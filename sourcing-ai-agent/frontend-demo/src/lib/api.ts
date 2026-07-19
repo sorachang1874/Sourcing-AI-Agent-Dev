@@ -4486,45 +4486,78 @@ function mapCandidateFacetSummary(source: unknown): CandidateFacetSummary | unde
 
 /**
  * Facet-SUMMARY scope is a backend-owned contract (FT2 fixed-forward r4,
- * rerun3 review finding 2; r5 hardening per rerun4 review finding 2): the
- * only legitimate evidence is the explicit summary-scope keys
- * (`facet_summary_scope` at payload top level and `facet_summary.count_scope`
- * inside the summary record). The frontend NEVER synthesizes the scope (no
- * `exact_projection` default) and never borrows it from the SEPARATE filter
- * contract (`facet_count_scope`) or from undocumented keys — AGENTS.md
- * forbids deriving one contract field from another.
+ * rerun3 review finding 2; r5 hardening per rerun4 review finding 2; r6
+ * hardening per rerun5 review findings 5 and 7): the only legitimate
+ * evidence is the explicit summary-scope keys (`facet_summary_scope` at
+ * payload top level and `facet_summary.count_scope` inside the summary
+ * record). The frontend NEVER synthesizes the scope (no `exact_projection`
+ * default) and never borrows it from the SEPARATE filter contract
+ * (`facet_count_scope`) or from undocumented keys — AGENTS.md forbids
+ * deriving one contract field from another.
  *
  * ONE strict adapter for every endpoint:
  * - EXACT STRING BYTES, no trimming/repair — a padded or undocumented value
  *   is INVALID evidence (not a near-match), and any invalid mirror fails
  *   the whole scope closed;
  * - CLOSED allowed values — the documented backend vocabulary
- *   (`global_full_population`, `exact_projection`, `current_served_partial`,
- *   `unavailable`);
- * - AGREEMENT across every documented mirror — mirrors must agree
- *   byte-for-byte; missing or conflicting evidence yields "" so facet
- *   consumption stays disabled.
+ *   (`docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md` §facet_summary_scope):
+ *   `global_full_population`, `exact_projection`, `current_served_partial`,
+ *   `raw_profile_partial`, `unavailable`. The two `*_partial` values and
+ *   `unavailable` are admitted as EXPLICIT states but never enable global
+ *   facet consumption (`isCanonicalFacetSummaryScope` stays the gate);
+ * - REQUIRED mirrors per endpoint: an ABSENT key (missing) fails a required
+ *   mirror, while a PRESENT-but-invalid value (null, empty, wrong type,
+ *   padded, undocumented) fails any mirror — a missing or null required
+ *   mirror can never let the remaining mirror promote itself;
+ * - AGREEMENT across every admitted mirror — byte-for-byte, or the scope is
+ *   "" and facet consumption stays disabled.
  */
 const FACET_SUMMARY_SCOPE_ALLOWED_VALUES: ReadonlySet<string> = new Set([
   "global_full_population",
   "exact_projection",
   "current_served_partial",
+  "raw_profile_partial",
   "unavailable",
 ]);
 
 type FacetSummaryScopeMirror = "absent" | "invalid" | string;
 
-function readFacetSummaryScopeMirror(value: unknown): FacetSummaryScopeMirror {
-  if (value === undefined || value === null || value === "") {
-    return "absent";
+interface FacetSummaryScopeEvidence {
+  /** Whether the key exists at all (hasOwnProperty semantics). */
+  present: boolean;
+  value: unknown;
+  /** A required mirror fails closed when its key is absent. */
+  required: boolean;
+}
+
+function readFacetSummaryScopeMirror(evidence: FacetSummaryScopeEvidence): FacetSummaryScopeMirror {
+  if (!evidence.present) {
+    return evidence.required ? "invalid" : "absent";
   }
+  const value = evidence.value;
   if (typeof value !== "string") {
     return "invalid";
   }
   return FACET_SUMMARY_SCOPE_ALLOWED_VALUES.has(value) ? value : "invalid";
 }
 
-function mapCandidateFacetSummaryScope(...evidence: unknown[]): string {
+function facetSummaryScopeEvidence(
+  record: unknown,
+  key: string,
+  required: boolean,
+): FacetSummaryScopeEvidence {
+  const source =
+    record && typeof record === "object" && !Array.isArray(record)
+      ? (record as Record<string, unknown>)
+      : {};
+  return {
+    present: Object.prototype.hasOwnProperty.call(source, key),
+    value: source[key],
+    required,
+  };
+}
+
+function mapCandidateFacetSummaryScope(...evidence: FacetSummaryScopeEvidence[]): string {
   const mirrors = evidence.map(readFacetSummaryScopeMirror);
   if (mirrors.some((mirror) => mirror === "invalid")) {
     return "";
@@ -4541,13 +4574,19 @@ function mapCandidateFacetSummaryScope(...evidence: unknown[]): string {
 
 /**
  * Agreement over the COMPLETE set of applicable summary-scope mirrors
- * (rerun4 review finding 2): every applicable mirror must carry a valid
- * closed-vocabulary value and all must agree byte-exactly. A missing,
- * invalid, or disagreeing mirror yields "" (consumption disabled) instead
- * of letting one remaining mirror become authoritative.
+ * (rerun4 review finding 2; rerun5 finding 5): every applicable mirror must
+ * carry a valid closed-vocabulary value and all must agree byte-exactly. A
+ * missing, null, padded, or disagreeing mirror yields "" (consumption
+ * disabled) instead of letting one remaining mirror become authoritative.
  */
 export function agreeCanonicalFacetSummaryScope(mirrors: unknown[]): string {
-  const read = mirrors.map(readFacetSummaryScopeMirror);
+  const read = mirrors.map((value) =>
+    readFacetSummaryScopeMirror({
+      present: value !== undefined && value !== null,
+      value,
+      required: true,
+    }),
+  );
   if (read.some((mirror) => mirror === "invalid" || mirror === "absent")) {
     return "";
   }
@@ -4600,7 +4639,9 @@ function candidateFacetSummaryMatchesCanonicalBoard(
   if (expectedCount <= 0) {
     return Math.max(0, Number(summary.candidateCount || 0) || 0) > 0;
   }
-  if (Math.max(0, Number(summary.candidateCount || 0) || 0) < expectedCount) {
+  // Exact equality to the canonical membership N (rerun5 review finding 4):
+  // an oversized summary is contradictory evidence, not an exact summary.
+  if (Math.max(0, Number(summary.candidateCount || 0) || 0) !== expectedCount) {
     return false;
   }
   if (
@@ -6637,10 +6678,13 @@ function mapJobResultsToDashboard(payload: any): DashboardData {
     (payload.effective_execution_semantics as Record<string, unknown>) || {},
   );
   const rawCandidateFacetSummary = mapCandidateFacetSummary(assetPopulationPayload.facet_summary);
+  // Required mirrors per endpoint (rerun5 finding 5): the job dashboard
+  // owns its scope at the asset_population top level; the summary's inner
+  // count_scope and the job top-level key are agree-if-present mirrors.
   const rawCandidateFacetSummaryScope = mapCandidateFacetSummaryScope(
-    assetPopulationPayload.facet_summary_scope,
-    (assetPopulationPayload.facet_summary as Record<string, unknown> | undefined)?.count_scope,
-    payload.facet_summary_scope,
+    facetSummaryScopeEvidence(assetPopulationPayload, "facet_summary_scope", true),
+    facetSummaryScopeEvidence(assetPopulationPayload.facet_summary, "count_scope", false),
+    facetSummaryScopeEvidence(payload, "facet_summary_scope", false),
   );
   const canonicalBoardExpectedCount = boardRuntimeState?.expectedCandidateCount || 0;
   const canonicalAssetPopulationCount = boardRuntimeState ? canonicalBoardExpectedCount : assetPopulationCount;
@@ -7917,13 +7961,16 @@ function projectionPayloadToDashboard(
   );
   const candidateFacetSummary = mapCandidateFacetSummary(payload.facet_summary);
   // The summary scope is consumed ONLY from its backend owners (no
-  // `exact_projection` minting): missing or conflicting evidence maps to ""
-  // and the board runtime state marks the summary unavailable (FT2
-  // fixed-forward r4, rerun3 review finding 2).
+  // `exact_projection` minting): the projection reader always owns
+  // `facet_summary.count_scope` (required mirror); the top-level key is an
+  // agree-if-present mirror. Missing, null, padded, or conflicting evidence
+  // maps to "" and the board runtime state marks the summary unavailable
+  // (FT2 fixed-forward r4/r5, rerun3 finding 2 + rerun4 finding 2 + rerun5
+  // finding 5).
   const candidateFacetSummaryScope = candidateFacetSummary
     ? mapCandidateFacetSummaryScope(
-        payload.facet_summary_scope,
-        (payload.facet_summary as Record<string, unknown> | undefined)?.count_scope,
+        facetSummaryScopeEvidence(payload.facet_summary, "count_scope", true),
+        facetSummaryScopeEvidence(payload, "facet_summary_scope", false),
       )
     : "";
   // The filter contract is an INDEPENDENT backend-owned contract: its count
@@ -8105,6 +8152,71 @@ export function storeProjectionDashboardCache(projectionId: string, dashboard: D
   return writeCacheValue(projectionDashboardCache, projectionId, dashboard);
 }
 
+/**
+ * Validate a server candidate-page envelope BEFORE admitting it (FT2
+ * fixed-forward r6, rerun5 review findings 1-2):
+ * - PAGE STATUS: `status` must be exactly `"ready"`. A `not_ready` page
+ *   (e.g. `projection_person_search_index_unavailable`) is rejected with
+ *   its server reason — it must never be converted into a successful empty
+ *   result ("zero matches" while the filter index is down).
+ * - SERVER FILTER IDENTITY: the top-level `filter_signature` and the filter
+ *   contract's `filter_signature` are two REQUIRED mirrors of the
+ *   server-computed applied-filter identity. Both keys must be present
+ *   (the backend emits `""` for an inactive filter — a present empty
+ *   string is valid) and byte-equal; a missing key or a mismatch fails
+ *   closed. The frontend NEVER substitutes its own client-computed
+ *   signature for a missing server one.
+ * - REQUEST TUPLE: the response `offset` must exactly equal the requested
+ *   offset; the response `limit` (the returned row count, per both page
+ *   owners) must be an integer within `[0, requestedLimit]` and equal the
+ *   raw row count — the truthy `payload.limit || limit` fallback that
+ *   rewrote the fail-closed 0 is gone.
+ */
+function requireReadyServerCandidatePage(
+  payload: any,
+  endpoint: string,
+  requested: { offset: number; limit: number },
+): { serverFilterSignature: string } {
+  const status = typeof payload?.status === "string" ? payload.status : "";
+  if (status !== "ready") {
+    const reason = pickFirstString(payload, ["reason"]) || "unknown";
+    throw new Error(`${endpoint} is not ready: ${reason}.`);
+  }
+  const hasTopSignature = Object.prototype.hasOwnProperty.call(payload, "filter_signature");
+  const topSignature = payload.filter_signature;
+  const contractRecord =
+    payload.filter_contract && typeof payload.filter_contract === "object" && !Array.isArray(payload.filter_contract)
+      ? (payload.filter_contract as Record<string, unknown>)
+      : null;
+  const hasContractSignature = Boolean(
+    contractRecord && Object.prototype.hasOwnProperty.call(contractRecord, "filter_signature"),
+  );
+  const contractSignature = contractRecord?.filter_signature;
+  if (
+    !hasTopSignature ||
+    !hasContractSignature ||
+    typeof topSignature !== "string" ||
+    typeof contractSignature !== "string" ||
+    topSignature !== contractSignature
+  ) {
+    throw new Error(`${endpoint} has missing or conflicting server filter signatures.`);
+  }
+  const rawRowCount = asArray(payload.candidates).length;
+  const responseOffset = Number(payload.offset);
+  const responseLimit = Number(payload.limit);
+  if (
+    !Number.isInteger(responseOffset) ||
+    responseOffset !== requested.offset ||
+    !Number.isInteger(responseLimit) ||
+    responseLimit < 0 ||
+    responseLimit > requested.limit ||
+    responseLimit !== rawRowCount
+  ) {
+    throw new Error(`${endpoint} does not match the requested page tuple.`);
+  }
+  return { serverFilterSignature: topSignature };
+}
+
 export async function getProjectionCandidatePage(
   projectionId: string,
   options?: {
@@ -8134,6 +8246,11 @@ export async function getProjectionCandidatePage(
       RESULTS_API_TIMEOUT_MS,
     )
       .then((payload): DashboardCandidatePage => {
+        const { serverFilterSignature } = requireReadyServerCandidatePage(
+          payload,
+          "Projection candidate page",
+          { offset, limit },
+        );
         const candidates = asArray(payload.candidates)
           .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
           .map((item) => publicProjectionMemberToCandidateRecord(item))
@@ -8152,8 +8269,8 @@ export async function getProjectionCandidatePage(
         return {
           jobId: pickFirstString(payload.projection || {}, ["source_run_id"]) || projectionId,
           resultMode: "asset_population",
-          offset: Number(payload.offset || 0) || 0,
-          limit: Number(payload.limit || limit) || limit,
+          offset: offset,
+          limit: Number(payload.limit),
           returnedCount: candidates.length,
           totalCandidates: Number(payload.total_candidates || payload.candidate_count || 0) || 0,
           filteredCandidateCount:
@@ -8168,7 +8285,8 @@ export async function getProjectionCandidatePage(
           boardRuntimeState: dashboard.boardRuntimeState,
           candidateFacetSummary: dashboard.candidateFacetSummary,
           candidateFacetSummaryScope: dashboard.candidateFacetSummaryScope,
-          filterSignature: asString(payload.filter_signature) || filterSignature,
+          // Server-owned filter identity (never the client-computed one).
+          filterSignature: serverFilterSignature,
           filterContract: mapCandidatePageFilterContract(payload.filter_contract),
         };
       })
@@ -8240,14 +8358,19 @@ export async function getDashboardCandidatePage(
       RESULTS_API_TIMEOUT_MS,
     )
       .then((payload): DashboardCandidatePage => {
+        const { serverFilterSignature } = requireReadyServerCandidatePage(
+          payload,
+          "Job candidate page",
+          { offset, limit },
+        );
         const resultMode: DashboardData["resultMode"] =
           asString(payload.result_mode) === "asset_population" ? "asset_population" : "ranked_results";
         return {
           jobId: asString(payload.job_id) || jobId,
           resultMode,
-          offset: Number(payload.offset || 0) || 0,
-          limit: Number(payload.limit || limit) || limit,
-          returnedCount: Number(payload.returned_count || 0) || 0,
+          offset: offset,
+          limit: Number(payload.limit),
+          returnedCount: Number(payload.returned_count ?? payload.limit) || 0,
           totalCandidates: Number(payload.total_candidates || 0) || 0,
           filteredCandidateCount:
             Number(payload.filtered_candidate_count ?? payload.total_candidates ?? 0) || 0,
@@ -8274,14 +8397,17 @@ export async function getDashboardCandidatePage(
           ),
           candidateFacetSummary: mapCandidateFacetSummary(payload.facet_summary),
           // The ONE strict scope adapter on every endpoint (rerun4 review
-          // finding 2): the job page compares BOTH documented mirrors —
-          // a conflicting or padded inner `count_scope` disables the scope
-          // instead of the top-level key silently winning.
+          // finding 2; rerun5 finding 5): the job page OWNS its scope at the
+          // top level (required mirror); the inner `count_scope` is an
+          // agree-if-present mirror — a missing, null, padded, or
+          // conflicting mirror disables the scope instead of the top level
+          // silently winning.
           candidateFacetSummaryScope: mapCandidateFacetSummaryScope(
-            payload.facet_summary_scope,
-            (payload.facet_summary as Record<string, unknown> | undefined)?.count_scope,
+            facetSummaryScopeEvidence(payload, "facet_summary_scope", true),
+            facetSummaryScopeEvidence(payload.facet_summary, "count_scope", false),
           ),
-          filterSignature: asString(payload.filter_signature) || filterSignature,
+          // Server-owned filter identity (never the client-computed one).
+          filterSignature: serverFilterSignature,
           filterContract: mapCandidatePageFilterContract(payload.filter_contract),
         };
       })

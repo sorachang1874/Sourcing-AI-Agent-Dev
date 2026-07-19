@@ -238,10 +238,16 @@ function dashboardCandidatePageFilterNarrows(filterSignature: string): boolean {
     const filter = JSON.parse(filterSignature) as DashboardCandidatePageFilter;
     const layerIncludes = filter.layerIncludes || [];
     const layerExcludes = filter.layerExcludes || [];
+    // The layer axes narrow only when they filter BEYOND the default
+    // applied layer view (include `layer_0`, no excludes): an exclude, or
+    // an include outside `layer_0`. An all-neutral layer state (empty
+    // include AND exclude lists) is the UN-narrowed baseline — and it is
+    // also what the gap-collapsed empty filter looks like, so it must not
+    // read as narrowing intent.
     const layerNarrows =
       layerExcludes.length > 0 ||
-      layerIncludes.length !== 1 ||
-      layerIncludes[0] !== "layer_0";
+      (layerIncludes.length > 0 &&
+        (layerIncludes.length !== 1 || layerIncludes[0] !== "layer_0"));
     return Boolean(
       String(filter.searchKeyword || "").trim() !== "" ||
         (filter.recallBuckets || []).length > 0 ||
@@ -282,7 +288,11 @@ function hasCanonicalFacetSummaryForServedPopulation(
   );
   const summaryMatchesExpected = Boolean(
     canonicalScope &&
-      summaryCandidateCount >= expectedCandidateCount &&
+      // The canonical contract requires EXACT equality to the served
+      // membership N (rerun5 review finding 4): an oversized summary (3
+      // candidates over a 2-member projection) is contradictory evidence,
+      // not an exact canonical summary.
+      summaryCandidateCount === expectedCandidateCount &&
       (
         facetSummaryScope === "exact_projection" ||
         (summary?.layers || []).length === 0 ||
@@ -297,7 +307,7 @@ function hasCanonicalFacetSummaryForServedPopulation(
         dashboard.boardRuntimeState.facetSummaryScope === "global_full_population" ||
         dashboard.boardRuntimeState.facetSummaryScope === "exact_projection"
       ) &&
-      dashboard.boardRuntimeState.facetSummaryCandidateCount >= expectedCandidateCount
+      dashboard.boardRuntimeState.facetSummaryCandidateCount === expectedCandidateCount
     );
   }
   if (
@@ -604,11 +614,18 @@ export function ResultsBoardPanel({
     ? `/targets?collection=${encodeURIComponent(collectionId.trim())}`
     : "/targets";
   const skipNextFacetSessionSaveRef = useRef(false);
-  // Last backend filter signature RESOLVED outside a canonical-summary gap
-  // (FT2 fixed-forward r5, rerun4 review finding 3): the generic record of
-  // the user's narrowing intent over every filter axis, keyed to the real
-  // filter contract rather than a hand-written facet list.
-  const lastResolvedFilterSignatureRef = useRef("");
+  // Last backend filter signature RESOLVED outside a canonical-summary gap,
+  // keyed to its projection context (FT2 fixed-forward r5, rerun4 review
+  // finding 3; r6 hardening per rerun5 review finding 3): the generic record
+  // of the user's narrowing intent over every filter axis. The context key
+  // is part of the record because `SearchFlow` does not remount this
+  // component when the projection changes inside the same job — a stale
+  // signature from a previous projection must never leak into the new
+  // context's gap preservation.
+  const lastResolvedFilterSignatureRef = useRef<{ contextKey: string; signature: string }>({
+    contextKey: "",
+    signature: "",
+  });
 
   const candidateFacetSummary = dashboard.candidateFacetSummary;
   const expectedCandidateCount = dashboardExpectedCandidateCount(dashboard);
@@ -947,13 +964,20 @@ export function ResultsBoardPanel({
   // through. The current keyword / layer state and the user-edit flags
   // additionally cover the restored-session edge (a first render that lands
   // inside the gap before any filter could be resolved or applied).
-  const layerSelectionNarrows = Object.entries(selectedLayerStates).some(
-    ([id, state]) => state !== (defaultLayerSelectionStates()[id] || "neutral"),
-  );
+  const layerSelectionNarrows =
+    Object.values(selectedLayerStates).some((state) => state === "exclude") ||
+    Object.entries(selectedLayerStates).some(([id, state]) => state === "include" && id !== "layer_0");
+  // The last resolved signature counts ONLY when it belongs to THIS
+  // projection context (rerun5 review finding 3): a signature recorded
+  // under a different resultsContextKey is stale cross-context evidence.
+  const lastResolvedFilterSignature =
+    lastResolvedFilterSignatureRef.current.contextKey === resultsContextKey
+      ? lastResolvedFilterSignatureRef.current.signature
+      : "";
   const preservedFacetIntentDuringGap = Boolean(
     canonicalFacetUnavailable &&
       (dashboardCandidatePageFilterNarrows(backendCandidatePageRequestSignature) ||
-        dashboardCandidatePageFilterNarrows(lastResolvedFilterSignatureRef.current) ||
+        dashboardCandidatePageFilterNarrows(lastResolvedFilterSignature) ||
         keyword.trim() !== "" ||
         layerSelectionNarrows ||
         userEditedFacetRefs.current.recall ||
@@ -1066,13 +1090,17 @@ export function ResultsBoardPanel({
   );
   useEffect(() => {
     // Record the last filter signature RESOLVED outside a canonical-summary
-    // gap; during a gap the resolved filter collapses to the empty object,
-    // so the recorded signature is the only generic record of the user's
-    // narrowing intent over every axis.
+    // gap, keyed to the CURRENT projection context; during a gap the
+    // resolved filter collapses to the empty object, so the recorded
+    // signature is the only generic record of the user's narrowing intent
+    // over every axis.
     if (!canonicalFacetUnavailable && backendFilterSignature) {
-      lastResolvedFilterSignatureRef.current = backendFilterSignature;
+      lastResolvedFilterSignatureRef.current = {
+        contextKey: resultsContextKey,
+        signature: backendFilterSignature,
+      };
     }
-  }, [backendFilterSignature, canonicalFacetUnavailable]);
+  }, [backendFilterSignature, canonicalFacetUnavailable, resultsContextKey]);
   const backendFilteredPagingSupported = Boolean(
     dashboard.boardRuntimeState?.filterContract?.backendFilteredPagingSupported,
   );
@@ -1085,7 +1113,7 @@ export function ResultsBoardPanel({
   // flight) is NOT a valid "recent filtered result" — the board falls back
   // to the blocking empty state instead of presenting it as one.
   const preservedFilterSignature =
-    lastResolvedFilterSignatureRef.current || backendCandidatePageRequestSignature;
+    lastResolvedFilterSignature || backendCandidatePageRequestSignature;
   const gapKeptBackendPage =
     preservedFacetIntentDuringGap &&
     backendCandidatePage &&

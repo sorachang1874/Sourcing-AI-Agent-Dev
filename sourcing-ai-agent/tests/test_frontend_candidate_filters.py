@@ -520,7 +520,9 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn('facetSummaryScope === "global_full_population"', source)
         self.assertIn('facetSummaryScope === "exact_projection"', source)
         self.assertIn("layerZeroCount === expectedCandidateCount", source)
-        self.assertIn("summaryCandidateCount >= expectedCandidateCount", source)
+        # Rerun5 finding 4: exact equality to canonical N, never >=.
+        self.assertIn("summaryCandidateCount === expectedCandidateCount", source)
+        self.assertNotIn("summaryCandidateCount >= expectedCandidateCount", source)
         self.assertIn('showCounts={hasGlobalFacetSummary}', source)
         self.assertIn("preserveEditedFacetSelection(current, employmentFacetOptions)", source)
         self.assertIn("canonicalBoardFacetOptions(", source)
@@ -592,9 +594,11 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn("mapCandidateFacetSummaryScope(", api_source)
         # Rerun4 finding 2: the job candidate-page scope goes through the ONE
         # strict byte-exact adapter over BOTH documented mirrors — the
-        # trimming top-level-only read may not return.
+        # trimming top-level-only read may not return. Rerun5 finding 5: the
+        # top-level scope is a REQUIRED mirror on this endpoint.
         self.assertNotIn("asString(payload.facet_summary_scope)", api_source)
-        self.assertIn("(payload.facet_summary as Record<string, unknown> | undefined)?.count_scope,", api_source)
+        self.assertIn('facetSummaryScopeEvidence(payload, "facet_summary_scope", true),', api_source)
+        self.assertIn('facetSummaryScopeEvidence(payload.facet_summary, "count_scope", false),', api_source)
         self.assertIn("FACET_SUMMARY_SCOPE_ALLOWED_VALUES", api_source)
         self.assertIn("DashboardCandidatePageFilter", api_source)
         self.assertIn("dashboardCandidatePageFilterSignature", api_source)
@@ -2125,9 +2129,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             }
 
             const candidatePagePayload = {
+              status: "ready",
               job_id: "job-1",
               offset: 24,
-              limit: 24,
+              // `limit` is the returned ROW COUNT per the backend page
+              // owners (1 row below), never the requested page size.
+              limit: 1,
               returned_count: 1,
               total_candidates: 25,
               filtered_candidate_count: 0,
@@ -2140,6 +2147,14 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   team: "Research",
                 },
               ],
+              filter_signature: "srv-filter-sig-1",
+              filter_contract: {
+                source: "dashboard",
+                facet_count_scope: "global",
+                row_filter_scope: "global",
+                backend_filtered_paging_supported: true,
+                filter_signature: "srv-filter-sig-1",
+              },
               board_runtime_state: {
                 job_id: "job-1",
                 result_mode: "ranked_results",
@@ -2259,6 +2274,9 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               };
               const mismatchedPagePayload = {
                 ...projectionCandidatePagePayload,
+                // The dashboard flow fetches its page at offset 0 — the
+                // tuple validator requires the response offset to match.
+                offset: 0,
                 projection: {
                   ...projectionCandidatePagePayload.projection,
                   membership_revision: "projection-page-revision",
@@ -2284,6 +2302,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   String(url).includes("/candidates")
                     ? {
                         ...projectionCandidatePagePayload,
+                        offset: 0,
                         projection: {
                           ...projectionCandidatePagePayload.projection,
                           membership_revision: "",

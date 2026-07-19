@@ -27,6 +27,21 @@ function requiredString(record: Record<string, unknown>, key: string): string {
 }
 
 /**
+ * Byte-exact server-identity parsing (FT2 fixed-forward r6, rerun5 review
+ * finding 6): registry/selection identity strings are server-owned BYTES —
+ * never trimmed, never case-repaired. A padded value is invalid evidence
+ * (a near-match is not a match) and fails closed instead of being
+ * normalized into agreement with the canonical owner.
+ */
+function requiredStringExact(record: Record<string, unknown>, key: string, field: string): string {
+  const value = record[key];
+  if (typeof value !== "string" || value === "" || value !== value.trim()) {
+    throw new Error(`${field} has an invalid ${key}.`);
+  }
+  return value;
+}
+
+/**
  * Byte-exact registry pin validation (FT2 fixed-forward r4, review finding
  * 3): registry version/digest are server identity bytes, never display text.
  * They must NOT be trimmed or otherwise repaired into a match — a padded or
@@ -76,7 +91,9 @@ function parseOptionList(value: unknown, field: string, allowEmpty = false): Coh
     if (!isRecord(item)) {
       throw new Error(`Cohort options response has an invalid ${field} item.`);
     }
-    const id = requiredString(item, "id");
+    // Option ids are registry-owned identity bytes (exact, no trim repair);
+    // labels stay display text.
+    const id = requiredStringExact(item, "id", `Cohort options response ${field}`);
     const label = requiredString(item, "label");
     const order = item.order;
     if (!Number.isInteger(order)) {
@@ -101,11 +118,15 @@ export function parseCohortSelectionOptionsPayload(payload: unknown): CohortSele
   if (!isRecord(payload.defaults)) {
     throw new Error("Cohort options response has invalid defaults.");
   }
-  const defaultRoleMatch = requiredString(payload.defaults, "role_match");
+  const defaultRoleMatch = requiredStringExact(
+    payload.defaults,
+    "role_match",
+    "Cohort options response defaults",
+  );
   if (!roleMatchOptions.some((option) => option.id === defaultRoleMatch)) {
     throw new Error("Cohort options response default role_match is not selectable.");
   }
-  const schemaVersion = requiredString(payload, "schema_version");
+  const schemaVersion = requiredStringExact(payload, "schema_version", "Cohort options response");
   if (schemaVersion !== COHORT_SELECTION_SCHEMA_VERSION) {
     throw new Error("Cohort options response uses an unsupported schema_version.");
   }
@@ -128,11 +149,13 @@ function parseStringArray(record: Record<string, unknown>, key: string, allowEmp
   if (!Array.isArray(value) || (!allowEmpty && value.length === 0)) {
     throw new Error(`Cohort selection has an invalid ${key}.`);
   }
+  // Byte-exact identity items (rerun5 review finding 6): no trim/case
+  // repair — a padded item is invalid evidence, not a near-match.
   const normalized = value.map((item) => {
-    if (typeof item !== "string" || !item.trim()) {
+    if (typeof item !== "string" || item === "" || item !== item.trim()) {
       throw new Error(`Cohort selection has an invalid ${key} value.`);
     }
-    return item.trim();
+    return item;
   });
   if (new Set(normalized).size !== normalized.length) {
     throw new Error(`Cohort selection has duplicate ${key} values.`);
@@ -148,11 +171,11 @@ export function parseCohortSelectionPayload(value: unknown): CohortSelection {
   if (unknownKeys.length > 0 || Object.keys(value).length !== COHORT_SELECTION_KEYS.size) {
     throw new Error("Cohort selection fields do not match the v1 contract.");
   }
-  const source = requiredString(value, "source");
+  const source = requiredStringExact(value, "source", "Cohort selection");
   if (source !== "user_explicit") {
     throw new Error("Frontend cohort selection must be user_explicit.");
   }
-  const schemaVersion = requiredString(value, "schema_version");
+  const schemaVersion = requiredStringExact(value, "schema_version", "Cohort selection");
   if (schemaVersion !== COHORT_SELECTION_SCHEMA_VERSION) {
     throw new Error("Cohort selection uses an unsupported schema_version.");
   }
@@ -160,7 +183,7 @@ export function parseCohortSelectionPayload(value: unknown): CohortSelection {
     schema_version: schemaVersion,
     role_bucket_ids: parseStringArray(value, "role_bucket_ids", true),
     employment_statuses: parseStringArray(value, "employment_statuses", false),
-    role_match: requiredString(value, "role_match"),
+    role_match: requiredStringExact(value, "role_match", "Cohort selection"),
     source,
   };
 }

@@ -2924,6 +2924,35 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   },
                 },
               });
+              // Rerun5 finding 6: cohort identity bytes are compared
+              // EXACTLY — a padded id in the canonical request OR in a
+              // secondary preview mirror is invalid evidence, never
+              // trim-repaired into agreement with the owner.
+              const paddedCanonicalCohort = mapError({
+                request: {
+                  cohort_selection: selectionFor([" research"], ["current", "former"]),
+                },
+                plan: cohortPlanRecord(),
+              });
+              const paddedSecondaryPreview = mapError({
+                request: { cohort_selection: cohort },
+                request_preview: { cohort_selection: cohort },
+                plan: cohortPlanRecord(),
+                metadata: {
+                  request_preview: {
+                    cohort_selection: selectionFor(["research", "removed_role "], ["current", "former"]),
+                  },
+                },
+              });
+              const paddedStatusMirror = mapError({
+                request: { cohort_selection: cohort },
+                plan: cohortPlanRecord(),
+                metadata: {
+                  request_preview: {
+                    cohort_selection: selectionFor(["research"], ["current", " former"]),
+                  },
+                },
+              });
               // Presence-intact happy paths: every present mirror agrees.
               const agreedValues = api.__testMapPlanPayloadToDemoPlan(
                 {
@@ -2987,6 +3016,9 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 previewOwnedCohortBorrow,
                 metadataOwnedCohortBorrow,
                 hiddenConflictingPreview,
+                paddedCanonicalCohort,
+                paddedSecondaryPreview,
+                paddedStatusMirror,
                 agreedValues: {
                   targetLocations: agreedValues.targetLocations ?? null,
                   hasTargetKey: Object.prototype.hasOwnProperty.call(agreedValues, "targetLocations"),
@@ -3043,6 +3075,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             payload["metadataOwnedCohortBorrow"],
         )
         self.assertIn("conflicting cohort_selection mirrors", payload["hiddenConflictingPreview"])
+
+        # Rerun5 finding 6: padded identity bytes fail at the strict parser —
+        # in the canonical request OR in a secondary preview mirror — never
+        # trim-repaired into agreement.
+        self.assertIn("invalid role_bucket_ids value", payload["paddedCanonicalCohort"])
+        self.assertIn("invalid role_bucket_ids value", payload["paddedSecondaryPreview"])
+        self.assertIn("invalid employment_statuses value", payload["paddedStatusMirror"])
 
         # Production-shape preview omission is NOT a conflict: the canonical
         # request's values / opt-out / exclude round-trip exactly.
@@ -3818,6 +3857,43 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             const paddedMirrorMarkup = render(
               el(resultsBoard.ResultsBoardPanel, boardProps(paddedMirrorDashboard)),
             );
+            // Rerun5 finding 4: an OVERSIZED summary (3 candidates over a
+            // 2-member projection) is contradictory evidence, not an exact
+            // canonical summary — the facet stays disabled.
+            const oversizedDashboard = {
+              ...canonicalDashboard,
+              boardRuntimeState: {
+                ...missingMirrorDashboard.boardRuntimeState,
+                facetSummaryScope: "exact_projection",
+                facetSummaryCandidateCount: 3,
+              },
+              candidateFacetSummary: {
+                ...canonicalDashboard.candidateFacetSummary,
+                candidateCount: 3,
+                functions: [
+                  { id: "research", label: "Researcher", count: 2 },
+                  { id: "engineering", label: "Engineer", count: 1 },
+                ],
+              },
+              candidateFacetSummaryScope: "exact_projection",
+            };
+            const oversizedMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(oversizedDashboard)),
+            );
+            // Rerun5 finding 7: `raw_profile_partial` is an EXPLICIT
+            // documented scope value, but it must never enable global facet
+            // consumption.
+            const rawPartialDashboard = {
+              ...missingMirrorDashboard,
+              boardRuntimeState: {
+                ...missingMirrorDashboard.boardRuntimeState,
+                facetSummaryScope: "raw_profile_partial",
+              },
+              candidateFacetSummaryScope: "raw_profile_partial",
+            };
+            const rawPartialMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(rawPartialDashboard)),
+            );
             const functionSection = (markup) => {
               // The exact function-facet label (the canonicalFacetUnavailable
               // notice also mentions 职能筛选, so a bare 职能 match is wrong).
@@ -3831,6 +3907,8 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               canonicalFunctionSection: functionSection(canonicalMarkup),
               missingMirrorFunctionSection: functionSection(missingMirrorMarkup),
               paddedMirrorFunctionSection: functionSection(paddedMirrorMarkup),
+              oversizedFunctionSection: functionSection(oversizedMarkup),
+              rawPartialFunctionSection: functionSection(rawPartialMarkup),
             }));
             """
         )
@@ -3855,6 +3933,18 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             self.assertIn("facet-empty-message", section, key)
             self.assertNotIn('class="facet-option"', section, key)
             self.assertNotIn("Researcher", section, key)
+
+        # Rerun5 finding 4: an oversized summary (3 over 2) is contradictory
+        # evidence — the facet stays disabled.
+        oversized_section = payload["oversizedFunctionSection"]
+        self.assertIn("facet-empty-message", oversized_section)
+        self.assertNotIn('class="facet-option"', oversized_section)
+
+        # Rerun5 finding 7: raw_profile_partial never enables global facet
+        # consumption even with a complete summary present.
+        raw_partial_section = payload["rawPartialFunctionSection"]
+        self.assertIn("facet-empty-message", raw_partial_section)
+        self.assertNotIn('class="facet-option"', raw_partial_section)
 
     def test_facet_scope_contracts_consumed_independently(self) -> None:
         """Rerun3 finding 2 + rerun4 finding 2: summary scope and
@@ -3961,14 +4051,36 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 payload.facet_summary_scope = " exact_projection ";
               }),
             );
+            // Rerun5 finding 5: a PRESENT-null mirror is present-invalid (not
+            // "absent"), and a MISSING required mirror fails — the remaining
+            // mirror never promotes itself.
+            const nullInnerScope = scopeTriple(
+              projectionPayload((payload) => {
+                payload.facet_summary.count_scope = null;
+              }),
+            );
+            const missingInnerScope = scopeTriple(
+              projectionPayload((payload) => {
+                delete payload.facet_summary.count_scope;
+              }),
+            );
+            // Rerun5 finding 7: `raw_profile_partial` is documented
+            // vocabulary — admitted as an explicit value in both mirrors.
+            const rawProfilePartialScope = scopeTriple(
+              projectionPayload((payload) => {
+                payload.facet_summary_scope = "raw_profile_partial";
+                payload.facet_summary.count_scope = "raw_profile_partial";
+              }),
+            );
             // The JOB candidate-page endpoint goes through the SAME strict
             // adapter: a top-level exact_projection with a conflicting inner
             // count_scope is NOT admitted (the top level no longer wins).
-            addRoute("GET", "/api/jobs/job-scope/candidates", () => ({
+            const jobScopePayload = () => ({
+              status: "ready",
               job_id: "job-scope",
               result_mode: "asset_population",
               offset: 0,
-              limit: 24,
+              limit: 0,
               returned_count: 0,
               total_candidates: 2,
               filtered_candidate_count: 2,
@@ -3994,15 +4106,29 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 candidate_count: 2,
               },
               facet_summary_scope: "exact_projection",
+              filter_signature: "srv-job-sig-1",
               filter_contract: {
                 source: "serving_projection_reader",
                 facet_count_scope: "exact_projection",
                 row_filter_scope: "projection_membership",
                 backend_filtered_paging_supported: true,
+                filter_signature: "srv-job-sig-1",
               },
-            }));
+            });
+            addRoute("GET", "/api/jobs/job-scope/candidates", () => jobScopePayload());
             const jobPageConflicting = await api
               .getDashboardCandidatePage("job-scope", { forceRefresh: true })
+              .then((page) => page.candidateFacetSummaryScope);
+            // Rerun5 finding 5 (job endpoint): the top-level scope is a
+            // REQUIRED mirror — a valid inner count_scope cannot promote
+            // itself when the owner key is missing.
+            addRoute("GET", "/api/jobs/job-scope-missing/candidates", () => {
+              const payload = jobScopePayload();
+              delete payload.facet_summary_scope;
+              return payload;
+            });
+            const jobPageMissingTopLevel = await api
+              .getDashboardCandidatePage("job-scope-missing", { forceRefresh: true })
               .then((page) => page.candidateFacetSummaryScope);
             console.log(JSON.stringify({
               agreeingScopes,
@@ -4011,7 +4137,11 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               missingFilterScope,
               paddedInnerScope,
               paddedTopLevelScope,
+              nullInnerScope,
+              missingInnerScope,
+              rawProfilePartialScope,
               jobPageConflicting,
+              jobPageMissingTopLevel,
             }));
             })().catch((error) => {
               console.error(error);
@@ -4050,6 +4180,20 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         for key in ("paddedInnerScope", "paddedTopLevelScope"):
             self.assertEqual(payload[key]["topLevelSummaryScope"], "", key)
             self.assertEqual(payload[key]["boardSummaryScope"], "unavailable", key)
+
+        # Rerun5 finding 5: a present-null mirror is present-invalid; a
+        # missing required mirror fails — the remaining mirror never
+        # promotes itself.
+        for key in ("nullInnerScope", "missingInnerScope"):
+            self.assertEqual(payload[key]["topLevelSummaryScope"], "", key)
+            self.assertEqual(payload[key]["boardSummaryScope"], "unavailable", key)
+        self.assertEqual(payload["jobPageMissingTopLevel"], "")
+
+        # Rerun5 finding 7: raw_profile_partial is admitted as an EXPLICIT
+        # documented value (not rewritten to empty/unavailable)…
+        raw_partial = payload["rawProfilePartialScope"]
+        self.assertEqual(raw_partial["topLevelSummaryScope"], "raw_profile_partial")
+        self.assertEqual(raw_partial["boardSummaryScope"], "raw_profile_partial")
 
         # The job candidate-page endpoint uses the same strict adapter: a
         # conflicting inner count_scope disables the scope (the top-level
@@ -4144,8 +4288,9 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 onReviewStateChanged: () => {},
               });
               // Production-shaped projection candidate page (the pinned
-              // serving reader shape; empty rows — the assertions target the
-              // request filter, the notice, and the preserved selection).
+              // serving reader shape; one member row — `limit` is the
+              // returned ROW COUNT per the backend page owners, and both
+              // server filter-signature mirrors are present and byte-equal).
               const pagePayload = {
                 status: "ready",
                 projection: {
@@ -4170,20 +4315,28 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 total_candidates: 2,
                 filtered_candidate_count: 1,
                 offset: 0,
-                limit: 24,
+                limit: 1,
                 has_more: false,
                 next_offset: null,
-                candidates: [],
+                candidates: [
+                  {
+                    candidate_id: "m-1",
+                    employment_scope: "current",
+                    public_summary: { display_name: "Member One" },
+                  },
+                ],
                 facet_summary: {
                   status: "complete",
                   count_scope: "exact_projection",
                   candidate_count: 2,
                 },
+                filter_signature: "srv-filter-sig-1",
                 filter_contract: {
                   source: "serving_projection_reader",
                   facet_count_scope: "exact_projection",
                   row_filter_scope: "projection_membership",
                   backend_filtered_paging_supported: true,
+                  filter_signature: "srv-filter-sig-1",
                 },
               };
               addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayload);
@@ -4377,20 +4530,28 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 total_candidates: 2,
                 filtered_candidate_count: 1,
                 offset: 0,
-                limit: 24,
+                limit: 1,
                 has_more: false,
                 next_offset: null,
-                candidates: [],
+                candidates: [
+                  {
+                    candidate_id: "m-1",
+                    employment_scope: "current",
+                    public_summary: { display_name: "Member One" },
+                  },
+                ],
                 facet_summary: {
                   status: "complete",
                   count_scope: "exact_projection",
                   candidate_count: 2,
                 },
+                filter_signature: "srv-filter-sig-1",
                 filter_contract: {
                   source: "serving_projection_reader",
                   facet_count_scope: "exact_projection",
                   row_filter_scope: "projection_membership",
                   backend_filtered_paging_supported: true,
+                  filter_signature: "srv-filter-sig-1",
                 },
               };
               addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayload);
@@ -4628,9 +4789,11 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 total_candidates: count,
                 filtered_candidate_count: count,
                 offset,
-                limit: 24,
-                has_more: offset + 24 < count,
-                next_offset: offset + 24 < count ? offset + 24 : null,
+                // `limit` is the returned ROW COUNT per the backend page
+                // owners (2 rows below), never the requested page size.
+                limit: 2,
+                has_more: offset + 2 < count,
+                next_offset: offset + 2 < count ? offset + 2 : null,
                 candidates: [
                   {
                     candidate_id: "m-1",
@@ -4648,11 +4811,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   count_scope: "exact_projection",
                   candidate_count: count,
                 },
+                filter_signature: "srv-filter-sig-1",
                 filter_contract: {
                   source: "serving_projection_reader",
                   facet_count_scope: "exact_projection",
                   row_filter_scope: "projection_membership",
                   backend_filtered_paging_supported: true,
+                  filter_signature: "srv-filter-sig-1",
                 },
               });
               const requestOffset = (url) =>
@@ -4799,6 +4964,381 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertIn("暂不显示候选人", payload["offsetMismatchNotice"])
         self.assertNotIn("保持索引不可用前", payload["offsetMismatchNotice"])
         self.assertEqual(payload["gapRequestCount"], payload["preGapRequestCount"])
+
+    def test_candidate_page_envelope_validation(self) -> None:
+        """Rerun5 findings 1-2: a `not_ready` candidate page is rejected with
+        its server reason (never a successful empty result); both server
+        filter-signature mirrors are required and byte-equal (never the
+        client-computed fallback); the response must match the exact
+        requested {offset, limit} tuple."""
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const pagePayloadFor = (mutate) => {
+                const payload = {
+                  status: "ready",
+                  projection: {
+                    projection_id: "proj-1",
+                    source_run_id: "run-1",
+                    membership_revision: "rev-1",
+                    visible_member_count: 2,
+                    read_contract: {
+                      source: "serving_projection_members",
+                      fallback_used: false,
+                      fail_closed: true,
+                    },
+                    counts: {
+                      count_scope: "exact_projection",
+                      result_count: 2,
+                      candidate_count: 2,
+                      visible_member_count: 2,
+                      facet_count_scope: "exact_projection",
+                    },
+                    readiness: {},
+                  },
+                  total_candidates: 2,
+                  filtered_candidate_count: 2,
+                  offset: 0,
+                  limit: 1,
+                  has_more: true,
+                  next_offset: 1,
+                  candidates: [
+                    {
+                      candidate_id: "m-1",
+                      employment_scope: "current",
+                      public_summary: { display_name: "Member One" },
+                    },
+                  ],
+                  facet_summary: {
+                    status: "complete",
+                    count_scope: "exact_projection",
+                    candidate_count: 2,
+                  },
+                  filter_signature: "srv-filter-sig-1",
+                  filter_contract: {
+                    source: "serving_projection_reader",
+                    facet_count_scope: "exact_projection",
+                    row_filter_scope: "projection_membership",
+                    backend_filtered_paging_supported: true,
+                    filter_signature: "srv-filter-sig-1",
+                  },
+                };
+                if (mutate) mutate(payload);
+                return payload;
+              };
+              addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) => {
+                // The scenario tag rides the real filter channel
+                // (searchKeyword -> `search` query param).
+                const mode = new URL(url, "http://stub.local").searchParams.get("search") || "happy";
+                if (mode === "not_ready") {
+                  return pagePayloadFor((payload) => {
+                    payload.status = "not_ready";
+                    payload.reason = "projection_person_search_index_unavailable";
+                    payload.filtered_candidate_count = 0;
+                    payload.limit = 0;
+                    payload.has_more = false;
+                    payload.next_offset = null;
+                    payload.candidates = [];
+                  });
+                }
+                if (mode === "missing_top_sig") {
+                  return pagePayloadFor((payload) => {
+                    delete payload.filter_signature;
+                  });
+                }
+                if (mode === "missing_contract_sig") {
+                  return pagePayloadFor((payload) => {
+                    delete payload.filter_contract.filter_signature;
+                  });
+                }
+                if (mode === "conflicting_sig") {
+                  return pagePayloadFor((payload) => {
+                    payload.filter_contract.filter_signature = "srv-filter-sig-OTHER";
+                  });
+                }
+                if (mode === "offset_mismatch") {
+                  return pagePayloadFor((payload) => {
+                    payload.offset = 24;
+                  });
+                }
+                if (mode === "limit_fabricated") {
+                  return pagePayloadFor((payload) => {
+                    // The rerun5 truthy-fallback probe: a nonzero limit with
+                    // zero returned rows is not a valid page tuple.
+                    payload.limit = 24;
+                    payload.candidates = [];
+                  });
+                }
+                return pagePayloadFor();
+              });
+              const fetchPage = (mode, offset = 0) =>
+                api.getProjectionCandidatePage("proj-1", {
+                  offset,
+                  limit: 24,
+                  forceRefresh: true,
+                  filter: { searchKeyword: mode },
+                });
+              const captureAsyncError = async (callback) => {
+                try {
+                  await callback();
+                  return "";
+                } catch (error) {
+                  return String(error?.message || error || "");
+                }
+              };
+              const notReadyError = await captureAsyncError(() => fetchPage("not_ready"));
+              const missingTopSigError = await captureAsyncError(() => fetchPage("missing_top_sig"));
+              const missingContractSigError = await captureAsyncError(() => fetchPage("missing_contract_sig"));
+              const conflictingSigError = await captureAsyncError(() => fetchPage("conflicting_sig"));
+              const offsetMismatchError = await captureAsyncError(() => fetchPage("offset_mismatch"));
+              const limitFabricatedError = await captureAsyncError(() => fetchPage("limit_fabricated"));
+              const happy = await fetchPage("happy");
+              console.log(JSON.stringify({
+                notReadyError,
+                missingTopSigError,
+                missingContractSigError,
+                conflictingSigError,
+                offsetMismatchError,
+                limitFabricatedError,
+                happyFilterSignature: happy.filterSignature,
+                happyOffset: happy.offset,
+                happyLimit: happy.limit,
+                happyReturnedCount: happy.returnedCount,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # not_ready is rejected with its server reason — never converted to a
+        # successful empty result.
+        self.assertIn("not ready", payload["notReadyError"])
+        self.assertIn("projection_person_search_index_unavailable", payload["notReadyError"])
+
+        # Both server signature mirrors are required and byte-equal; the
+        # client-computed signature is never a substitute.
+        for key in ("missingTopSigError", "missingContractSigError", "conflictingSigError"):
+            self.assertIn("missing or conflicting server filter signatures", payload[key], key)
+
+        # The exact requested tuple: offset mismatch and a fabricated limit
+        # (truthy fallback rewriting the row count) are both rejected.
+        self.assertIn("does not match the requested page tuple", payload["offsetMismatchError"])
+        self.assertIn("does not match the requested page tuple", payload["limitFabricatedError"])
+
+        # Happy path: the admitted page carries the SERVER-owned signature
+        # (never the client JSON signature) and the validated tuple.
+        self.assertEqual(payload["happyFilterSignature"], "srv-filter-sig-1")
+        self.assertEqual(payload["happyOffset"], 0)
+        self.assertEqual(payload["happyLimit"], 1)
+        self.assertEqual(payload["happyReturnedCount"], 1)
+
+    def test_summary_gap_signature_does_not_leak_across_projections(self) -> None:
+        """Rerun5 finding 3: the last resolved filter signature is keyed to
+        its projection context — narrowing projection 1 and switching to
+        projection 2 (same job, inside a facet gap) must NOT block
+        projection 2 behind a stale preserved-filter state."""
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const resultsBoard = loadTs("frontend-demo/src/components/ResultsBoardPanel.tsx");
+              const REV = "rev-1";
+              const summary = {
+                candidateCount: 2,
+                layers: [],
+                recall: [],
+                employment: [],
+                locations: [],
+                functions: [
+                  { id: "research", label: "Researcher", count: 1 },
+                  { id: "engineering", label: "Engineer", count: 1 },
+                ],
+              };
+              const boardRuntimeFor = (facet) => ({
+                expectedCandidateCount: 2,
+                rowPublicationRevision: REV,
+                rowPublicationTier: "serving_projection_members",
+                facetSummaryStatus: facet ? "complete" : "unavailable",
+                facetSummaryScope: facet ? "global_full_population" : "unavailable",
+                facetSummaryCandidateCount: facet ? 2 : 0,
+                filterContract: {
+                  source: "serving_projection_reader",
+                  facetCountScope: "exact_projection",
+                  rowFilterScope: "projection_membership",
+                  backendFilteredPagingSupported: true,
+                },
+              });
+              const boardCandidate = (patch) => ({
+                ...baseCandidate,
+                evidence: [],
+                confidence: "high",
+                avatarUrl: "",
+                ...patch,
+              });
+              const candidates = [
+                boardCandidate({
+                  id: "row-1",
+                  employmentStatus: "current",
+                  functionBucketIds: ["engineering"],
+                  functionBucketSource: "lane_membership",
+                }),
+                boardCandidate({
+                  id: "row-2",
+                  employmentStatus: "former",
+                  functionBucketIds: ["research"],
+                  functionBucketSource: "registry_evidence",
+                }),
+              ];
+              const dashboardFor = (projId, withSummary) => ({
+                candidates,
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: 2,
+                manualReviewCount: 0,
+                projectionId: projId,
+                candidateFacetSummary: withSummary ? summary : undefined,
+                candidateFacetSummaryScope: withSummary ? "global_full_population" : "",
+                boardRuntimeState: boardRuntimeFor(withSummary),
+              });
+              const boardProps = (dashboard, projId) => ({
+                dashboard,
+                projectionId: projId,
+                historyId: "",
+                jobId: "job-shared",
+                initialCandidateId: "",
+                isHydratingCandidates: false,
+                candidateHydrationError: "",
+                reviewStatusMap: {},
+                onSelectedCandidateChange: () => {},
+                onOpenManualReview: () => {},
+                onReviewStateChanged: () => {},
+              });
+              const pagePayloadFor = (projId) => ({
+                status: "ready",
+                projection: {
+                  projection_id: projId,
+                  source_run_id: "run-1",
+                  membership_revision: REV,
+                  visible_member_count: 2,
+                  read_contract: {
+                    source: "serving_projection_members",
+                    fallback_used: false,
+                    fail_closed: true,
+                  },
+                  counts: {
+                    count_scope: "exact_projection",
+                    result_count: 2,
+                    candidate_count: 2,
+                    visible_member_count: 2,
+                    facet_count_scope: "exact_projection",
+                  },
+                  readiness: {},
+                },
+                total_candidates: 2,
+                filtered_candidate_count: 1,
+                offset: 0,
+                limit: 1,
+                has_more: false,
+                next_offset: null,
+                candidates: [
+                  {
+                    candidate_id: "m-1",
+                    employment_scope: "current",
+                    public_summary: { display_name: "Member One" },
+                  },
+                ],
+                facet_summary: {
+                  status: "complete",
+                  count_scope: "exact_projection",
+                  candidate_count: 2,
+                },
+                filter_signature: "srv-filter-sig-1",
+                filter_contract: {
+                  source: "serving_projection_reader",
+                  facet_count_scope: "exact_projection",
+                  row_filter_scope: "projection_membership",
+                  backend_filtered_paging_supported: true,
+                  filter_signature: "srv-filter-sig-1",
+                },
+              });
+              addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayloadFor("proj-1"));
+              addRoute("GET", "/api/projections/proj-2/candidates", () => pagePayloadFor("proj-2"));
+
+              const container = miniWindow.document.createElement("div");
+              miniWindow.document.body.appendChild(container);
+              const root = ReactDOMClient.createRoot(container);
+              const renderBoard = async (dashboard, projId) => {
+                await act(async () => {
+                  root.render(el(resultsBoard.ResultsBoardPanel, boardProps(dashboard, projId)));
+                });
+                await settle();
+              };
+              const findFacetOptionInput = (labelText) => {
+                let found = null;
+                const visit = (node) => {
+                  if (found || !node) return;
+                  if (
+                    node.nodeType === 1 &&
+                    node.nodeName === "LABEL" &&
+                    String(node.getAttribute("class") || "").includes("facet-option") &&
+                    node.textContent.includes(labelText)
+                  ) {
+                    found = (node.childNodes || []).find((child) => child.nodeName === "INPUT") || null;
+                    return;
+                  }
+                  for (const child of node.childNodes || []) visit(child);
+                };
+                visit(container);
+                return found;
+              };
+
+              // Narrow projection 1's function facet (records the resolved
+              // signature under projection 1's context key), then SWITCH to
+              // projection 2 INSIDE a canonical-summary gap: projection 2 has
+              // no narrowing intent of its own, so it must issue its normal
+              // browsing request and must NOT show the preserved-filter
+              // blocker from projection 1's stale signature.
+              await renderBoard(dashboardFor("proj-1", true), "proj-1");
+              setCheckbox(findFacetOptionInput("Engineer"), false);
+              await settle();
+              const proj1Urls = callsTo("/api/projections/proj-1/candidates").map((c) => c.url || c.path);
+
+              await renderBoard(dashboardFor("proj-2", false), "proj-2");
+              await settle();
+              const proj2Urls = callsTo("/api/projections/proj-2/candidates").map((c) => c.url || c.path);
+              const proj2Notice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+              const proj2IndexNotice = container.textContent.includes("筛选索引准备中");
+
+              console.log(JSON.stringify({
+                proj1Narrowed: proj1Urls.some((url) => url.includes("function_buckets=research")),
+                proj2RequestCount: proj2Urls.length,
+                proj2Notice,
+                proj2IndexNotice,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Projection 1 did narrow (the resolved signature was recorded).
+        self.assertTrue(payload["proj1Narrowed"])
+        # Projection 2 inside the gap: its OWN browsing request fires (not
+        # blocked by projection 1's stale signature) and the preserved-filter
+        # blocker does NOT appear (the generic index-preparing notice may).
+        self.assertGreaterEqual(payload["proj2RequestCount"], 1)
+        self.assertFalse(payload["proj2Notice"])
+        self.assertTrue(payload["proj2IndexNotice"])
 
 
 if __name__ == "__main__":

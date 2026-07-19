@@ -67,8 +67,8 @@ class FrontendResultsBoardPaginationTest(unittest.TestCase):
         # contract's count scope comes independently from the projection's own
         # counts.facet_count_scope.
         self.assertNotIn('mapCandidateFacetSummaryScope(payload, "exact_projection")', api_source)
-        self.assertIn("payload.facet_summary_scope,", api_source)
-        self.assertIn(')?.count_scope,', api_source)
+        self.assertIn('facetSummaryScopeEvidence(payload, "facet_summary_scope", false)', api_source)
+        self.assertIn('facetSummaryScopeEvidence(payload.facet_summary, "count_scope", true)', api_source)
         self.assertIn('pickFirstString(counts, ["facet_count_scope"])', api_source)
         self.assertIn("facet_summary: payload.facet_summary", api_source)
         self.assertIn("facet_summary_scope: payload.facet_summary_scope,", api_source)
