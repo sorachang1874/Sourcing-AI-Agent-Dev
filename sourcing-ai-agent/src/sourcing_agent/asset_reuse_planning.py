@@ -2430,6 +2430,8 @@ def _sync_task_intent_view_from_metadata(metadata: dict[str, Any]) -> dict[str, 
         intent_view["asset_reuse_plan"] = dict(synchronized.get("asset_reuse_plan") or {})
     if "delta_execution_plan" in synchronized:
         intent_view["delta_execution_plan"] = dict(synchronized.get("delta_execution_plan") or {})
+    if "company_employee_base_filters" in synchronized:
+        intent_view["company_employee_base_filters"] = dict(synchronized.get("company_employee_base_filters") or {})
     if "company_employee_shards" in synchronized:
         intent_view["company_employee_shards"] = [
             dict(item) for item in list(synchronized.get("company_employee_shards") or []) if isinstance(item, dict)

@@ -4,10 +4,12 @@ import re
 from copy import deepcopy
 from typing import Any, Callable, Iterable
 
+from .cohort_selection import explicit_cohort_selection
 from .organization_execution_profile import FALLBACK_LARGE_COMPANY_KEYS
 from .query_signal_knowledge import (
     ALPHABET_COMPANY_URL,
     GOOGLE_COMPANY_URL,
+    default_large_org_priority_function_ids,
     function_id_selectable_labels,
     related_company_scope_urls,
     role_bucket_function_ids,
@@ -54,8 +56,11 @@ SEARCH_QUERY_CANONICAL_ALIASES: dict[str, str] = {
     "nano-banana": "Nano Banana",
 }
 
-LARGE_ORG_PRIORITY_FUNCTION_IDS = ["8", "9", "19", "24"]
-LARGE_ORG_TECHNICAL_FUNCTION_IDS = ["8", "24"]
+# Registry-derived function-id sets (never hand-maintained duplicates of
+# ROLE_BUCKET_KNOWLEDGE): engineering/founding/product_management/research and
+# the technical (engineering+research) subset.
+LARGE_ORG_PRIORITY_FUNCTION_IDS = default_large_org_priority_function_ids()
+LARGE_ORG_TECHNICAL_FUNCTION_IDS = role_bucket_function_ids(("engineering", "research"))
 
 # The company-employees roster lane's default location scope.  Every roster
 # query plan (adaptive partition, keyword probe, or request-scoped function
@@ -72,52 +77,33 @@ REQUEST_FUNCTION_PARTITION_STRATEGY_ID = "request_function_partition"
 def request_scoped_roster_function_ids(request_payload: dict[str, Any] | None) -> list[str]:
     """Explicitly selected provider function ids for the company-employees roster lane.
 
-    Reads the request's structured role selection
-    (``must_have_primary_role_buckets``; user-explicit cohort selections mirror
-    their ``role_bucket_ids`` into that field during request canonicalization)
-    and maps buckets through the canonical ``ROLE_BUCKET_KNOWLEDGE`` registry
-    (research→"24", engineering→"8", product_management→"19").  Text-inferred
-    or planner-inferred roles are not function selections and never shard the
-    roster lane; unknown buckets map to no id (never invent new ids).
+    ONLY a user-explicit cohort selection (the canonical role authority,
+    ``cohort_selection.role_bucket_ids``) counts as a function selection; its
+    buckets map through the canonical ``ROLE_BUCKET_KNOWLEDGE`` registry
+    (research→"24", engineering→"8", product_management→"19", founding→"9").
+    The flat ``must_have_primary_role_buckets`` compatibility mirror, soft or
+    text-inferred role buckets, and planner-inferred roles are NOT paid
+    function selections and never produce roster shards; unknown buckets map
+    to no id (never invent new ids).
     """
 
-    payload = dict(request_payload or {})
-    raw_buckets = payload.get("must_have_primary_role_buckets")
-    if raw_buckets is None:
-        raw_buckets = payload.get("must_have_primary_role_bucket")
-    if isinstance(raw_buckets, str):
-        raw_items: list[Any] = [raw_buckets]
-    elif isinstance(raw_buckets, (list, tuple, set)):
-        raw_items = list(raw_buckets)
-    else:
-        raw_items = []
-    return role_bucket_function_ids(str(item) for item in raw_items)
+    cohort = explicit_cohort_selection(request_payload)
+    if cohort is None or str(cohort.get("source") or "") != "user_explicit":
+        return []
+    return role_bucket_function_ids(list(cohort.get("role_bucket_ids") or []))
 
 
-def build_request_scoped_company_employee_query_plan(
-    *,
+def _request_scoped_location_filters(
     target_locations: list[str] | None,
-    function_ids: Iterable[str] | None,
-    max_pages: int,
-    page_limit: int,
-) -> dict[str, Any]:
-    """Unified request-scoped query plan for the Harvest company-employees roster lane.
+    exclude_target_locations: list[str] | None,
+) -> tuple[list[str], list[str], dict[str, Any]]:
+    """Single-writer location semantics for the roster lane (absent/default/values/opt-out).
 
-    One parameter contract consumed by the roster lane for every company — no
-    company-name branches:
-
-    - ``target_locations``: request-level locations.  ``None`` (field absent)
-      defaults to the United States; a non-empty list passes through unchanged
-      (multi-region allowed); an explicit empty list opts out of location
-      filtering (single-writer rule — request values win outright and are
-      never merged with the default).
-    - ``function_ids``: explicitly selected provider function ids.  Each id
-      gets its own company-employees shard with its own receipts/queue rows,
-      because the provider caps one call at ~2500 items and per-function
-      sharding is the coverage mechanism; the segmented roster merge
-      union-dedupes overlapping members across shards.  No function selection
-      yields one unsharded query (current small-company behavior) carrying
-      only the location filter.
+    ``target_locations`` ``None`` (field absent) defaults to the United States;
+    a non-empty list passes through (multi-region allowed); an explicit empty
+    list opts out of location filtering — request values win outright and are
+    never merged with the default.  ``exclude_target_locations`` composes
+    independently into ``exclude_locations`` (empty/absent ⇒ no exclusion).
     """
 
     if target_locations is None:
@@ -126,17 +112,57 @@ def build_request_scoped_company_employee_query_plan(
         locations = list(
             dict.fromkeys(str(item).strip() for item in list(target_locations or []) if str(item).strip())
         )
+    exclude_locations = list(
+        dict.fromkeys(str(item).strip() for item in list(exclude_target_locations or []) if str(item).strip())
+    )
+    filters: dict[str, Any] = {}
+    if locations:
+        filters["locations"] = list(locations)
+    if exclude_locations:
+        filters["exclude_locations"] = list(exclude_locations)
+    return locations, exclude_locations, filters
+
+
+def build_request_scoped_company_employee_query_plan(
+    *,
+    target_locations: list[str] | None,
+    function_ids: Iterable[str] | None,
+    max_pages: int,
+    page_limit: int,
+    exclude_target_locations: list[str] | None = None,
+) -> dict[str, Any]:
+    """Unified request-scoped query plan for the Harvest company-employees roster lane.
+
+    One parameter contract consumed by the roster lane for every company — no
+    company-name branches:
+
+    - ``target_locations`` / ``exclude_target_locations``: request-level
+      location axes (see ``_request_scoped_location_filters`` for the
+      single-writer semantics); both land on every shard and on the unsharded
+      query's base filters (provider ``locations`` / ``excludeLocations``).
+    - ``function_ids``: explicitly selected provider function ids (see
+      ``request_scoped_roster_function_ids`` for who may select).  Each id
+      gets its own company-employees shard with its own receipts/queue rows,
+      because the provider caps one call at ~2500 items and per-function
+      sharding is the coverage mechanism; the segmented roster merge
+      union-dedupes overlapping members across shards while keeping every
+      shard's provenance.  No function selection yields one unsharded query
+      (current small-company behavior) carrying only the location filters.
+    """
+
+    locations, exclude_locations, base_filters = _request_scoped_location_filters(
+        target_locations,
+        exclude_target_locations,
+    )
     normalized_function_ids = list(
         dict.fromkeys(str(item).strip() for item in list(function_ids or []) if str(item).strip())
     )
-    base_filters: dict[str, Any] = {}
-    if locations:
-        base_filters["locations"] = list(locations)
     location_title = ", ".join(locations) if locations else "All locations"
     scope_note = (
         "Request-scoped function partition. One company-employees shard per explicitly selected "
         "function id because the provider caps a single query at ~2500 items; each shard carries "
-        "its own receipts and the segmented roster merge union-dedupes overlapping members."
+        "its own receipts and the segmented roster merge union-dedupes overlapping members while "
+        "preserving every shard's function provenance."
     )
     labels = function_id_selectable_labels(normalized_function_ids)
     shards: list[dict[str, Any]] = []
@@ -157,25 +183,90 @@ def build_request_scoped_company_employee_query_plan(
     return {
         "strategy_id": REQUEST_FUNCTION_PARTITION_STRATEGY_ID if shards else "",
         "locations": locations,
+        "exclude_locations": exclude_locations,
         "function_ids": normalized_function_ids,
         "company_filters": base_filters,
         "shards": shards,
     }
 
 
-def _generic_large_org_technical_partition_policy(*, scope_note: str = "") -> dict[str, Any]:
+# Stop reasons emitted by the connector for a truncated company-employees
+# query (provider ~2500-item cap or the requested item limit).
+TRUNCATED_ROSTER_STOP_REASONS = frozenset({"provider_cap_reached", "requested_limit_reached"})
+
+
+def shard_summary_is_truncated(shard_summary: dict[str, Any]) -> bool:
+    """True when one roster shard's evidence shows truncated (non-exhaustive) coverage."""
+
+    summary = dict(shard_summary or {})
+    if bool(summary.get("partial_result") or summary.get("provider_cap_hit") or summary.get("requested_limit_hit")):
+        return True
+    if bool(summary.get("provider_cap_limited") or summary.get("requested_limit_would_truncate")):
+        return True
+    return str(summary.get("stop_reason") or "").strip().lower() in TRUNCATED_ROSTER_STOP_REASONS
+
+
+def resolve_segmented_roster_completion(
+    *,
+    expected_shard_ids: Iterable[str],
+    shard_summaries: Iterable[dict[str, Any]],
+    completed_stop_reason: str,
+    partial_stop_reason: str,
+) -> dict[str, Any]:
+    """One honest completion contract for segmented company-employees rosters.
+
+    Coverage is ``completed`` only when every expected shard is present AND no
+    shard carries truncation evidence (provider cap / requested-limit hit); a
+    missing or truncated shard keeps the roster ``partial`` so capped function
+    coverage is never reported as overall completed.  Both the direct
+    segmented fetch and background worker reconciliation route through this.
+    """
+
+    expected = {str(item).strip() for item in expected_shard_ids if str(item).strip()}
+    summaries = [dict(item) for item in shard_summaries if isinstance(item, dict)]
+    available = {str(item.get("shard_id") or "").strip() for item in summaries if str(item.get("shard_id") or "").strip()}
+    truncated_shard_ids = sorted(
+        str(item.get("shard_id") or "").strip()
+        for item in summaries
+        if str(item.get("shard_id") or "").strip() and shard_summary_is_truncated(item)
+    )
+    missing_shard_ids = sorted(expected - available)
+    complete = not missing_shard_ids and not truncated_shard_ids
+    return {
+        "completion_status": "completed" if complete else "partial",
+        "stop_reason": completed_stop_reason if complete else partial_stop_reason,
+        "expected_shard_count": len(expected),
+        "available_shard_count": len(available),
+        "missing_shard_ids": missing_shard_ids,
+        "truncated_shard_ids": truncated_shard_ids,
+    }
+
+
+def _generic_large_org_technical_partition_policy(
+    *,
+    scope_note: str = "",
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
+) -> dict[str, Any]:
+    effective_locations = (
+        list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS) if locations is None else list(locations or [])
+    )
+    root_filters: dict[str, Any] = {}
+    if effective_locations:
+        root_filters["locations"] = list(effective_locations)
+    if exclude_locations:
+        root_filters["exclude_locations"] = list(exclude_locations)
+    root_filters["function_ids"] = list(LARGE_ORG_TECHNICAL_FUNCTION_IDS)
+    location_title = ", ".join(effective_locations) if effective_locations else "All locations"
     return {
         "strategy_id": "adaptive_us_technical_partition",
         "scope_note": scope_note
         or (
-            "Probe-driven United States technical roster partition. Start from engineering+research, "
+            f"Probe-driven {location_title} technical roster partition. Start from engineering+research, "
             "split engineering and research explicitly, and keep capped shard metadata when a live shard still exceeds the provider cap."
         ),
-        "root_title": "United States",
-        "root_filters": {
-            "locations": list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS),
-            "function_ids": list(LARGE_ORG_TECHNICAL_FUNCTION_IDS),
-        },
+        "root_title": location_title,
+        "root_filters": root_filters,
         "allow_overflow_partial": True,
         "partition_rules": [
             {
@@ -211,12 +302,46 @@ def _should_use_generic_large_org_partition(
     return normalized_company_key in FALLBACK_LARGE_COMPANY_KEYS
 
 
+def _compose_request_roster_policy_axes(
+    base: dict[str, Any],
+    *,
+    locations: list[str] | None,
+    exclude_locations: list[str] | None,
+    request_function_ids: list[str] | None,
+) -> dict[str, Any]:
+    """Compose request-owned location/function axes into an adaptive roster policy.
+
+    ``locations=None`` keeps the policy's own default; an explicit list
+    (including ``[]``) replaces it so a requested region is never silently
+    re-defaulted to the United States.  ``request_function_ids`` marks the
+    explicit function selection the probe planner must expand into separate
+    per-function shard roots BEFORE any keyword/partition subdivision.
+    """
+
+    root_filters = dict(base.get("root_filters") or {})
+    if locations is not None:
+        if locations:
+            root_filters["locations"] = list(locations)
+        else:
+            root_filters.pop("locations", None)
+        base["root_title"] = ", ".join(locations) if locations else "All locations"
+    if exclude_locations:
+        root_filters["exclude_locations"] = list(exclude_locations)
+    base["root_filters"] = root_filters
+    if request_function_ids:
+        base["request_function_ids"] = list(request_function_ids)
+    return base
+
+
 def build_default_company_employee_shard_policy(
     company_key: str,
     *,
     max_pages: int,
     page_limit: int,
     organization_execution_profile: dict[str, Any] | None = None,
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
+    request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     normalized_company_key = str(company_key or "").strip().lower()
     base = deepcopy(ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES.get(normalized_company_key) or {})
@@ -224,7 +349,10 @@ def build_default_company_employee_shard_policy(
         normalized_company_key,
         organization_execution_profile=organization_execution_profile,
     ):
-        base = _generic_large_org_technical_partition_policy()
+        base = _generic_large_org_technical_partition_policy(
+            locations=locations,
+            exclude_locations=exclude_locations,
+        )
     if not base:
         return {}
     base["max_pages"] = max(1, int(max_pages or 1))
@@ -232,6 +360,12 @@ def build_default_company_employee_shard_policy(
     base["provider_result_cap"] = FULL_COMPANY_EMPLOYEE_RESULT_CAP
     base["probe_max_pages"] = 1
     base["probe_page_limit"] = 25
+    base = _compose_request_roster_policy_axes(
+        base,
+        locations=locations,
+        exclude_locations=exclude_locations,
+        request_function_ids=request_function_ids,
+    )
     return normalize_company_employee_shard_policy(base)
 
 
@@ -243,6 +377,9 @@ def build_large_org_keyword_probe_shard_policy(
     function_ids: list[str] | None = None,
     max_pages: int,
     page_limit: int,
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
+    request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     normalized_company_key = str(company_key or "").strip().lower()
     scope_companies = _resolve_large_org_scope_companies(normalized_company_key, company_scope)
@@ -252,6 +389,17 @@ def build_large_org_keyword_probe_shard_policy(
     if not keyword_shards:
         return {}
 
+    effective_locations = (
+        list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS) if locations is None else list(locations or [])
+    )
+    location_title = ", ".join(effective_locations) if effective_locations else "All locations"
+    root_filters: dict[str, Any] = {"companies": scope_companies}
+    if effective_locations:
+        root_filters["locations"] = list(effective_locations)
+    if exclude_locations:
+        root_filters["exclude_locations"] = list(exclude_locations)
+    root_filters["function_ids"] = list(function_ids or LARGE_ORG_PRIORITY_FUNCTION_IDS)
+
     return normalize_company_employee_shard_policy(
         {
             "strategy_id": "adaptive_large_org_keyword_probe",
@@ -259,16 +407,13 @@ def build_large_org_keyword_probe_shard_policy(
             "force_keyword_shards": True,
             "allow_overflow_partial": True,
             "scope_note": (
-                "Related-scope keyword probe mode. First probe the broad US scope, then run keyword shards "
+                f"Related-scope keyword probe mode. First probe the broad {location_title} scope, then run keyword shards "
                 "and union+dedupe downstream if the root scope exceeds the provider cap."
             ),
-            "root_title": "United States",
-            "root_filters": {
-                "locations": list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS),
-                "companies": scope_companies,
-                "function_ids": list(function_ids or LARGE_ORG_PRIORITY_FUNCTION_IDS),
-            },
+            "root_title": location_title,
+            "root_filters": root_filters,
             "keyword_shards": keyword_shards,
+            "request_function_ids": list(request_function_ids or []),
             "max_pages": max(1, int(max_pages or 1)),
             "page_limit": max(1, int(page_limit or 25)),
             "probe_max_pages": 1,
@@ -293,7 +438,12 @@ def normalize_company_employee_shard_policy(value: Any) -> dict[str, Any]:
         return {}
     if mode == "partition_mece" and not partition_rules and keyword_shards:
         mode = "keyword_union"
-    return {
+    request_function_ids = [
+        str(item).strip()
+        for item in list(value.get("request_function_ids") or [])
+        if str(item).strip()
+    ]
+    normalized = {
         "strategy_id": str(value.get("strategy_id") or "").strip(),
         "mode": mode,
         "force_keyword_shards": bool(value.get("force_keyword_shards")),
@@ -309,6 +459,9 @@ def normalize_company_employee_shard_policy(value: Any) -> dict[str, Any]:
         "probe_page_limit": max(1, int(value.get("probe_page_limit") or 25)),
         "provider_result_cap": max(1, int(value.get("provider_result_cap") or FULL_COMPANY_EMPLOYEE_RESULT_CAP)),
     }
+    if request_function_ids:
+        normalized["request_function_ids"] = list(dict.fromkeys(request_function_ids))
+    return normalized
 
 
 def normalize_company_filters(value: Any) -> dict[str, Any]:
@@ -349,6 +502,19 @@ def plan_company_employee_shards_from_policy(
     partition_rules = [dict(item) for item in list(normalized_policy.get("partition_rules") or []) if isinstance(item, dict)]
     keyword_shards = [dict(item) for item in list(normalized_policy.get("keyword_shards") or []) if isinstance(item, dict)]
     allow_overflow_partial = bool(normalized_policy.get("allow_overflow_partial"))
+
+    request_function_ids = [
+        str(item).strip() for item in list(normalized_policy.get("request_function_ids") or []) if str(item).strip()
+    ]
+    if request_function_ids:
+        # Explicit function selection owns the partition axis: expand into
+        # separate per-function shard roots FIRST, then allow the configured
+        # (keyword/capped) subdivision inside each function scope.
+        return _plan_request_function_shards(
+            normalized_policy=normalized_policy,
+            request_function_ids=request_function_ids,
+            probe_fn=probe_fn,
+        )
 
     if mode == "keyword_union":
         return _plan_keyword_union_shards(
@@ -803,6 +969,239 @@ def _plan_keyword_union_shards(
         "shards": shards,
         "union_dedupe_required": True,
     }
+
+
+def _plan_single_scope_root(
+    *,
+    strategy_id: str,
+    scope_note: str,
+    root_title: str,
+    root_filters: dict[str, Any],
+    max_pages: int,
+    page_limit: int,
+    provider_cap: int,
+    allow_overflow_partial: bool,
+    probe_fn: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]],
+    probe_id: str = "root",
+) -> dict[str, Any]:
+    """Probe one scope root and emit a single shard (or a capped-overflow shard).
+
+    Used for request-function shard roots: cross-function partition rules do
+    not apply inside one function's scope, so an over-cap root either stays a
+    capped shard with explicit overflow metadata (``allow_overflow_partial``)
+    or blocks the plan (fail closed).
+    """
+
+    root_probe = probe_fn(
+        root_filters,
+        {
+            "probe_id": probe_id,
+            "title": root_title,
+            "scope_note": scope_note,
+            "strategy_id": strategy_id,
+            "max_pages": max_pages,
+            "page_limit": page_limit,
+        },
+    )
+    root_probe_summary = _normalize_probe_summary(root_probe, root_filters, probe_id=probe_id, title=root_title)
+    probe_summaries = [root_probe_summary]
+    root_count = int(root_probe_summary.get("estimated_total_count") or 0)
+    if root_count <= 0:
+        return {
+            "status": "blocked",
+            "reason": "root_probe_empty",
+            "detail": f"Adaptive shard probe returned no visible estimate for scope '{root_title}'.",
+            "probe_summaries": probe_summaries,
+            "shards": [],
+        }
+    if root_count <= provider_cap:
+        return {
+            "status": "planned",
+            "reason": "root_scope_within_cap",
+            "probe_summaries": probe_summaries,
+            "shards": [
+                _build_shard_record(
+                    strategy_id=strategy_id,
+                    shard_id=_normalize_shard_id(root_title),
+                    title=root_title,
+                    scope_note=scope_note,
+                    max_pages=max_pages,
+                    page_limit=page_limit,
+                    company_filters=root_filters,
+                    probe_summary=root_probe_summary,
+                )
+            ],
+        }
+    if allow_overflow_partial:
+        capped_shard = _build_shard_record(
+            strategy_id=strategy_id,
+            shard_id=_normalize_shard_id(root_title),
+            title=root_title,
+            scope_note=scope_note,
+            max_pages=max_pages,
+            page_limit=page_limit,
+            company_filters=root_filters,
+            probe_summary=root_probe_summary,
+        )
+        capped_shard["provider_cap_limited"] = True
+        capped_shard["estimated_total_count_before_cap"] = root_count
+        return {
+            "status": "planned",
+            "reason": "root_scope_over_cap_capped",
+            "probe_summaries": probe_summaries,
+            "shards": [capped_shard],
+            "overflow_scopes": [
+                {
+                    "title": root_title,
+                    "company_filters": root_filters,
+                    "estimated_total_count": root_count,
+                }
+            ],
+        }
+    return {
+        "status": "blocked",
+        "reason": "root_scope_over_cap_without_partition_rules",
+        "detail": (
+            f"Adaptive shard probe found '{root_title}' above the provider cap "
+            f"({root_count} > {provider_cap}) with no applicable subdivision."
+        ),
+        "probe_summaries": probe_summaries,
+        "shards": [],
+        "overflow_scope": {
+            "title": root_title,
+            "company_filters": root_filters,
+            "estimated_total_count": root_count,
+        },
+    }
+
+
+def _plan_request_function_shards(
+    *,
+    normalized_policy: dict[str, Any],
+    request_function_ids: list[str],
+    probe_fn: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]],
+) -> dict[str, Any]:
+    """Expand an explicit function selection into separate per-function shard roots.
+
+    Each selected function id becomes its own probe root (never one combined
+    multi-function query); keyword shards subdivide a function root only when
+    that root itself exceeds the provider cap ("optional keyword subdivision"),
+    and a still-over-cap root without subdivision stays a capped shard with
+    overflow metadata when ``allow_overflow_partial`` is set.  A function scope
+    that probes empty is skipped (recorded), and any other planning failure
+    blocks the whole plan (fail closed).
+    """
+
+    strategy_id = REQUEST_FUNCTION_PARTITION_STRATEGY_ID
+    base_root_filters = normalize_company_filters(normalized_policy.get("root_filters"))
+    base_root_title = str(normalized_policy.get("root_title") or "Root scope").strip() or "Root scope"
+    max_pages = int(normalized_policy.get("max_pages") or 1)
+    page_limit = int(normalized_policy.get("page_limit") or 25)
+    provider_cap = int(normalized_policy.get("provider_result_cap") or FULL_COMPANY_EMPLOYEE_RESULT_CAP)
+    mode = str(normalized_policy.get("mode") or "partition_mece").strip().lower()
+    keyword_shards = [dict(item) for item in list(normalized_policy.get("keyword_shards") or []) if isinstance(item, dict)]
+    allow_overflow_partial = bool(normalized_policy.get("allow_overflow_partial"))
+    scope_note = str(normalized_policy.get("scope_note") or "").strip()
+    labels = function_id_selectable_labels(request_function_ids)
+
+    all_shards: list[dict[str, Any]] = []
+    probe_summaries: list[dict[str, Any]] = []
+    overflow_scopes: list[dict[str, Any]] = []
+    skipped_function_ids: list[str] = []
+    union_dedupe_required = False
+    for function_id in request_function_ids:
+        label = str(labels.get(function_id) or "").strip() or f"Function {function_id}"
+        root_title = f"{base_root_title} / {label}"
+        root_filters = {**base_root_filters, "function_ids": [function_id]}
+        if mode == "keyword_union" and keyword_shards:
+            # Per function root, keyword subdivision is optional: it only runs
+            # when that function scope itself exceeds the provider cap.
+            function_policy = {**normalized_policy, "force_keyword_shards": False}
+            sub_plan = _plan_keyword_union_shards(
+                normalized_policy=function_policy,
+                strategy_id=strategy_id,
+                scope_note=scope_note,
+                root_title=root_title,
+                root_filters=root_filters,
+                max_pages=max_pages,
+                page_limit=page_limit,
+                provider_cap=provider_cap,
+                keyword_shards=keyword_shards,
+                probe_fn=probe_fn,
+            )
+        else:
+            sub_plan = _plan_single_scope_root(
+                strategy_id=strategy_id,
+                scope_note=scope_note,
+                root_title=root_title,
+                root_filters=root_filters,
+                max_pages=max_pages,
+                page_limit=page_limit,
+                provider_cap=provider_cap,
+                allow_overflow_partial=allow_overflow_partial,
+                probe_fn=probe_fn,
+                probe_id=f"function_{_normalize_shard_id(function_id)}",
+            )
+        probe_summaries.extend(dict(item) for item in list(sub_plan.get("probe_summaries") or []))
+        if str(sub_plan.get("status") or "") == "blocked" and str(sub_plan.get("reason") or "") == "root_probe_empty":
+            skipped_function_ids.append(function_id)
+            continue
+        if str(sub_plan.get("status") or "") != "planned":
+            return {
+                "status": "blocked",
+                "reason": "function_shard_planning_failed",
+                "detail": (
+                    f"Adaptive planning failed for explicitly selected function id {function_id} "
+                    f"({label}): {str(sub_plan.get('detail') or sub_plan.get('reason') or 'unknown')}."
+                ),
+                "policy": normalized_policy,
+                "probe_summaries": probe_summaries,
+                "shards": all_shards,
+                "failed_function_id": function_id,
+            }
+        for shard in list(sub_plan.get("shards") or []):
+            normalized_shard = dict(shard)
+            normalized_shard["shard_id"] = (
+                f"function_{_normalize_shard_id(function_id)}__{str(normalized_shard.get('shard_id') or 'shard').strip()}"
+            )
+            all_shards.append(normalized_shard)
+        overflow_scopes.extend(dict(item) for item in list(sub_plan.get("overflow_scopes") or []))
+        union_dedupe_required = union_dedupe_required or bool(sub_plan.get("union_dedupe_required"))
+
+    if not all_shards:
+        return {
+            "status": "blocked",
+            "reason": "root_probe_empty",
+            "detail": "Every explicitly selected function scope probed empty; no executable shard set.",
+            "policy": normalized_policy,
+            "probe_summaries": probe_summaries,
+            "shards": [],
+            "skipped_function_ids": skipped_function_ids,
+        }
+    result: dict[str, Any] = {
+        "status": "planned",
+        "reason": "request_function_partition",
+        "detail": (
+            f"Request-scoped function partition planned {len(all_shards)} shard(s) across "
+            f"{len(request_function_ids)} explicitly selected function id(s)."
+        ),
+        "policy": normalized_policy,
+        "probe_summaries": probe_summaries,
+        "shards": all_shards,
+    }
+    if skipped_function_ids:
+        result["skipped_function_ids"] = skipped_function_ids
+    if union_dedupe_required:
+        result["union_dedupe_required"] = True
+    if overflow_scopes:
+        result["reason"] = "request_function_partition_with_capped_shards"
+        result["detail"] = (
+            "Some request-function shards exceed the provider cap; those shards will run up to the provider cap "
+            "and keep overflow metadata for follow-up refinement."
+        )
+        result["overflow_scope"] = overflow_scopes[0]
+        result["overflow_scopes"] = overflow_scopes
+    return result
 
 
 def merge_company_filters(base: Any, patch: Any) -> dict[str, Any]:

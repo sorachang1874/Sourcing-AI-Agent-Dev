@@ -36,20 +36,26 @@ from .cohort_provider_compiler import (
 from .cohort_selection import explicit_cohort_selection
 from .company_registry import upsert_company_identity_registry_entry
 from .company_shard_planning import (
+    TRUNCATED_ROSTER_STOP_REASONS,
+    _compose_request_roster_policy_axes,
     build_request_scoped_company_employee_query_plan,
     normalize_company_employee_shard_policy,
     plan_company_employee_shards_from_policy,
     request_scoped_roster_function_ids,
+    resolve_segmented_roster_completion,
 )
 from .connectors import (
     CompanyIdentity,
     CompanyRosterSnapshot,
     LinkedInCompanyRosterConnector,
+    annotate_roster_entry_shard_provenance,
     build_candidates_from_roster,
     load_rapidapi_accounts,
     profile_detail_accounts,
     resolve_company_identity,
     resolve_manual_company_identity,
+    roster_merge_dedupe_key,
+    union_roster_entry_provenance,
 )
 from .domain import (
     AcquisitionTask,
@@ -116,6 +122,7 @@ from .seed_discovery import (
 from .settings import AppSettings
 from .snapshot_state import company_identity_from_record as _company_identity_from_record
 from .snapshot_state import merge_background_reconcile_candidate as _merge_background_reconcile_candidate
+from .snapshot_state import read_json_dict as _read_json_dict
 from .storage import ControlPlaneStore
 
 _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES = 1000
@@ -1600,6 +1607,7 @@ class AcquisitionEngine:
             "asset_reuse_plan",
             "delta_execution_noop",
             "delta_execution_reason",
+            "company_employee_base_filters",
             "company_employee_shards",
             "company_employee_shard_policy",
             "company_employee_shard_strategy",
@@ -2083,14 +2091,32 @@ class AcquisitionEngine:
             function_ids=request_scoped_roster_function_ids(job_request.to_record()),
             max_pages=max_pages,
             page_limit=page_limit,
+            exclude_target_locations=job_request.exclude_target_locations,
         )
-        if not company_employee_shards and not bool(cost_policy.get("large_org_keyword_probe_mode")):
-            # Explicit request function selection owns the roster lane for every
-            # company (no company-name branches) and pre-empts the generic
-            # adaptive probe policy; planner-emitted metadata shards and delta
-            # missing shards still win when present.  large_org_keyword_probe_mode
-            # keeps its own keyword-union sharding contract.
+        request_roster_function_ids = list(request_roster_plan.get("function_ids") or [])
+        shard_plan_reason = "task_metadata_shards" if company_employee_shards else ""
+        if not company_employee_shards and company_employee_shard_policy and (
+            request_roster_plan.get("company_filters") or request_roster_function_ids
+        ):
+            # The request-owned location/function contract is enforced at
+            # execution time too (single-writer: the request wins), so legacy
+            # or restored policies cannot bypass it.  Explicit functions expand
+            # into per-function shard roots during probe planning.
+            company_employee_shard_policy = _compose_request_roster_policy_axes(
+                dict(company_employee_shard_policy),
+                locations=list(request_roster_plan.get("locations") or []),
+                exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
+                request_function_ids=request_roster_function_ids
+                or list(company_employee_shard_policy.get("request_function_ids") or []),
+            )
+        if not company_employee_shards and not company_employee_shard_policy:
+            # Small-company lane (no adaptive policy): an explicit request
+            # function selection still owns the roster lane and expands into
+            # one shard per function id.  Large-org/keyword policies carry the
+            # same request axes and expand per function during probe planning.
             company_employee_shards = list(request_roster_plan.get("shards") or [])
+            if company_employee_shards:
+                shard_plan_reason = "request_scoped_shards"
         unsharded_company_filters = dict(request_roster_plan.get("company_filters") or {})
         job_id = str(state.get("job_id") or "")
         request_payload = job_request.to_record()
@@ -2185,6 +2211,18 @@ class AcquisitionEngine:
                         )
                     company_employee_shards = _normalize_company_employee_shards(adaptive_shard_plan.get("shards"))
                 if company_employee_shards:
+                    if not adaptive_shard_plan:
+                        # Durable segmented plan for background recovery: the
+                        # adaptive planner persists its own plan file; metadata
+                        # and request-scoped shard sets must be recorded through
+                        # the same canonical file BEFORE dispatch so worker
+                        # reconciliation and restore fail closed (stay partial)
+                        # until every expected shard is terminal.
+                        self._persist_company_employee_shard_plan(
+                            snapshot_dir=snapshot_dir,
+                            shards=company_employee_shards,
+                            reason=shard_plan_reason or "segmented_shards",
+                        )
                     if self.worker_runtime is not None and job_id:
                         shard_worker_summary = self._execute_segmented_harvest_company_roster_workers(
                             identity=identity,
@@ -4651,6 +4689,47 @@ class AcquisitionEngine:
             planned["detail"] = "Adaptive Harvest shard planning did not produce an executable shard set."
         return planned
 
+    def _persist_company_employee_shard_plan(
+        self,
+        *,
+        snapshot_dir: Path,
+        shards: list[dict[str, Any]],
+        reason: str,
+    ) -> None:
+        """Record a segmented shard set through the canonical plan file.
+
+        Background worker reconciliation, snapshot restore, and supplement
+        filter inheritance all derive expected shard ids/filters from
+        ``harvest_company_employees/adaptive_shard_plan.json``.  The adaptive
+        probe planner writes that file itself; every other shard source
+        (request-scoped function shards, task metadata, delta reruns) must
+        persist the same durable record before dispatch so recovery fails
+        closed until every expected shard is terminal.
+        """
+
+        normalized_shards = [dict(item) for item in list(shards or []) if isinstance(item, dict)]
+        if not normalized_shards:
+            return
+        logger = AssetLogger(snapshot_dir)
+        harvest_dir = snapshot_dir / "harvest_company_employees"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        plan_payload = {
+            "status": "planned",
+            "reason": str(reason or "").strip() or "segmented_shards",
+            "strategy_id": str(normalized_shards[0].get("strategy_id") or "").strip(),
+            "policy": {},
+            "probe_summaries": [],
+            "shards": normalized_shards,
+        }
+        logger.write_json(
+            harvest_dir / "adaptive_shard_plan.json",
+            plan_payload,
+            asset_type="harvest_company_employees_adaptive_shard_plan",
+            source_kind="harvest_company_employees",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+
     def _execute_harvest_company_roster_worker(
         self,
         *,
@@ -4992,12 +5071,10 @@ class AcquisitionEngine:
         shard_root.mkdir(parents=True, exist_ok=True)
 
         merged_entries: list[dict[str, Any]] = []
-        visible_entries: list[dict[str, Any]] = []
-        headless_entries: list[dict[str, Any]] = []
+        entry_index_by_key: dict[str, int] = {}
         page_summaries: list[dict[str, Any]] = []
         shard_summaries: list[dict[str, Any]] = []
         errors: list[str] = []
-        seen_keys: set[str] = set()
 
         shard_specs: list[dict[str, Any]] = []
         for index, shard in enumerate(shards, start=1):
@@ -5076,33 +5153,27 @@ class AcquisitionEngine:
             unique_count = 0
             duplicate_count = 0
             for entry in shard_snapshot.raw_entries:
-                normalized_entry = dict(entry)
-                normalized_entry["source_shard_id"] = shard_id
-                normalized_entry["source_shard_title"] = str(shard.get("title") or "").strip()
-                normalized_entry["source_shard_filters"] = dict(shard.get("company_filters") or {})
-                shard_filters = dict(shard.get("company_filters") or {})
-                shard_function_ids = [
-                    str(item).strip() for item in list(shard_filters.get("function_ids") or []) if str(item).strip()
-                ]
-                exclude_function_ids = {
-                    str(item).strip()
-                    for item in list(shard_filters.get("exclude_function_ids") or [])
-                    if str(item).strip()
-                }
-                shard_function_ids = [item for item in shard_function_ids if item not in exclude_function_ids]
-                if shard_function_ids and not normalized_entry.get("function_ids"):
-                    normalized_entry["function_ids"] = shard_function_ids
-                member_key = _roster_entry_key(normalized_entry)
-                if member_key in seen_keys:
-                    duplicate_count += 1
-                    continue
-                seen_keys.add(member_key)
-                unique_count += 1
-                merged_entries.append(normalized_entry)
-                if bool(normalized_entry.get("is_headless")):
-                    headless_entries.append(normalized_entry)
+                annotated_entry = annotate_roster_entry_shard_provenance(
+                    entry,
+                    shard_id=shard_id,
+                    shard_title=str(shard.get("title") or "").strip(),
+                    company_filters=dict(shard.get("company_filters") or {}),
+                )
+                # Cross-shard dedupe only on stable person identity; a duplicate
+                # keeps BOTH shards' function/provenance evidence (union), and
+                # lookalike rows without stable identity never collapse.
+                member_key = roster_merge_dedupe_key(annotated_entry, shard_id=shard_id)
+                existing_index = entry_index_by_key.get(member_key)
+                if existing_index is None:
+                    entry_index_by_key[member_key] = len(merged_entries)
+                    merged_entries.append(annotated_entry)
+                    unique_count += 1
                 else:
-                    visible_entries.append(normalized_entry)
+                    merged_entries[existing_index] = union_roster_entry_provenance(
+                        merged_entries[existing_index],
+                        annotated_entry,
+                    )
+                    duplicate_count += 1
             for page_summary in shard_snapshot.page_summaries:
                 page_summaries.append(
                     {
@@ -5112,6 +5183,8 @@ class AcquisitionEngine:
                     }
                 )
             errors.extend(f"{shard_id}: {error}" for error in shard_snapshot.errors)
+            shard_stop_reason = str(shard_snapshot.stop_reason or "").strip().lower()
+            shard_cap_evidence = bool(shard.get("provider_cap_limited"))
             shard_summaries.append(
                 {
                     "shard_id": shard_id,
@@ -5127,9 +5200,45 @@ class AcquisitionEngine:
                     "unique_entry_count": unique_count,
                     "duplicate_entry_count": duplicate_count,
                     "stop_reason": shard_snapshot.stop_reason,
+                    "partial_result": shard_stop_reason in TRUNCATED_ROSTER_STOP_REASONS or shard_cap_evidence,
+                    "provider_cap_hit": shard_stop_reason == "provider_cap_reached" or shard_cap_evidence,
+                    "requested_limit_hit": shard_stop_reason == "requested_limit_reached",
+                    **({"provider_cap_limited": True} if shard_cap_evidence else {}),
                     "summary_path": str(shard_snapshot.summary_path),
                 }
             )
+
+        visible_entries = [item for item in merged_entries if not bool(item.get("is_headless"))]
+        headless_entries = [item for item in merged_entries if bool(item.get("is_headless"))]
+        # The durably persisted plan file is the canonical expected-shard
+        # contract: recovery and reconciliation must fail closed against the
+        # full expected set, not against whatever shards happen to be
+        # available in this run.
+        expected_shard_ids: list[str] = []
+        plan_path = harvest_dir / "adaptive_shard_plan.json"
+        if plan_path.exists():
+            plan_payload = _read_json_dict(plan_path)
+            expected_shard_ids = [
+                str(item.get("shard_id") or "").strip()
+                for item in list(plan_payload.get("shards") or [])
+                if isinstance(item, dict) and str(item.get("shard_id") or "").strip()
+            ]
+        if not expected_shard_ids:
+            expected_shard_ids = [str(spec.get("shard_id") or "shard").strip() or "shard" for spec in shard_specs]
+        completion = resolve_segmented_roster_completion(
+            expected_shard_ids=expected_shard_ids,
+            shard_summaries=shard_summaries,
+            completed_stop_reason="completed_segmented",
+            partial_stop_reason="partial_segmented",
+        )
+        # The caller-supplied availability override is a floor, never an
+        # upgrade: a truncated shard keeps the roster partial either way.
+        override_stop_reason = str(summary_stop_reason or "").strip()
+        final_stop_reason = (
+            "partial_segmented"
+            if completion["completion_status"] == "partial" or override_stop_reason == "partial_segmented"
+            else "completed_segmented"
+        )
 
         merged_path = harvest_dir / "harvest_company_employees_merged.json"
         visible_path = harvest_dir / "harvest_company_employees_visible.json"
@@ -5145,9 +5254,9 @@ class AcquisitionEngine:
                 "company_identity": identity.to_record(),
                 "expected_shard_count": int(expected_shard_count or len(shards)),
                 "available_shard_count": len(shard_summaries),
-                "completion_status": (
-                    "completed" if int(expected_shard_count or len(shards)) <= len(shard_summaries) else "partial"
-                ),
+                "missing_shard_ids": list(completion.get("missing_shard_ids") or []),
+                "truncated_shard_ids": list(completion.get("truncated_shard_ids") or []),
+                "completion_status": str(completion.get("completion_status") or "partial"),
                 "shards": shard_summaries,
             },
             asset_type="harvest_company_employees_payload",
@@ -5189,9 +5298,9 @@ class AcquisitionEngine:
                 "strategy_id": str(shards[0].get("strategy_id") or "").strip() if shards else "",
                 "expected_shard_count": int(expected_shard_count or len(shards)),
                 "available_shard_count": len(shard_summaries),
-                "completion_status": (
-                    "completed" if int(expected_shard_count or len(shards)) <= len(shard_summaries) else "partial"
-                ),
+                "missing_shard_ids": list(completion.get("missing_shard_ids") or []),
+                "truncated_shard_ids": list(completion.get("truncated_shard_ids") or []),
+                "completion_status": str(completion.get("completion_status") or "partial"),
                 "raw_entry_count": len(merged_entries),
                 "visible_entry_count": len(visible_entries),
                 "headless_entry_count": len(headless_entries),
@@ -5199,7 +5308,7 @@ class AcquisitionEngine:
                 "shard_summaries": shard_summaries,
                 "accounts_used": ["harvest_company_employees"],
                 "errors": errors,
-                "stop_reason": str(summary_stop_reason or "completed_segmented"),
+                "stop_reason": final_stop_reason,
             },
             asset_type="company_roster_summary",
             source_kind="harvest_company_employees",
@@ -5217,7 +5326,7 @@ class AcquisitionEngine:
             page_summaries=page_summaries,
             accounts_used=["harvest_company_employees"],
             errors=errors,
-            stop_reason=str(summary_stop_reason or "completed_segmented"),
+            stop_reason=final_stop_reason,
             merged_path=merged_path,
             visible_path=visible_path,
             headless_path=headless_path,
@@ -7031,39 +7140,32 @@ def _normalize_company_employee_shards(value: Any) -> list[dict[str, Any]]:
             page_limit = max(1, int(item.get("page_limit") or 25))
         except (TypeError, ValueError):
             page_limit = 25
-        normalized.append(
-            {
-                "strategy_id": str(item.get("strategy_id") or "").strip(),
-                "shard_id": shard_id,
-                "title": str(item.get("title") or shard_id).strip() or shard_id,
-                "scope_note": str(item.get("scope_note") or "").strip(),
-                "max_pages": max_pages,
-                "page_limit": page_limit,
-                "company_filters": normalized_filters,
-            }
-        )
+        normalized_shard = {
+            "strategy_id": str(item.get("strategy_id") or "").strip(),
+            "shard_id": shard_id,
+            "title": str(item.get("title") or shard_id).strip() or shard_id,
+            "scope_note": str(item.get("scope_note") or "").strip(),
+            "max_pages": max_pages,
+            "page_limit": page_limit,
+            "company_filters": normalized_filters,
+        }
+        # Planning-time truncation evidence must survive normalization so a
+        # probe-capped shard is never later reported as completed coverage.
+        if bool(item.get("provider_cap_limited")):
+            normalized_shard["provider_cap_limited"] = True
+            try:
+                before_cap = max(0, int(item.get("estimated_total_count_before_cap") or 0))
+            except (TypeError, ValueError):
+                before_cap = 0
+            if before_cap > 0:
+                normalized_shard["estimated_total_count_before_cap"] = before_cap
+        normalized.append(normalized_shard)
     return normalized
 
 
 def _normalize_shard_id(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
     return cleaned or "shard"
-
-
-def _roster_entry_key(entry: dict[str, Any]) -> str:
-    linkedin_url = str(entry.get("linkedin_url") or entry.get("profile_url") or "").strip().lower()
-    if linkedin_url:
-        return linkedin_url
-    member_key = str(entry.get("member_key") or entry.get("member_id") or "").strip().lower()
-    if member_key:
-        return member_key
-    return "|".join(
-        [
-            str(entry.get("full_name") or "").strip().lower(),
-            str(entry.get("headline") or "").strip().lower(),
-            str(entry.get("location") or "").strip().lower(),
-        ]
-    )
 
 
 def _company_identity_search_queries(target_company: str) -> list[str]:

@@ -39,7 +39,7 @@ LARGE_ORG_SCOPE_COMPANY_URLS = {
 
 LARGE_ORG_PRIORITY_FUNCTION_IDS = default_large_org_priority_function_ids()
 DEFAULT_PRIMARY_LOCATION = "United States"
-FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS = ["8", "24"]
+FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS = role_bucket_function_ids(("engineering", "research"))
 
 KEYWORD_CANONICAL_ALIASES = {
     "coding": "Coding",

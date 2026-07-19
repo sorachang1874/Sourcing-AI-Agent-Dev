@@ -396,9 +396,14 @@ def apply_plan_review_decision(
             preferences=decision_preferences,
         )
 
-    _apply_location_review_decision(updated_request, updated_plan, decision)
+    location_edited = _apply_location_review_decision(updated_request, updated_plan, decision)
     _sync_request_execution_preferences(updated_request, decision)
     _sync_task_metadata(updated_plan, request_payload=updated_request)
+    if location_edited:
+        # Task metadata is rebuilt BEFORE manifest rebinding so the canonical
+        # manifest lanes are derived from the same request-scoped roster plan
+        # the tasks carry (never from pre-edit metadata).
+        _rebind_provider_execution_manifest_after_location_edit(updated_request, updated_plan)
     return updated_request, updated_plan
 
 
@@ -431,7 +436,7 @@ def _apply_location_review_decision(
     request_payload: dict[str, Any],
     plan_payload: dict[str, Any],
     decision_payload: dict[str, Any],
-) -> None:
+) -> bool:
     """Authorized application owner for plan-review location edits (F6).
 
     Location edits enter canonical request state ONLY through this path —
@@ -439,12 +444,12 @@ def _apply_location_review_decision(
     present axis is validated before any mutation (atomic fail-closed), and
     the three wire states are never collapsed: an absent key leaves the axis
     untouched, the tagged clear removes the axis from the canonical request,
-    and a list replaces it.  The dependent plan state is then rebuilt
-    through the same owners as plan time — filter hints via
-    ``sync_location_filter_hints`` and the provider execution manifest via
-    its canonical compiler/builder — so downstream consumers (provider
-    compiler, acquisition lanes, the launched workflow) see the edited
-    location consistently.
+    and a list replaces it.  The plan's filter hints are rebuilt through the
+    same owner as plan time (``sync_location_filter_hints``).  Returns True
+    when an edit was applied so the caller can re-sync task metadata and then
+    rebind the provider execution manifest through its canonical
+    compiler/builder — in that order, so manifest lanes derive from the
+    rebuilt roster plan rather than pre-edit metadata.
     """
 
     decision = dict(decision_payload or {})
@@ -457,7 +462,7 @@ def _apply_location_review_decision(
             field_name=field_name,
         )
     if not operations:
-        return
+        return False
     for field_name, replacement in operations.items():
         if replacement is None:
             # Tagged clear: restore ABSENCE on the canonical request axis.
@@ -465,7 +470,7 @@ def _apply_location_review_decision(
         else:
             request_payload[field_name] = replacement
     _sync_plan_location_filter_hints(request_payload, plan_payload)
-    _rebind_provider_execution_manifest_after_location_edit(request_payload, plan_payload)
+    return True
 
 
 def _normalize_location_review_operation(value: Any, *, field_name: str) -> list[str] | None:
@@ -589,6 +594,19 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
     search_channel_order = list(acquisition_strategy.get("search_channel_order") or [])
     search_seed_queries = list(acquisition_strategy.get("search_seed_queries") or [])
     max_pages = _default_review_full_roster_max_pages(target_company, plan_payload) if strategy_type == "full_company_roster" else 10
+    request_roster_plan: dict[str, Any] = {"shards": [], "company_filters": {}, "function_ids": [], "locations": [], "exclude_locations": []}
+    if strategy_type == "full_company_roster":
+        # Rebuild the same request-scoped roster contract the planner emitted
+        # (one unified method, no company branches) so plan-review sync never
+        # drops or distorts explicit location/functionID wiring.
+        request_roster_plan = build_request_scoped_company_employee_query_plan(
+            target_locations=dict(request_payload or {}).get("target_locations"),
+            function_ids=request_scoped_roster_function_ids(request_payload),
+            max_pages=max_pages,
+            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+            exclude_target_locations=dict(request_payload or {}).get("exclude_target_locations"),
+        )
+    request_roster_function_ids = list(request_roster_plan.get("function_ids") or [])
     shard_policy = _build_review_company_shard_policy(
         strategy_type=strategy_type,
         target_company=target_company,
@@ -597,6 +615,9 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
         cost_policy=cost_policy,
         organization_execution_profile=dict(acquisition_strategy.get("organization_execution_profile") or {}),
         max_pages=max_pages,
+        locations=list(request_roster_plan.get("locations") or []) if strategy_type == "full_company_roster" else None,
+        exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
+        request_function_ids=request_roster_function_ids,
     )
     for task in plan_payload.get("acquisition_tasks") or []:
         if not isinstance(task, dict):
@@ -623,21 +644,14 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
             metadata["max_pages"] = max_pages
             metadata["page_limit"] = FULL_COMPANY_EMPLOYEES_PAGE_LIMIT
             request_roster_shards: list[dict[str, Any]] = []
-            if strategy_type == "full_company_roster" and not bool(cost_policy.get("large_org_keyword_probe_mode")):
-                # Rebuild the same request-scoped roster shards the planner
-                # emitted so plan-review sync never drops explicit
-                # location/functionID wiring (one unified contract, no
-                # company branches).  large_org_keyword_probe_mode keeps its
-                # own keyword-union sharding contract instead.
-                request_roster_shards = list(
-                    build_request_scoped_company_employee_query_plan(
-                        target_locations=dict(request_payload or {}).get("target_locations"),
-                        function_ids=request_scoped_roster_function_ids(request_payload),
-                        max_pages=max_pages,
-                        page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-                    ).get("shards")
-                    or []
-                )
+            if request_roster_function_ids and not shard_policy:
+                # Small-company lane (no adaptive policy): concrete per-function
+                # shards.  Large-org/keyword policies carry the same request
+                # axes and expand per function during probe planning.
+                request_roster_shards = list(request_roster_plan.get("shards") or [])
+            metadata["company_employee_base_filters"] = (
+                dict(request_roster_plan.get("company_filters") or {}) if strategy_type == "full_company_roster" else {}
+            )
             metadata["company_employee_shards"] = request_roster_shards
             if request_roster_shards:
                 metadata["company_employee_shard_policy"] = {}
@@ -675,6 +689,9 @@ def _build_review_company_shard_policy(
     cost_policy: dict[str, Any],
     organization_execution_profile: dict[str, Any] | None = None,
     max_pages: int,
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
+    request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if strategy_type != "full_company_roster":
         return {}
@@ -687,6 +704,9 @@ def _build_review_company_shard_policy(
             function_ids=[str(item).strip() for item in list(filter_hints.get("function_ids") or []) if str(item).strip()],
             max_pages=max_pages,
             page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+            locations=locations,
+            exclude_locations=exclude_locations,
+            request_function_ids=request_function_ids,
         )
         if keyword_policy:
             return keyword_policy
@@ -695,6 +715,9 @@ def _build_review_company_shard_policy(
         max_pages=max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
         organization_execution_profile=organization_execution_profile,
+        locations=locations,
+        exclude_locations=exclude_locations,
+        request_function_ids=request_function_ids,
     )
 
 

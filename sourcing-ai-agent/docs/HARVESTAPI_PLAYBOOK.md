@@ -277,37 +277,73 @@
 
 ## 请求级 location / functionID 参数（request-scoped roster shard）
 
-full-company roster（Harvest company-employees）lane 的两个一等请求参数，统一入口是
-`company_shard_planning.build_request_scoped_company_employee_query_plan(target_locations=..., function_ids=..., max_pages=..., page_limit=...)`，
-对所有公司同一份参数契约，不做任何公司名分支：
+full-company roster（Harvest company-employees）lane 的一等请求参数，统一入口是
+`company_shard_planning.build_request_scoped_company_employee_query_plan(target_locations=..., function_ids=..., max_pages=..., page_limit=..., exclude_target_locations=...)`，
+对所有公司同一份参数契约，不做任何公司名分支；planner、plan_review、执行引擎与 provider manifest
+都从同一份 plan 取值（parity 由 `tests/test_request_scoped_roster_shards.py` 的跨层断言钉死）。
 
 - **location**：请求级 `target_locations` 直接流入 lane 的 `locations` filter。
   - 字段缺省（`None`）→ 默认 `["United States"]`；
   - 非空列表 → 原样透传，允许多区域（如 `["United States", "Germany"]`）；
   - 显式空列表 `[]` → 完全不加 location filter（single-writer 规则：请求值永远优先，绝不与默认值合并）。
-- **functionID**：请求显式选择 function（结构化 `must_have_primary_role_buckets`；user-explicit
-  `cohort_selection.role_bucket_ids` 在请求归一化时会镜像进该字段）时，按 registry 里的 canonical
-  映射（`query_signal_knowledge.ROLE_BUCKET_KNOWLEDGE`：research→`"24"`、engineering→`"8"`、
+  - `exclude_target_locations` 独立组合进 `exclude_locations`（provider `excludeLocations`），
+    与 include 轴一起落到每一条 shard、unsharded 查询、adaptive/keyword policy 的 root filters
+    与 manifest lane 上；任何一层丢失该轴都视为 contract 缺陷。
+- **functionID**：只有 user-explicit cohort（`cohort_selection.role_bucket_ids`，canonical role
+  authority）才算显式 function 选择；flat `must_have_primary_role_buckets` 兼容镜像、soft 或
+  文本推断的 role 都不会产生付费 function shard。选择成立后按 registry 里的 canonical 映射
+  （`query_signal_knowledge.ROLE_BUCKET_KNOWLEDGE`：research→`"24"`、engineering→`"8"`、
   product_management→`"19"`、founding→`"9"`）把 roster lane 切成**每个 function id 一条独立的
   company-employees 查询**。provider 单次调用最多返回 ~2500 条，按 function 分片是覆盖率的实现机制；
-  不接受把多个 functionIds 合并进一条查询。未选择 function 时保持现状：一条不分片的查询（小公司
-  TML 行为），只携带 location filter。
+  任何模式下都不接受把多个显式 functionIds 合并进一条查询。未选择 function 时保持现状：一条
+  不分片的查询（小公司 TML 行为），只携带 location filters。
+
+分片形态（所有公司同一规则）：
+
+- 无 adaptive policy（小公司）：直接生成 concrete `request_function_partition` shard，每个
+  function id 一片，不再 probe。
+- large-org adaptive / `large_org_keyword_probe_mode`：policy 的 root_filters 一律改用请求级
+  location/exclude（替换默认 US），并把显式 function 选择记录为 `request_function_ids`；probe
+  planner（`plan_company_employee_shards_from_policy`）先把 scope 展成**每个 function 一个 probe
+  root**，只有当某个 function root 自己超过 provider cap 时才在该 function 内做可选的 keyword
+  细分（keyword 模式）或保留 capped shard + overflow metadata（`allow_overflow_partial`）。
 
 执行与审计语义：
 
 - 每个 function shard 都有独立的 worker/queue 行与 receipts（`shards/<shard_id>/harvest_company_employees/`），
-  `shard_id` 形如 `function_24`，`strategy_id=request_function_partition`。
-- 下游 merge 沿用现有 segmented roster 语义做 union-dedupe（按 LinkedIn URL / member key），merged entry
-  会带上 `source_shard_id` / `source_shard_filters`，并回填 entry 级 `function_ids` 归因。
-- 汇总 manifest（`harvest_company_employees_summary.json` 的 `shard_summaries`、raw manifest 的 `shards`）
-  记录每个 shard 的 `company_filters`、unique/duplicate 计数与 strategy id，可审计“哪个 function lane
-  产出了哪些成员”。
+  `shard_id` 形如 `function_24`（adaptive 展开后为 `function_24__<sub_shard>`），
+  `strategy_id=request_function_partition`。
+- 所有 segmented 分片来源（request-scoped、task metadata、delta）在派发前都会把预期 shard 集合
+  持久化到同一个 canonical 计划文件 `harvest_company_employees/adaptive_shard_plan.json`；
+  worker 对账、restore 与 supplement filter 继承据此 fail closed——预期 shard 未全部 terminal
+  前整体保持 `partial`，不会把先完成的 function shard 当作整体 completed。
+- 下游 merge 用 canonical 例程（`connectors.annotate_roster_entry_shard_provenance` /
+  `union_roster_entry_provenance` / `roster_merge_dedupe_key`，direct 与 background 共用）：
+  只有稳定身份（LinkedIn URL / member key）才跨 shard 去重；重复身份不再丢弃第二片，而是把
+  `function_ids`、`source_shard_ids`、`source_shard_provenance` 做并集（单数兼容字段
+  `source_shard_id` / `source_shard_filters` 保持 first-shard-wins）。无稳定身份的 name+headline+location
+  行只按 shard 作用域去重，两个不同长相成员绝不跨 shard 合并。
+- 覆盖率诚实语义（`company_shard_planning.resolve_segmented_roster_completion`，direct 与
+  background 共用）：任一 shard 携带截断证据（`provider_cap_reached` / `requested_limit_reached` /
+  probe 期 `provider_cap_limited` / worker summary 的 cap 标记）或缺失，整体即 `partial`
+  （`partial_segmented` / `partial_segmented_background_company_roster`），并在 summary 里记录
+  `truncated_shard_ids` / `missing_shard_ids`； capped function 不会被报成整体 completed。
 - dispatch 保持 slot-free-fill：有空闲 worker slot 就立即派发，不引入 batch/tail 特例。
-- `plan_review` 的 task metadata 同步会重建同一组 request-scoped shard，不会在 review 后丢失该接线。
-- `large_org_keyword_probe_mode`（Google 类 keyword-union probe lane）保留自己的 keyword 分片契约，
-  function ids 在该模式下仍作为合并后的 root filter 轴，不走 request-scoped function 分片。
+- `plan_review` 的 task metadata 同步会重建同一组 request-scoped shard/policy，不会在 review 后丢失该接线；
+  执行侧也会对 stored policy 做同样的 request-axes 覆写（single-writer：请求永远赢），legacy/restored
+  plan 无法绕过该契约。
 - planner 产出的 request-scoped shard 会抢占 generic adaptive probe policy（`adaptive_us_technical_partition`）；
   delta rerun 的 `missing_company_employee_shards` 与 planner metadata shard 仍然优先于 request 推导。
+
+Owner matrix（request-scoped roster contract）：
+
+| Field | Owner / source of truth | Consumers | Fallback / deletion |
+|---|---|---|---|
+| `target_locations` / `exclude_target_locations` → roster `locations` / `exclude_locations` | canonical request（`domain.JobRequest`）；`build_request_scoped_company_employee_query_plan` 是 roster lane 唯一组合点 | planning / plan_review / acquisition 执行 / policy builders / manifest lanes | 缺省默认 `["United States"]`；无 fallback ladder；删除条件：产品默认地点变更 |
+| `function_ids`（显式选择） | `cohort_selection.role_bucket_ids`（user_explicit）经 `request_scoped_roster_function_ids` + `ROLE_BUCKET_KNOWLEDGE` | 同上；flat 镜像、文本/推断 role 为 forbidden source | 无显式选择 ⇒ unsharded；无 registry 映射 ⇒ 无 id（不发明新 id） |
+| `company_employee_base_filters` / `company_employee_shards` / `company_employee_shard_policy`（task metadata） | planning；plan_review `_sync_task_metadata` 重建 | 执行引擎、provider manifest lanes、delta coverage、explain hints | 执行侧从请求重新推导作为 backstop；metadata 不留旧语义双轨 |
+| `adaptive_shard_plan.json`（预期 shard 集合） | acquisition 在 segmented 派发前持久化（所有分片来源） | snapshot_materializer 对账、orchestrator restore、company_asset_supplement | 缺文件 ⇒ 非 segmented 旧行为；不写第二份计划文件 |
+| `partial_result` / `truncated_shard_ids` / `missing_shard_ids` | `resolve_segmented_roster_completion`（direct+background 共用） | roster summary / raw manifest / 对账 stop_reason | 无：截断证据不允许被completed覆盖 |
 
 相关测试：`tests/test_request_scoped_roster_shards.py`（纯 scripted/offline，无 provider 调用）。
 

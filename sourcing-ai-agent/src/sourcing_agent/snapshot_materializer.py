@@ -9,7 +9,15 @@ from typing import Any
 from .acquisition import AcquisitionEngine
 from .asset_logger import AssetLogger
 from .candidate_artifacts import build_company_candidate_artifacts
-from .connectors import CompanyIdentity, CompanyRosterSnapshot, build_candidates_from_roster
+from .company_shard_planning import resolve_segmented_roster_completion, shard_summary_is_truncated
+from .connectors import (
+    CompanyIdentity,
+    CompanyRosterSnapshot,
+    annotate_roster_entry_shard_provenance,
+    build_candidates_from_roster,
+    roster_merge_dedupe_key,
+    union_roster_entry_provenance,
+)
 from .domain import AcquisitionTask, Candidate, EvidenceRecord, JobRequest, normalize_name_token
 from .enrichment import (
     _apply_non_member_profile,
@@ -245,11 +253,11 @@ class SnapshotMaterializer:
             if str(item or "").strip()
         ]
         applied_worker_ids: list[int] = []
-        seen_keys = {
-            _company_roster_entry_key(item)
-            for item in merged_entries
-            if _company_roster_entry_key(item)
-        }
+        entry_index_by_key: dict[str, int] = {}
+        for position, item in enumerate(merged_entries):
+            member_key = roster_merge_dedupe_key(item)
+            if member_key:
+                entry_index_by_key[member_key] = position
         original_entry_count = len(merged_entries)
 
         for worker in sorted(
@@ -273,16 +281,26 @@ class SnapshotMaterializer:
             if not isinstance(worker_snapshot, CompanyRosterSnapshot):
                 continue
             worker_summary = dict(worker_result.get("worker_summary") or {})
+            worker_shard_id = str(worker_summary.get("shard_id") or "").strip()
             worker_entries = _annotate_company_roster_entries(
                 worker_snapshot.raw_entries,
                 worker_summary=worker_summary,
             )
             for entry in worker_entries:
-                member_key = _company_roster_entry_key(entry)
-                if not member_key or member_key in seen_keys:
+                member_key = roster_merge_dedupe_key(entry, shard_id=worker_shard_id)
+                if not member_key:
                     continue
-                seen_keys.add(member_key)
-                merged_entries.append(entry)
+                existing_index = entry_index_by_key.get(member_key)
+                if existing_index is None:
+                    entry_index_by_key[member_key] = len(merged_entries)
+                    merged_entries.append(entry)
+                    continue
+                # Stable-identity duplicate across shards: keep BOTH shards'
+                # function/provenance evidence instead of dropping the row.
+                merged_entries[existing_index] = union_roster_entry_provenance(
+                    merged_entries[existing_index],
+                    entry,
+                )
             page_summaries.extend(
                 _annotate_company_roster_page_summaries(
                     worker_snapshot.page_summaries,
@@ -311,12 +329,19 @@ class SnapshotMaterializer:
         completion_status = "completed"
         stop_reason = str(existing_summary.get("stop_reason") or "").strip() or "completed_background_company_roster"
         if expected_shard_ids:
-            completion_status = "completed" if set(expected_shard_ids).issubset(set(available_shard_ids)) else "partial"
-            stop_reason = (
-                "completed_segmented_background_company_roster"
-                if completion_status == "completed"
-                else "partial_segmented_background_company_roster"
+            completion = resolve_segmented_roster_completion(
+                expected_shard_ids=expected_shard_ids,
+                shard_summaries=shard_summaries,
+                completed_stop_reason="completed_segmented_background_company_roster",
+                partial_stop_reason="partial_segmented_background_company_roster",
             )
+            completion_status = str(completion.get("completion_status") or "partial")
+            stop_reason = str(completion.get("stop_reason") or stop_reason)
+        elif any(shard_summary_is_truncated(item) for item in shard_summaries):
+            # A truncated shard must never be reported as completed coverage,
+            # even without a durable expected-shard plan on disk.
+            completion_status = "partial"
+            stop_reason = "partial_segmented_background_company_roster"
 
         logger.write_json(
             raw_manifest_path,
@@ -1635,22 +1660,6 @@ def _resolve_company_roster_identity(
     return None
 
 
-def _company_roster_entry_key(entry: dict[str, Any]) -> str:
-    linkedin_url = str(entry.get("linkedin_url") or entry.get("profile_url") or "").strip().lower()
-    if linkedin_url:
-        return linkedin_url
-    member_key = str(entry.get("member_key") or entry.get("member_id") or "").strip().lower()
-    if member_key:
-        return member_key
-    return "|".join(
-        [
-            str(entry.get("full_name") or "").strip().lower(),
-            str(entry.get("headline") or "").strip().lower(),
-            str(entry.get("location") or "").strip().lower(),
-        ]
-    )
-
-
 def _materialize_company_roster_worker_snapshot(
     *,
     acquisition_engine: AcquisitionEngine,
@@ -1706,30 +1715,19 @@ def _annotate_company_roster_entries(
     shard_id = str(worker_summary.get("shard_id") or "").strip()
     shard_title = str(worker_summary.get("title") or "").strip()
     shard_filters = dict(worker_summary.get("company_filters") or {})
-    shard_function_ids = [
-        str(item).strip()
-        for item in list(shard_filters.get("function_ids") or [])
-        if str(item).strip()
-    ]
-    exclude_function_ids = {
-        str(item).strip()
-        for item in list(shard_filters.get("exclude_function_ids") or [])
-        if str(item).strip()
-    }
-    shard_function_ids = [item for item in shard_function_ids if item not in exclude_function_ids]
 
     annotated: list[dict[str, Any]] = []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        normalized_entry = dict(entry)
-        if shard_id:
-            normalized_entry["source_shard_id"] = shard_id
-            normalized_entry["source_shard_title"] = shard_title
-            normalized_entry["source_shard_filters"] = shard_filters
-            if shard_function_ids and not normalized_entry.get("function_ids"):
-                normalized_entry["function_ids"] = shard_function_ids
-        annotated.append(normalized_entry)
+        annotated.append(
+            annotate_roster_entry_shard_provenance(
+                entry,
+                shard_id=shard_id,
+                shard_title=shard_title,
+                company_filters=shard_filters,
+            )
+        )
     return annotated
 
 
@@ -1765,6 +1763,10 @@ def _build_company_roster_shard_summary(
     shard_id = str(worker_summary.get("shard_id") or "").strip()
     if not shard_id:
         return {}
+    snapshot_stop_reason = str(roster_snapshot.stop_reason or "").strip().lower()
+    worker_cap_evidence = bool(
+        worker_summary.get("provider_cap_hit") or worker_summary.get("requested_limit_would_truncate")
+    )
     return {
         "shard_id": shard_id,
         "title": str(worker_summary.get("title") or "").strip(),
@@ -1779,6 +1781,12 @@ def _build_company_roster_shard_summary(
         "unique_entry_count": len(roster_snapshot.raw_entries),
         "duplicate_entry_count": 0,
         "stop_reason": roster_snapshot.stop_reason,
+        "partial_result": snapshot_stop_reason in {"provider_cap_reached", "requested_limit_reached"}
+        or worker_cap_evidence,
+        "provider_cap_hit": snapshot_stop_reason == "provider_cap_reached"
+        or bool(worker_summary.get("provider_cap_hit")),
+        "requested_limit_hit": snapshot_stop_reason == "requested_limit_reached"
+        or bool(worker_summary.get("requested_limit_would_truncate")),
         "summary_path": str(roster_snapshot.summary_path),
     }
 
