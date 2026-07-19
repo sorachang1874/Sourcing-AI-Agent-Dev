@@ -561,6 +561,8 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "research",
                     "engineering",
                     "product_management",
+                    "infra_systems",
+                    "founding",
                     "other",
                     "unknown",
                 ],
@@ -27058,7 +27060,11 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         }
         self.assertEqual(facet_summary["candidate_count"], len(candidates))
         self.assertEqual(recall_counts.get("keyword:vision-language"), 2)
-        self.assertEqual(function_counts.get("engineering"), 2)
+        # FT1 facet contract: infra_systems is its own named bucket (no longer
+        # collapsed into engineering by the shared function-id "8"); only the
+        # free-text Developer Relations Engineer still infers as engineering.
+        self.assertEqual(function_counts.get("engineering"), 1)
+        self.assertEqual(function_counts.get("infra_systems"), 1)
         self.assertEqual(function_counts.get("research"), 1)
         self.assertEqual(function_counts.get("product_management"), 1)
 

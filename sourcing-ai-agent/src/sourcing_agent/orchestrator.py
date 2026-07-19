@@ -21909,7 +21909,7 @@ class SourcingOrchestrator:
                             "reason": "projection_facet_layering_item_claim_contention",
                         },
                         metadata={"activity_boundary": "projection_facet_layering_build"},
-                        idempotency_scope="projection_facet_layering_build",
+                        idempotency_scope="projection_facet_layering_build:projection_facet_layering_not_applied",
                     )
                     retry_command = self.store.mark_workflow_command_failed(
                         command_id,
@@ -22038,7 +22038,7 @@ class SourcingOrchestrator:
                     if str(path or "").strip()
                 ],
                 metadata={"activity_boundary": "projection_facet_layering_build"},
-                idempotency_scope="projection_facet_layering_build",
+                idempotency_scope=f"projection_facet_layering_build:{delta_kind}",
             )
             result_payload["activity_run_id"] = str((final_activity or activity).get("activity_run_id") or "").strip()
             result_payload["activity_attempt_id"] = str(

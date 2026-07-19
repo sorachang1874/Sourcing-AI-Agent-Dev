@@ -879,7 +879,11 @@ def candidate_page_filter_active(candidate_filter: dict[str, Any]) -> bool:
         for item in list(source.get("function_buckets") or [])
         if str(item or "").strip()
     }
-    if function_buckets and function_buckets != _FUNCTION_FACET_OPTION_ID_SET:
+    # ``other``/``unknown`` are documented result-only states and are never
+    # selectable request values.  The inactive (all-roles) no-op is any set
+    # that covers every selectable role id — with or without the result-only
+    # ids — while any proper subset is an active exclusion.
+    if function_buckets and not _SELECTABLE_FUNCTION_ROLE_ID_SET.issubset(function_buckets):
         return True
     layer_includes = [str(item or "").strip() for item in list(source.get("layer_includes") or [])]
     layer_excludes = [str(item or "").strip() for item in list(source.get("layer_excludes") or [])]
