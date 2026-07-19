@@ -10,7 +10,10 @@
 
 The fixed-forward integration decision in `.coord/handoffs/s1f0c-ff-di-v1.md` (969 lines, pinned at
 `3bd3ed2fd803e428846961982d76f74c0fb4437e`) is adopted as the single design source for canonical S1f0c. This batch
-makes that decision tracked and machine-checkable without re-deriving it.
+makes that decision tracked and machine-checkable without re-deriving it. The FF-DI handoff, the five Wave-0 handoffs,
+the FF-DI lane decision handoff, and the controlling prior review artifact are content-hash-bound inside the
+manifest's `obligation_basis.design_evidence_closure` (exact SHA-256 per source file); the source files themselves
+remain untracked and are never committed, so every adoption claim is independently checkable by recomputation.
 
 The decision rejects the three reviewed-candidate literals `acquisition_start_lineage_ref.v1`,
 `cohort_provider_execution_manifest.v2`, and `filter_projection_publication_terminal.v1` as implementation literals and
@@ -43,9 +46,11 @@ Unknown keys, inferred aliases, caller-supplied refs/digests/winners, and partia
   `filter_projection_lineage_terminal_owner_decision_v1.json`, and
   `tests/test_d1n_s1f0c_lineage_terminal_owner_decision.py`. This batch follows that structure exactly: one machine
   manifest, one decision document, one executable decision test, plus the two index/router lines.
-- Collision method: every new literal and relation name was checked with exact `git grep -F` against the pinned base
-  commit `c3efff2aa07330dee52408ebc9dcc7f1786564f5`; all 23 new literals and 6 relation names had zero matches. The
-  executable test re-proves this against the live tree instead of hardcoding the result.
+- Collision method: the executable test derives the scan from `git ls-tree`/`git grep` at the pinned `HEAD` commit
+  over tracked content only, excluding exactly the three candidate blobs by exact path; all 23 new literals and 6
+  relation names must have zero matches and the 7 retained literals must remain byte-referenced. The author-side
+  pre-check used exact `git grep -F` against the pinned base commit `c3efff2aa07330dee52408ebc9dcc7f1786564f5` with
+  zero matches; the test re-proves the property against tracked Git content instead of the ambient filesystem.
 
 ## 3. What the machine manifest pins
 
@@ -53,26 +58,42 @@ The manifest is the single machine-readable pin that later implementation packet
 handoff tables:
 
 - handoff section 1.1: all 21 schema/registry literals with contract owner, physical writer/storage owner, and the
-  collision/append-only rule, plus the contract digest equation
-  `SHA256(UTF8(canonical_json({schema_version, owner, ordered_fields})))` with canonical-JSON rules (sorted keys,
-  compact separators, Unicode preserved, `allow_nan=false`, duplicate keys rejected, recursive type-strict equality)
-  and the 18 materialized contract digests;
+  collision/append-only rule, plus the contract digest equation `SHA256(UTF8(canonical_json(schema)))` where `schema`
+  is each row's full closed schema object (exact field descriptors binding types, constants, enums, optionality,
+  derivation rules, and nested structure; adding an enum value or deleting a derivation rule changes the digest), the
+  canonical-JSON rules (sorted keys, compact separators, Unicode preserved, `allow_nan=false`, duplicate keys
+  rejected, recursive type-strict equality), and the 22 materialized contract digests — every adopted literal plus
+  `filter_projection_product_ref.v1`, with no registry literal left undigested;
+- the `digest_dependency_dag`: every digest construction edge as machine data. The candidate-set digest depends only
+  on source/member inputs and the execution result then binds the completed candidate-set digest; the product terminal
+  has an acyclic `terminal_core_digest` (fields 1-23), the freshness/readiness refs derive from that core, and the
+  envelope `terminal_digest` is derived last; `commit_contract_digest` is a constant self-binding, not a construction
+  edge. A topological test rejects any cycle, including hostile reintroduction of either reviewed back-edge;
 - handoff section 1.2: the six new PG relation names, their three owners, and the reserved migration slot
   `0015_s1f0c_filter_projection_lineage.sql` (`reserved_not_authored`);
 - handoff section 3: the closed six-field start carrier, the eleven-field execution authority with its normative
-  plan-body digest exclusion, the six-stage writer taxonomy, and the eight-row source join whose every
-  miss/duplicate/foreign/malformed/split identity maps publicly to `projection_not_found`;
+  plan-body digest exclusion, the six-stage writer taxonomy, and the eight-row source join as structured machine data
+  (all eight rows, the five command identities with expected command types/stages/owners, alternate keys,
+  parent/causality predicates with the forbidden commit-parent fallback, requester bindings, and the exact advisory
+  lock keys); every miss/duplicate/foreign/malformed/split identity maps publicly to `projection_not_found`;
 - handoff section 4: the opaque namespace ref (public subset `schema_version, namespace_ref_id, ref_digest`), the
   19-field capability v2 (`simulate|scripted` only at this boundary), the 12-field execution envelope with its fixed
-  recompile sequence, and the lane-result/member/candidate-set/result-v2/execution-commit records;
-- handoff section 5: full column and constraint ownership for all six physical relations;
-- handoff section 6: the 26-field product terminal, the freshness/readiness refs, the exact eight-item readiness
-  prerequisite set, the five-step deferred reason precedence, and the five-way terminal-digest equality;
-- handoff section 7: the V3 success/deferred/masked public roots, the commandless full terminal tuple
-  (`no_command_v1`, both-empty Action/Operation, zero attempt/generation/epoch), the deterministic
-  `filter_projection_terminal_winner.v1` equation, the four closed internal owner refs, and the replay/quarantine
-  retention rules;
-- handoff section 8: the 13-edge end-to-end owner graph;
+  recompile sequence, and the lane-result/member/candidate-set/result-v2/execution-commit records; the commit record
+  persists `schema_version` and `commit_contract_digest`, both included in `commit_digest`, so no future schema can
+  produce indistinguishable commit bytes;
+- handoff section 5: full column and constraint ownership for all six physical relations plus a typed PG descriptor
+  per relation (column types, nullability/defaults, primary/unique/check/foreign keys with targets, actions, and
+  deferrability, and index definitions), the reserved creation/rollback order, and 63-byte identifier validation;
+- handoff section 6: the 27-field product terminal with the acyclic `terminal_core_digest`, the freshness/readiness
+  refs carrying the core digest, the exact eight-item readiness prerequisite set bound inside the readiness schema
+  derivation, the five-step deferred reason precedence, and the core/envelope terminal-digest equalities;
+- handoff section 7: the V3 success/deferred/masked public roots bound by the `filter_projection_result_v3` schema
+  (per-variant field descriptors and masked constants), the commandless full terminal tuple (`no_command_v1`,
+  both-empty Action/Operation, zero attempt/generation/epoch), the deterministic
+  `filter_projection_terminal_winner.v1` equation, the four closed internal owner refs with exact field manifests, and
+  the replay/quarantine retention rules;
+- handoff section 8: the 13-edge end-to-end owner graph using only canonical owner IDs from the closed `owners`
+  registry, with descriptive labels kept in the separate `owner_label` field;
 - handoff section 9: the seven-group global lock order and the 18 locked write/race outcomes;
 - handoff section 10: lane/count, member-set, digest, cross-surface, and V3 page equations, with
   `missing_required_lane_count` pinned as role-intersection identity loss, never lane coverage;
@@ -100,6 +121,9 @@ Rejected as implementation literals (they remain referenced as reviewed history 
 
 This decision creates no DDL, no migration, no runtime writer, no reader, no result acceptance, no backfill, and no
 served transition. `served=0`, provider/model/live invocation counts are `0`, and `R-019`/`R-029` remain open; the
-scope-local Cohort attempt fence never claims global `R-019` closure. Author evidence is not a formal review: a fresh
-scope-matched non-author decision review is required before canonical S1f0c implementation or migration `0015`
-authoring, and unrelated S1e2b/fake work may continue while that review waits.
+scope-local Cohort attempt fence never claims global `R-019` closure. The central owner matrix in
+`docs/PRE_AGENT_CONTRACT_REVIEW.md` records the same `decision_locked_not_implemented` owner state for the product,
+terminal, and freshness/readiness owners in this reviewed scope, preserving every `served=0` and no-live boundary.
+Author evidence is not a formal review: a fresh scope-matched non-author decision review is required before canonical
+S1f0c implementation or migration `0015` authoring, and unrelated S1e2b/fake work may continue while that review
+waits.
