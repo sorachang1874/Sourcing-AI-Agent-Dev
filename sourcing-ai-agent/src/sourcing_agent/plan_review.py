@@ -10,8 +10,11 @@ from .cohort_provider_compiler import COHORT_PROVIDER_MANIFEST_VERSION, CohortPr
 from .cohort_selection import CohortSelectionValidationError, explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
+    REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
     build_default_company_employee_shard_policy,
     build_large_org_keyword_probe_shard_policy,
+    build_request_scoped_company_employee_query_plan,
+    request_scoped_roster_function_ids,
 )
 from .domain import JobRequest, SourcingPlan
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
@@ -395,7 +398,7 @@ def apply_plan_review_decision(
 
     _apply_location_review_decision(updated_request, updated_plan, decision)
     _sync_request_execution_preferences(updated_request, decision)
-    _sync_task_metadata(updated_plan)
+    _sync_task_metadata(updated_plan, request_payload=updated_request)
     return updated_request, updated_plan
 
 
@@ -564,7 +567,7 @@ def _rebind_provider_execution_manifest_after_location_edit(
     plan_payload["acquisition_strategy"] = acquisition_strategy
 
 
-def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
+def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str, Any] | None = None) -> None:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
     publication = dict(plan_payload.get("publication_coverage") or {})
     publication_families = [
@@ -615,9 +618,29 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
         if str(task.get("task_type") or "") == "acquire_full_roster":
             metadata["max_pages"] = max_pages
             metadata["page_limit"] = FULL_COMPANY_EMPLOYEES_PAGE_LIMIT
-            metadata["company_employee_shards"] = []
-            metadata["company_employee_shard_policy"] = shard_policy
-            metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
+            request_roster_shards: list[dict[str, Any]] = []
+            if strategy_type == "full_company_roster" and not bool(cost_policy.get("large_org_keyword_probe_mode")):
+                # Rebuild the same request-scoped roster shards the planner
+                # emitted so plan-review sync never drops explicit
+                # location/functionID wiring (one unified contract, no
+                # company branches).  large_org_keyword_probe_mode keeps its
+                # own keyword-union sharding contract instead.
+                request_roster_shards = list(
+                    build_request_scoped_company_employee_query_plan(
+                        target_locations=dict(request_payload or {}).get("target_locations"),
+                        function_ids=request_scoped_roster_function_ids(request_payload),
+                        max_pages=max_pages,
+                        page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+                    ).get("shards")
+                    or []
+                )
+            metadata["company_employee_shards"] = request_roster_shards
+            if request_roster_shards:
+                metadata["company_employee_shard_policy"] = {}
+                metadata["company_employee_shard_strategy"] = REQUEST_FUNCTION_PARTITION_STRATEGY_ID
+            else:
+                metadata["company_employee_shard_policy"] = shard_policy
+                metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
         if str(task.get("task_type") or "") == "enrich_profiles_multisource":
             metadata["publication_source_families"] = publication_families
         task["metadata"] = _sync_task_intent_view_from_metadata(metadata)

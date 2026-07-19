@@ -36,8 +36,10 @@ from .cohort_provider_compiler import (
 from .cohort_selection import explicit_cohort_selection
 from .company_registry import upsert_company_identity_registry_entry
 from .company_shard_planning import (
+    build_request_scoped_company_employee_query_plan,
     normalize_company_employee_shard_policy,
     plan_company_employee_shards_from_policy,
+    request_scoped_roster_function_ids,
 )
 from .connectors import (
     CompanyIdentity,
@@ -2076,6 +2078,20 @@ class AcquisitionEngine:
         max_pages, page_limit = self._task_roster_paging(task, job_request)
         company_employee_shards = self._effective_company_employee_shards(task, job_request)
         company_employee_shard_policy = self._task_company_employee_shard_policy(task, job_request)
+        request_roster_plan = build_request_scoped_company_employee_query_plan(
+            target_locations=job_request.target_locations,
+            function_ids=request_scoped_roster_function_ids(job_request.to_record()),
+            max_pages=max_pages,
+            page_limit=page_limit,
+        )
+        if not company_employee_shards and not bool(cost_policy.get("large_org_keyword_probe_mode")):
+            # Explicit request function selection owns the roster lane for every
+            # company (no company-name branches) and pre-empts the generic
+            # adaptive probe policy; planner-emitted metadata shards and delta
+            # missing shards still win when present.  large_org_keyword_probe_mode
+            # keeps its own keyword-union sharding contract.
+            company_employee_shards = list(request_roster_plan.get("shards") or [])
+        unsharded_company_filters = dict(request_roster_plan.get("company_filters") or {})
         job_id = str(state.get("job_id") or "")
         request_payload = job_request.to_record()
         plan_payload = dict(state.get("plan_payload") or {})
@@ -2252,6 +2268,7 @@ class AcquisitionEngine:
                         plan_payload=plan_payload,
                         runtime_mode=runtime_mode,
                         allow_shared_provider_cache=allow_shared_provider_cache,
+                        company_filters=unsharded_company_filters,
                     )
                     if str(harvest_worker.get("worker_status") or "") == "queued":
                         summary = dict(harvest_worker.get("summary") or {})
@@ -2320,6 +2337,7 @@ class AcquisitionEngine:
                                 asset_logger=AssetLogger(snapshot_dir),
                                 max_pages=max_pages,
                                 page_limit=page_limit,
+                                company_filters=unsharded_company_filters,
                                 allow_shared_provider_cache=allow_shared_provider_cache,
                                 runtime_timing_overrides=runtime_timing_overrides,
                             )
@@ -2345,6 +2363,7 @@ class AcquisitionEngine:
                                 asset_logger=AssetLogger(snapshot_dir),
                                 max_pages=max_pages,
                                 page_limit=page_limit,
+                                company_filters=unsharded_company_filters,
                                 allow_shared_provider_cache=allow_shared_provider_cache,
                                 runtime_timing_overrides=runtime_timing_overrides,
                             )

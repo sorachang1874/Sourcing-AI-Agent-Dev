@@ -275,6 +275,42 @@
 - `live_tests` 里的 Harvest probe summary 现在可被后续真实 snapshot 直接复用，不会因为 summary 缺少 `input_payload`
   就重复发远端 probe。
 
+## 请求级 location / functionID 参数（request-scoped roster shard）
+
+full-company roster（Harvest company-employees）lane 的两个一等请求参数，统一入口是
+`company_shard_planning.build_request_scoped_company_employee_query_plan(target_locations=..., function_ids=..., max_pages=..., page_limit=...)`，
+对所有公司同一份参数契约，不做任何公司名分支：
+
+- **location**：请求级 `target_locations` 直接流入 lane 的 `locations` filter。
+  - 字段缺省（`None`）→ 默认 `["United States"]`；
+  - 非空列表 → 原样透传，允许多区域（如 `["United States", "Germany"]`）；
+  - 显式空列表 `[]` → 完全不加 location filter（single-writer 规则：请求值永远优先，绝不与默认值合并）。
+- **functionID**：请求显式选择 function（结构化 `must_have_primary_role_buckets`；user-explicit
+  `cohort_selection.role_bucket_ids` 在请求归一化时会镜像进该字段）时，按 registry 里的 canonical
+  映射（`query_signal_knowledge.ROLE_BUCKET_KNOWLEDGE`：research→`"24"`、engineering→`"8"`、
+  product_management→`"19"`、founding→`"9"`）把 roster lane 切成**每个 function id 一条独立的
+  company-employees 查询**。provider 单次调用最多返回 ~2500 条，按 function 分片是覆盖率的实现机制；
+  不接受把多个 functionIds 合并进一条查询。未选择 function 时保持现状：一条不分片的查询（小公司
+  TML 行为），只携带 location filter。
+
+执行与审计语义：
+
+- 每个 function shard 都有独立的 worker/queue 行与 receipts（`shards/<shard_id>/harvest_company_employees/`），
+  `shard_id` 形如 `function_24`，`strategy_id=request_function_partition`。
+- 下游 merge 沿用现有 segmented roster 语义做 union-dedupe（按 LinkedIn URL / member key），merged entry
+  会带上 `source_shard_id` / `source_shard_filters`，并回填 entry 级 `function_ids` 归因。
+- 汇总 manifest（`harvest_company_employees_summary.json` 的 `shard_summaries`、raw manifest 的 `shards`）
+  记录每个 shard 的 `company_filters`、unique/duplicate 计数与 strategy id，可审计“哪个 function lane
+  产出了哪些成员”。
+- dispatch 保持 slot-free-fill：有空闲 worker slot 就立即派发，不引入 batch/tail 特例。
+- `plan_review` 的 task metadata 同步会重建同一组 request-scoped shard，不会在 review 后丢失该接线。
+- `large_org_keyword_probe_mode`（Google 类 keyword-union probe lane）保留自己的 keyword 分片契约，
+  function ids 在该模式下仍作为合并后的 root filter 轴，不走 request-scoped function 分片。
+- planner 产出的 request-scoped shard 会抢占 generic adaptive probe policy（`adaptive_us_technical_partition`）；
+  delta rerun 的 `missing_company_employee_shards` 与 planner metadata shard 仍然优先于 request 推导。
+
+相关测试：`tests/test_request_scoped_roster_shards.py`（纯 scripted/offline，无 provider 调用）。
+
 ## Profile enrich 的执行策略
 
 对于已经拿到 LinkedIn URL 的 current / former roster，`profile-scraper` 不应再完全串行，也不应再固定按“每批约 100 条”机械切分。

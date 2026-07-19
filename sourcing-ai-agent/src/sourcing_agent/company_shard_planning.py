@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from .organization_execution_profile import FALLBACK_LARGE_COMPANY_KEYS
 from .query_signal_knowledge import (
     ALPHABET_COMPANY_URL,
     GOOGLE_COMPANY_URL,
+    function_id_selectable_labels,
     related_company_scope_urls,
+    role_bucket_function_ids,
     scope_signal_search_query_aliases,
 )
 
@@ -55,6 +57,111 @@ SEARCH_QUERY_CANONICAL_ALIASES: dict[str, str] = {
 LARGE_ORG_PRIORITY_FUNCTION_IDS = ["8", "9", "19", "24"]
 LARGE_ORG_TECHNICAL_FUNCTION_IDS = ["8", "24"]
 
+# The company-employees roster lane's default location scope.  Every roster
+# query plan (adaptive partition, keyword probe, or request-scoped function
+# partition) starts from this default unless the request explicitly overrides
+# or opts out of location filtering.
+DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS = ["United States"]
+
+# Strategy id stamped on request-scoped per-function roster shards so queue
+# summaries, snapshot manifests, and delta-coverage rows can tell them apart
+# from adaptive probe partitions.
+REQUEST_FUNCTION_PARTITION_STRATEGY_ID = "request_function_partition"
+
+
+def request_scoped_roster_function_ids(request_payload: dict[str, Any] | None) -> list[str]:
+    """Explicitly selected provider function ids for the company-employees roster lane.
+
+    Reads the request's structured role selection
+    (``must_have_primary_role_buckets``; user-explicit cohort selections mirror
+    their ``role_bucket_ids`` into that field during request canonicalization)
+    and maps buckets through the canonical ``ROLE_BUCKET_KNOWLEDGE`` registry
+    (research→"24", engineering→"8", product_management→"19").  Text-inferred
+    or planner-inferred roles are not function selections and never shard the
+    roster lane; unknown buckets map to no id (never invent new ids).
+    """
+
+    payload = dict(request_payload or {})
+    raw_buckets = payload.get("must_have_primary_role_buckets")
+    if raw_buckets is None:
+        raw_buckets = payload.get("must_have_primary_role_bucket")
+    if isinstance(raw_buckets, str):
+        raw_items: list[Any] = [raw_buckets]
+    elif isinstance(raw_buckets, (list, tuple, set)):
+        raw_items = list(raw_buckets)
+    else:
+        raw_items = []
+    return role_bucket_function_ids(str(item) for item in raw_items)
+
+
+def build_request_scoped_company_employee_query_plan(
+    *,
+    target_locations: list[str] | None,
+    function_ids: Iterable[str] | None,
+    max_pages: int,
+    page_limit: int,
+) -> dict[str, Any]:
+    """Unified request-scoped query plan for the Harvest company-employees roster lane.
+
+    One parameter contract consumed by the roster lane for every company — no
+    company-name branches:
+
+    - ``target_locations``: request-level locations.  ``None`` (field absent)
+      defaults to the United States; a non-empty list passes through unchanged
+      (multi-region allowed); an explicit empty list opts out of location
+      filtering (single-writer rule — request values win outright and are
+      never merged with the default).
+    - ``function_ids``: explicitly selected provider function ids.  Each id
+      gets its own company-employees shard with its own receipts/queue rows,
+      because the provider caps one call at ~2500 items and per-function
+      sharding is the coverage mechanism; the segmented roster merge
+      union-dedupes overlapping members across shards.  No function selection
+      yields one unsharded query (current small-company behavior) carrying
+      only the location filter.
+    """
+
+    if target_locations is None:
+        locations = list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS)
+    else:
+        locations = list(
+            dict.fromkeys(str(item).strip() for item in list(target_locations or []) if str(item).strip())
+        )
+    normalized_function_ids = list(
+        dict.fromkeys(str(item).strip() for item in list(function_ids or []) if str(item).strip())
+    )
+    base_filters: dict[str, Any] = {}
+    if locations:
+        base_filters["locations"] = list(locations)
+    location_title = ", ".join(locations) if locations else "All locations"
+    scope_note = (
+        "Request-scoped function partition. One company-employees shard per explicitly selected "
+        "function id because the provider caps a single query at ~2500 items; each shard carries "
+        "its own receipts and the segmented roster merge union-dedupes overlapping members."
+    )
+    labels = function_id_selectable_labels(normalized_function_ids)
+    shards: list[dict[str, Any]] = []
+    for function_id in normalized_function_ids:
+        label = str(labels.get(function_id) or "").strip()
+        title_suffix = label or f"Function {function_id}"
+        shards.append(
+            {
+                "strategy_id": REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
+                "shard_id": f"function_{_normalize_shard_id(function_id)}",
+                "title": f"{location_title} / {title_suffix}",
+                "scope_note": scope_note,
+                "max_pages": max(1, int(max_pages or 1)),
+                "page_limit": max(1, int(page_limit or 25)),
+                "company_filters": {**base_filters, "function_ids": [function_id]},
+            }
+        )
+    return {
+        "strategy_id": REQUEST_FUNCTION_PARTITION_STRATEGY_ID if shards else "",
+        "locations": locations,
+        "function_ids": normalized_function_ids,
+        "company_filters": base_filters,
+        "shards": shards,
+    }
+
 
 def _generic_large_org_technical_partition_policy(*, scope_note: str = "") -> dict[str, Any]:
     return {
@@ -66,7 +173,7 @@ def _generic_large_org_technical_partition_policy(*, scope_note: str = "") -> di
         ),
         "root_title": "United States",
         "root_filters": {
-            "locations": ["United States"],
+            "locations": list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS),
             "function_ids": list(LARGE_ORG_TECHNICAL_FUNCTION_IDS),
         },
         "allow_overflow_partial": True,
@@ -157,7 +264,7 @@ def build_large_org_keyword_probe_shard_policy(
             ),
             "root_title": "United States",
             "root_filters": {
-                "locations": ["United States"],
+                "locations": list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS),
                 "companies": scope_companies,
                 "function_ids": list(function_ids or LARGE_ORG_PRIORITY_FUNCTION_IDS),
             },

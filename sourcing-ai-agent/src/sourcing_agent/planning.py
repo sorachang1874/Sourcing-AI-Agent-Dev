@@ -8,8 +8,11 @@ from .cohort_provider_compiler import CohortProviderCompiler
 from .cohort_selection import explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
+    REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
     build_default_company_employee_shard_policy,
     build_large_org_keyword_probe_shard_policy,
+    build_request_scoped_company_employee_query_plan,
+    request_scoped_roster_function_ids,
 )
 from .domain import (
     AcquisitionStrategyPlan,
@@ -619,6 +622,30 @@ def _build_acquisition_tasks(
         max_pages=roster_max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
     )
+    request_roster_shards: list[dict[str, Any]] = []
+    if acquisition_strategy.strategy_type == "full_company_roster" and not bool(
+        acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode")
+    ):
+        # Request-scoped roster parameters (location, functionIDs) are one
+        # unified contract for every company: an explicit function selection
+        # yields one company-employees shard per function id and pre-empts the
+        # generic adaptive probe policy; otherwise the lane stays unsharded.
+        # large_org_keyword_probe_mode keeps its own keyword-union sharding
+        # contract, where function ids are a combined root-filter axis.
+        request_roster_shards = list(
+            build_request_scoped_company_employee_query_plan(
+                target_locations=request.target_locations,
+                function_ids=request_scoped_roster_function_ids(request.to_record()),
+                max_pages=roster_max_pages,
+                page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+            ).get("shards")
+            or []
+        )
+    if request_roster_shards:
+        company_employee_shard_policy = {}
+        company_employee_shard_strategy = REQUEST_FUNCTION_PARTITION_STRATEGY_ID
+    else:
+        company_employee_shard_strategy = str(company_employee_shard_policy.get("strategy_id") or "").strip()
     linkedin_stage_metadata = {
         "acquisition_phase": "linkedin_stage_1",
         "acquisition_phase_title": "LinkedIn Stage 1",
@@ -663,17 +690,17 @@ def _build_acquisition_tasks(
                 "cost_policy": acquisition_strategy.cost_policy,
                 "max_pages": roster_max_pages,
                 "page_limit": FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-                "company_employee_shards": [],
+                "company_employee_shards": request_roster_shards,
                 "company_employee_shard_policy": company_employee_shard_policy,
-                "company_employee_shard_strategy": str(company_employee_shard_policy.get("strategy_id") or "").strip(),
+                "company_employee_shard_strategy": company_employee_shard_strategy,
                 "include_former_search_seed": include_former_search_seed,
                 "intent_view": _task_intent_view_with_overrides(
                     task_intent_view,
                     max_pages=roster_max_pages,
                     page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-                    company_employee_shards=[],
+                    company_employee_shards=request_roster_shards,
                     company_employee_shard_policy=company_employee_shard_policy,
-                    company_employee_shard_strategy=str(company_employee_shard_policy.get("strategy_id") or "").strip(),
+                    company_employee_shard_strategy=company_employee_shard_strategy,
                     include_former_search_seed=include_former_search_seed,
                     acquisition_phase="linkedin_stage_1",
                     acquisition_phase_title="LinkedIn Stage 1",

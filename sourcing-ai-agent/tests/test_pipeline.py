@@ -19745,6 +19745,7 @@ class PipelineTest(unittest.TestCase):
             asset_logger=None,
             max_pages=10,
             page_limit=50,
+            company_filters=None,
             allow_shared_provider_cache=True,
         ):
             seen["allow_shared_provider_cache"] = allow_shared_provider_cache
@@ -19936,6 +19937,7 @@ class PipelineTest(unittest.TestCase):
             asset_logger=None,
             max_pages=10,
             page_limit=50,
+            company_filters=None,
             allow_shared_provider_cache=True,
         ):
             seen["called"] = True
@@ -20159,11 +20161,13 @@ class PipelineTest(unittest.TestCase):
 
         self.assertEqual(execution.status, "completed")
         plan_mock.assert_called_once()
+        # The segmented fetch fans shards out over a thread pool, so the call
+        # order is nondeterministic; assert the filter set, not the ordering.
         self.assertEqual(
-            seen_filters,
+            sorted(json.dumps(item, sort_keys=True) for item in seen_filters),
             [
-                {"locations": ["United States"], "function_ids": ["8"]},
-                {"locations": ["United States"], "exclude_function_ids": ["8"]},
+                json.dumps({"locations": ["United States"], "exclude_function_ids": ["8"]}, sort_keys=True),
+                json.dumps({"locations": ["United States"], "function_ids": ["8"]}, sort_keys=True),
             ],
         )
 

@@ -722,6 +722,31 @@ def default_large_org_priority_function_ids() -> list[str]:
     return role_bucket_function_ids(("engineering", "founding", "product_management", "research"))
 
 
+def function_id_selectable_labels(function_ids: Iterable[str]) -> dict[str, str]:
+    """Canonical selectable label per provider function id.
+
+    Reverse lookup over ``ROLE_BUCKET_KNOWLEDGE`` so consumers (roster-lane
+    shard titles, audit output) reuse the registry mapping instead of keeping a
+    second hand-maintained function-id table.  When several buckets share one
+    function id, the first bucket in registry order wins (``engineering``
+    before ``infra_systems`` for ``"8"``).
+    """
+
+    labels: dict[str, str] = {}
+    for raw_id in function_ids:
+        function_id = str(raw_id or "").strip()
+        if not function_id or function_id in labels:
+            continue
+        label = ""
+        for payload in ROLE_BUCKET_KNOWLEDGE.values():
+            bucket_function_ids = [str(item).strip() for item in list(payload.get("function_ids") or [])]
+            if function_id in bucket_function_ids:
+                label = str(payload.get("selectable_label") or "").strip()
+                break
+        labels[function_id] = label
+    return labels
+
+
 def _specific_matched_alias_spans(
     normalized_text: str,
     specs: Iterable[dict[str, Any]],
