@@ -2219,16 +2219,127 @@ def test_s1f0c_ff_registry_lock_declares_every_adopted_literal_exactly_once() ->
     assert v3_row["contract_owner"] == owners["result_v3_route_owner"] == "filter_projection"
 
 
+FF_SCHEMA_ADOPTION: dict[str, tuple[str, ...]] = {
+    "acquisition_execution_authority.v1": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+    ),
+    "acquisition_start_authority_carrier.v1": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+    ),
+    "agent_runtime_namespace_ref.v1": (
+        "src/sourcing_agent/agent_runtime_namespace_ref.py",
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_agent_runtime_namespace_ref.py",
+        "tests/test_cohort_execution_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "cohort_candidate_member.v1": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "cohort_candidate_set.v1": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "cohort_execution_capability.v2": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "cohort_execution_commit.v1": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "cohort_execution_envelope.v1": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "cohort_execution_lane_result.v2": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "cohort_execution_result.v2": (
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "tests/test_cohort_execution_contract.py",
+    ),
+    "filter_projection_freshness_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_masked_absence_owner_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_not_ready_owner_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_product_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_product_terminal.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_readiness_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_result_serializer_v3": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_result_v3": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_stale_owner_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+    "filter_projection_success_owner_ref.v1": (
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    ),
+}
+
+
 def test_s1f0c_ff_new_literals_and_relations_have_zero_repo_collisions() -> None:
     head = _pinned_head()
     tracked = _tracked_paths_at_head(head)
     assert CANDIDATE_BLOBS <= set(tracked), "the three candidate blobs must be tracked at the pinned HEAD"
     kept = [path for path in tracked if path not in CANDIDATE_BLOBS]
     assert len(tracked) - len(kept) == 3, "only the three candidate blobs are excluded, by exact path"
+    # FF-XO adoption flip (integration-owner write, FF-SCHEMA `87e4dfe`): the six
+    # FF-SCHEMA files legitimately adopt the schema-wave literals; every other
+    # literal must still have zero tracked hits, and every adopted literal must
+    # hit exactly the recorded paths — no more, no fewer. Later waves extend
+    # this map only through the same integration-owner write path.
+    adopted_paths = {path for paths in FF_SCHEMA_ADOPTION.values() for path in paths}
+    assert adopted_paths == {
+        "src/sourcing_agent/agent_runtime_namespace_ref.py",
+        "src/sourcing_agent/cohort_execution_contract.py",
+        "src/sourcing_agent/filter_projection_terminal_contract.py",
+        "tests/test_agent_runtime_namespace_ref.py",
+        "tests/test_cohort_execution_contract.py",
+        "tests/test_filter_projection_terminal_contract.py",
+    }, "the adoption map must cover exactly the six FF-SCHEMA files"
+    for adopted_path in sorted(adopted_paths):
+        assert adopted_path in tracked, f"adopted file {adopted_path} must be tracked at the pinned HEAD"
     needles = sorted(NEW_LITERALS | NEW_RELATION_NAMES)
+    assert set(FF_SCHEMA_ADOPTION) <= set(needles), "adopted literals must come from the decision literal set"
     for needle in needles:
         hits = _git_grep_paths(needle, head)
-        assert hits == [], f"{needle} collides with existing tracked content: {hits}"
+        expected = FF_SCHEMA_ADOPTION.get(needle)
+        if expected is None:
+            assert hits == [], f"{needle} collides with existing tracked content: {hits}"
+        else:
+            assert hits == list(expected), (
+                f"{needle} adoption drifted: expected exactly {list(expected)}, got {hits}"
+            )
 
 
 def test_s1f0c_ff_retained_and_rejected_literals_are_history_never_retyped() -> None:
