@@ -18,8 +18,13 @@ from .public_candidate_facets import (
     candidate_page_filter_signature,
     normalize_candidate_page_filter,
     public_facet_summary_from_counts,
+    public_function_facet_option_spec,
 )
 from .storage import ControlPlaneStore
+
+# Registry-derived function-facet ids from the ONE backend option spec;
+# the keyword-only fast-path check accepts exactly these values.
+_PUBLIC_FUNCTION_FACET_ID_SET = {item_id for item_id, _label in public_function_facet_option_spec()}
 
 _SERVABLE_PROJECTION_STATES = {"serving", "building", "degraded"}
 SHARED_CANONICAL_PROJECTION_ACCESS_SCOPE = "shared_canonical_read"
@@ -1509,7 +1514,7 @@ def _candidate_filter_is_keyword_only(candidate_filter: dict[str, Any]) -> bool:
             values = [
                 item
                 for item in values
-                if item not in {"research", "engineering", "product_management", "other", "unknown"}
+                if item not in _PUBLIC_FUNCTION_FACET_ID_SET
             ]
         elif key == "layer_includes":
             values = [item for item in values if item != "layer_0"]

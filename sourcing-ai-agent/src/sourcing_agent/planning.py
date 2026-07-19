@@ -89,6 +89,8 @@ def build_sourcing_plan(
         employment_statuses,
         retrieval_plan,
         organization_execution_profile=organization_execution_profile,
+        target_locations=effective_request.target_locations,
+        exclude_target_locations=effective_request.exclude_target_locations,
     )
     publication_coverage = compile_publication_coverage_plan(effective_request, acquisition_strategy)
     search_strategy = compile_search_strategy(

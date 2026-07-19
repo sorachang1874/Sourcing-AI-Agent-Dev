@@ -6,8 +6,98 @@ import re
 from collections import Counter
 from typing import Any
 
+from .query_signal_knowledge import ROLE_BUCKET_KNOWLEDGE
+
 EXCEL_INTAKE_CURRENT_JOB_MARKER_ID = "excel_intake:current_job"
 EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL = "本次Excel导入"
+
+# Provenance markers for the served per-candidate function-bucket projection.
+# Consumers and audits must be able to tell membership-derived truth from
+# inferred legacy display; the values are a closed enum.
+FUNCTION_BUCKET_SOURCE_LANE_MEMBERSHIP = "lane_membership"
+FUNCTION_BUCKET_SOURCE_REGISTRY_EVIDENCE = "registry_evidence"
+FUNCTION_BUCKET_SOURCE_LEGACY_INFERENCE = "legacy_inference"
+FUNCTION_BUCKET_SOURCES = (
+    FUNCTION_BUCKET_SOURCE_LANE_MEMBERSHIP,
+    FUNCTION_BUCKET_SOURCE_REGISTRY_EVIDENCE,
+    FUNCTION_BUCKET_SOURCE_LEGACY_INFERENCE,
+)
+
+# Documented result-only facet states.  ``other`` means the record carries
+# role evidence that maps to no selectable registry role (e.g. an unmapped
+# numeric function id or a non-registry asset bucket); ``unknown`` means the
+# record carries no role evidence at all.  Neither is a selectable request
+# value and neither may silently absorb a selectable role.
+_RESULT_ONLY_FUNCTION_FACET_SPEC: tuple[tuple[str, str], ...] = (
+    ("other", "其他"),
+    ("unknown", "未提供职能信息"),
+)
+
+
+def _selectable_function_role_ids() -> list[str]:
+    """Project the central selectable role registry in canonical order."""
+
+    selectable: list[tuple[str, int]] = []
+    for role_id, spec in ROLE_BUCKET_KNOWLEDGE.items():
+        label = str(spec.get("selectable_label") or "").strip()
+        order = spec.get("selectable_order")
+        if not label or isinstance(order, bool) or not isinstance(order, int):
+            continue
+        selectable.append((str(role_id), order))
+    selectable.sort(key=lambda item: (item[1], item[0]))
+    return [role_id for role_id, _order in selectable]
+
+
+def public_function_facet_option_spec() -> list[tuple[str, str]]:
+    """Return the sole registry-derived function-facet option spec.
+
+    Named roles project ``ROLE_BUCKET_KNOWLEDGE`` (the single taxonomy source
+    of truth shared with the cohort-selection options endpoint) in selectable
+    order with registry labels; ``other``/``unknown`` are appended as
+    documented result-only states that are never selectable.  Every backend
+    consumer — the facet summary, filter normalization, and the operation/
+    projection filter enums — derives from this ONE helper; no second enum.
+    """
+
+    spec: list[tuple[str, str]] = [
+        (role_id, str(ROLE_BUCKET_KNOWLEDGE[role_id]["selectable_label"]).strip())
+        for role_id in _SELECTABLE_FUNCTION_ROLE_IDS
+    ]
+    spec.extend(_RESULT_ONLY_FUNCTION_FACET_SPEC)
+    return spec
+
+
+_SELECTABLE_FUNCTION_ROLE_IDS: tuple[str, ...] = tuple(_selectable_function_role_ids())
+_SELECTABLE_FUNCTION_ROLE_ID_SET: frozenset[str] = frozenset(_SELECTABLE_FUNCTION_ROLE_IDS)
+_FUNCTION_FACET_OPTION_IDS: tuple[str, ...] = tuple(item_id for item_id, _label in public_function_facet_option_spec())
+_FUNCTION_FACET_OPTION_ID_SET: frozenset[str] = frozenset(_FUNCTION_FACET_OPTION_IDS)
+_FUNCTION_FACET_ORDER: dict[str, int] = {item_id: index for index, item_id in enumerate(_FUNCTION_FACET_OPTION_IDS)}
+
+
+def _function_id_owner_roles() -> dict[str, str]:
+    """Map each registry function id to its first owner in registry order.
+
+    ``engineering`` and ``infra_systems`` share function id ``"8"``; a bare id
+    maps to ``engineering`` only (registry-order tie-break, documented).
+    ``infra_systems`` is additionally attributed only from explicit
+    role_bucket/lane evidence, never from the bare id.
+    """
+
+    owners: dict[str, str] = {}
+    for role_id in _SELECTABLE_FUNCTION_ROLE_IDS:
+        for function_id in ROLE_BUCKET_KNOWLEDGE[role_id].get("function_ids") or ():
+            normalized = str(function_id or "").strip()
+            if normalized and normalized not in owners:
+                owners[normalized] = role_id
+    return owners
+
+
+_FUNCTION_ID_OWNER_ROLE: dict[str, str] = _function_id_owner_roles()
+
+
+def _ordered_function_facet_ids(bucket_ids: Any) -> list[str]:
+    unique = {str(item or "").strip() for item in bucket_ids if str(item or "").strip()}
+    return sorted(unique, key=lambda item: (_FUNCTION_FACET_ORDER.get(item, len(_FUNCTION_FACET_ORDER)), item))
 
 
 def _dedupe_texts(values: list[str]) -> list[str]:
@@ -80,7 +170,80 @@ def candidate_location_bucket_for_public_facets(record: dict[str, Any]) -> str:
     return "us"
 
 
+def candidate_function_bucket_projection_for_public_facets(record: dict[str, Any]) -> dict[str, Any]:
+    """Return the served per-candidate function-bucket projection.
+
+    Multi-valued membership-first derivation with exact precedence:
+
+    1. ``lane_membership`` — Cohort-produced records carry server-derived
+       ``metadata.cohort_lane_membership`` / ``metadata.cohort_role_bucket_ids``
+       provenance; the candidate counts in EVERY qualifying role bucket.
+    2. ``registry_evidence`` — registry-mappable function evidence: numeric
+       ``function_ids`` mapped through the registry (bare ``"8"`` resolves to
+       ``engineering`` only, registry-order tie-break; unmapped ids become
+       ``other``) plus explicit registry ``role_bucket`` evidence, which is
+       additionally how ``infra_systems``/``founding`` are attributed.
+    3. ``legacy_inference`` — the documented pre-FT1 text/``role_bucket``
+       inference fallback, retained byte-for-byte for records with neither
+       membership nor registry-mappable evidence (historical persisted
+       candidates and legacy non-Cohort acquisitions).
+    """
+
+    metadata = dict(record.get("metadata") or {})
+
+    membership_roles: list[str] = []
+    for item in list(metadata.get("cohort_lane_membership") or []):
+        if not isinstance(item, dict):
+            continue
+        role_id = str(item.get("role_bucket_id") or "").strip()
+        if role_id in _SELECTABLE_FUNCTION_ROLE_ID_SET and role_id not in membership_roles:
+            membership_roles.append(role_id)
+    for item in list(metadata.get("cohort_role_bucket_ids") or []):
+        role_id = str(item or "").strip()
+        if role_id in _SELECTABLE_FUNCTION_ROLE_ID_SET and role_id not in membership_roles:
+            membership_roles.append(role_id)
+    if membership_roles:
+        return {
+            "function_bucket_ids": _ordered_function_facet_ids(membership_roles),
+            "function_bucket_source": FUNCTION_BUCKET_SOURCE_LANE_MEMBERSHIP,
+        }
+
+    evidence: set[str] = set()
+    function_ids = [
+        str(item or "").strip()
+        for item in list(record.get("function_ids") or metadata.get("function_ids") or [])
+        if str(item or "").strip()
+    ]
+    for function_id in function_ids:
+        owner_role = _FUNCTION_ID_OWNER_ROLE.get(function_id)
+        evidence.add(owner_role if owner_role else "other")
+    role_bucket = str(record.get("role_bucket") or metadata.get("role_bucket") or "").strip().lower()
+    if role_bucket in _SELECTABLE_FUNCTION_ROLE_ID_SET:
+        evidence.add(role_bucket)
+    if evidence:
+        return {
+            "function_bucket_ids": _ordered_function_facet_ids(evidence),
+            "function_bucket_source": FUNCTION_BUCKET_SOURCE_REGISTRY_EVIDENCE,
+        }
+
+    return {
+        "function_bucket_ids": _legacy_inferred_function_buckets(record),
+        "function_bucket_source": FUNCTION_BUCKET_SOURCE_LEGACY_INFERENCE,
+    }
+
+
 def candidate_function_buckets_for_public_facets(record: dict[str, Any]) -> list[str]:
+    return list(candidate_function_bucket_projection_for_public_facets(record)["function_bucket_ids"])
+
+
+def _legacy_inferred_function_buckets(record: dict[str, Any]) -> list[str]:
+    """Documented pre-FT1 fallback, retained byte-for-byte (FT0 §5.3).
+
+    Deletion condition: a projection-regeneration preflight shows zero served
+    rows with ``function_bucket_source="legacy_inference"`` across one full
+    materialization regeneration window.
+    """
+
     metadata = dict(record.get("metadata") or {})
     function_ids = [
         str(item or "").strip()
@@ -144,6 +307,33 @@ def candidate_function_buckets_for_public_facets(record: dict[str, Any]) -> list
     return ["unknown"]
 
 
+def candidate_employment_statuses_for_public_facets(record: dict[str, Any]) -> list[str]:
+    """Return the authoritative employment status set for facet counts/filters.
+
+    For Cohort-produced records ``metadata.cohort_lane_membership`` /
+    ``metadata.cohort_employment_statuses`` are the ONLY authoritative
+    employment provenance: a candidate qualifying in both current and former
+    lanes is counted and filterable under BOTH even though the card's
+    top-level ``employment_status`` keeps its frozen display-only derivation.
+    Returns [] when no membership provenance exists (legacy records), so
+    callers fall back to the documented top-level/``lead`` semantics.
+    """
+
+    metadata = dict(record.get("metadata") or {})
+    statuses: list[str] = []
+    for item in list(metadata.get("cohort_lane_membership") or []):
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("employment_status") or "").strip().lower()
+        if status in {"current", "former"} and status not in statuses:
+            statuses.append(status)
+    for item in list(metadata.get("cohort_employment_statuses") or []):
+        status = str(item or "").strip().lower()
+        if status in {"current", "former"} and status not in statuses:
+            statuses.append(status)
+    return statuses
+
+
 def candidate_recall_keywords_for_public_facets(record: dict[str, Any]) -> list[str]:
     metadata = dict(record.get("metadata") or {})
     values: list[str] = []
@@ -191,8 +381,13 @@ def public_facet_counts_from_records(records: list[dict[str, Any]]) -> dict[str,
         candidate_count += 1
         record = dict(source_record)
         metadata = dict(record.get("metadata") or {})
-        status = str(record.get("employment_status") or metadata.get("employment_status") or "").strip().lower()
-        employment_counts[status if status in {"current", "former"} else "lead"] += 1
+        membership_statuses = candidate_employment_statuses_for_public_facets(record)
+        if membership_statuses:
+            for membership_status in membership_statuses:
+                employment_counts[membership_status] += 1
+        else:
+            status = str(record.get("employment_status") or metadata.get("employment_status") or "").strip().lower()
+            employment_counts[status if status in {"current", "former"} else "lead"] += 1
         location_counts[candidate_location_bucket_for_public_facets(record)] += 1
         for bucket in candidate_function_buckets_for_public_facets(record):
             function_counts[bucket] += 1
@@ -325,13 +520,7 @@ def public_facet_summary_from_counts(
             keep_zero_ids={"us", "other"},
         ),
         "functions": _facet_options(
-            [
-                ("research", "Researcher"),
-                ("engineering", "Engineer"),
-                ("product_management", "Product Manager"),
-                ("other", "其他"),
-                ("unknown", "未提供职能信息"),
-            ],
+            public_function_facet_option_spec(),
             dict(source.get("function_counts") or {}),
         ),
     }
@@ -416,7 +605,7 @@ def normalize_candidate_page_filter(candidate_filter: dict[str, Any] | None) -> 
         ),
         "function_buckets": normalize_candidate_page_filter_values(
             source.get("function_buckets"),
-            allowed_values={"research", "engineering", "product_management", "other", "unknown"},
+            allowed_values=_FUNCTION_FACET_OPTION_ID_SET,
         ),
         "layer_includes": normalize_candidate_page_filter_values(
             source.get("layer_includes") or source.get("layers"),
@@ -463,13 +652,7 @@ def candidate_page_filter_active(candidate_filter: dict[str, Any]) -> bool:
         for item in list(source.get("function_buckets") or [])
         if str(item or "").strip()
     }
-    if function_buckets and function_buckets != {
-        "research",
-        "engineering",
-        "product_management",
-        "other",
-        "unknown",
-    }:
+    if function_buckets and function_buckets != _FUNCTION_FACET_OPTION_ID_SET:
         return True
     layer_includes = [str(item or "").strip() for item in list(source.get("layer_includes") or [])]
     layer_excludes = [str(item or "").strip() for item in list(source.get("layer_excludes") or [])]
@@ -632,14 +815,19 @@ def candidate_matches_candidate_page_filter(
 
     selected_employment = set(candidate_filter.get("employment_statuses") or [])
     if selected_employment:
-        metadata = dict(record.get("metadata") or {})
-        status = str(record.get("employment_status") or metadata.get("employment_status") or "").strip().lower()
-        status = status if status in {"current", "former"} else "lead"
-        if status == "lead":
-            if not {"current", "former"}.issubset(selected_employment):
+        membership_statuses = candidate_employment_statuses_for_public_facets(record)
+        if membership_statuses:
+            if not set(membership_statuses).intersection(selected_employment):
                 return False
-        elif status not in selected_employment:
-            return False
+        else:
+            metadata = dict(record.get("metadata") or {})
+            status = str(record.get("employment_status") or metadata.get("employment_status") or "").strip().lower()
+            status = status if status in {"current", "former"} else "lead"
+            if status == "lead":
+                if not {"current", "former"}.issubset(selected_employment):
+                    return False
+            elif status not in selected_employment:
+                return False
 
     selected_locations = set(candidate_filter.get("locations") or [])
     if selected_locations and candidate_location_bucket_for_public_facets(record) not in selected_locations:

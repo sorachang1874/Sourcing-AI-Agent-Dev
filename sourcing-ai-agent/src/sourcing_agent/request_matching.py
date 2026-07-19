@@ -407,6 +407,13 @@ def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limi
         "organization_keywords": _normalize_list(payload.get("organization_keywords")),
         "retrieval_strategy": _normalize_scalar(payload.get("retrieval_strategy")),
     }
+    # Location sibling fields join signature identity only when present, so
+    # different locations never share request signatures/reuse families while
+    # legacy requests without the fields keep byte-identical signatures.
+    if payload.get("target_locations") is not None:
+        normalized["target_locations"] = _normalize_list(payload.get("target_locations"))
+    if payload.get("exclude_target_locations") is not None:
+        normalized["exclude_target_locations"] = _normalize_list(payload.get("exclude_target_locations"))
     cohort_identity = cohort_execution_identity_for_signature(payload)
     if cohort_identity:
         normalized["cohort_selection_digest"] = cohort_identity
@@ -473,6 +480,15 @@ def _normalized_effective_request_payload(
         "organization_keywords": _normalize_list(effective_payload.get("organization_keywords")),
         "retrieval_strategy": _normalize_scalar(effective_payload.get("retrieval_strategy")),
     }
+    # Same location signature identity as _normalized_request_payload: present
+    # values split matching signatures/reuse by location; absent fields keep
+    # legacy matching payloads byte-identical.
+    if effective_payload.get("target_locations") is not None:
+        normalized["target_locations"] = _normalize_list(effective_payload.get("target_locations"))
+    if effective_payload.get("exclude_target_locations") is not None:
+        normalized["exclude_target_locations"] = _normalize_list(
+            effective_payload.get("exclude_target_locations")
+        )
     cohort_identity = cohort_execution_identity_for_signature(effective_payload)
     if cohort_identity:
         normalized["cohort_selection_digest"] = cohort_identity

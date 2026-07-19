@@ -138,12 +138,23 @@ def compile_acquisition_strategy(
     employment_statuses: list[str],
     retrieval_plan: RetrievalPlan,
     organization_execution_profile: dict[str, Any] | None = None,
+    *,
+    target_locations: list[str] | None = None,
+    exclude_target_locations: list[str] | None = None,
 ) -> AcquisitionStrategyPlan:
     effective_request, intent_view = build_effective_job_request(
         request,
         fallback_categories=categories,
         fallback_employment_statuses=employment_statuses,
     )
+    # Location sibling fields: planning.py passes the request's own values
+    # through explicitly; a None argument defers to the (effective) request
+    # record, where None means absent and [] means the user opted out of
+    # location filtering (single-writer rule — never merged with defaults).
+    if target_locations is None:
+        target_locations = effective_request.target_locations
+    if exclude_target_locations is None:
+        exclude_target_locations = effective_request.exclude_target_locations
     raw_text = f"{effective_request.raw_user_request} {effective_request.query}".strip()
     text = _normalize(raw_text)
     intent_axes = coerce_intent_axis_mapping(intent_view.get("intent_axes"))
@@ -331,6 +342,8 @@ def compile_acquisition_strategy(
         cost_policy=cost_policy,
         function_ids=function_ids,
         explicit_role_authority=explicit_role_authority,
+        target_locations=target_locations,
+        exclude_target_locations=exclude_target_locations,
     )
     confirmation_points = _build_confirmation_points(
         strategy_type,
@@ -1173,6 +1186,8 @@ def _build_filter_hints(
     cost_policy: dict[str, object],
     function_ids: list[str],
     explicit_role_authority: bool = False,
+    target_locations: list[str] | None = None,
+    exclude_target_locations: list[str] | None = None,
 ) -> dict[str, list[str]]:
     large_org_keyword_probe_mode = bool(cost_policy.get("large_org_keyword_probe_mode"))
     prefer_known_scope_company_urls = bool(
@@ -1205,6 +1220,24 @@ def _build_filter_hints(
         cost_policy=cost_policy,
     ):
         filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
+    if target_locations is not None:
+        # Single-writer rule: the user's explicit request locations win
+        # outright over every planner default and are NEVER merged with it
+        # (a request with an explicit non-US region must not silently
+        # re-acquire a US shard).  An explicit empty list opts out of
+        # location filtering and suppresses every location default.
+        if target_locations:
+            filters["locations"] = list(target_locations)
+        else:
+            filters.pop("locations", None)
+    elif explicit_role_authority and "locations" not in filters:
+        # Broad-recall default: explicit-Cohort requests with the field
+        # absent default to the primary US scope; legacy non-Cohort paths
+        # keep their existing behavior byte-for-byte.
+        filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
+    if exclude_target_locations:
+        # Composes independently into the provider exclusion axis.
+        filters["exclude_locations"] = list(exclude_target_locations)
     if large_org_keyword_probe_mode and not explicit_role_authority:
         filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *effective_function_ids]))
     elif effective_function_ids:

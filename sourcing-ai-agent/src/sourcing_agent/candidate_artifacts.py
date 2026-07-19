@@ -101,6 +101,9 @@ from .profile_timeline import (
     timeline_has_complete_profile_detail,
 )
 from .public_candidate_facets import (
+    candidate_function_bucket_projection_for_public_facets as _candidate_function_bucket_projection,
+)
+from .public_candidate_facets import (
     public_facet_counts_from_records as _public_facet_counts_from_records,
 )
 from .public_candidate_facets import (
@@ -1717,6 +1720,37 @@ def _build_candidate_serving_page_record(
     if metadata:
         merged["metadata"] = metadata
     return _project_profile_signal_fields_into_record(merged, signal_payload=materialized_record)
+
+
+def _candidate_facet_projection_record(
+    normalized_record: dict[str, Any],
+    materialized_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Re-bind server-derived Cohort provenance onto the facet projection input.
+
+    The normalized record intentionally drops candidate metadata, while the
+    materialized record retains it.  ``cohort_lane_membership`` /
+    ``cohort_role_bucket_ids`` / ``cohort_employment_statuses`` are the only
+    authoritative role/employment provenance for Cohort-produced candidates
+    (FT0 §4.1/§6.1), so the facet projection re-binds exactly those keys from
+    the aligned materialized record.  In-memory copy only: no persisted
+    artifact shape changes, and legacy records without the keys pass through
+    byte-identical.
+    """
+
+    record = dict(normalized_record or {})
+    materialized_metadata = dict(dict(materialized_record or {}).get("metadata") or {})
+    cohort_metadata = {
+        key: materialized_metadata[key]
+        for key in ("cohort_lane_membership", "cohort_role_bucket_ids", "cohort_employment_statuses")
+        if materialized_metadata.get(key) not in (None, "", [], {})
+    }
+    if cohort_metadata:
+        metadata = dict(record.get("metadata") or {})
+        for key, value in cohort_metadata.items():
+            metadata.setdefault(key, value)
+        record["metadata"] = metadata
+    return record
 
 
 def _artifact_bool(payload: dict[str, Any], *keys: str) -> bool:
@@ -5405,8 +5439,28 @@ def _build_artifact_view_payloads(
     removed_candidate_count = len(
         [candidate_id for candidate_id in existing_states if candidate_id not in current_candidate_ids_set]
     )
-    public_facet_counts = _public_facet_counts_from_records(normalized_candidates)
+    facet_projection_records = [
+        _candidate_facet_projection_record(normalized_candidate, materialized_candidate)
+        for normalized_candidate, materialized_candidate in zip(
+            normalized_candidates, materialized_candidate_records, strict=False
+        )
+    ]
+    public_facet_counts = _public_facet_counts_from_records(facet_projection_records)
     public_facet_summary = _public_facet_summary_from_counts(public_facet_counts)
+    # Served per-candidate function-bucket projection (append-only).  Computed
+    # once here — the same build point and the same facet projection records
+    # that feed public_facet_counts — so per-row bucket ids always agree with
+    # the served facet counts.  Page candidates are built in normalized order,
+    # so the flattened page sequence aligns 1:1 with facet_projection_records.
+    served_page_candidates = [
+        served_candidate
+        for page_payload in page_payloads
+        for served_candidate in list(dict(page_payload.get("payload") or {}).get("candidates") or [])
+    ]
+    for served_candidate, projection_record in zip(served_page_candidates, facet_projection_records, strict=False):
+        function_bucket_projection = _candidate_function_bucket_projection(projection_record)
+        served_candidate["function_bucket_ids"] = list(function_bucket_projection["function_bucket_ids"])
+        served_candidate["function_bucket_source"] = str(function_bucket_projection["function_bucket_source"])
     artifact_summary = {
         "target_company": materialized_view["target_company"],
         "company_key": materialized_view["company_key"],

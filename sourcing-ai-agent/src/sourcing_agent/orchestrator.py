@@ -441,6 +441,9 @@ from .public_candidate_facets import (
 from .public_candidate_facets import (
     public_facet_summary_from_records as _public_facet_summary_from_records,
 )
+from .public_candidate_facets import (
+    public_function_facet_option_spec as _public_function_facet_option_spec,
+)
 from .query_intent_policy import list_business_rewrite_policy_catalog
 from .query_intent_rewrite import interpret_query_intent_rewrite, summarize_query_intent_rewrite
 from .recovery_drain_registry import (
@@ -26293,7 +26296,7 @@ class SourcingOrchestrator:
         fixed_values = {
             "employment_statuses": {"current", "former"},
             "locations": {"us", "other", "unknown"},
-            "function_buckets": {"research", "engineering", "product_management", "other", "unknown"},
+            "function_buckets": {item_id for item_id, _label in _public_function_facet_option_spec()},
             "layer_includes": {f"layer_{index}" for index in range(8)},
             "layer_excludes": {f"layer_{index}" for index in range(8)},
             "audit_statuses": {

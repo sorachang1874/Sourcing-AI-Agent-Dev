@@ -117,6 +117,59 @@ The explicit selection digest is a hard request-family identity fence, not a sim
 
 An explicit criteria rerun baseline is owner-checked first and then cohort-checked before baseline-result reads or policy execution; an explicit idempotency-key hit is likewise only a candidate when its stored request has the same cohort identity. Asset-reuse compilation filters registry rows through their source jobs and emits `baseline_source_job_id` for explicit requests. Inherited force-fresh suppression requires that provenance to resolve to the same exact cohort, so a stale plan or registry pointer cannot silently install a delta/reuse baseline.
 
+## Location sibling fields, result facet projection, and shard contract
+
+### Location sibling request fields
+
+The user-selectable location dimension is a SIBLING REQUEST FIELD pair — `target_locations` and `exclude_target_locations` at request top level — composed through the existing acquisition filter-hints plumbing. It is NOT part of the closed five-field `cohort_selection.v1` object (whose validators on both backend and frontend fail closed on unknown fields), and it is not a successor schema. Location is an execution-scope axis: the selection digest deliberately covers only selection semantics and is unchanged by location.
+
+| Aspect | Locked value |
+|---|---|
+| Request fields | `target_locations: list[str]`, `exclude_target_locations: list[str]`; both optional, both default absent |
+| Field owner | request/planner chain: `domain.py` (JobRequest fields + normalization), `acquisition_strategy.py` (`_build_filter_hints` composition), `planning.py` (pass-through into the plan's `filter_hints`), `request_matching.py` (signature identity) |
+| Source of truth | the canonical request object; the plan's `acquisition_strategy.filter_hints` is the exact downstream mirror consumed by the compiler |
+| Allowed values | free-text provider location names (no closed enum — the provider location vocabulary is not registry-owned); trimmed, deduped, order-preserved; maxItems 16, item length 1–240 (the compiler's bounded-list convention) |
+| Validation | wrong type (non-list / non-string items), over-bound lists, or null-present values fail closed at ingress with HTTP 400 before any model/history/plan/job/provider write — the same fail-closed posture as Cohort ingress |
+| Default | for explicit-Cohort requests with the field absent, the server injects `locations: ["United States"]` into the plan's filter hints (`DEFAULT_PRIMARY_LOCATION`); non-Cohort legacy paths are unchanged byte-for-byte |
+| Single-writer rule | the user's `target_locations` beats the planner default; they are NEVER merged (a request with an explicit non-US region must not silently re-acquire a US shard); an explicit empty list opts out of location filtering; `exclude_target_locations` composes independently into `exclude_locations` |
+| Composition | applies uniformly to every manifest lane via base filter hints; former lanes keep `locations` and must NOT gain `excludeCurrentCompanies`; role-keyed hint stripping is unchanged |
+| Execution identity | both fields join `request_matching._normalized_request_payload` (and the effective-request mirror) only when present, so different locations never share request signatures, reuse families, or snapshot reuse while legacy requests keep byte-identical signatures; lane and manifest digests already bind location through `compiler_inputs.base_filter_hints` → lane `filter_hints` → `lane_digest`/`manifest_digest` |
+| Deletion condition | none (new field); the planner default injection is removable only if the product default changes away from US |
+
+### Result function-facet projection
+
+Result facets are a read-side projection of acquisition provenance; they change no request field, registry content, or selection/manifest digest.
+
+- **Single taxonomy source.** `ROLE_BUCKET_KNOWLEDGE` is the single source of truth for BOTH request selection options and result function-facet options/derivation. `public_candidate_facets.public_function_facet_option_spec()` is the ONE exported registry-derived options helper every backend consumer uses (facet summary, filter normalization, and the operation/projection filter enums in `operation_runtime.py`, `serving_projection_reader.py`, and `orchestrator.py`). A fast parity preflight asserts options-endpoint roles == result-facet named roles == the selectable registry projection (ids/labels/order); taxonomy drift must never first surface in an expensive run.
+- **Multi-valued membership-first derivation.** A candidate counts in EVERY function bucket evidenced by server-derived provenance, replacing single-winner behavior. Precedence: lane-membership roles (`metadata.cohort_lane_membership` / `metadata.cohort_role_bucket_ids`) > registry-mappable function evidence (`function_ids` + explicit registry `role_bucket`) > the documented legacy inference fallback.
+- **Named facets.** `infra_systems` (label from the registry) and `founding` are named result facets; `infra_systems` is no longer collapsed into `engineering`. `other` and `unknown` remain documented result-only states — `other` = role evidence mapping to no registry role (e.g. an unmapped function id or a TML-asset-only bucket such as `leadership`/`ops`/`investor`), `unknown` = no role evidence at all; neither is selectable and neither may silently absorb a selectable role.
+- **Function-id collision.** `engineering` and `infra_systems` share function id `"8"`. For Cohort-produced records lane membership distinguishes them; for legacy records a bare `"8"` maps to `engineering` only (registry-order tie-break, documented), and `infra_systems` is additionally attributed only when explicit role_bucket/facet evidence says so — never from bare headline keyword overlap.
+- **Served per-candidate fields (append-only).** `function_bucket_ids: list[str]` and `function_bucket_source: "lane_membership" | "registry_evidence" | "legacy_inference"` are computed once by the backend at the existing `public_facet_counts` build point in `candidate_artifacts.py` and attached to every served candidate row. Owner: the backend projection build from the registry + lane membership. Fallback: `legacy_inference` for historical records.
+- **Legacy fallback retention and deletion.** The pre-FT1 text/`role_bucket` inference is RETAINED as the documented fallback, only for records with neither lane membership nor registry-mappable function evidence, always marked `function_bucket_source="legacy_inference"`. Deletion condition: a projection-regeneration preflight shows zero served rows with `function_bucket_source="legacy_inference"` across one full materialization regeneration window; until then the fallback stays pinned by parity tests on legacy-shaped records.
+- **Employment facets from membership.** `metadata.cohort_lane_membership` / `metadata.cohort_employment_statuses` are the ONLY authoritative employment provenance for Cohort-produced candidates: result employment facet counts and filters use the membership status set, so a dual-status candidate is counted/filterable under BOTH `current` and `former`. Top-level `employment_status` remains a DISPLAY-ONLY convenience projection with its derivation frozen (sole status when exactly one; else `current` when present; else first; else `all`); it is documented lossy and must not drive Cohort filtering, counts, or audit. The `lead` result-filter semantic (unknown/missing employment matches only when both statuses are selected) is unchanged and remains a compatibility semantic, not a third Cohort status.
+
+### Shard contract pointer
+
+Multi-functionID requests expand into per-role sharded executions ONLY at the `CohortProviderCompiler` (see "Role authority and provider compilation" above): one shard = one compiled lane = one (employment_status × role bucket) pair carrying exactly that role's registry-owned `function_ids`/`job_titles`, with `lane_count = S * max(1, R)`. Where function ids collide (the two `"8"` lanes), job-title hints differentiate the provider queries and server-side lane provenance keeps shards distinct end-to-end. Location is NOT a shard axis: one request carries ONE location value-set applied uniformly to every shard; a different location selection is a different request identity and therefore a different run.
+
+### Cohort sufficiency decision contract (typed; runtime wiring is a later packet)
+
+The staged broad-recall pipeline's async "enough / fetch other shard?" step is a NEW server-owned typed decision. No runtime primitive exists today; this subsection pins the contract that its later implementation must satisfy, so no implementation session invents values.
+
+- **Typed persisted result** — `cohort_sufficiency_decision.v1`:
+  - `schema_version`: exactly `cohort_sufficiency_decision.v1`.
+  - `stop`: boolean — true means the integrated result is sufficient and no further shard/batch is dispatched.
+  - `continue_shard_ids`: list of compiled lane ids to re-dispatch/extend (empty when `stop` is true).
+  - `rationale`: deterministic counters object carrying `rule_id`, `lane_count`, `completed_lane_count`, `accepted_count`, `rejected_count`, `truncated_count`, `missing_required_lane_count`, and `target_accepted_count`, so every decision is auditable from lane summaries alone.
+  - Identity binding: the persisted decision carries the exact `cohort_selection_digest` and `cohort_provider_manifest_digest` it evaluated.
+- **Deterministic rule table** (inputs are lane summaries + integrated counts only; fixed evaluation order, first match wins; no time, randomness, or hidden state):
+  1. `R1 missing_lanes_continue`: `missing_required_lane_count > 0` → `stop=false`, continue the incomplete lane ids.
+  2. `R2 target_met_stop`: all lanes complete and `accepted_count >= target_accepted_count` → `stop=true`, continue none.
+  3. `R3 truncated_lanes_continue`: all lanes complete, `accepted_count < target_accepted_count`, and `truncated_count > 0` → `stop=false`, continue the lanes whose results were truncated.
+  4. `R4 exhausted_stop`: all lanes complete, `accepted_count < target_accepted_count`, `truncated_count == 0` → `stop=true` (population exhausted), continue none.
+- **Thresholds.** `target_accepted_count` is a product value: FT0 deliberately left it UNSET. The FT1 contract test proposes the default derivation from the request's `requested_result_limit`; the value is pinned by the FT1 non-author review, not guessed here.
+- **No provider/model invocation.** The default path is rule-driven over persisted lane summaries and integrated counts. Any model assist MUST go through the typed model-activity/result spine (TRACK_D M5 precedent), never a hidden provider call. `served=0` is unchanged.
+
 ## Criteria write provenance
 
 The three external criteria mutation endpoints validate every present nested request alias before invoking an orchestrator handler. A caller may supply only `source=user_explicit`; malformed mirrors, server-owned provenance values, non-object aliases, and canonical disagreement return HTTP 400 with zero feedback, policy, compiler, result, or derived-job writes. The same validation runs again at the orchestrator boundary so direct callers cannot bypass HTTP ingress.

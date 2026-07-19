@@ -6,6 +6,7 @@ from hashlib import sha1
 from typing import Any
 
 from .cohort_selection import (
+    CohortSelectionValidationError,
     apply_user_explicit_cohort_authority,
     canonicalize_cohort_selection_request_payload,
 )
@@ -297,6 +298,14 @@ class JobRequest:
     intent_axes: dict[str, Any] = field(default_factory=dict)
     requested_population_boundary: dict[str, Any] = field(default_factory=dict)
     cohort_selection: dict[str, Any] | None = None
+    # Location is a SIBLING REQUEST FIELD pair (never part of the closed
+    # five-field cohort_selection.v1 object).  None means absent: explicit
+    # Cohort requests then receive the planner's US default; an explicit []
+    # opts out of location filtering (single-writer rule — user values beat
+    # the default, never merged).  Legacy records lack the keys entirely, so
+    # to_record() omits them when None and stays byte-compatible.
+    target_locations: list[str] | None = None
+    exclude_target_locations: list[str] | None = None
     semantic_rerank_limit: int = 0
     top_k: int = 10
     slug_resolution_limit: int = 8
@@ -396,6 +405,14 @@ class JobRequest:
             cohort_selection=dict(normalized_payload.get("cohort_selection") or {})
             if isinstance(normalized_payload.get("cohort_selection"), dict)
             else None,
+            target_locations=_normalize_location_list(
+                normalized_payload.get("target_locations"),
+                field_name="target_locations",
+            ),
+            exclude_target_locations=_normalize_location_list(
+                normalized_payload.get("exclude_target_locations"),
+                field_name="exclude_target_locations",
+            ),
             semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
             top_k=_normalize_top_k(normalized_payload.get("top_k")),
             slug_resolution_limit=_normalize_small_limit(
@@ -424,7 +441,65 @@ class JobRequest:
         record = asdict(self)
         if self.cohort_selection is None:
             record.pop("cohort_selection", None)
+        if self.target_locations is None:
+            record.pop("target_locations", None)
+        if self.exclude_target_locations is None:
+            record.pop("exclude_target_locations", None)
         return record
+
+
+_REQUEST_LOCATION_MAX_ITEMS = 16
+_REQUEST_LOCATION_ITEM_MAX_LENGTH = 240
+
+
+def _normalize_location_list(value: Any, *, field_name: str) -> list[str] | None:
+    """Fail-closed normalization for the sibling request location fields.
+
+    Free-text provider location names: trimmed, deduped (first occurrence
+    wins, case-insensitive), order-preserved; at most 16 items of 1-240
+    characters each (the provider compiler's bounded-list convention).  Wrong
+    container types, non-string or null-present items, and over-bound lists
+    raise CohortSelectionValidationError so invalid requests fail closed with
+    the same posture as Cohort ingress, before any downstream write.  Returns
+    None when the field is absent so legacy records stay byte-compatible.
+    """
+
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise CohortSelectionValidationError(
+            "request_location_invalid_type",
+            field_name,
+            f"{field_name} must be an array of location strings",
+        )
+    if len(value) > _REQUEST_LOCATION_MAX_ITEMS:
+        raise CohortSelectionValidationError(
+            "request_location_too_many_items",
+            field_name,
+            f"{field_name} accepts at most {_REQUEST_LOCATION_MAX_ITEMS} items",
+        )
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise CohortSelectionValidationError(
+                "request_location_invalid_item",
+                field_name,
+                f"{field_name} items must be strings",
+            )
+        trimmed = item.strip()
+        if not trimmed or len(trimmed) > _REQUEST_LOCATION_ITEM_MAX_LENGTH:
+            raise CohortSelectionValidationError(
+                "request_location_item_length_invalid",
+                field_name,
+                f"{field_name} items must be 1-{_REQUEST_LOCATION_ITEM_MAX_LENGTH} characters",
+            )
+        key = trimmed.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(trimmed)
+    return normalized
 
 
 def _normalize_list(value: Any) -> list[str]:
