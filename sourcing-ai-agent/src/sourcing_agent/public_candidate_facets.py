@@ -51,6 +51,7 @@ class CohortFacetProvenanceError(ValueError):
     def __str__(self) -> str:
         return f"{self.code}: {self.field}" if self.field else self.code
 
+
 # Documented result-only facet states.  ``other`` means the record carries
 # role evidence that maps to no selectable registry role (e.g. an unmapped
 # numeric function id or a non-registry asset bucket); ``unknown`` means the
@@ -128,6 +129,61 @@ def _ordered_function_facet_ids(bucket_ids: Any) -> list[str]:
     return sorted(unique, key=lambda item: (_FUNCTION_FACET_ORDER.get(item, len(_FUNCTION_FACET_ORDER)), item))
 
 
+def effective_function_bucket_filter_values(function_buckets: Any) -> list[str]:
+    """Normalize a function-facet filter selection to its effective predicate.
+
+    The documented inactive (all-roles/default-complete) no-op is ANY
+    selection covering every selectable role id — with or without the
+    result-only ``other``/``unknown`` ids — and narrows nothing, so it
+    normalizes to an empty effective predicate; only a proper subset is an
+    active exclusion.  This ONE normalization is shared by the active check,
+    scan matching, index filtering, and keyword routing so a default/all-role
+    selection can never turn into a narrowing predicate (excluding
+    ``other``/``unknown`` candidates) when another facet axis is active.
+    """
+
+    selected = {str(item or "").strip() for item in list(function_buckets or []) if str(item or "").strip()}
+    if not selected or _SELECTABLE_FUNCTION_ROLE_ID_SET.issubset(selected):
+        return []
+    return _ordered_function_facet_ids(selected)
+
+
+# The immutable ``projection_filter_request_v1`` function_buckets domain
+# (docs/AGENT_OPERATION_CONTRACT.md): the published v1 request schema keeps
+# its exact historical five-value enum (version/digest contract forbids
+# in-place mutation), so the FT1 named roles (``infra_systems``/``founding``)
+# are NOT part of the v1 domain.  v1's selectable roles are exactly these
+# three; ``other``/``unknown`` were already result-only states in v1.
+_PROJECTION_FILTER_V1_SELECTABLE_ROLE_IDS: frozenset[str] = frozenset({"research", "engineering", "product_management"})
+PROJECTION_FILTER_V1_FUNCTION_BUCKET_ENUM: tuple[str, ...] = (
+    "research",
+    "engineering",
+    "product_management",
+    "other",
+    "unknown",
+)
+
+
+def effective_projection_filter_v1_function_buckets(function_buckets: Any) -> list[str]:
+    """Normalize a v1 (``projection_filter_request_v1``) function selection.
+
+    Contract-version-aware dispatch normalization (FT1-FF2): v1 keeps its
+    HISTORICAL execution semantics — any selection covering every v1
+    selectable role (the complete five-value enum, or the three selectable
+    roles with any subset of the result-only ids) is the inactive select-all
+    no-op it was when the action was recorded, so replayed/retried/approved v1
+    actions never silently narrow onto newly classified (``infra_systems`` /
+    ``founding``) candidates.  Only a proper subset of the v1 selectable roles
+    narrows.  The version-blind page/projection filter keeps the canonical
+    (current-registry) predicate in ``effective_function_bucket_filter_values``.
+    """
+
+    selected = {str(item or "").strip() for item in list(function_buckets or []) if str(item or "").strip()}
+    if not selected or _PROJECTION_FILTER_V1_SELECTABLE_ROLE_IDS.issubset(selected):
+        return []
+    return _ordered_function_facet_ids(selected)
+
+
 def _dedupe_texts(values: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -203,11 +259,11 @@ def _validated_cohort_provenance(metadata: dict[str, Any]) -> dict[str, Any]:
 
     Returns ``{"has_provenance": bool, "role_bucket_ids": [...],
     "employment_statuses": [...]}``.  Any malformed provenance — wrong
-    container/item types, unknown role ids, invalid statuses, an empty
-    employment mirror (invalid at request time, FT0 §3.5), or lane/mirror
-    disagreement when both exist — raises ``CohortFacetProvenanceError`` so
-    facet/index publication fails closed instead of silently falling back to
-    lower-authority evidence.  The legitimate all-roles case (status-only
+    container/item types, unknown role ids, invalid statuses, a present-empty
+    lane membership, an empty employment mirror (invalid at request time, FT0
+    §3.5), or lane/mirror disagreement when both exist — raises
+    ``CohortFacetProvenanceError`` so facet/index publication fails closed
+    instead of silently falling back to lower-authority evidence.  The legitimate all-roles case (status-only
     lanes carry a blank ``role_bucket_id`` and the role mirror is an empty
     list) is well-formed and simply yields no role evidence, passing the
     record through to the registry/legacy tiers.
@@ -226,6 +282,15 @@ def _validated_cohort_provenance(metadata: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(membership, list):
             raise CohortFacetProvenanceError(
                 "cohort_facet_provenance_invalid_type",
+                "cohort_lane_membership",
+            )
+        if not membership:
+            # A present-empty lane membership is never legitimate: a
+            # Cohort-produced candidate always belongs to at least one lane
+            # (status-only lanes in the all-roles case), so an empty list is
+            # malformed provenance, not a valid mirror-only/legacy record.
+            raise CohortFacetProvenanceError(
+                "cohort_facet_provenance_empty_lane_membership",
                 "cohort_lane_membership",
             )
         for item in membership:
@@ -715,8 +780,7 @@ def public_facet_summary_from_counts(
         )
 
     layer_counts = {
-        str(key or "").strip(): max(0, int(value or 0))
-        for key, value in dict(source.get("layer_counts") or {}).items()
+        str(key or "").strip(): max(0, int(value or 0)) for key, value in dict(source.get("layer_counts") or {}).items()
     }
     has_layer_metadata = bool(source.get("has_layer_metadata"))
     if has_layer_metadata:
@@ -861,29 +925,22 @@ def candidate_page_filter_active(candidate_filter: dict[str, Any]) -> bool:
     if str(source.get("search_keyword") or "").strip():
         return True
     employment_statuses = {
-        str(item or "").strip()
-        for item in list(source.get("employment_statuses") or [])
-        if str(item or "").strip()
+        str(item or "").strip() for item in list(source.get("employment_statuses") or []) if str(item or "").strip()
     }
     if employment_statuses and employment_statuses != {"current", "former"}:
         return True
-    locations = {
-        str(item or "").strip()
-        for item in list(source.get("locations") or [])
-        if str(item or "").strip()
-    }
+    locations = {str(item or "").strip() for item in list(source.get("locations") or []) if str(item or "").strip()}
     if locations and locations != {"us", "other", "unknown"}:
         return True
     function_buckets = {
-        str(item or "").strip()
-        for item in list(source.get("function_buckets") or [])
-        if str(item or "").strip()
+        str(item or "").strip() for item in list(source.get("function_buckets") or []) if str(item or "").strip()
     }
     # ``other``/``unknown`` are documented result-only states and are never
     # selectable request values.  The inactive (all-roles) no-op is any set
     # that covers every selectable role id — with or without the result-only
-    # ids — while any proper subset is an active exclusion.
-    if function_buckets and not _SELECTABLE_FUNCTION_ROLE_ID_SET.issubset(function_buckets):
+    # ids — while any proper subset is an active exclusion.  The same
+    # normalization drives the matcher's effective predicate.
+    if function_buckets and effective_function_bucket_filter_values(function_buckets):
         return True
     layer_includes = [str(item or "").strip() for item in list(source.get("layer_includes") or [])]
     layer_excludes = [str(item or "").strip() for item in list(source.get("layer_excludes") or [])]
@@ -906,11 +963,7 @@ def candidate_page_filter_active(candidate_filter: dict[str, Any]) -> bool:
 
 
 def candidate_page_filter_signature(candidate_filter: dict[str, Any]) -> str:
-    payload = {
-        key: value
-        for key, value in dict(candidate_filter or {}).items()
-        if value not in ("", [], {}, None)
-    }
+    payload = {key: value for key, value in dict(candidate_filter or {}).items() if value not in ("", [], {}, None)}
     if not payload:
         return ""
     return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
@@ -1024,7 +1077,9 @@ def candidate_matches_candidate_page_filter(
                 if candidate_page_filter_text(EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL) in recall_keywords:
                     recall_matched = True
                     break
-                for source_match in list(record.get("source_matches") or dict(record.get("metadata") or {}).get("source_matches") or []):
+                for source_match in list(
+                    record.get("source_matches") or dict(record.get("metadata") or {}).get("source_matches") or []
+                ):
                     if not isinstance(source_match, dict):
                         continue
                     source_type = str(source_match.get("source_type") or source_match.get("marker_id") or "").strip()
@@ -1064,10 +1119,12 @@ def candidate_matches_candidate_page_filter(
     if selected_locations and candidate_location_bucket_for_public_facets(record) not in selected_locations:
         return False
 
-    selected_functions = set(candidate_filter.get("function_buckets") or [])
-    if selected_functions and not selected_functions.intersection(
-        candidate_function_buckets_for_public_facets(record)
-    ):
+    # Full-domain (all selectable roles) selections are inactive no-ops —
+    # never a narrowing predicate — so ``other``/``unknown`` candidates stay
+    # visible when only another axis is active (FT1-FF2).  Only a proper
+    # subset of the selectable roles intersects as an exclusion.
+    selected_functions = set(effective_function_bucket_filter_values(candidate_filter.get("function_buckets")))
+    if selected_functions and not selected_functions.intersection(candidate_function_buckets_for_public_facets(record)):
         return False
 
     layer_id = candidate_page_filter_layer_id(record)

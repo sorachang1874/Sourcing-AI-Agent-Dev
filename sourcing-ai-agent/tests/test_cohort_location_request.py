@@ -125,7 +125,11 @@ class LocationFieldValidationTest(unittest.TestCase):
             ({"target_locations": ["x" * 241]}, "request_location_item_length_invalid", "target_locations"),
             ({"target_locations": ["   "]}, "request_location_item_length_invalid", "target_locations"),
             ({"exclude_target_locations": "France"}, "request_location_invalid_type", "exclude_target_locations"),
-            ({"exclude_target_locations": [None, "France"]}, "request_location_invalid_item", "exclude_target_locations"),
+            (
+                {"exclude_target_locations": [None, "France"]},
+                "request_location_invalid_item",
+                "exclude_target_locations",
+            ),
         ]
         for payload_patch, expected_code, expected_field in cases:
             with self.subTest(payload=payload_patch):
@@ -482,16 +486,12 @@ class LocationOrchestratorIngressTest(unittest.TestCase):
         )
 
     def test_explain_returns_typed_invalid_for_invalid_location_values(self) -> None:
-        result = self.orchestrator.explain_workflow(
-            {"target_company": "Acme", "target_locations": "United States"}
-        )
+        result = self.orchestrator.explain_workflow({"target_company": "Acme", "target_locations": "United States"})
         self.assertEqual(result.get("status"), "invalid")
         self.assertEqual(result.get("reason"), "request_location_invalid_type")
 
     def test_queue_returns_typed_invalid_for_invalid_location_values(self) -> None:
-        result = self.orchestrator.queue_workflow(
-            {"target_company": "Acme", "target_locations": ["x"] * 17}
-        )
+        result = self.orchestrator.queue_workflow({"target_company": "Acme", "target_locations": ["x"] * 17})
         self.assertEqual(result.get("status"), "invalid")
         self.assertEqual(result.get("reason"), "request_location_too_many_items")
 
@@ -544,10 +544,7 @@ class LocationSignatureIdentityTest(unittest.TestCase):
 
     def test_cohort_selection_digest_is_unchanged_by_location(self) -> None:
         records = self._records()
-        digests = {
-            name: cohort_selection_digest(record["cohort_selection"])
-            for name, record in records.items()
-        }
+        digests = {name: cohort_selection_digest(record["cohort_selection"]) for name, record in records.items()}
         self.assertEqual(len(set(digests.values())), 1)
 
     def test_manifest_and_lane_digests_differ_across_locations(self) -> None:
@@ -643,93 +640,66 @@ class LocationLaneCompositionTest(unittest.TestCase):
 
 
 class CohortSufficiencyDecisionContractTest(unittest.TestCase):
-    """Matrix row 10: typed contract only; runtime wiring is NOT FT1."""
+    """Matrix row 10: honest counters only — NO sufficiency stop/continue rule
+    or target is currently authorized (operator decision, FT1-FF2 finding 9)."""
 
     @classmethod
     def _contract_text(cls) -> str:
         return _CONTRACT_DOC.read_text(encoding="utf-8")
 
-    def test_typed_result_schema_is_pinned_in_the_contract_doc(self) -> None:
+    def test_honest_counter_vocabulary_is_pinned_in_the_contract_doc(self) -> None:
         text = self._contract_text()
         for token in (
-            "cohort_sufficiency_decision.v1",
-            "stop",
-            "continue_shard_ids",
-            "rule_id",
             "lane_count",
             "completed_lane_count",
             "accepted_count",
             "rejected_count",
             "truncated_count",
             "missing_required_lane_count",
-            "target_accepted_count",
             "cohort_selection_digest",
             "cohort_provider_manifest_digest",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, text)
 
-    def test_rule_table_is_deterministic_ordered_and_provider_free(self) -> None:
+    def test_contract_records_no_authorized_rule_or_target(self) -> None:
         text = self._contract_text()
-        rule_ids = [
-            "R1 missing_lanes_continue",
-            "R2 target_met_stop",
-            "R3 truncated_lanes_continue",
-            "R4 exhausted_stop",
-        ]
-        positions = []
-        for rule_id in rule_ids:
-            with self.subTest(rule_id=rule_id):
-                self.assertIn(rule_id, text)
-            positions.append(text.index(rule_id))
-        self.assertEqual(positions, sorted(positions), "rule table must keep fixed evaluation order")
-        self.assertIn("fixed evaluation order, first match wins", text)
+        # The operator left the sufficiency stop/continue decision OPEN: the
+        # contract must record that no rule/target is authorized, keep the
+        # target-driven schema/rule table withdrawn, and stay provider-free.
+        self.assertIn("NO sufficiency stop/continue rule or target is currently authorized", text)
+        self.assertIn("WITHDRAWN", text)
+        self.assertIn("UNRESOLVED", text)
         self.assertIn("never a hidden provider call", text)
         self.assertIn("`served=0` is unchanged", text)
-        # Thresholds are product values pinned by the FT1 review, not guessed.
-        self.assertIn("pinned by the FT1 non-author review, not guessed here", text)
+        # No pinned target vocabulary may survive anywhere in the contract.
+        self.assertNotIn("target_accepted_count", text)
+        self.assertNotIn("target_met_stop", text)
+        self.assertNotIn("exhausted_stop", text)
+        self.assertNotIn("truncated_lanes_continue", text)
 
-    def test_documented_rule_table_decision_oracle(self) -> None:
-        """Executable oracle for the documented contract (no runtime wiring).
+    def test_no_runtime_or_default_sufficiency_target_exists(self) -> None:
+        """Replacement oracle: prove no runtime/default target exists anywhere.
 
-        The later runtime implementation must reproduce exactly this mapping
-        over lane summaries + integrated counts, in this fixed order.
+        The withdrawn oracle embedded a concrete target (50) and target-driven
+        rules; the authorized state is that no schema field, rule, default, or
+        oracle may introduce one.  Scan every runtime source file for the
+        target vocabulary and require zero occurrences.
         """
 
-        def decide(summary: dict) -> dict:
-            if summary["missing_required_lane_count"] > 0:
-                return {"stop": False, "continue_shard_ids": summary["incomplete_lane_ids"], "rule_id": "R1"}
-            if summary["accepted_count"] >= summary["target_accepted_count"]:
-                return {"stop": True, "continue_shard_ids": [], "rule_id": "R2"}
-            if summary["truncated_count"] > 0:
-                return {"stop": False, "continue_shard_ids": summary["truncated_lane_ids"], "rule_id": "R3"}
-            return {"stop": True, "continue_shard_ids": [], "rule_id": "R4"}
-
-        base = {
-            "incomplete_lane_ids": [],
-            "truncated_lane_ids": [],
-            "missing_required_lane_count": 0,
-            "accepted_count": 0,
-            "target_accepted_count": 50,
-            "truncated_count": 0,
-        }
-        cases = [
-            ("R1 missing lanes continue", {**base, "missing_required_lane_count": 1, "incomplete_lane_ids": ["lane-2"]},
-             {"stop": False, "continue_shard_ids": ["lane-2"], "rule_id": "R1"}),
-            ("R1 wins over target met", {**base, "missing_required_lane_count": 1, "accepted_count": 60,
-             "incomplete_lane_ids": ["lane-2"]},
-             {"stop": False, "continue_shard_ids": ["lane-2"], "rule_id": "R1"}),
-            ("R2 target met stops", {**base, "accepted_count": 50},
-             {"stop": True, "continue_shard_ids": [], "rule_id": "R2"}),
-            ("R3 truncated lanes continue", {**base, "accepted_count": 12, "truncated_count": 5,
-             "truncated_lane_ids": ["lane-1"]},
-             {"stop": False, "continue_shard_ids": ["lane-1"], "rule_id": "R3"}),
-            ("R4 exhausted stops", {**base, "accepted_count": 12},
-             {"stop": True, "continue_shard_ids": [], "rule_id": "R4"}),
-        ]
-        for name, summary, expected in cases:
-            with self.subTest(case=name):
-                self.assertEqual(decide(summary), expected)
+        src_root = Path(__file__).resolve().parent.parent / "src" / "sourcing_agent"
+        offenders: list[str] = []
+        for path in sorted(src_root.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            if "target_accepted_count" in text:
+                offenders.append(str(path.relative_to(src_root)))
+        self.assertEqual(offenders, [])
+        # No runtime sufficiency decision schema/rule table exists either.
+        for path in sorted(src_root.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("cohort_sufficiency_decision", text, msg=str(path))
+        # And the contract doc itself carries no target token.
+        self.assertNotIn("target_accepted_count", self._contract_text())
 
 
 if __name__ == "__main__":

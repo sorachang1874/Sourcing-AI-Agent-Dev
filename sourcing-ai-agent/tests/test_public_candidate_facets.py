@@ -137,7 +137,7 @@ class FunctionFacetOptionParityTest(unittest.TestCase):
                 key=lambda role_id: (
                     int(ROLE_BUCKET_KNOWLEDGE[role_id]["selectable_order"]),
                     role_id,
-                )
+                ),
             )
         ]
         self.assertEqual(endpoint_roles, registry_projection)
@@ -284,9 +284,7 @@ class EmploymentFacetFromMembershipTest(unittest.TestCase):
                 self.assertTrue(
                     candidate_matches_candidate_page_filter(
                         record=record,
-                        candidate_filter=normalize_candidate_page_filter(
-                            {"employment_statuses": selected}
-                        ),
+                        candidate_filter=normalize_candidate_page_filter({"employment_statuses": selected}),
                     )
                 )
 
@@ -446,39 +444,27 @@ class FunctionFilterEnumTest(unittest.TestCase):
         # filter must reach the filtered index path instead of being silently
         # discarded.
         self.assertFalse(
-            _candidate_filter_is_keyword_only(
-                {"search_keyword": "agent", "function_buckets": ["infra_systems"]}
-            )
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": ["infra_systems"]})
         )
         self.assertFalse(
             _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": ["founding"]})
         )
-        self.assertFalse(
-            _candidate_filter_is_keyword_only({"search_keyword": "agent", "locations": ["us"]})
-        )
+        self.assertFalse(_candidate_filter_is_keyword_only({"search_keyword": "agent", "locations": ["us"]}))
         self.assertFalse(
             _candidate_filter_is_keyword_only({"search_keyword": "agent", "employment_statuses": ["current"]})
         )
         # Unrecognized values are not full-domain no-ops either: the safe
         # answer stays "not keyword-only" (normalized filters drop them
         # upstream; a raw caller gets the conservative filtered path).
-        self.assertFalse(
-            _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": ["bogus"]})
-        )
+        self.assertFalse(_candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": ["bogus"]}))
         # The genuine all-values no-op selection IS keyword-only.
         all_ids = [item_id for item_id, _label in public_function_facet_option_spec()]
+        self.assertTrue(_candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": all_ids}))
         self.assertTrue(
-            _candidate_filter_is_keyword_only({"search_keyword": "agent", "function_buckets": all_ids})
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "employment_statuses": ["current", "former"]})
         )
         self.assertTrue(
-            _candidate_filter_is_keyword_only(
-                {"search_keyword": "agent", "employment_statuses": ["current", "former"]}
-            )
-        )
-        self.assertTrue(
-            _candidate_filter_is_keyword_only(
-                {"search_keyword": "agent", "locations": ["us", "other", "unknown"]}
-            )
+            _candidate_filter_is_keyword_only({"search_keyword": "agent", "locations": ["us", "other", "unknown"]})
         )
         self.assertTrue(_candidate_filter_is_keyword_only({"search_keyword": "agent"}))
         self.assertFalse(_candidate_filter_is_keyword_only({"function_buckets": ["infra_systems"]}))
@@ -553,21 +539,31 @@ class ServedFunctionBucketProjectionTest(unittest.TestCase):
             employment_status="current",
             metadata={
                 "cohort_lane_membership": [
-                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
-                    {"lane_id": "cohort_former_engineering_d", "employment_status": "former", "role_bucket_id": "engineering"},
+                    {
+                        "lane_id": "cohort_current_research_d",
+                        "employment_status": "current",
+                        "role_bucket_id": "research",
+                    },
+                    {
+                        "lane_id": "cohort_former_engineering_d",
+                        "employment_status": "former",
+                        "role_bucket_id": "engineering",
+                    },
                 ],
                 "cohort_role_bucket_ids": ["research", "engineering"],
                 "cohort_employment_statuses": ["current", "former"],
             },
         )
-        legacy_engineer = Candidate(candidate_id="c2", name_en="Legacy Dev", role="Software Engineer", employment_status="current")
-        legacy_asset_only = Candidate(candidate_id="c3", name_en="Legacy Other", role="Sales Director", employment_status="former")
+        legacy_engineer = Candidate(
+            candidate_id="c2", name_en="Legacy Dev", role="Software Engineer", employment_status="current"
+        )
+        legacy_asset_only = Candidate(
+            candidate_id="c3", name_en="Legacy Other", role="Sales Director", employment_status="former"
+        )
 
         result = self._build([cohort_candidate, legacy_engineer, legacy_asset_only])
         served = [
-            row
-            for page in result["incremental_artifacts"]["page_payloads"]
-            for row in page["payload"]["candidates"]
+            row for page in result["incremental_artifacts"]["page_payloads"] for row in page["payload"]["candidates"]
         ]
         self.assertEqual(len(served), 3)
         by_id = {row["candidate_id"]: row for row in served}
@@ -595,9 +591,7 @@ class ServedFunctionBucketProjectionTest(unittest.TestCase):
 
         # FT1-FF (finding 8): materialized candidate documents receive the
         # identical centralized row projection, not just page payloads.
-        materialized_by_id = {
-            row["candidate_id"]: row for row in result["materialized_documents"]["candidates"]
-        }
+        materialized_by_id = {row["candidate_id"]: row for row in result["materialized_documents"]["candidates"]}
         self.assertEqual(materialized_by_id["c1"]["function_bucket_ids"], ["research", "engineering"])
         self.assertEqual(materialized_by_id["c1"]["function_bucket_source"], "lane_membership")
         self.assertEqual(materialized_by_id["c1"]["employment_statuses"], ["current", "former"])
@@ -616,9 +610,7 @@ class TmlAssetOnlyRoleMappingTest(unittest.TestCase):
     def test_all_three_asset_only_roles_produce_structured_other(self) -> None:
         for role_bucket in ("leadership", "ops", "investor"):
             with self.subTest(role_bucket=role_bucket):
-                projection = candidate_function_bucket_projection_for_public_facets(
-                    {"role_bucket": role_bucket}
-                )
+                projection = candidate_function_bucket_projection_for_public_facets({"role_bucket": role_bucket})
                 self.assertEqual(projection["function_bucket_ids"], ["other"])
                 self.assertEqual(projection["function_bucket_source"], "registry_evidence")
                 metadata_projection = candidate_function_bucket_projection_for_public_facets(
@@ -672,9 +664,7 @@ class CohortProvenanceValidatorTest(unittest.TestCase):
             },
             {
                 "metadata": {
-                    "cohort_lane_membership": [
-                        {"lane_id": "l1", "employment_status": "current", "role_bucket_id": 7}
-                    ]
+                    "cohort_lane_membership": [{"lane_id": "l1", "employment_status": "current", "role_bucket_id": 7}]
                 }
             },
         ]
@@ -848,8 +838,16 @@ class ServedPublicSummaryProjectionTest(unittest.TestCase):
             "linkedin_url": "https://www.linkedin.com/in/dual-role/",
             "metadata": {
                 "cohort_lane_membership": [
-                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
-                    {"lane_id": "cohort_former_engineering_d", "employment_status": "former", "role_bucket_id": "engineering"},
+                    {
+                        "lane_id": "cohort_current_research_d",
+                        "employment_status": "current",
+                        "role_bucket_id": "research",
+                    },
+                    {
+                        "lane_id": "cohort_former_engineering_d",
+                        "employment_status": "former",
+                        "role_bucket_id": "engineering",
+                    },
                 ],
                 "cohort_role_bucket_ids": ["research", "engineering"],
                 "cohort_employment_statuses": ["current", "former"],
@@ -898,3 +896,192 @@ class ServedPublicSummaryProjectionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AllSelectableRolesNoOpAcrossAxesTest(unittest.TestCase):
+    """FT1-FF2 (finding 3): an all-selectable-role (default-complete) function
+    selection stays an INACTIVE no-op even when another facet axis is active —
+    it never becomes a narrowing predicate that hides other/unknown candidates."""
+
+    _ALL_ROLES = ["research", "engineering", "product_management", "infra_systems", "founding"]
+
+    @staticmethod
+    def _other_candidate() -> dict:
+        # TML asset-only role evidence → structured ``other`` bucket.
+        return {
+            "candidate_id": "c-other",
+            "display_name": "Other Candidate",
+            "role_bucket": "leadership",
+            "employment_status": "current",
+            "profile_location": "Berlin, Germany",
+        }
+
+    @staticmethod
+    def _unknown_candidate() -> dict:
+        # No role evidence at all → ``unknown`` bucket.
+        return {
+            "candidate_id": "c-unknown",
+            "display_name": "Unknown Candidate",
+            "employment_status": "current",
+            "profile_location": "New York, NY",
+        }
+
+    @staticmethod
+    def _research_candidate() -> dict:
+        return {
+            "candidate_id": "c-research",
+            "display_name": "Research Candidate",
+            "role_bucket": "research",
+            "employment_status": "current",
+            "profile_location": "San Francisco, CA",
+        }
+
+    def test_all_roles_plus_active_axis_keeps_other_and_unknown_visible(self) -> None:
+        from sourcing_agent.public_candidate_facets import apply_candidate_page_filter
+
+        for name, extra in (
+            ("employment", {"employment_statuses": ["current"]}),
+            ("locations", {"locations": ["us", "other"]}),
+            ("keyword", {"search_keyword": "candidate"}),
+            ("recall_keyword", {"recall_buckets": ["keyword:candidate"]}),
+        ):
+            with self.subTest(name=name):
+                candidate_filter = {"function_buckets": list(self._ALL_ROLES), **extra}
+                # Another axis makes the filter active overall...
+                self.assertTrue(candidate_page_filter_active(candidate_filter))
+                for record in (self._other_candidate(), self._unknown_candidate(), self._research_candidate()):
+                    with self.subTest(candidate=record["candidate_id"]):
+                        self.assertTrue(
+                            candidate_matches_candidate_page_filter(
+                                record=record,
+                                candidate_filter=candidate_filter,
+                            )
+                        )
+                filtered = apply_candidate_page_filter(
+                    candidates=[self._other_candidate(), self._unknown_candidate(), self._research_candidate()],
+                    candidate_filter=candidate_filter,
+                )
+                self.assertEqual(len(filtered), 3)
+
+    def test_all_roles_with_result_only_ids_is_still_a_no_op(self) -> None:
+        candidate_filter = {"function_buckets": [*self._ALL_ROLES, "other", "unknown"]}
+        self.assertFalse(candidate_page_filter_active(candidate_filter))
+        for record in (self._other_candidate(), self._unknown_candidate(), self._research_candidate()):
+            with self.subTest(candidate=record["candidate_id"]):
+                self.assertTrue(
+                    candidate_matches_candidate_page_filter(record=record, candidate_filter=candidate_filter)
+                )
+
+    def test_proper_subset_still_narrows(self) -> None:
+        candidate_filter = {"function_buckets": ["research"], "employment_statuses": ["current"]}
+        self.assertTrue(candidate_page_filter_active(candidate_filter))
+        self.assertTrue(
+            candidate_matches_candidate_page_filter(
+                record=self._research_candidate(), candidate_filter=candidate_filter
+            )
+        )
+        self.assertFalse(
+            candidate_matches_candidate_page_filter(record=self._other_candidate(), candidate_filter=candidate_filter)
+        )
+        self.assertFalse(
+            candidate_matches_candidate_page_filter(record=self._unknown_candidate(), candidate_filter=candidate_filter)
+        )
+
+
+class ProjectionFilterV1HistoricalNoOpTest(unittest.TestCase):
+    """FT1-FF2 (finding 4): the immutable projection_filter_request_v1 contract
+    keeps its HISTORICAL complete-enum no-op execution semantics — dispatch
+    normalization is contract-version-aware, v2 keeps the canonical predicate."""
+
+    _V1_COMPLETE_ENUM = ["research", "engineering", "product_management", "other", "unknown"]
+
+    def test_complete_v1_enum_normalizes_to_no_predicate(self) -> None:
+        normalized = SourcingOrchestrator._normalize_operation_projection_filter(  # noqa: SLF001
+            {"function_buckets": list(self._V1_COMPLETE_ENUM)}
+        )
+        self.assertNotIn("function_buckets", normalized)
+
+    def test_v1_selectable_cover_with_any_result_only_subset_is_a_no_op(self) -> None:
+        for selection in (
+            ["research", "engineering", "product_management"],
+            ["research", "engineering", "product_management", "other"],
+            ["engineering", "research", "product_management", "unknown"],
+        ):
+            with self.subTest(selection=selection):
+                normalized = SourcingOrchestrator._normalize_operation_projection_filter(  # noqa: SLF001
+                    {"function_buckets": selection}
+                )
+                self.assertNotIn("function_buckets", normalized)
+
+    def test_v1_proper_subsets_still_narrow(self) -> None:
+        for selection, expected in (
+            (["research", "engineering"], ["engineering", "research"]),
+            (["other"], ["other"]),
+            (["research", "other", "unknown"], ["other", "research", "unknown"]),
+        ):
+            with self.subTest(selection=selection):
+                normalized = SourcingOrchestrator._normalize_operation_projection_filter(  # noqa: SLF001
+                    {"function_buckets": selection}
+                )
+                self.assertEqual(normalized["function_buckets"], expected)
+
+    def test_replayed_v1_complete_enum_returns_newly_classified_candidates(self) -> None:
+        # Execution-result replay (not merely schema validation): a replayed v1
+        # action carrying the recorded complete-enum selection must match every
+        # served row, including FT1-classified infra_systems/founding/other rows.
+        from sourcing_agent.public_candidate_facets import apply_candidate_page_filter
+
+        normalized = SourcingOrchestrator._normalize_operation_projection_filter(  # noqa: SLF001
+            {"function_buckets": list(self._V1_COMPLETE_ENUM)}
+        )
+        served_rows = [
+            {"candidate_id": "c-infra", "display_name": "Infra Candidate", "role_bucket": "infra_systems"},
+            {"candidate_id": "c-founding", "display_name": "Founding Candidate", "role_bucket": "founding"},
+            {"candidate_id": "c-research", "display_name": "Research Candidate", "role_bucket": "research"},
+            {"candidate_id": "c-other", "display_name": "Other Candidate", "role_bucket": "leadership"},
+            {"candidate_id": "c-unknown", "display_name": "Unknown Candidate"},
+        ]
+        self.assertFalse(candidate_page_filter_active(normalized))
+        filtered = apply_candidate_page_filter(candidates=served_rows, candidate_filter=normalized)
+        self.assertEqual({row["candidate_id"] for row in filtered}, {row["candidate_id"] for row in served_rows})
+
+    def test_v2_canonical_predicate_still_requires_current_selectable_cover(self) -> None:
+        # The version-blind (v2/board) predicate is unchanged: the five legacy
+        # ids remain an ACTIVE narrowing selection there because they do not
+        # cover infra_systems/founding.
+        self.assertTrue(candidate_page_filter_active({"function_buckets": list(self._V1_COMPLETE_ENUM)}))
+        all_current_ids = [item_id for item_id, _label in public_function_facet_option_spec()]
+        self.assertFalse(candidate_page_filter_active({"function_buckets": all_current_ids}))
+
+
+class PresentEmptyMembershipValidatorTest(unittest.TestCase):
+    """FT1-FF2 (finding 7): a present-empty lane membership is malformed
+    provenance and fails closed; the legitimate all-roles status-only lane
+    shape stays valid."""
+
+    def test_present_empty_lane_membership_raises(self) -> None:
+        record = {"candidate_id": "c1", "metadata": {"cohort_lane_membership": []}}
+        with self.assertRaises(CohortFacetProvenanceError) as captured:
+            candidate_function_bucket_projection_for_public_facets(record)
+        self.assertEqual(captured.exception.code, "cohort_facet_provenance_empty_lane_membership")
+        with self.assertRaises(CohortFacetProvenanceError):
+            candidate_employment_statuses_for_public_facets(record)
+
+    def test_legitimate_status_only_all_roles_lane_still_passes_through(self) -> None:
+        record = {
+            "candidate_id": "c1",
+            "metadata": {
+                "cohort_lane_membership": [
+                    {"lane_id": "cohort_current_all_d", "employment_status": "current", "role_bucket_id": ""},
+                    {"lane_id": "cohort_former_all_d", "employment_status": "former", "role_bucket_id": ""},
+                ],
+                "cohort_role_bucket_ids": [],
+                "cohort_employment_statuses": ["current", "former"],
+            },
+        }
+        projection = candidate_function_bucket_projection_for_public_facets(record)
+        self.assertEqual(projection["function_bucket_source"], FUNCTION_BUCKET_SOURCE_LEGACY_INFERENCE)
+        self.assertEqual(
+            candidate_employment_statuses_for_public_facets(record),
+            ["current", "former"],
+        )

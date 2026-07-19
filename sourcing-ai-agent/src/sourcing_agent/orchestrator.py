@@ -99,6 +99,7 @@ from .cohort_provider_compiler import (
 from .cohort_selection import (
     CohortSelectionValidationError,
     apply_user_explicit_cohort_authority,
+    cohort_execution_identity_for_signature,
     merge_plan_review_cohort_selection,
     source_request_covers_explicit_cohort,
     validate_external_cohort_selection_payload,
@@ -433,6 +434,9 @@ from .public_candidate_facets import (
     candidate_recall_keywords_for_public_facets as _public_candidate_recall_keywords,
 )
 from .public_candidate_facets import (
+    effective_projection_filter_v1_function_buckets as _public_effective_projection_filter_v1_function_buckets,
+)
+from .public_candidate_facets import (
     normalize_candidate_page_filter as _public_normalize_candidate_page_filter,
 )
 from .public_candidate_facets import (
@@ -508,6 +512,7 @@ from .request_matching import (
     request_family_score,
     request_family_signature,
     request_signature,
+    source_request_matches_hard_identity,
 )
 from .request_normalization import (
     build_request_preview_payload as _shared_build_request_preview_payload,
@@ -7116,7 +7121,7 @@ class SourcingOrchestrator:
             or str(execution_preferences.get("baseline_policy") or "").strip()
             or ("run_scope_delta" if patch_payload else "run_scope")
         )
-        return {
+        scope = {
             "target_company": str(source_payload.get("target_company") or request.target_company or "").strip(),
             "target_scope": str(request.target_scope or "").strip(),
             "asset_view": str(source_payload.get("asset_view") or request.asset_view or "canonical_merged").strip()
@@ -7132,6 +7137,22 @@ class SourcingOrchestrator:
                 or ""
             ).strip(),
         }
+        # Persist the same hard request identity the reuse guard enforces
+        # (FT1-FF2): the Cohort execution digest and — presence-aware, exactly
+        # like JobRequest.to_record() — both location sibling fields, so
+        # projection scope metadata explains and audits which request identity
+        # the projection was built for.  Absent fields stay absent (legacy
+        # scope specs remain byte-compatible).
+        cohort_identity = cohort_execution_identity_for_signature(request.to_record())
+        if cohort_identity:
+            scope["cohort_selection_digest"] = cohort_identity
+        if request.target_locations is not None:
+            scope["target_locations"] = [str(item).strip() for item in list(request.target_locations or [])]
+        if request.exclude_target_locations is not None:
+            scope["exclude_target_locations"] = [
+                str(item).strip() for item in list(request.exclude_target_locations or [])
+            ]
+        return scope
 
     def _serving_projection_public_summary_from_record(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._serialize_asset_population_candidate_api_record(
@@ -26342,6 +26363,17 @@ class SourcingOrchestrator:
                 raise ValueError("filter_projection_filter_value_invalid:recall_buckets")
 
         normalized = cls._normalize_candidate_page_filter(source)
+        # Contract-version-aware dispatch normalization (FT1-FF2): this is the
+        # immutable ``projection_filter_request_v1`` path, whose historical
+        # complete-enum function selection was an inactive select-all no-op.
+        # Reduce the function axis through the v1 predicate so
+        # replayed/retried/approved v1 actions keep their recorded semantics
+        # instead of silently narrowing onto FT1 named-role (infra_systems /
+        # founding) candidates.  The canonical current-registry predicate stays
+        # with the version-blind page/projection filter (v2).
+        normalized["function_buckets"] = _public_effective_projection_filter_v1_function_buckets(
+            normalized.get("function_buckets")
+        )
         compacted: dict[str, Any] = {}
         for field, value in normalized.items():
             if isinstance(value, list):
@@ -60687,11 +60719,16 @@ class SourcingOrchestrator:
         current_count = int(asset_reuse_plan.get("baseline_current_effective_candidate_count") or 0)
         former_count = int(asset_reuse_plan.get("baseline_former_effective_candidate_count") or 0)
         request_payload = request.to_record()
-        explicit_cohort = not source_request_covers_explicit_cohort(request_payload, None)
-        if explicit_cohort and baseline_snapshot_id and baseline_reuse_available:
+        # Hard-identity reuse guard (FT1-FF2): baseline/registry suppression
+        # of an explicit force-fresh request must first prove the source job's
+        # stored request matches Cohort coverage AND location identity.  The
+        # guard runs unconditionally — a fully legacy request still matches a
+        # legacy/missing source exactly as before, but no request may suppress
+        # force-fresh through a cross-location authoritative source.
+        if baseline_snapshot_id and baseline_reuse_available:
             baseline_source_job_id = str(asset_reuse_plan.get("baseline_source_job_id") or "").strip()
             baseline_source_job = self.store.get_job(baseline_source_job_id) if baseline_source_job_id else None
-            if not self._matched_job_covers_explicit_cohort(
+            if not self._matched_job_matches_hard_identity(
                 request_payload=request_payload,
                 matched_job=baseline_source_job,
             ):
@@ -60701,10 +60738,10 @@ class SourcingOrchestrator:
                 target_company=request.target_company,
                 asset_view=str(request.asset_view or "canonical_merged").strip() or "canonical_merged",
             )
-            if registry_row and explicit_cohort:
+            if registry_row:
                 source_job_id = str(registry_row.get("source_job_id") or "").strip()
                 source_job = self.store.get_job(source_job_id) if source_job_id else None
-                if not self._matched_job_covers_explicit_cohort(
+                if not self._matched_job_matches_hard_identity(
                     request_payload=request_payload,
                     matched_job=source_job,
                 ):
@@ -61071,7 +61108,7 @@ class SourcingOrchestrator:
         source_job_id = str(registry_row.get("source_job_id") or "").strip()
         if source_job_id:
             matched_job = dict(self.store.get_job(source_job_id) or {})
-        if not self._matched_job_covers_explicit_cohort(
+        if not self._matched_job_matches_hard_identity(
             request_payload=request_payload,
             matched_job=matched_job,
         ):
@@ -61232,7 +61269,7 @@ class SourcingOrchestrator:
         ).strip()
         matched_job = dict(self.store.get_job(source_run_id) or {}) if source_run_id else {}
         request_payload = request.to_record()
-        if not self._matched_job_covers_explicit_cohort(
+        if not self._matched_job_matches_hard_identity(
             request_payload=request_payload,
             matched_job=matched_job,
         ):
@@ -61295,12 +61332,16 @@ class SourcingOrchestrator:
         }
 
     @staticmethod
-    def _matched_job_covers_explicit_cohort(
+    def _matched_job_matches_hard_identity(
         *,
         request_payload: dict[str, Any],
         matched_job: dict[str, Any] | None,
     ) -> bool:
-        return source_request_covers_explicit_cohort(
+        # One presence-aware hard-identity guard for every authoritative
+        # registry/projection/baseline reuse path (FT1-FF2): Cohort coverage
+        # PLUS canonical location identity (presence+values of both sibling
+        # fields), for Cohort and legacy requests alike.
+        return source_request_matches_hard_identity(
             request_payload,
             (matched_job or {}).get("request"),
         )
@@ -61589,7 +61630,7 @@ class SourcingOrchestrator:
                 tenant_id=tenant_id,
                 scope=scope,
             )
-            if matched_by_idempotency and not self._matched_job_covers_explicit_cohort(
+            if matched_by_idempotency and not self._matched_job_matches_hard_identity(
                 request_payload=request_payload,
                 matched_job=matched_by_idempotency,
             ):
@@ -78214,11 +78255,16 @@ class SourcingOrchestrator:
                 request_payload,
                 baseline_request if isinstance(baseline_request, dict) else {},
             )
+            # Cohort-coverage failures keep their exact reason label; the
+            # location/identity hard fence is the hard_family_mismatch branch
+            # immediately below (request_family_score already covers BOTH
+            # hard-identity axes with precise reasons), so this branch probes
+            # cohort coverage only.
             if (
                 request_has_explicit_cohort
-                and not self._matched_job_covers_explicit_cohort(
-                    request_payload=request_payload,
-                    matched_job=baseline_job,
+                and not source_request_covers_explicit_cohort(
+                    request_payload,
+                    (baseline_job or {}).get("request"),
                 )
             ) or "cohort_selection_invalid" in set(baseline_match.get("reasons") or []):
                 return {
@@ -78313,7 +78359,7 @@ class SourcingOrchestrator:
                 expected_tenant_id=expected_tenant_id,
             ):
                 return {"status": "not_found", "reason": "job_not_found"}
-            if not self._matched_job_covers_explicit_cohort(
+            if not self._matched_job_matches_hard_identity(
                 request_payload=request_payload,
                 matched_job=current_baseline_job,
             ):

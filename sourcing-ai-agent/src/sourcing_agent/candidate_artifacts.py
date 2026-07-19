@@ -101,6 +101,9 @@ from .profile_timeline import (
     timeline_has_complete_profile_detail,
 )
 from .public_candidate_facets import (
+    CohortFacetProvenanceError,
+)
+from .public_candidate_facets import (
     derive_candidate_employment_statuses_for_public_facets as _derive_candidate_employment_statuses,
 )
 from .public_candidate_facets import (
@@ -1778,10 +1781,16 @@ def _candidate_facet_projection_record(
 
     record = dict(normalized_record or {})
     materialized_metadata = dict(dict(materialized_record or {}).get("metadata") or {})
+    # Copy by KEY PRESENCE, preserving exact values (FT1-FF2): a present-empty
+    # mirror or membership list is malformed provenance the closed validator
+    # must see and reject — erasing empty values here would convert malformed
+    # modern provenance into apparently valid mirror-only/legacy input and
+    # publish a fabricated canonical projection.  Absent keys keep legacy
+    # records byte-identical.
     cohort_metadata = {
         key: materialized_metadata[key]
         for key in ("cohort_lane_membership", "cohort_role_bucket_ids", "cohort_employment_statuses")
-        if materialized_metadata.get(key) not in (None, "", [], {})
+        if key in materialized_metadata
     }
     if cohort_metadata:
         metadata = dict(record.get("metadata") or {})
@@ -1828,6 +1837,31 @@ def _materialized_artifact_dir_from_registry_row(
     return runtime_dir / "company_assets" / company_key / snapshot_id / "normalized_artifacts"
 
 
+def _candidate_served_projection_row_is_current(row: dict[str, Any]) -> bool:
+    """Whether one served row carries the exact canonical recomputed projection.
+
+    The row's projection is recomputed from its own provenance/evidence (the
+    centralized projector never trusts the persisted pair), and the stored
+    function pair AND the authoritative employment status set must match it
+    exactly — the status set present exactly when the recomputed membership
+    set is non-empty.  A row with malformed provenance cannot be certified
+    current.
+    """
+
+    if "function_bucket_ids" not in row or "function_bucket_source" not in row:
+        return False
+    try:
+        recomputed = _attach_candidate_served_facet_projection(dict(row))
+    except CohortFacetProvenanceError:
+        return False
+    return (
+        list(row.get("function_bucket_ids") or []) == list(recomputed.get("function_bucket_ids") or [])
+        and str(row.get("function_bucket_source") or "") == str(recomputed.get("function_bucket_source") or "")
+        and list(row.get("employment_statuses") or []) == list(recomputed.get("employment_statuses") or [])
+        and ("employment_statuses" in row) == ("employment_statuses" in recomputed)
+    )
+
+
 def _candidate_artifact_view_missing_paginated_serving(artifact_dir: Path) -> bool:
     if not (artifact_dir / "artifact_summary.json").exists():
         return False
@@ -1840,21 +1874,49 @@ def _candidate_artifact_view_missing_paginated_serving(artifact_dir: Path) -> bo
         return True
     # Stale-projection detection (FT1-FF): an artifact built or repaired before
     # the served facet projection version is upgraded — version drift on the
-    # artifact summary, or served page rows missing the canonical projection
-    # fields — so historical products receive the new projection instead of
-    # being treated as complete.
+    # artifact summary — so historical products receive the new projection
+    # instead of being treated as complete.
     artifact_summary = load_company_snapshot_json(artifact_dir / "artifact_summary.json")
     if isinstance(artifact_summary, dict):
         projection_version = str(artifact_summary.get("projection_version") or "").strip()
         if projection_version != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
             return True
-    first_page_path = sorted(pages_dir.glob("page-*.json"))[0]
-    first_page = load_company_snapshot_json(first_page_path)
-    if isinstance(first_page, dict):
-        page_rows = [dict(item) for item in list(first_page.get("candidates") or []) if isinstance(item, dict)]
-        if page_rows and any(
-            "function_bucket_ids" not in row or "function_bucket_source" not in row for row in page_rows
-        ):
+    # Artifact completeness (FT1-FF2): certify EVERY manifest-declared page
+    # and candidate shard, not just a first-row sample.  Every page row and
+    # every shard's materialized_candidate must carry the exact canonical
+    # recomputed projection — the function pair AND the authoritative
+    # employment status set — and every shard must stamp the current
+    # projection version.  A later stale page, a dual-status row missing its
+    # status set, an old/incomplete shard, or any missing manifest-declared
+    # product (e.g. after partial batched writes) marks the view for repair
+    # instead of bypassing it.
+    manifest_payload = load_company_snapshot_json(artifact_dir / "manifest.json")
+    if not isinstance(manifest_payload, dict):
+        return True
+    page_entries = [dict(item) for item in list(manifest_payload.get("pages") or []) if isinstance(item, dict)]
+    for page_entry in page_entries:
+        page_relative_path = str(page_entry.get("path") or "").strip()
+        if not page_relative_path:
+            return True
+        page_payload = load_company_snapshot_json(artifact_dir / page_relative_path)
+        if not isinstance(page_payload, dict):
+            return True
+        page_rows = [dict(item) for item in list(page_payload.get("candidates") or []) if isinstance(item, dict)]
+        if any(not _candidate_served_projection_row_is_current(row) for row in page_rows):
+            return True
+    shard_entries = [
+        dict(item) for item in list(manifest_payload.get("candidate_shards") or []) if isinstance(item, dict)
+    ]
+    for shard_entry in shard_entries:
+        shard_relative_path = str(shard_entry.get("path") or "").strip()
+        if not shard_relative_path:
+            return True
+        shard_payload = load_company_snapshot_json(artifact_dir / shard_relative_path)
+        if not isinstance(shard_payload, dict):
+            return True
+        if str(shard_payload.get("projection_version") or "").strip() != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
+            return True
+        if not _candidate_served_projection_row_is_current(dict(shard_payload.get("materialized_candidate") or {})):
             return True
     return False
 
@@ -5557,10 +5619,11 @@ def _build_artifact_view_payloads(
     # facet counts.  Page candidates are built in normalized order, so the
     # flattened page sequence aligns 1:1 with facet_projection_records.  The
     # centralized row projection (_attach_candidate_served_facet_projection)
-    # covers BOTH page payloads and materialized candidate documents, so
-    # page/materialized/repair/materialized-fallback rows all carry the
-    # identical canonical fields (function_bucket_ids, function_bucket_source,
-    # and the authoritative employment status set).
+    # covers page payloads, materialized candidate documents, AND every dirty
+    # candidate shard payload before persistence, so page/materialized/shard/
+    # repair/materialized-fallback rows all carry the identical canonical
+    # fields (function_bucket_ids, function_bucket_source, and the
+    # authoritative employment status set).
     served_page_candidates = [
         served_candidate
         for page_payload in page_payloads
@@ -5580,6 +5643,26 @@ def _build_artifact_view_payloads(
         )
         served_candidate.clear()
         served_candidate.update(attached_candidate)
+    # Dirty candidate shards are persisted from these exact payloads (FT1-FF2):
+    # attach the SAME canonical projection to every dirty shard's
+    # materialized_candidate BEFORE persistence, from its aligned projection
+    # record (candidate_states align 1:1 with facet_projection_records), so
+    # shard/detail/authoritative reads never serve an unprojected row while
+    # page/count products carry the projection.
+    projection_record_by_candidate_id = {
+        str(state.get("candidate_id") or ""): projection_record
+        for state, projection_record in zip(candidate_states, facet_projection_records, strict=False)
+    }
+    for dirty_shard in dirty_candidate_shards:
+        aligned_projection_record = projection_record_by_candidate_id.get(str(dirty_shard.get("candidate_id") or ""))
+        if aligned_projection_record is None:
+            continue
+        dirty_shard_payload = dict(dirty_shard.get("payload") or {})
+        dirty_shard_payload["materialized_candidate"] = _attach_candidate_served_facet_projection(
+            dict(dirty_shard_payload.get("materialized_candidate") or {}),
+            projection_record=aligned_projection_record,
+        )
+        dirty_shard["payload"] = dirty_shard_payload
     artifact_summary = {
         "target_company": materialized_view["target_company"],
         "company_key": materialized_view["company_key"],
@@ -5847,13 +5930,23 @@ def _load_candidate_shard_payload(
     if str(payload.get("fingerprint") or "").strip() != str(fingerprint or "").strip():
         return None
     projection_version = str(payload.get("projection_version") or "").strip()
-    if projection_version and projection_version != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
+    if projection_version != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
+        # Fail closed on any missing OR version-mismatched product (FT1-FF2):
+        # a shard without the current projection version is stale and must be
+        # rebuilt, never accepted into authoritative reads.
         return None
     if not isinstance(payload.get("materialized_candidate"), dict):
         return None
     if not isinstance(payload.get("normalized_candidate"), dict):
         return None
     if not isinstance(payload.get("reusable_document"), dict):
+        return None
+    materialized_candidate = dict(payload.get("materialized_candidate") or {})
+    if "function_bucket_ids" not in materialized_candidate or "function_bucket_source" not in materialized_candidate:
+        # Stale pre-projection shard (FT1-FF2): written at the current version
+        # but before the canonical served facet projection was attached at
+        # shard persistence — rebuild instead of reusing an unprojected
+        # authoritative record.
         return None
     return payload
 

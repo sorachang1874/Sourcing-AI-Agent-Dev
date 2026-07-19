@@ -10,7 +10,6 @@ from typing import Any
 from .asset_coverage_contracts import build_population_coverage_contract
 from .asset_paths import iter_company_asset_snapshot_dirs, load_company_snapshot_identity
 from .candidate_artifacts import CandidateArtifactError, _resolve_company_snapshot
-from .cohort_selection import cohort_execution_identity_for_signature, source_request_covers_explicit_cohort
 from .company_registry import normalize_company_key, resolve_company_alias_key
 from .company_shard_planning import (
     merge_company_filters,
@@ -28,6 +27,7 @@ from .query_signal_knowledge import (
     canonicalize_thematic_signal_label,
     match_scope_signals,
 )
+from .request_matching import source_request_matches_hard_identity
 from .request_normalization import build_effective_request_payload
 from .search_seed_registry import (
     infer_search_seed_summary_employment_scope as _registry_infer_search_seed_summary_employment_scope,
@@ -3890,8 +3890,13 @@ def _compile_asset_reuse_plan_for_baseline(
         ),
         "planner_mode": ("delta_from_snapshot" if requires_delta_acquisition else "reuse_snapshot_only"),
     }
-    if cohort_execution_identity_for_signature(request.to_record()):
-        plan_payload["baseline_source_job_id"] = _normalize_text(baseline.get("source_job_id"))
+    # Record the baseline's source job whenever the registry row carries one
+    # (not only for explicit-Cohort requests): the dispatch-time hard-identity
+    # guard needs it to prove Cohort/location coverage for location-pinned
+    # requests too.
+    baseline_source_job_id = _normalize_text(baseline.get("source_job_id"))
+    if baseline_source_job_id:
+        plan_payload["baseline_source_job_id"] = baseline_source_job_id
     plan_payload["baseline_selection_explanation"] = build_asset_reuse_baseline_selection_explanation(
         request=request,
         baseline=baseline,
@@ -4010,29 +4015,37 @@ def compile_asset_reuse_plan(
         if dict(candidate_row or {})
     ]
     request_payload = request.to_record()
-    if cohort_execution_identity_for_signature(request_payload):
-        source_jobs: dict[str, dict[str, Any]] = {}
+    # Hard-identity reuse guard (FT1-FF2): every candidate baseline must come
+    # from a source job whose stored request matches the current request's
+    # Cohort coverage AND canonical location identity (presence+values of both
+    # sibling fields).  The guard runs for Cohort AND legacy requests alike —
+    # a legacy request with no pinned identity still never reuses a source
+    # that carries location identity (absent versus present is a hard
+    # mismatch), while a legacy source remains reusable for it.
+    source_jobs: dict[str, dict[str, Any]] = {}
 
-        def _cohort_compatible(candidate_row: dict[str, Any]) -> bool:
-            source_job_id = str(candidate_row.get("source_job_id") or "").strip()
-            if not source_job_id:
-                return False
-            if source_job_id not in source_jobs:
-                source_job = store.get_job(source_job_id)
-                source_jobs[source_job_id] = dict(source_job) if isinstance(source_job, dict) else {}
-            return source_request_covers_explicit_cohort(
-                request_payload,
-                source_jobs[source_job_id].get("request"),
-            )
+    def _hard_identity_compatible(candidate_row: dict[str, Any]) -> bool:
+        source_job_id = str(candidate_row.get("source_job_id") or "").strip()
+        if not source_job_id:
+            # No source request to prove coverage: only a request pinning no
+            # hard identity (fully legacy) may reuse such a row.
+            return source_request_matches_hard_identity(request_payload, None)
+        if source_job_id not in source_jobs:
+            source_job = store.get_job(source_job_id)
+            source_jobs[source_job_id] = dict(source_job) if isinstance(source_job, dict) else {}
+        return source_request_matches_hard_identity(
+            request_payload,
+            source_jobs[source_job_id].get("request"),
+        )
 
-        ordered_candidate_rows = [row for row in ordered_candidate_rows if _cohort_compatible(row)]
-        if authoritative_baseline and not _cohort_compatible(authoritative_baseline):
-            authoritative_baseline = {}
-        if not ordered_candidate_rows and not authoritative_baseline:
-            return {
-                "baseline_reuse_available": False,
-                "reason": "no_cohort_compatible_authoritative_baseline",
-            }
+    ordered_candidate_rows = [row for row in ordered_candidate_rows if _hard_identity_compatible(row)]
+    if authoritative_baseline and not _hard_identity_compatible(authoritative_baseline):
+        authoritative_baseline = {}
+    if not ordered_candidate_rows and not authoritative_baseline:
+        return {
+            "baseline_reuse_available": False,
+            "reason": "no_cohort_compatible_authoritative_baseline",
+        }
 
     best_plan: dict[str, Any] = {}
     for candidate_baseline in ordered_candidate_rows:

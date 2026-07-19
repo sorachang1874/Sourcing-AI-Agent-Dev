@@ -1422,8 +1422,16 @@ class ServingProjectionFacetOwnershipTest(PGControlPlaneStoreTestMixin, unittest
             "linkedin_url": "https://www.linkedin.com/in/dual-role/",
             "metadata": {
                 "cohort_lane_membership": [
-                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
-                    {"lane_id": "cohort_former_engineering_d", "employment_status": "former", "role_bucket_id": "engineering"},
+                    {
+                        "lane_id": "cohort_current_research_d",
+                        "employment_status": "current",
+                        "role_bucket_id": "research",
+                    },
+                    {
+                        "lane_id": "cohort_former_engineering_d",
+                        "employment_status": "former",
+                        "role_bucket_id": "engineering",
+                    },
                 ],
                 "cohort_role_bucket_ids": ["research", "engineering"],
                 "cohort_employment_statuses": ["current", "former"],
@@ -1503,7 +1511,11 @@ class ServingProjectionFacetOwnershipTest(PGControlPlaneStoreTestMixin, unittest
             "linkedin_url": "https://www.linkedin.com/in/revision-candidate/",
             "metadata": {
                 "cohort_lane_membership": [
-                    {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
+                    {
+                        "lane_id": "cohort_current_research_d",
+                        "employment_status": "current",
+                        "role_bucket_id": "research",
+                    },
                 ],
                 "cohort_role_bucket_ids": ["research"],
                 "cohort_employment_statuses": ["current"],
@@ -1529,7 +1541,11 @@ class ServingProjectionFacetOwnershipTest(PGControlPlaneStoreTestMixin, unittest
             **record_v1,
             "metadata": {
                 "cohort_lane_membership": [
-                    {"lane_id": "cohort_current_engineering_d", "employment_status": "current", "role_bucket_id": "engineering"},
+                    {
+                        "lane_id": "cohort_current_engineering_d",
+                        "employment_status": "current",
+                        "role_bucket_id": "engineering",
+                    },
                 ],
                 "cohort_role_bucket_ids": ["engineering"],
                 "cohort_employment_statuses": ["current"],
@@ -1581,3 +1597,171 @@ class ServingProjectionFacetOwnershipTest(PGControlPlaneStoreTestMixin, unittest
 
         with self.assertRaises(CohortFacetProvenanceError):
             self._members_from_records([malformed])
+
+
+class CanonicalPublicSummaryAdapterTest(unittest.TestCase):
+    """FT1-FF2 (finding 8): build_person_summary_view is the ONE canonical
+    public-summary adapter — migration/repair/consolidation can never silently
+    downgrade owned facets to unmarked legacy inference."""
+
+    @staticmethod
+    def _dual_status_metadata() -> dict:
+        return {
+            "cohort_lane_membership": [
+                {
+                    "lane_id": "cohort_current_infra_d",
+                    "employment_status": "current",
+                    "role_bucket_id": "infra_systems",
+                },
+                {"lane_id": "cohort_former_infra_d", "employment_status": "former", "role_bucket_id": "infra_systems"},
+            ],
+            "cohort_role_bucket_ids": ["infra_systems"],
+            "cohort_employment_statuses": ["current", "former"],
+        }
+
+    def test_owned_pair_and_status_set_are_preserved_and_validated(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        summary = build_person_summary_view(
+            {
+                "candidate_id": "c1",
+                "display_name": "Owned",
+                "function_bucket_ids": ["infra_systems"],
+                "function_bucket_source": "lane_membership",
+                "employment_statuses": ["current", "former"],
+            }
+        )
+        self.assertEqual(summary["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(summary["function_bucket_source"], "lane_membership")
+        self.assertEqual(summary["employment_statuses"], ["current", "former"])
+
+    def test_malformed_owned_pair_fails_closed(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+        from sourcing_agent.public_candidate_facets import CohortFacetProvenanceError
+
+        with self.assertRaises(CohortFacetProvenanceError):
+            build_person_summary_view({"candidate_id": "c1", "function_bucket_ids": ["engineering"]})
+        with self.assertRaises(CohortFacetProvenanceError):
+            build_person_summary_view(
+                {
+                    "candidate_id": "c1",
+                    "function_bucket_ids": ["engineering"],
+                    "function_bucket_source": "lane_membership",
+                    "employment_statuses": [],
+                }
+            )
+
+    def test_explicit_infra_systems_never_downgrades_to_bare_id_engineering(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        summary = build_person_summary_view(
+            {
+                "candidate_id": "c1",
+                "display_name": "Infra",
+                "role_bucket": "infra_systems",
+                "function_ids": ["8"],
+            }
+        )
+        self.assertEqual(summary["function_bucket_ids"], ["engineering", "infra_systems"])
+        self.assertEqual(summary["function_bucket_source"], "registry_evidence")
+
+    def test_bare_function_id_8_maps_to_engineering_only(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        summary = build_person_summary_view({"candidate_id": "c1", "display_name": "Bare", "function_ids": ["8"]})
+        self.assertEqual(summary["function_bucket_ids"], ["engineering"])
+        self.assertEqual(summary["function_bucket_source"], "registry_evidence")
+
+    def test_dual_status_membership_survives_the_adapter(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        summary = build_person_summary_view(
+            {
+                "candidate_id": "c1",
+                "display_name": "Dual",
+                "employment_status": "current",
+                "metadata": self._dual_status_metadata(),
+            }
+        )
+        self.assertEqual(summary["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(summary["function_bucket_source"], "lane_membership")
+        self.assertEqual(summary["employment_statuses"], ["current", "former"])
+
+    def test_genuinely_legacy_rows_are_explicitly_marked(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        summary = build_person_summary_view(
+            {"candidate_id": "c1", "display_name": "Legacy", "headline": "Software Engineer"}
+        )
+        self.assertEqual(summary["function_bucket_ids"], ["engineering"])
+        self.assertEqual(summary["function_bucket_source"], "legacy_inference")
+        self.assertNotIn("employment_statuses", summary)
+
+    def test_migration_member_builder_preserves_infra_and_dual_status(self) -> None:
+        from sourcing_agent.serving_projection_migration import _projection_member_from_candidate
+
+        member = _projection_member_from_candidate(  # noqa: SLF001
+            {
+                "candidate_id": "c1",
+                "display_name": "Migrated",
+                "employment_status": "current",
+                "metadata": self._dual_status_metadata(),
+            },
+            run_id="run-1",
+            rank_index=1,
+        )
+        public_summary = dict(member.get("public_summary") or {})
+        self.assertEqual(public_summary["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(public_summary["function_bucket_source"], "lane_membership")
+        self.assertEqual(public_summary["employment_statuses"], ["current", "former"])
+
+    def test_consolidation_member_builder_preserves_infra_and_dual_status(self) -> None:
+        from sourcing_agent.asset_consolidation_repair_apply import _projection_members_from_payload
+
+        members = _projection_members_from_payload(  # noqa: SLF001
+            payload={
+                "candidates": [
+                    {
+                        "candidate_id": "c1",
+                        "display_name": "Consolidated",
+                        "employment_status": "current",
+                        "function_bucket_ids": ["infra_systems"],
+                        "function_bucket_source": "lane_membership",
+                        "employment_statuses": ["current", "former"],
+                        "metadata": self._dual_status_metadata(),
+                    }
+                ]
+            },
+            source_snapshot_id="snap-1",
+            target_company="Acme",
+            collection_id="company:acme",
+        )
+        self.assertEqual(len(members), 1)
+        public_summary = dict(members[0].get("public_summary") or {})
+        self.assertEqual(public_summary["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(public_summary["function_bucket_source"], "lane_membership")
+        self.assertEqual(public_summary["employment_statuses"], ["current", "former"])
+
+    def test_index_filter_record_inherits_the_canonical_fields(self) -> None:
+        from sourcing_agent.person_asset_writer import _projection_filter_record
+        from sourcing_agent.serving_projection_migration import _projection_member_from_candidate
+
+        member = _projection_member_from_candidate(  # noqa: SLF001
+            {
+                "candidate_id": "c1",
+                "display_name": "Indexed",
+                "employment_status": "current",
+                "metadata": self._dual_status_metadata(),
+            },
+            run_id="run-1",
+            rank_index=1,
+        )
+        filter_record = _projection_filter_record(  # noqa: SLF001
+            member=member,
+            public_summary=dict(member.get("public_summary") or {}),
+            projection_metrics=dict(member.get("projection_metrics") or {}),
+            member_metadata={},
+        )
+        self.assertEqual(filter_record["function_bucket_ids"], ["infra_systems"])
+        self.assertEqual(filter_record["function_bucket_source"], "lane_membership")
+        self.assertEqual(filter_record["employment_statuses"], ["current", "former"])

@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
+from .public_candidate_facets import (
+    candidate_employment_statuses_for_public_facets,
+    candidate_function_bucket_projection_for_public_facets,
+)
 
 
 def _normalized_public_text_list(value: Any, *, limit: int = 12) -> list[str]:
@@ -122,21 +126,20 @@ def build_person_summary_view(
     source_projection_id: str = "",
     source_run_id: str = "",
 ) -> dict[str, Any]:
-    """Build a compact, public-safe row summary shared by projections, CRM, and exports."""
+    """Build a compact, public-safe row summary shared by projections, CRM, and exports.
+
+    Every summary carries the canonical served facet projection fields
+    (``function_bucket_ids`` / ``function_bucket_source``, plus the
+    authoritative ``employment_statuses`` membership set when non-empty):
+    owned values are preserved and closed-validated when the source has them,
+    otherwise they are derived from source evidence with marked
+    ``legacy_inference`` only for genuinely legacy rows.
+    """
 
     source = dict(payload or {})
-    normalized_candidate_id = str(
-        candidate_id
-        or source.get("candidate_id")
-        or source.get("id")
-        or ""
-    ).strip()
+    normalized_candidate_id = str(candidate_id or source.get("candidate_id") or source.get("id") or "").strip()
     normalized_linkedin_url = str(
-        linkedin_url
-        or source.get("linkedin_url")
-        or source.get("profile_url")
-        or source.get("url")
-        or ""
+        linkedin_url or source.get("linkedin_url") or source.get("profile_url") or source.get("url") or ""
     ).strip()
     normalized_profile_key = resolve_profile_url_key(
         profile_url_key,
@@ -150,18 +153,11 @@ def build_person_summary_view(
         candidate_id=normalized_candidate_id,
     )
     display_name = str(
-        source.get("display_name")
-        or source.get("candidate_name")
-        or source.get("name")
-        or source.get("name_en")
-        or ""
+        source.get("display_name") or source.get("candidate_name") or source.get("name") or source.get("name_en") or ""
     ).strip()
     headline = str(source.get("headline") or source.get("role") or source.get("title") or "").strip()
     current_company = str(
-        source.get("current_company")
-        or source.get("organization")
-        or source.get("company")
-        or ""
+        source.get("current_company") or source.get("organization") or source.get("company") or ""
     ).strip()
     avatar_url = str(source.get("avatar_url") or source.get("photo_url") or source.get("media_url") or "").strip()
     location = str(source.get("location") or source.get("profile_location") or "").strip()
@@ -214,4 +210,22 @@ def build_person_summary_view(
     ):
         if key in source:
             summary[key] = source.get(key)
+    # Canonical served facet projection (FT0 §5.2/§6; FT1-FF2): this adapter
+    # is the ONE public-summary owner for normal publication, migration,
+    # repair, and consolidation, so it must establish — not assume — the
+    # owned-field invariant.  It preserves and closed-validates the OWNED
+    # function-bucket pair / authoritative employment status set when the
+    # source carries them, and otherwise derives the canonical values from
+    # source evidence (lane membership > registry evidence > marked
+    # legacy_inference for genuinely legacy rows).  Modern owned values can
+    # therefore never be silently downgraded before indexing (explicit
+    # infra_systems → bare-id engineering; dual-status → display scalar), and
+    # malformed provenance or a malformed persisted pair raises instead of
+    # falling through to unmarked legacy inference.
+    function_bucket_projection = candidate_function_bucket_projection_for_public_facets(source)
+    summary["function_bucket_ids"] = list(function_bucket_projection["function_bucket_ids"])
+    summary["function_bucket_source"] = str(function_bucket_projection["function_bucket_source"])
+    authoritative_statuses = candidate_employment_statuses_for_public_facets(source)
+    if authoritative_statuses:
+        summary["employment_statuses"] = list(authoritative_statuses)
     return {key: value for key, value in summary.items() if value not in ("", None, [], {})}

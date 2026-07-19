@@ -4,8 +4,12 @@ import json
 from hashlib import sha1
 from typing import Any
 
-from .cohort_selection import CohortSelectionValidationError, cohort_execution_identity_for_signature
-from .domain import normalize_requested_facets, normalize_requested_role_buckets
+from .cohort_selection import (
+    CohortSelectionValidationError,
+    cohort_execution_identity_for_signature,
+    source_request_covers_explicit_cohort,
+)
+from .domain import _normalize_location_list, normalize_requested_facets, normalize_requested_role_buckets
 from .request_normalization import (
     build_effective_request_payload,
     canonicalize_request_payload,
@@ -468,6 +472,38 @@ def baseline_selection_reason(match: dict[str, Any]) -> str:
     return "Fell back to the latest completed job for the target company."
 
 
+def source_request_matches_hard_identity(
+    request_payload: dict[str, Any] | None,
+    source_request_payload: Any,
+) -> bool:
+    """Presence-aware hard-identity reuse guard for authoritative reuse paths.
+
+    This is the ONE guard every registry/projection/baseline reuse path must
+    apply before reusing an authoritative source.  It covers BOTH hard
+    identity axes that ``request_family_score`` enforces before any scoring:
+
+    1. Cohort coverage — the existing
+       ``source_request_covers_explicit_cohort`` semantics (a current request
+       carrying user authority never reuses a missing, legacy, different, or
+       malformed source; legacy current requests keep their cohort behavior).
+    2. Location identity — canonical presence+values of BOTH sibling fields
+       (``target_locations`` / ``exclude_target_locations``) must match for
+       Cohort and legacy requests alike: US vs Germany, absent versus an
+       explicit ``[]``, and differing exclusions never share an authoritative
+       reuse source.  A source request that is missing or empty carries the
+       all-absent identity, so only identity-free (fully legacy) current
+       requests match it.  Malformed location values on either side fail
+       closed (no reuse).
+    """
+
+    if not source_request_covers_explicit_cohort(request_payload, source_request_payload):
+        return False
+    try:
+        return _location_payload_identity(request_payload) == _location_payload_identity(source_request_payload)
+    except CohortSelectionValidationError:
+        return False
+
+
 def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limits: bool) -> dict[str, Any]:
     normalized: dict[str, Any] = {
         "target_company": _normalize_scalar(payload.get("target_company")),
@@ -614,20 +650,21 @@ def _coerce_matching_bundle(payload: dict[str, Any], bundle: dict[str, Any] | No
 
 
 def _apply_location_signature_fields(payload: dict[str, Any], normalized: dict[str, Any]) -> None:
-    # Presence semantics mirror request ingress (domain._normalize_location_list):
-    # a present JSON null is NOT field absence and fails closed with the same
-    # stable invalid-type posture instead of being silently treated as absent.
+    # Presence AND validation semantics mirror request ingress
+    # (domain._normalize_location_list) exactly (FT1-FF2): only a real array
+    # of bounded location strings is valid — a present JSON null, a bare
+    # string, a mapping, a number, null/non-string items, or over-bound values
+    # all fail closed with the same stable ``request_location_*`` validation
+    # error instead of aliasing a valid request family (a bare "Germany"
+    # string becoming ["Germany"], a null item silently collapsing) or
+    # aborting matching with an uncaught TypeError.  Valid values keep the
+    # canonical signature form (lowercased/deduped/sorted), so well-formed
+    # payloads keep byte-identical signatures while absent fields stay absent.
     for field_name in ("target_locations", "exclude_target_locations"):
         if field_name not in payload:
             continue
-        value = payload.get(field_name)
-        if value is None:
-            raise CohortSelectionValidationError(
-                "request_location_invalid_type",
-                field_name,
-                f"{field_name} must be an array of location strings",
-            )
-        normalized[field_name] = _normalize_list(value)
+        validated = _normalize_location_list(payload.get(field_name), field_name=field_name)
+        normalized[field_name] = _normalize_list(validated)
 
 
 def _location_request_identity(normalized: dict[str, Any]) -> tuple:
@@ -637,6 +674,20 @@ def _location_request_identity(normalized: dict[str, Any]) -> tuple:
         (field_name in normalized, tuple(normalized.get(field_name) or ()))
         for field_name in ("target_locations", "exclude_target_locations")
     )
+
+
+def _location_payload_identity(payload: Any) -> tuple:
+    # Same canonical presence+value identity as _location_request_identity,
+    # computed straight from a raw stored/request payload (no effective-request
+    # materialization: no location defaulting happens in normalization, and the
+    # stored request is the reuse authority).  A missing/non-dict payload
+    # carries the all-absent identity; a present JSON null raises so callers
+    # fail closed exactly like request ingress and matching identity.
+    if not isinstance(payload, dict) or not payload:
+        return tuple((False, ()) for _field in ("target_locations", "exclude_target_locations"))
+    normalized: dict[str, Any] = {}
+    _apply_location_signature_fields(payload, normalized)
+    return _location_request_identity(normalized)
 
 
 def _signature_for_payload(payload: dict[str, Any]) -> str:

@@ -1135,7 +1135,7 @@ class CohortSelectionIngressTest(unittest.TestCase):
             for name, matched_job, expected in cases:
                 with self.subTest(roles=roles, source=name):
                     self.assertEqual(
-                        SourcingOrchestrator._matched_job_covers_explicit_cohort(  # noqa: SLF001
+                        SourcingOrchestrator._matched_job_matches_hard_identity(  # noqa: SLF001
                             request_payload=request.to_record(),
                             matched_job=matched_job,
                         ),
@@ -1806,3 +1806,289 @@ class CohortSelectionApiTest(unittest.TestCase):
 
         self.assertEqual(status, 400)
         self.assertEqual(result["reason"], "cohort_selection_plan_review_conflict")
+
+
+class HardIdentityReuseGuardIntegrationTest(unittest.TestCase):
+    """FT1-FF2 (finding 1): authoritative registry/projection/baseline reuse is
+    fenced by the presence-aware hard-identity guard (Cohort digest + both
+    location fields), for Cohort AND legacy requests."""
+
+    @staticmethod
+    def _request(payload: dict[str, Any]) -> JobRequest:
+        return JobRequest.from_payload({"target_company": "Acme", **payload})
+
+    def _registry_orchestrator(self, store: Any) -> SourcingOrchestrator:
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = store
+        orchestrator._load_snapshot_reuse_context_from_snapshot = lambda **_kwargs: {
+            "snapshot_id": "snap",
+            "snapshot_dir": "/tmp/snap",
+            "source_path": "/tmp/snap/candidate_documents.json",
+        }
+        return orchestrator
+
+    def _registry_match(self, request: JobRequest, source_request: dict[str, Any] | None) -> dict[str, Any]:
+        class _Store:
+            @staticmethod
+            def get_authoritative_organization_asset_registry(**_kwargs):
+                return {
+                    "registry_id": 1,
+                    "snapshot_id": "snap",
+                    "source_job_id": "source-job",
+                    "candidate_count": 2,
+                    "current_lane_effective_ready": True,
+                    "current_lane_effective_candidate_count": 2,
+                    "former_lane_effective_ready": False,
+                    "former_lane_effective_candidate_count": 0,
+                }
+
+            @staticmethod
+            def get_organization_execution_profile(**_kwargs):
+                return {}
+
+            @staticmethod
+            def get_job(_job_id):
+                return {"job_id": "source-job", "status": "completed", "request": dict(source_request or {})}
+
+        context = {
+            "asset_reuse_plan": {
+                "baseline_reuse_available": True,
+                "baseline_snapshot_id": "snap",
+                "baseline_current_effective_ready": True,
+                "baseline_current_effective_candidate_count": 2,
+                "baseline_former_effective_ready": False,
+                "baseline_former_effective_candidate_count": 0,
+            }
+        }
+        return self._registry_orchestrator(_Store())._resolve_organization_asset_registry_snapshot_reuse_match(  # noqa: SLF001
+            request,
+            context,
+        )
+
+    def _collection_match(self, request: JobRequest, source_request: dict[str, Any] | None) -> dict[str, Any]:
+        projection = {
+            "projection_id": "proj",
+            "projection_type": "run_scope_projection",
+            "state": "serving",
+            "source_run_id": "source-job",
+            "scope_spec": {
+                "target_scope": "full_company_asset",
+                "keywords": [],
+                "snapshot_id": "snap",
+            },
+            "counts": {"candidate_count": 2},
+            "readiness": {"row": "complete", "profile": "complete", "card": "complete"},
+            "metadata": {"source_path": "/tmp/snap/candidate_documents.json"},
+        }
+
+        class _ServingProjectionRepo:
+            @staticmethod
+            def get_authoritative_pointer(_collection_id):
+                return {"state": "active", "active_projection_id": "proj"}
+
+            @staticmethod
+            def get(_projection_id):
+                return dict(projection)
+
+            @staticmethod
+            def list(**_kwargs):
+                return []
+
+        class _Store:
+            repos = SimpleNamespace(serving_projection=_ServingProjectionRepo())
+
+            @staticmethod
+            def get_job(_job_id):
+                return {"job_id": "source-job", "status": "completed", "request": dict(source_request or {})}
+
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = _Store()
+        orchestrator._projection_collection_id_for_request = lambda _request: "company:acme"
+        orchestrator._load_snapshot_reuse_context_from_snapshot = lambda **_kwargs: {
+            "snapshot_id": "snap",
+            "snapshot_dir": "/tmp/snap",
+            "source_path": "/tmp/snap/candidate_documents.json",
+        }
+        return orchestrator._resolve_collection_authoritative_projection_reuse_match(  # noqa: SLF001
+            request,
+            {},
+        )
+
+    def test_registry_and_projection_reuse_fence_location_identity_for_cohort_requests(self) -> None:
+        request = self._request(
+            {
+                "cohort_selection": _cohort(roles=[], statuses=["current"]),
+                "target_locations": ["Germany"],
+                "exclude_target_locations": ["France"],
+            }
+        )
+        same_source = request.to_record()
+        different_region = self._request(
+            {
+                "cohort_selection": _cohort(roles=[], statuses=["current"]),
+                "target_locations": ["United States"],
+                "exclude_target_locations": ["France"],
+            }
+        ).to_record()
+        different_exclusion = self._request(
+            {
+                "cohort_selection": _cohort(roles=[], statuses=["current"]),
+                "target_locations": ["Germany"],
+            }
+        ).to_record()
+        explicit_empty_vs_absent = self._request(
+            {
+                "cohort_selection": _cohort(roles=[], statuses=["current"]),
+                "target_locations": [],
+                "exclude_target_locations": ["France"],
+            }
+        ).to_record()
+
+        for name, source_request, expect_match in (
+            ("same", same_source, True),
+            ("different_region", different_region, False),
+            ("different_exclusion", different_exclusion, False),
+            ("absent_vs_explicit_empty", explicit_empty_vs_absent, False),
+            ("legacy_source", {"target_company": "Acme"}, False),
+            ("missing_source", None, False),
+        ):
+            with self.subTest(name=name):
+                registry_match = self._registry_match(request, source_request)
+                self.assertEqual(bool(registry_match), expect_match)
+                collection_match = self._collection_match(request, source_request)
+                self.assertEqual(bool(collection_match), expect_match)
+
+    def test_registry_and_projection_reuse_fence_location_identity_for_legacy_requests(self) -> None:
+        legacy_request = self._request({"employment_statuses": ["current"]})
+        located_legacy_request = self._request({"employment_statuses": ["current"], "target_locations": ["Germany"]})
+        for name, request, source_request, expect_match in (
+            ("fully_legacy_pair", legacy_request, {"target_company": "Acme"}, True),
+            ("legacy_missing_source", legacy_request, None, True),
+            (
+                "legacy_vs_located_source",
+                legacy_request,
+                {"target_company": "Acme", "target_locations": ["Germany"]},
+                False,
+            ),
+            (
+                "legacy_vs_explicit_empty_source",
+                legacy_request,
+                {"target_company": "Acme", "target_locations": []},
+                False,
+            ),
+            (
+                "located_legacy_vs_different_region",
+                located_legacy_request,
+                {"target_company": "Acme", "target_locations": ["United States"]},
+                False,
+            ),
+            (
+                "located_legacy_vs_same_region",
+                located_legacy_request,
+                {"target_company": "Acme", "target_locations": ["germany"]},
+                True,
+            ),
+            ("located_legacy_vs_absent_source", located_legacy_request, {"target_company": "Acme"}, False),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(bool(self._registry_match(request, source_request)), expect_match)
+                self.assertEqual(bool(self._collection_match(request, source_request)), expect_match)
+
+    def test_compile_asset_reuse_plan_fences_baseline_by_location_identity(self) -> None:
+        compiled = {"baseline_reuse_available": True, "baseline_snapshot_id": "snap"}
+        for name, request_payload, source_request, expect_reuse in (
+            (
+                "cohort_same_location",
+                {
+                    "cohort_selection": _cohort(roles=["research"], statuses=["current"]),
+                    "target_locations": ["Germany"],
+                },
+                None,  # replaced below with the request's own record
+                True,
+            ),
+            (
+                "cohort_different_location",
+                {
+                    "cohort_selection": _cohort(roles=["research"], statuses=["current"]),
+                    "target_locations": ["Germany"],
+                },
+                {
+                    "target_company": "Acme",
+                    "cohort_selection": _cohort(roles=["research"], statuses=["current"]),
+                    "target_locations": ["United States"],
+                },
+                False,
+            ),
+            (
+                "legacy_vs_located_source",
+                {},
+                {"target_company": "Acme", "target_locations": ["Germany"]},
+                False,
+            ),
+            ("legacy_vs_legacy_source", {}, {"target_company": "Acme"}, True),
+            ("legacy_missing_source_job", {}, "missing", True),
+        ):
+            with self.subTest(name=name):
+                request = self._request(request_payload)
+                if source_request is None:
+                    source_request = request.to_record()
+                source_job_id = "" if source_request == "missing" else "source-job"
+                registry_row = {
+                    "registry_id": 1,
+                    "snapshot_id": "snap",
+                    "source_job_id": source_job_id,
+                    "authoritative": True,
+                }
+                store = SimpleNamespace(
+                    get_job=lambda _job_id: {"job_id": _job_id, "request": source_request},
+                )
+                with (
+                    patch(
+                        "sourcing_agent.asset_reuse_planning.build_organization_asset_registry_candidate_inventory",
+                        return_value={
+                            "authoritative_row": registry_row,
+                            "ordered_candidate_rows": [registry_row],
+                        },
+                    ),
+                    patch(
+                        "sourcing_agent.asset_reuse_planning._compile_asset_reuse_plan_for_baseline",
+                        return_value=compiled,
+                    ),
+                ):
+                    result = compile_asset_reuse_plan(
+                        runtime_dir="/tmp",
+                        store=store,
+                        request=request,
+                        plan=SimpleNamespace(),
+                    )
+                if expect_reuse:
+                    self.assertEqual(result, compiled)
+                else:
+                    self.assertEqual(
+                        result,
+                        {
+                            "baseline_reuse_available": False,
+                            "reason": "no_cohort_compatible_authoritative_baseline",
+                        },
+                    )
+
+    def test_projection_scope_spec_persists_hard_identity_with_presence_semantics(self) -> None:
+        located_cohort_request = self._request(
+            {
+                "cohort_selection": _cohort(roles=["research"], statuses=["current"]),
+                "target_locations": ["Germany"],
+                "exclude_target_locations": [],
+            }
+        )
+        scope = SourcingOrchestrator._projection_scope_spec_for_request(located_cohort_request)  # noqa: SLF001
+        self.assertEqual(scope["target_locations"], ["Germany"])
+        self.assertEqual(scope["exclude_target_locations"], [])
+        self.assertEqual(
+            scope["cohort_selection_digest"],
+            cohort_selection_digest(located_cohort_request.cohort_selection),
+        )
+
+        legacy_scope = SourcingOrchestrator._projection_scope_spec_for_request(self._request({}))  # noqa: SLF001
+        self.assertNotIn("cohort_selection_digest", legacy_scope)
+        self.assertNotIn("target_locations", legacy_scope)
+        self.assertNotIn("exclude_target_locations", legacy_scope)

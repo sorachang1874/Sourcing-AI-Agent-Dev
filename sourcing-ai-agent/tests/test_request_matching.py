@@ -364,9 +364,7 @@ class LocationHardFamilyFenceTest(unittest.TestCase):
         match = request_family_score(_location_request(["United States"]), _location_request(["Germany"]))
         explanation = match["explanation"]
         self.assertIn("target_locations", explanation["mismatched_fields"])
-        location_details = [
-            detail for detail in explanation["field_details"] if detail["field"] == "target_locations"
-        ]
+        location_details = [detail for detail in explanation["field_details"] if detail["field"] == "target_locations"]
         self.assertEqual(len(location_details), 1)
         self.assertEqual(location_details[0]["kind"], "hard_identity")
         self.assertEqual(location_details[0]["status"], "hard_mismatch")
@@ -397,8 +395,12 @@ class LocationHardFamilyFenceTest(unittest.TestCase):
 
         # Control: a same-location candidate IS selected.
         matched_request = _location_request(["United States"])
-        matched_row = {**row, "job_id": "us-job", "request": matched_request,
-                       "request_matching": build_request_matching_bundle(matched_request)}
+        matched_row = {
+            **row,
+            "job_id": "us-job",
+            "request": matched_request,
+            "request_matching": build_request_matching_bundle(matched_request),
+        }
         store._select_control_plane_job_rows = lambda **_kwargs: [matched_row]
         selected = ControlPlaneStore.find_best_completed_job_match(
             store,
@@ -631,3 +633,149 @@ class LocationPresenceSemanticsTest(unittest.TestCase):
                 self.assertEqual(match["score"], 0.0)
                 self.assertTrue(match["hard_family_mismatch"])
                 self.assertEqual(match["reasons"], ["request_location_invalid_type"])
+
+
+class HardIdentityReuseGuardTest(unittest.TestCase):
+    """FT1-FF2 (finding 1): one presence-aware reuse guard covers Cohort digest
+    plus BOTH location sibling fields, for Cohort and legacy requests alike."""
+
+    def test_cohort_requests_require_matching_cohort_and_location_identity(self) -> None:
+        from sourcing_agent.request_matching import source_request_matches_hard_identity
+
+        request = _location_request(["United States"], exclude=["France"], cohort=True)
+        for name, source, expected in (
+            ("same", _location_request(["United States"], exclude=["France"], cohort=True), True),
+            ("different_region", _location_request(["Germany"], exclude=["France"], cohort=True), False),
+            ("different_exclusion", _location_request(["United States"], exclude=["Germany"], cohort=True), False),
+            ("absent_vs_explicit_empty", _location_request([], exclude=["France"], cohort=True), False),
+            ("missing_location", _location_request(cohort=True), False),
+            ("legacy_source", _location_request(["United States"], exclude=["France"]), False),
+            ("missing_source", None, False),
+            ("non_dict_source", "invalid", False),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(
+                    source_request_matches_hard_identity(request, source),
+                    expected,
+                )
+
+    def test_legacy_requests_never_reuse_location_carrying_sources(self) -> None:
+        from sourcing_agent.request_matching import source_request_matches_hard_identity
+
+        for name, request, source, expected in (
+            ("fully_legacy_pair", _location_request(), _location_request(), True),
+            ("legacy_missing_source", _location_request(), None, True),
+            ("legacy_vs_located_source", _location_request(), _location_request(["Germany"]), False),
+            (
+                "legacy_vs_explicit_empty_source",
+                _location_request(),
+                _location_request([], exclude=[]),
+                False,
+            ),
+            ("located_vs_absent_source", _location_request(["United States"]), _location_request(), False),
+            ("located_vs_missing_source", _location_request(["United States"]), None, False),
+            ("explicit_empty_vs_absent", _location_request([]), _location_request(), False),
+            ("same_explicit_empty", _location_request([]), _location_request([]), True),
+            (
+                "same_values_case_and_order_insensitive",
+                _location_request(["United States", "Germany"]),
+                _location_request(["germany", "united states"]),
+                True,
+            ),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(
+                    source_request_matches_hard_identity(request, source),
+                    expected,
+                )
+
+    def test_malformed_location_values_fail_closed_without_raising(self) -> None:
+        from sourcing_agent.request_matching import source_request_matches_hard_identity
+
+        for name, request, source in (
+            ("null_on_request", {**_location_request(), "target_locations": None}, _location_request()),
+            ("null_on_source", _location_request(), {**_location_request(), "target_locations": None}),
+            (
+                "string_on_source",
+                _location_request(["Germany"]),
+                {**_location_request(), "target_locations": "Germany"},
+            ),
+            ("integer_item", _location_request(), {**_location_request(), "target_locations": [5]}),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(source_request_matches_hard_identity(request, source), False)
+
+
+class LocationSignatureClosedValidationTest(unittest.TestCase):
+    """FT1-FF2 (finding 2): matching closed-validates non-null malformed
+    location values with the same ingress semantics as JobRequest."""
+
+    def test_malformed_values_raise_stable_location_errors_in_signature_builders(self) -> None:
+        from sourcing_agent.cohort_selection import CohortSelectionValidationError
+
+        cases = (
+            ("bare_string", "Germany", "request_location_invalid_type"),
+            ("mapping", {"region": "Germany"}, "request_location_invalid_type"),
+            ("number", 5, "request_location_invalid_type"),
+            ("null_item", [None, "Germany"], "request_location_invalid_item"),
+            ("non_string_item", [5], "request_location_invalid_item"),
+            ("blank_item", ["   "], "request_location_item_length_invalid"),
+            ("too_many_items", [f"loc-{index}" for index in range(17)], "request_location_too_many_items"),
+        )
+        for field in ("target_locations", "exclude_target_locations"):
+            for name, value, expected_code in cases:
+                with self.subTest(field=field, case=name):
+                    with self.assertRaises(CohortSelectionValidationError) as captured:
+                        request_signature({"target_company": "Acme", field: value})
+                    self.assertEqual(captured.exception.code, expected_code)
+                    with self.assertRaises(CohortSelectionValidationError):
+                        build_request_matching_bundle({"target_company": "Acme", field: value})
+
+    def test_malformed_values_are_stable_hard_family_mismatches_not_exceptions(self) -> None:
+        for name, value, expected_reason in (
+            ("bare_string", "Germany", "request_location_invalid_type"),
+            ("null_item", [None, "Germany"], "request_location_invalid_item"),
+            ("number", 5, "request_location_invalid_type"),
+        ):
+            with self.subTest(name=name):
+                match = request_family_score(
+                    {"target_company": "Acme", "target_locations": value},
+                    _location_request(["United States"]),
+                )
+                self.assertEqual(match["score"], 0.0)
+                self.assertTrue(match["hard_family_mismatch"])
+                self.assertEqual(match["reasons"], [expected_reason])
+
+    def test_well_formed_payloads_keep_byte_identical_signatures(self) -> None:
+        # Canonical signature identity is unchanged for valid values:
+        # trimmed/lowercased/deduped/sorted, absent stays absent, [] stays [].
+        self.assertEqual(
+            request_signature(_location_request(["United States", "Germany"])),
+            request_signature(_location_request(["germany", "united states", "Germany"])),
+        )
+        self.assertEqual(
+            request_family_signature(_location_request([])),
+            request_family_signature(_location_request([])),
+        )
+        self.assertNotEqual(
+            request_signature(_location_request()),
+            request_signature(_location_request([])),
+        )
+
+    def test_malformed_persisted_bundle_rebuilds_or_mismatches_closed(self) -> None:
+        from sourcing_agent.cohort_selection import CohortSelectionValidationError
+
+        # A persisted bundle computed from a bare-string location can never be
+        # trusted: canonical regeneration now fails closed, so the malformed
+        # identity can never alias a valid family.
+        malformed_payload = {"target_company": "Acme", "target_locations": "Germany"}
+        with self.assertRaises(CohortSelectionValidationError):
+            matching_bundle_payload(
+                malformed_payload,
+                execution_bundle_payload={
+                    "request_matching": {
+                        "matching_request": {"target_company": "acme", "target_locations": ["germany"]},
+                        "matching_family_request": {"target_company": "acme", "target_locations": ["germany"]},
+                    }
+                },
+            )
