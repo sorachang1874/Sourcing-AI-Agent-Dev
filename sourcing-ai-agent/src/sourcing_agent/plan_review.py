@@ -4,7 +4,10 @@ import re
 from copy import deepcopy
 from typing import Any
 
+from .acquisition_strategy import sync_location_filter_hints
 from .asset_reuse_planning import _sync_task_intent_view_from_metadata
+from .cohort_provider_compiler import COHORT_PROVIDER_MANIFEST_VERSION, CohortProviderCompiler
+from .cohort_selection import CohortSelectionValidationError, explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
     build_default_company_employee_shard_policy,
@@ -18,9 +21,21 @@ from .planning import (
     FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS,
     FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
     FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+    _build_provider_execution_manifest,
+    hydrate_sourcing_plan,
 )
 from .query_signal_knowledge import scope_review_hints
 from .request_normalization import materialize_request_payload
+
+# Authorized plan-review location axes (F6).  Both are sibling request
+# fields — never part of the closed cohort object — and enter canonical
+# request state only through apply_plan_review_decision below.
+PLAN_REVIEW_LOCATION_FIELDS = ("target_locations", "exclude_target_locations")
+# Tagged clear operation for the review wire contract: an initialized,
+# gate-authorized axis restored to ABSENCE serializes as
+# {"op": "clear"} so restore-absence is never collapsed with
+# not-part-of-this-decision (an omitted key) or with an explicit value.
+LOCATION_REVIEW_CLEAR_OPERATION = "clear"
 
 
 def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str, Any]:
@@ -45,6 +60,8 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         "force_fresh_run",
         "reuse_existing_roster",
         "run_former_search_seed",
+        "target_locations",
+        "exclude_target_locations",
     ]
     required_before_execution = False
     risk_level = "low"
@@ -376,9 +393,175 @@ def apply_plan_review_decision(
             preferences=decision_preferences,
         )
 
+    _apply_location_review_decision(updated_request, updated_plan, decision)
     _sync_request_execution_preferences(updated_request, decision)
     _sync_task_metadata(updated_plan)
     return updated_request, updated_plan
+
+
+def validate_plan_review_location_decision(decision_payload: dict[str, Any] | None) -> None:
+    """Fail-closed validation for the tagged location review wire contract.
+
+    Runs at the review write boundary for EVERY action (approve, reject,
+    needs_changes), mirroring the cohort-selection posture: per authorized
+    axis the decision may carry exactly one of
+
+    - a list of location strings (replace the axis; explicit ``[]`` opts out
+      of location filtering),
+    - the tagged clear operation ``{"op": "clear"}`` (restore the axis to
+      ABSENT so the server default applies again),
+    - no key at all (the axis is not part of this decision).
+
+    Any other shape — a present JSON null, a wrong container, an unknown op
+    tag, or a clear dict carrying extra keys — fails closed before any
+    review write.
+    """
+
+    decision = dict(decision_payload or {})
+    for field_name in PLAN_REVIEW_LOCATION_FIELDS:
+        if field_name not in decision:
+            continue
+        _normalize_location_review_operation(decision.get(field_name), field_name=field_name)
+
+
+def _apply_location_review_decision(
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+    decision_payload: dict[str, Any],
+) -> None:
+    """Authorized application owner for plan-review location edits (F6).
+
+    Location edits enter canonical request state ONLY through this path —
+    never frontend-minted, never a metadata mirror promoted to owner.  Every
+    present axis is validated before any mutation (atomic fail-closed), and
+    the three wire states are never collapsed: an absent key leaves the axis
+    untouched, the tagged clear removes the axis from the canonical request,
+    and a list replaces it.  The dependent plan state is then rebuilt
+    through the same owners as plan time — filter hints via
+    ``sync_location_filter_hints`` and the provider execution manifest via
+    its canonical compiler/builder — so downstream consumers (provider
+    compiler, acquisition lanes, the launched workflow) see the edited
+    location consistently.
+    """
+
+    decision = dict(decision_payload or {})
+    operations: dict[str, list[str] | None] = {}
+    for field_name in PLAN_REVIEW_LOCATION_FIELDS:
+        if field_name not in decision:
+            continue
+        operations[field_name] = _normalize_location_review_operation(
+            decision.get(field_name),
+            field_name=field_name,
+        )
+    if not operations:
+        return
+    for field_name, replacement in operations.items():
+        if replacement is None:
+            # Tagged clear: restore ABSENCE on the canonical request axis.
+            request_payload.pop(field_name, None)
+        else:
+            request_payload[field_name] = replacement
+    _sync_plan_location_filter_hints(request_payload, plan_payload)
+    _rebind_provider_execution_manifest_after_location_edit(request_payload, plan_payload)
+
+
+def _normalize_location_review_operation(value: Any, *, field_name: str) -> list[str] | None:
+    """Return the normalized replacement list, or None for the tagged clear."""
+
+    if isinstance(value, dict):
+        if set(value) == {"op"} and str(value.get("op") or "").strip() == LOCATION_REVIEW_CLEAR_OPERATION:
+            return None
+        raise CohortSelectionValidationError(
+            "plan_review_location_invalid_operation",
+            field_name,
+            f"{field_name} accepts only a location string list or the tagged clear operation",
+        )
+    # Replacement lists are validated through the canonical request ingress
+    # owner (JobRequest) so the review channel can never accept a shape the
+    # request itself rejects: wrong container types, a present JSON null,
+    # over-bound lists, and null/blank items fail closed with the same
+    # stable request_location_* codes as ingress.
+    probe = JobRequest.from_payload({"target_company": "plan-review-location-probe", field_name: value})
+    if field_name == "target_locations":
+        return list(probe.target_locations or [])
+    return list(probe.exclude_target_locations or [])
+
+
+def _sync_plan_location_filter_hints(
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+) -> None:
+    """Rebuild the plan's location-derived filter hints from the request."""
+
+    acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
+    if not acquisition_strategy:
+        return
+    company_scope = [
+        str(item).strip()
+        for item in list(acquisition_strategy.get("company_scope") or [])
+        if str(item).strip()
+    ]
+    target_company = str(request_payload.get("target_company") or "").strip() or (
+        company_scope[0] if company_scope else ""
+    )
+    cohort = explicit_cohort_selection(request_payload)
+    acquisition_strategy["filter_hints"] = sync_location_filter_hints(
+        dict(acquisition_strategy.get("filter_hints") or {}),
+        strategy_type=str(acquisition_strategy.get("strategy_type") or "").strip(),
+        target_company=target_company,
+        cost_policy=dict(acquisition_strategy.get("cost_policy") or {}),
+        explicit_role_authority=bool(cohort) and str(cohort.get("source") or "") == "user_explicit",
+        target_locations=(
+            list(request_payload["target_locations"]) if "target_locations" in request_payload else None
+        ),
+        exclude_target_locations=(
+            list(request_payload["exclude_target_locations"]) if "exclude_target_locations" in request_payload else None
+        ),
+    )
+    plan_payload["acquisition_strategy"] = acquisition_strategy
+
+
+def _rebind_provider_execution_manifest_after_location_edit(
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+) -> None:
+    """Rebind the canonical plan manifest after a location edit.
+
+    The stored manifest is never repaired in place and never borrowed from a
+    metadata mirror.  A cohort-compiler manifest is recompiled through its
+    sole owner (``CohortProviderCompiler``) from the reviewed canonical
+    request plus the rebuilt base filter hints — the same inputs the runtime
+    exact-recompilation preflight uses before any provider call — and a
+    legacy planning manifest is rebuilt through the same plan-time builder
+    so lane company filters cannot keep pre-edit locations.  A compiler
+    manifest whose reviewed request lost its user-explicit cohort owner is
+    an identity disagreement and fails closed instead of being repaired.
+    """
+
+    acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
+    stored_manifest = dict(acquisition_strategy.get("provider_execution_manifest") or {})
+    if not stored_manifest:
+        return
+    if str(stored_manifest.get("schema_version") or "").strip() == COHORT_PROVIDER_MANIFEST_VERSION:
+        cohort = explicit_cohort_selection(request_payload)
+        if not cohort or str(cohort.get("source") or "") != "user_explicit":
+            raise CohortSelectionValidationError(
+                "plan_review_location_manifest_rebind_failed",
+                "provider_execution_manifest",
+                "stored cohort provider manifest has no user_explicit cohort owner on the reviewed request",
+            )
+        acquisition_strategy["provider_execution_manifest"] = CohortProviderCompiler().compile(
+            deepcopy(request_payload),
+            base_filter_hints=dict(acquisition_strategy.get("filter_hints") or {}),
+        )
+        plan_payload["acquisition_strategy"] = acquisition_strategy
+        return
+    hydrated = hydrate_sourcing_plan(plan_payload)
+    acquisition_strategy["provider_execution_manifest"] = _build_provider_execution_manifest(
+        acquisition_strategy=hydrated.acquisition_strategy,
+        acquisition_tasks=list(hydrated.acquisition_tasks or []),
+    )
+    plan_payload["acquisition_strategy"] = acquisition_strategy
 
 
 def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:

@@ -306,7 +306,7 @@ from .organization_execution_profile import (
 from .outreach_layering import analyze_company_outreach_layers, build_outreach_layer_analysis
 from .pattern_suggestions import derive_pattern_suggestions
 from .person_asset_writer import PersonAssetWriter
-from .plan_review import apply_plan_review_decision, build_plan_review_gate
+from .plan_review import apply_plan_review_decision, build_plan_review_gate, validate_plan_review_location_decision
 from .plan_submit_contract import (
     LEGACY_PLAN_SUBMIT_RESPONSE_STATUS,
     PLAN_GENERATION_COMPLETED,
@@ -44937,6 +44937,14 @@ class SourcingOrchestrator:
             # Every review action is an external write boundary.  A malformed
             # cohort must not be persisted merely because the action is reject
             # or needs_changes rather than approve.
+            return exc.to_result()
+        try:
+            validate_plan_review_location_decision(decision_payload)
+        except CohortSelectionValidationError as exc:
+            # Same external-write-boundary posture as the cohort object: a
+            # malformed location operation (present null, wrong container,
+            # unknown op tag) fails closed before any review write, whatever
+            # the action.
             return exc.to_result()
         try:
             cohort_validated_request = merge_plan_review_cohort_selection(

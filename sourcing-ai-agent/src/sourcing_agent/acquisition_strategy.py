@@ -1215,29 +1215,15 @@ def _build_filter_hints(
         filters["past_companies"] = company_values
     else:
         filters["current_companies"] = company_values
-    if strategy_type == "full_company_roster" and _full_company_roster_defaults_to_primary_location(
+    filters = sync_location_filter_hints(
+        filters,
+        strategy_type=strategy_type,
         target_company=target_company,
         cost_policy=cost_policy,
-    ):
-        filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
-    if target_locations is not None:
-        # Single-writer rule: the user's explicit request locations win
-        # outright over every planner default and are NEVER merged with it
-        # (a request with an explicit non-US region must not silently
-        # re-acquire a US shard).  An explicit empty list opts out of
-        # location filtering and suppresses every location default.
-        if target_locations:
-            filters["locations"] = list(target_locations)
-        else:
-            filters.pop("locations", None)
-    elif explicit_role_authority and "locations" not in filters:
-        # Broad-recall default: explicit-Cohort requests with the field
-        # absent default to the primary US scope; legacy non-Cohort paths
-        # keep their existing behavior byte-for-byte.
-        filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
-    if exclude_target_locations:
-        # Composes independently into the provider exclusion axis.
-        filters["exclude_locations"] = list(exclude_target_locations)
+        explicit_role_authority=explicit_role_authority,
+        target_locations=target_locations,
+        exclude_target_locations=exclude_target_locations,
+    )
     if large_org_keyword_probe_mode and not explicit_role_authority:
         filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *effective_function_ids]))
     elif effective_function_ids:
@@ -1249,6 +1235,58 @@ def _build_filter_hints(
     if keyword_hints:
         filters["keywords"] = keyword_hints
     return filters
+
+
+def sync_location_filter_hints(
+    filters: dict[str, list[str]],
+    *,
+    strategy_type: str,
+    target_company: str,
+    cost_policy: dict[str, object],
+    explicit_role_authority: bool = False,
+    target_locations: list[str] | None,
+    exclude_target_locations: list[str] | None,
+) -> dict[str, list[str]]:
+    """Single owner mapping the request location fields onto plan filter hints.
+
+    Plan-time compilation (``_build_filter_hints``) and the plan-review
+    application owner (``plan_review``) both route through here so a reviewed
+    location edit and a freshly compiled plan produce byte-identical
+    ``locations`` / ``exclude_locations`` hints.  Any pre-existing location
+    keys are dropped first and then recomputed from the request state: the
+    full-roster planner default, the single-writer user value, the
+    explicit-Cohort broad-recall default, and the independent exclusion axis.
+    """
+
+    synced: dict[str, list[str]] = {
+        str(key): list(value or [])
+        for key, value in dict(filters or {}).items()
+        if str(key) not in {"locations", "exclude_locations"}
+    }
+    if str(strategy_type or "").strip() == "full_company_roster" and _full_company_roster_defaults_to_primary_location(
+        target_company=target_company,
+        cost_policy=cost_policy,
+    ):
+        synced["locations"] = [DEFAULT_PRIMARY_LOCATION]
+    if target_locations is not None:
+        # Single-writer rule: the user's explicit request locations win
+        # outright over every planner default and are NEVER merged with it
+        # (a request with an explicit non-US region must not silently
+        # re-acquire a US shard).  An explicit empty list opts out of
+        # location filtering and suppresses every location default.
+        if target_locations:
+            synced["locations"] = list(target_locations)
+        else:
+            synced.pop("locations", None)
+    elif explicit_role_authority and "locations" not in synced:
+        # Broad-recall default: explicit-Cohort requests with the field
+        # absent default to the primary US scope; legacy non-Cohort paths
+        # keep their existing behavior byte-for-byte.
+        synced["locations"] = [DEFAULT_PRIMARY_LOCATION]
+    if exclude_target_locations:
+        # Composes independently into the provider exclusion axis.
+        synced["exclude_locations"] = list(exclude_target_locations)
+    return synced
 
 
 def _full_company_roster_defaults_to_primary_location(
