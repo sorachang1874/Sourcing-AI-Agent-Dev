@@ -64,6 +64,7 @@ RETAINED_LOOKUP_FORBIDDEN = (
 )
 
 _SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+_HTTPS_URL_RE = re.compile(r"^https://[^\s]+$")
 
 
 class AgentRuntimeNamespaceRefError(ValueError):
@@ -196,9 +197,7 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
             _fail(label, "enum violation")
         if descriptor.get("format") == "sha256_hex" and not _SHA256_HEX_RE.fullmatch(value):
             _fail(label, "sha256_hex format violation")
-        if descriptor.get("format") == "https_url" and not (
-            value.startswith("https://") and not any(character.isspace() for character in value)
-        ):
+        if descriptor.get("format") == "https_url" and not _HTTPS_URL_RE.fullmatch(value):
             _fail(label, "https_url format violation")
     elif declared == "integer":
         if type(value) is not int:  # rejects bool and float aliases
@@ -383,11 +382,19 @@ def mint_agent_runtime_namespace_ref(
     return parse_agent_runtime_namespace_ref(_canonical_json_object(candidate))
 
 
-def agent_runtime_namespace_ref_public_record(value: Any) -> CanonicalJsonObject:
-    """Project one validated ref to its exact public V3 subset; workspace/path/lifecycle never leave the server."""
+def agent_runtime_namespace_ref_public_record(value: Any) -> dict[str, Any]:
+    """Project one validated ref to its exact public V3 subset; workspace/path/lifecycle never leave the server.
+
+    Trusted output projection: strict input provenance is enforced by the
+    parse inside, and the returned value is rebuilt through canonical JSON
+    into exact built-in JSON types (plain ``dict``/``list``/scalars, never a
+    dict subclass), so decision-locked downstream validators such as the V3
+    ``ActionResultSpec`` accept it without any conversion layer.
+    """
 
     record = parse_agent_runtime_namespace_ref(value)
-    return _canonical_json_object({field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS})
+    subset = {field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS}
+    return json.loads(canonical_json(subset))
 
 
 __all__ = [

@@ -12,11 +12,17 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from sourcing_agent.action_result_schema import (
+    ActionResultActionOwner,
+    ActionResultSchemaError,
+    ActionResultSpec,
+)
 from sourcing_agent.agent_runtime_namespace_ref import (
     AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST,
     AgentRuntimeNamespaceRefError,
@@ -65,8 +71,10 @@ from sourcing_agent.filter_projection_terminal_contract import (
     FILTER_PROJECTION_RESULT_SERIALIZER_V3_REVISION,
     FILTER_PROJECTION_RESULT_V3_CONTRACT_DIGEST,
     FILTER_PROJECTION_RESULT_V3_DEFERRED_ROOT_FIELDS,
+    FILTER_PROJECTION_RESULT_V3_FIELD_VALUE_ROLES,
     FILTER_PROJECTION_RESULT_V3_MASKED_ROOT_CONSTANTS,
     FILTER_PROJECTION_RESULT_V3_MASKED_ROOT_FIELDS,
+    FILTER_PROJECTION_RESULT_V3_MAX_SERIALIZED_BYTES,
     FILTER_PROJECTION_RESULT_V3_ORDERED_FIELDS,
     FILTER_PROJECTION_RESULT_V3_OWNER,
     FILTER_PROJECTION_RESULT_V3_SCHEMA,
@@ -458,8 +466,15 @@ def _success_root() -> dict[str, Any]:
                     "employment_status": "current",
                     "role_bucket_id": "engineering",
                     "coverage_status": "complete",
-                    "result_count": 2,
-                }
+                    "result_count": 1,
+                },
+                {
+                    "lane_id": "lane-1",
+                    "employment_status": "current",
+                    "role_bucket_id": "engineering",
+                    "coverage_status": "complete",
+                    "result_count": 1,
+                },
             ],
             "offset": 0,
             "limit": 250,
@@ -521,6 +536,36 @@ def _expect_invalid(parser: Any, record: Any, **kwargs: Any) -> None:
         parser(payload, **kwargs)
 
 
+def _v3_result_spec() -> ActionResultSpec:
+    """Build the real decision-locked V3 ActionResultSpec from the manifest fingerprint record."""
+
+    record = _manifest()["result_v3_slot_contract"]["canonical_fingerprints"]["result"]["record"]
+    return ActionResultSpec(
+        tool_name=record["tool_name"],
+        tool_kind=record["tool_kind"],
+        owner_binding=ActionResultActionOwner(action_type=record["owner_binding"]["action_type"]),
+        result_schema_version=record["result_schema_version"],
+        serializer_owner=record["serializer_owner"],
+        serializer_revision=record["serializer_revision"],
+        serializer_contract=deepcopy(record["serializer_contract"]),
+        validator_owner=record["validator_owner"],
+        variant_schemas=deepcopy(record["variant_schemas"]),
+        field_provenance=deepcopy(record["field_provenance"]),
+        field_value_roles=deepcopy(record["field_value_roles"]),
+        max_serialized_bytes=record["max_serialized_bytes"],
+        max_items=record["max_items"],
+        max_depth=record["max_depth"],
+        artifact_ref_schemes=tuple(record["artifact_ref_schemes"]),
+        interpretation_contract_version=record["interpretation_contract"]["schema_version"],
+        externally_controlled_identifier_paths=tuple(record["externally_controlled_identifier_paths"]),
+    )
+
+
+def _expect_spec_rejection(spec: ActionResultSpec, record: Any) -> None:
+    with pytest.raises(ActionResultSchemaError):
+        spec.serialize(json.loads(canonical_json(record)))
+
+
 def test_constants_match_manifest_exactly() -> None:
     rows = _manifest_rows()
     for literal, (version, owner, _ordered, _schema, _digest_constant) in {**ADOPTED, **REFERENCED}.items():
@@ -546,6 +591,12 @@ def test_schema_objects_and_digests_match_manifest() -> None:
     assert FILTER_PROJECTION_RESULT_SERIALIZER_V3_CONTRACT_DIGEST == serializer_row["contract_digest"]
     assert FILTER_PROJECTION_RESULT_SERIALIZER_V3_OWNER_NAME == "projection_search_service.filter_projection_result_serializer_v3"
     assert FILTER_PROJECTION_RESULT_SERIALIZER_V3_REVISION == "filter_projection_result_serializer_v3"
+    # the embedded value-role map is byte-identical to the decision-locked
+    # ActionResultSpec fingerprint map (action_result_positive_value_roles_v3)
+    fingerprint_roles = _manifest()["result_v3_slot_contract"]["canonical_fingerprints"]["result"]["record"][
+        "field_value_roles"
+    ]
+    assert json.loads(json.dumps(FILTER_PROJECTION_RESULT_V3_FIELD_VALUE_ROLES)) == fingerprint_roles
 
 
 def test_manifest_module_field_order_consistency() -> None:
@@ -1087,13 +1138,25 @@ def test_result_v3_lane_coverage_derivation_table() -> None:
             parse_filter_projection_result_v3,
             {**success, "requested_lane_coverage": hostile_coverage},
         )
-    # every consistent row of the derivation table passes
-    for good_coverage in (
-        {"status": "complete", "requested_lane_count": 2, "completed_lane_count": 2, "missing_lane_count": 0},
-        {"status": "partial", "requested_lane_count": 2, "completed_lane_count": 1, "missing_lane_count": 1},
-        {"status": "unavailable", "requested_lane_count": 2, "completed_lane_count": 0, "missing_lane_count": 2},
+    # every consistent row of the derivation table passes, with the bound
+    # per-lane summary evidence to match
+    complete_summary = {"lane_id": "lane-0", "employment_status": "current", "role_bucket_id": "engineering", "coverage_status": "complete", "result_count": 1}
+    missing_summary = {"lane_id": "lane-1", "employment_status": "current", "role_bucket_id": "engineering", "coverage_status": "missing", "result_count": 0}
+    for good_coverage, good_summaries in (
+        (
+            {"status": "complete", "requested_lane_count": 2, "completed_lane_count": 2, "missing_lane_count": 0},
+            [{**complete_summary, "lane_id": "lane-0"}, {**complete_summary, "lane_id": "lane-1"}],
+        ),
+        (
+            {"status": "partial", "requested_lane_count": 2, "completed_lane_count": 1, "missing_lane_count": 1},
+            [complete_summary, missing_summary],
+        ),
+        (
+            {"status": "unavailable", "requested_lane_count": 2, "completed_lane_count": 0, "missing_lane_count": 2},
+            [{**missing_summary, "lane_id": "lane-0"}, {**missing_summary, "lane_id": "lane-1"}],
+        ),
     ):
-        good = {**success, "requested_lane_coverage": good_coverage}
+        good = {**success, "requested_lane_coverage": good_coverage, "lane_summaries": good_summaries}
         assert parse_filter_projection_result_v3(canonical_json(good)) == good
 
 
@@ -1108,6 +1171,229 @@ def test_result_v3_page_candidate_refs_are_unique() -> None:
     assert duplicated["candidates"][0]["candidate_ref"] == duplicated["candidates"][1]["candidate_ref"]
     assert duplicated["returned_count"] == len(duplicated["candidates"]) == 2
     _expect_invalid(parse_filter_projection_result_v3, duplicated)
+    assert parse_filter_projection_result_v3(canonical_json(success)) == success
+
+
+def test_public_namespace_projection_flows_through_real_v3_spec() -> None:
+    """F1r4: the trusted-output projection is exact built-in JSON and flows through the real V3 spec."""
+
+    spec = _v3_result_spec()
+    success = _success_root()
+    public = success["runtime_namespace_ref"]
+
+    def _assert_builtin_types(value: Any) -> None:
+        assert type(value) in (dict, list, str, int, bool, type(None)), type(value)
+        if isinstance(value, dict):
+            for key, child in value.items():
+                assert type(key) is str
+                _assert_builtin_types(child)
+        elif isinstance(value, list):
+            for child in value:
+                _assert_builtin_types(child)
+
+    _assert_builtin_types(public)
+    # the helper output flows from the FF-SCHEMA parser through the real V3
+    # ActionResultSpec with no conversion layer
+    assert parse_filter_projection_result_v3(canonical_json(success)) == success
+    serialized = spec.serialize(json.loads(canonical_json(success)))
+    assert json.loads(serialized) == json.loads(canonical_json(success))
+    # the old dict-subclass shape is exactly what the canonical validator rejects
+    subclassed = {**success, "runtime_namespace_ref": _DictSubclass(public)}
+    with pytest.raises(ActionResultSchemaError, match="action_result_not_strict_json"):
+        spec.serialize(subclassed)
+
+
+class _DictSubclass(dict):
+    pass
+
+
+def test_value_role_policy_differential_vs_action_result_spec() -> None:
+    """F2r4: parser and serializer agree on every decision-locked value role."""
+
+    spec = _v3_result_spec()
+    success = _success_root()
+    # positive: parser and serializer accept the same canonical root
+    assert parse_filter_projection_result_v3(canonical_json(success)) == success
+    spec.serialize(json.loads(canonical_json(success)))
+    candidate = success["candidates"][0]
+    lane_summary = success["lane_summaries"][0]
+    # identifier role: path-like values are rejected by both layers
+    for hostile in (
+        {**success, "lane_summaries": [{**lane_summary, "lane_id": "/tmp/private.json"}, success["lane_summaries"][1]]},
+        {**success, "runtime_namespace_ref": {**success["runtime_namespace_ref"], "namespace_ref_id": "/Users/me/private"}},
+        {**success, "projection_ref": {**success["projection_ref"], "projection_id": "https://example.com/x"}},
+        {**success, "lane_summaries": [{**lane_summary, "lane_id": "has space"}, success["lane_summaries"][1]]},
+    ):
+        _expect_invalid(parse_filter_projection_result_v3, hostile)
+        _expect_spec_rejection(spec, hostile)
+    # display_text role: whitespace-only display data is rejected by both layers
+    for hostile in (
+        {**success, "candidates": [{**candidate, "display_name": "   "}, success["candidates"][1]]},
+        {**success, "candidates": [{**candidate, "headline": "\t\n "}, success["candidates"][1]]},
+    ):
+        _expect_invalid(parse_filter_projection_result_v3, hostile)
+        _expect_spec_rejection(spec, hostile)
+    # web_url role: a bare scheme is not a URL in either layer
+    hostile = {**success, "candidates": [{**candidate, "public_profile_url": "https://"}, success["candidates"][1]]}
+    _expect_invalid(parse_filter_projection_result_v3, hostile)
+    _expect_spec_rejection(spec, hostile)
+    # control role: closed const/enum values reject in both layers
+    hostile = {**success, "lane_summaries": [{**lane_summary, "role_bucket_id": "sales"}, success["lane_summaries"][1]]}
+    _expect_invalid(parse_filter_projection_result_v3, hostile)
+    _expect_spec_rejection(spec, hostile)
+
+
+def _sized_success_root(target: int) -> dict[str, Any]:
+    """Build a success root whose canonical UTF-8 size is exactly ``target`` bytes."""
+
+    root = _success_root()
+
+    def _with_counts(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            **root,
+            "candidates": candidates,
+            "returned_count": len(candidates),
+            "total_count": len(candidates),
+        }
+
+    def _pad_list(candidates: list[dict[str, Any]], delta: int) -> None:
+        for candidate in reversed(candidates):
+            for field, maximum in (("display_name", 500), ("headline", 1000)):
+                if delta == 0:
+                    return
+                take = min(delta, maximum - len(candidate[field]))
+                candidate[field] = candidate[field] + "x" * take
+                delta -= take
+        raise AssertionError(f"not enough display room to tune {target} bytes")
+
+    candidates: list[dict[str, Any]] = []
+    index = 100
+    while True:
+        candidate = {
+            "candidate_ref": _digest(f"candidate-{index}"),
+            "display_name": "A" * 250,
+            "headline": "h" * 500,
+            "employment_statuses": ["current"],
+            "role_bucket_ids": ["engineering"],
+        }
+        base = len(canonical_json(_with_counts([*candidates, candidate])).encode("utf-8"))
+        delta = target - base
+        if delta < 0:
+            # the fresh candidate overshot: distribute the remaining padding
+            # across the already-accumulated candidates
+            assert candidates, "root alone unexpectedly exceeds the target size"
+            previous_delta = target - len(canonical_json(_with_counts(candidates)).encode("utf-8"))
+            assert previous_delta > 0
+            _pad_list(candidates, previous_delta)
+            tuned = _with_counts(candidates)
+            assert len(canonical_json(tuned).encode("utf-8")) == target
+            return tuned
+        if delta == 0:
+            return _with_counts([*candidates, candidate])
+        if delta <= 1498:
+            _pad_list([*candidates, candidate], delta)
+            tuned = _with_counts([*candidates, candidate])
+            assert len(canonical_json(tuned).encode("utf-8")) == target
+            return tuned
+        candidates.append(candidate)
+        index += 1
+        assert index < 250, "size tuning must stay inside the model-safe item bounds"
+
+
+def test_result_v3_serialized_bytes_limit() -> None:
+    """F3r4: the canonical 64-KiB model-safety limit binds parser and serializer identically."""
+
+    manifest = _manifest()
+    record = manifest["result_v3_slot_contract"]["canonical_fingerprints"]["result"]["record"]
+    assert FILTER_PROJECTION_RESULT_V3_MAX_SERIALIZED_BYTES == record["max_serialized_bytes"] == 65536
+    exact = _sized_success_root(65536)
+    assert len(canonical_json(exact).encode("utf-8")) == 65536
+    assert parse_filter_projection_result_v3(canonical_json(exact)) == exact
+    over = _sized_success_root(65537)
+    assert len(canonical_json(over).encode("utf-8")) == 65537
+    _expect_invalid(parse_filter_projection_result_v3, over)
+    # maximum-page regression: a fully shape-valid 250-candidate page exceeds the limit
+    big = _success_root()
+    big["candidates"] = [_candidate_item(index) for index in range(250)]
+    for candidate in big["candidates"]:
+        candidate["headline"] = "h" * 1000
+    big["returned_count"] = 250
+    big["total_count"] = 250
+    assert len(canonical_json(big).encode("utf-8")) > 65536
+    _expect_invalid(parse_filter_projection_result_v3, big)
+    # the authoritative serializer agrees on the boundary
+    spec = _v3_result_spec()
+    spec.serialize(json.loads(canonical_json(exact)))
+    with pytest.raises(ActionResultSchemaError, match="action_result_serialized_bytes_exceeded"):
+        spec.serialize(json.loads(canonical_json(over)))
+
+
+def test_zero_member_deferred_tuple_is_exact() -> None:
+    """F4r4: projection_candidate_set_empty is exactly not_ready/retryable=false/reselection_required=true."""
+
+    deferred = _deferred_root()
+    assert deferred["reason"] == "projection_candidate_set_empty"
+    assert deferred["status"] == "not_ready"
+    assert deferred["retryable"] is False
+    assert deferred["reselection_required"] is True
+    assert parse_filter_projection_result_v3(canonical_json(deferred)) == deferred
+    # impossible retry/reselection policies for an empty candidate set fail closed
+    _expect_invalid(parse_filter_projection_result_v3, {**deferred, "retryable": True})
+    _expect_invalid(parse_filter_projection_result_v3, {**deferred, "reselection_required": False})
+    # an empty candidate set is never a stale outcome
+    stale_target = {
+        **deferred["requested_target_ref"],
+        "requested_terminal_id": "terminal-0",
+        "requested_terminal_digest": _digest("requested-terminal"),
+        "route_revision_token": "route-token-0",
+    }
+    _expect_invalid(
+        parse_filter_projection_result_v3,
+        {**deferred, "status": "stale", "requested_target_ref": stale_target},
+    )
+    # other deferred reasons keep their owner-decided policy fields
+    other = {
+        **deferred,
+        "reason": "projection_members_not_ready",
+        "retryable": True,
+        "reselection_required": False,
+    }
+    assert parse_filter_projection_result_v3(canonical_json(other)) == other
+
+
+def test_coverage_counts_bound_to_lane_summary_evidence() -> None:
+    """F5r4: coverage counts derive from unique per-lane summaries, one per requested lane."""
+
+    success = _success_root()
+    summaries = success["lane_summaries"]
+    # zero summaries cannot evidence two completed lanes
+    _expect_invalid(parse_filter_projection_result_v3, {**success, "lane_summaries": []})
+    # duplicate lane identities are not per-lane evidence
+    duplicated = [summaries[0], summaries[0]]
+    _expect_invalid(parse_filter_projection_result_v3, {**success, "lane_summaries": duplicated})
+    # fewer or more summaries than requested lanes contradict the coverage counts
+    _expect_invalid(parse_filter_projection_result_v3, {**success, "lane_summaries": summaries[:1]})
+    extra = {**summaries[0], "lane_id": "lane-2"}
+    _expect_invalid(parse_filter_projection_result_v3, {**success, "lane_summaries": [*summaries, extra]})
+    # counts must derive from summary states: one missing summary is one missing lane
+    missing_summary = {**summaries[1], "coverage_status": "missing", "result_count": 0}
+    _expect_invalid(
+        parse_filter_projection_result_v3,
+        {**success, "lane_summaries": [summaries[0], missing_summary]},
+    )
+    # the consistent partial row passes with matching evidence
+    partial = {
+        **success,
+        "requested_lane_coverage": {
+            "status": "partial",
+            "requested_lane_count": 2,
+            "completed_lane_count": 1,
+            "missing_lane_count": 1,
+        },
+        "lane_summaries": [summaries[0], missing_summary],
+    }
+    assert parse_filter_projection_result_v3(canonical_json(partial)) == partial
+    assert success["requested_lane_coverage"]["requested_lane_count"] == len(success["lane_summaries"]) == 2
     assert parse_filter_projection_result_v3(canonical_json(success)) == success
 
 

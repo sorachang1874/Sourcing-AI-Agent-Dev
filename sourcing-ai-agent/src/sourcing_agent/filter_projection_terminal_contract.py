@@ -67,10 +67,20 @@ unique ``candidate_ref`` values within the returned page (the page is a
 window of the unique member set M), freshness/readiness parity with the root
 candidate-set digest and shared terminal core, the status-dependent
 requested-target shape (stale-only terminal fields present exactly when
-``status == "stale"``), and the exact lane-coverage derivation table:
-``requested == completed + missing`` with ``complete <=> missing == 0``,
-``partial <=> completed > 0 and missing > 0``, and
-``unavailable <=> completed == 0 and missing == requested``.
+``status == "stale"``), the exact zero-member deferred tuple
+(``projection_candidate_set_empty`` is exactly ``not_ready``,
+``retryable=false``, ``reselection_required=true``), the exact lane-coverage
+derivation table (``requested == completed + missing``; ``complete <=>
+missing == 0``; ``partial <=> completed > 0 and missing > 0``;
+``unavailable <=> completed == 0 and missing == requested``) with coverage
+counts bound to unique per-lane summary evidence (one summary per requested
+lane, counts derived from summary states), the decision-locked
+``action_result_positive_value_roles_v3`` policy per pinned value role
+(``identifier`` values are transport-neutral and separator-free,
+``display_text`` carries non-whitespace content, ``web_url`` is an HTTPS
+URL), and the canonical 64-KiB model-safety limit over exact canonical
+UTF-8 bytes, so the schema preflight and the authoritative serializer accept
+exactly the same values.
 
 Decode boundary: public parsers accept raw JSON text/bytes (strictly decoded
 by the shared decoder in ``agent_runtime_namespace_ref`` with duplicate-key
@@ -155,6 +165,71 @@ FILTER_PROJECTION_RESULT_V3_MASKED_ROOT_CONSTANTS = {
     "reason": "projection_not_found",
     "retryable": False,
 }
+FILTER_PROJECTION_RESULT_V3_FIELD_VALUE_ROLES = {'deferred': {'/decision_ref': 'identifier',
+              '/reason': 'control',
+              '/requested_target_ref/membership_revision': 'identifier',
+              '/requested_target_ref/projection_id': 'identifier',
+              '/requested_target_ref/requested_terminal_digest': 'identifier',
+              '/requested_target_ref/requested_terminal_id': 'identifier',
+              '/requested_target_ref/route_revision_token': 'identifier',
+              '/status': 'control',
+              '/variant': 'control'},
+ 'error': {'/decision_ref': 'identifier', '/reason': 'control', '/status': 'control', '/variant': 'control'},
+ 'success': {'/candidate_set_digest': 'identifier',
+             '/candidates/*/candidate_ref': 'identifier',
+             '/candidates/*/display_name': 'display_text',
+             '/candidates/*/employment_statuses/*': 'control',
+             '/candidates/*/headline': 'display_text',
+             '/candidates/*/public_profile_url': 'web_url',
+             '/candidates/*/role_bucket_ids/*': 'control',
+             '/cohort_selection/employment_statuses/*': 'identifier',
+             '/cohort_selection/role_bucket_ids/*': 'identifier',
+             '/cohort_selection/role_match': 'identifier',
+             '/cohort_selection/schema_version': 'identifier',
+             '/cohort_selection/source': 'identifier',
+             '/cohort_selection_digest': 'identifier',
+             '/cohort_selection_registry_digest': 'identifier',
+             '/cohort_selection_registry_version': 'control',
+             '/execution_commit_digest': 'identifier',
+             '/freshness/candidate_set_digest': 'identifier',
+             '/freshness/freshness_ref_digest': 'identifier',
+             '/freshness/membership_revision': 'identifier',
+             '/freshness/owner': 'control',
+             '/freshness/product_terminal_id': 'identifier',
+             '/freshness/route_key': 'identifier',
+             '/freshness/route_kind': 'control',
+             '/freshness/route_revision_token': 'identifier',
+             '/freshness/schema_version': 'control',
+             '/freshness/status': 'control',
+             '/freshness/terminal_core_digest': 'identifier',
+             '/lane_summaries/*/coverage_status': 'control',
+             '/lane_summaries/*/employment_status': 'control',
+             '/lane_summaries/*/lane_id': 'identifier',
+             '/lane_summaries/*/role_bucket_id': 'control',
+             '/projection_ref/membership_revision': 'identifier',
+             '/projection_ref/projection_id': 'identifier',
+             '/projection_ref/schema_version': 'control',
+             '/projection_ref/terminal_digest': 'identifier',
+             '/provider_mode': 'control',
+             '/readiness/candidate_set_digest': 'identifier',
+             '/readiness/membership_revision': 'identifier',
+             '/readiness/owner': 'control',
+             '/readiness/prerequisite_set_digest': 'identifier',
+             '/readiness/product_terminal_id': 'identifier',
+             '/readiness/projection_state': 'control',
+             '/readiness/readiness_ref_digest': 'identifier',
+             '/readiness/reason': 'control',
+             '/readiness/schema_version': 'control',
+             '/readiness/status': 'control',
+             '/readiness/terminal_core_digest': 'identifier',
+             '/requested_lane_coverage/status': 'control',
+             '/runtime_namespace_ref/namespace_ref_id': 'identifier',
+             '/runtime_namespace_ref/ref_digest': 'identifier',
+             '/runtime_namespace_ref/schema_version': 'control',
+             '/status': 'control',
+             '/variant': 'control'}}
+
+
 FILTER_PROJECTION_DEFERRED_REASON_PRECEDENCE = (
     "projection_candidate_set_empty",
     "projection_publication_pending",
@@ -180,6 +255,12 @@ FILTER_PROJECTION_RESULT_SERIALIZER_V3_REVISION = "filter_projection_result_seri
 FILTER_PROJECTION_RESULT_SERIALIZER_V3_CONTRACT_DIGEST = "c0ab7e6620d05f8bf68d1c8601052e8f66b88d83d3f4263ff3b8b7b7f791c64c"
 
 _SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+_HTTPS_URL_RE = re.compile(r"^https://[^\s]+$")
+# decision-locked action_result_positive_value_roles_v3 patterns
+_URI_SCHEME_VALUE_RE = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:[^\s]")
+_DISPLAY_TEXT_RE = re.compile(r"(?s:.*\S.*)")
+
+FILTER_PROJECTION_RESULT_V3_MAX_SERIALIZED_BYTES = 65536
 
 # Ref resolution is lazy: populated with literal -> parse function after the
 # parse functions below are defined.  An unresolvable ref fails closed.
@@ -236,10 +317,29 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
             _fail(label, "enum violation")
         if descriptor.get("format") == "sha256_hex" and not _SHA256_HEX_RE.fullmatch(value):
             _fail(label, "sha256_hex format violation")
-        if descriptor.get("format") == "https_url" and not (
-            value.startswith("https://") and not any(character.isspace() for character in value)
-        ):
+        if descriptor.get("format") == "https_url" and not _HTTPS_URL_RE.fullmatch(value):
             _fail(label, "https_url format violation")
+        # decision-locked action_result_positive_value_roles_v3 policy: the
+        # schema preflight never approves values the authoritative serializer
+        # rejects for the pinned role.
+        value_role = descriptor.get("value_role")
+        if value_role == "identifier":
+            if (
+                not value
+                or value != value.strip()
+                or any(character.isspace() for character in value)
+                or "/" in value
+                or "\\" in value
+                or _URI_SCHEME_VALUE_RE.search(value) is not None
+                or any(ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F for character in value)
+            ):
+                _fail(label, "identifier value-role violation")
+        elif value_role == "display_text":
+            if not _DISPLAY_TEXT_RE.search(value):
+                _fail(label, "display_text must contain non-whitespace content")
+        elif value_role == "web_url":
+            if not _HTTPS_URL_RE.fullmatch(value):
+                _fail(label, "web_url value-role violation")
     elif declared == "integer":
         if type(value) is not int:  # rejects bool and float aliases
             _fail(label, "expected integer")
@@ -1804,7 +1904,58 @@ def parse_filter_projection_result_v3(value: Any, *, variant: str | None = None)
         _enforce_success_equations(ordered)
     elif variant == "deferred":
         _enforce_deferred_target_shape(ordered)
+    _enforce_value_roles(ordered, variant)
+    # The canonical 64-KiB model-safety limit binds every variant: parser and
+    # authoritative serializer accept exactly the same bytes.
+    serialized = canonical_json(ordered).encode("utf-8")
+    if len(serialized) > FILTER_PROJECTION_RESULT_V3_MAX_SERIALIZED_BYTES:
+        _fail("serialized_bytes", f"canonical result exceeds {FILTER_PROJECTION_RESULT_V3_MAX_SERIALIZED_BYTES} UTF-8 bytes")
     return _canonical_json_object(ordered)
+
+
+def _enforce_value_roles(record: dict[str, Any], variant: str) -> None:
+    """Enforce the decision-locked ``action_result_positive_value_roles_v3`` map by JSON path.
+
+    The map pins every model-visible string path's role: ``identifier``
+    values are transport-neutral and separator-free, ``display_text``
+    carries non-whitespace content, and ``web_url`` values are HTTPS URLs —
+    so the schema preflight never approves values the authoritative
+    serializer rejects for the pinned role.
+    """
+
+    roles = FILTER_PROJECTION_RESULT_V3_FIELD_VALUE_ROLES[variant]
+
+    def _walk(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                _walk(child, f"{path}/{key}")
+            return
+        if isinstance(value, list):
+            for child in value:
+                _walk(child, f"{path}/*")
+            return
+        if type(value) is not str:
+            return
+        role = roles.get(path)
+        if role == "identifier":
+            if (
+                not value
+                or value != value.strip()
+                or any(character.isspace() for character in value)
+                or "/" in value
+                or "\\" in value
+                or _URI_SCHEME_VALUE_RE.search(value) is not None
+                or any(ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F for character in value)
+            ):
+                _fail(path, "identifier value-role violation")
+        elif role == "display_text":
+            if not _DISPLAY_TEXT_RE.search(value):
+                _fail(path, "display_text must contain non-whitespace content")
+        elif role == "web_url":
+            if not _HTTPS_URL_RE.fullmatch(value):
+                _fail(path, "web_url value-role violation")
+
+    _walk(record, "")
 
 
 def _enforce_success_equations(record: dict[str, Any]) -> None:
@@ -1854,6 +2005,20 @@ def _enforce_success_equations(record: dict[str, Any]) -> None:
         consistent = coverage["completed_lane_count"] == 0 and coverage["missing_lane_count"] == coverage["requested_lane_count"]
     if not consistent:
         _fail("requested_lane_coverage", f"status/count contradiction for status={status}")
+    # Coverage counts are bound to unique per-lane summary evidence: one
+    # summary per requested lane with unique lane_id, and the counts derive
+    # from the summary states (missing summaries are the missing lanes).
+    summaries = record["lane_summaries"]
+    summary_lane_ids = [summary["lane_id"] for summary in summaries]
+    if len(set(summary_lane_ids)) != len(summary_lane_ids):
+        _fail("lane_summaries", "lane_id values must be unique (per-lane exact summaries)")
+    if len(summaries) != coverage["requested_lane_count"]:
+        _fail("lane_summaries", "exactly one summary per requested lane")
+    missing_from_summaries = sum(1 for summary in summaries if summary["coverage_status"] == "missing")
+    if coverage["missing_lane_count"] != missing_from_summaries:
+        _fail("requested_lane_coverage", "missing_lane_count must derive from summary states")
+    if coverage["completed_lane_count"] != len(summaries) - missing_from_summaries:
+        _fail("requested_lane_coverage", "completed_lane_count must derive from summary states")
     # Freshness/readiness parity with the root and with each other.
     freshness = parse_filter_projection_freshness_ref(record["freshness"])
     readiness = parse_filter_projection_readiness_ref(record["readiness"])
@@ -1883,6 +2048,15 @@ def _enforce_deferred_target_shape(record: dict[str, Any]) -> None:
         present = set(target) & stale_only_fields
         if present:
             _fail("requested_target_ref", f"stale-only fields {sorted(present)} are absent for not_ready")
+    # The decision-locked zero-member outcome is exact: an empty candidate
+    # set is deferred not_ready, never retryable, always reselection-required.
+    if record["reason"] == "projection_candidate_set_empty":
+        if record["status"] != "not_ready":
+            _fail("status", "projection_candidate_set_empty is exactly not_ready")
+        if record["retryable"] is not False:
+            _fail("retryable", "projection_candidate_set_empty is exactly retryable=false")
+        if record["reselection_required"] is not True:
+            _fail("reselection_required", "projection_candidate_set_empty is exactly reselection_required=true")
 
 
 def validate_filter_projection_result_v3(value: Any, *, variant: str | None = None) -> None:
@@ -1974,7 +2148,9 @@ __all__ = [
     "FILTER_PROJECTION_RESULT_SERIALIZER_V3_REVISION",
     "FILTER_PROJECTION_RESULT_V3_CONTRACT_DIGEST",
     "FILTER_PROJECTION_RESULT_V3_DEFERRED_ROOT_FIELDS",
+    "FILTER_PROJECTION_RESULT_V3_FIELD_VALUE_ROLES",
     "FILTER_PROJECTION_RESULT_V3_MASKED_ROOT_CONSTANTS",
+    "FILTER_PROJECTION_RESULT_V3_MAX_SERIALIZED_BYTES",
     "FILTER_PROJECTION_RESULT_V3_MASKED_ROOT_FIELDS",
     "FILTER_PROJECTION_RESULT_V3_ORDERED_FIELDS",
     "FILTER_PROJECTION_RESULT_V3_OWNER",

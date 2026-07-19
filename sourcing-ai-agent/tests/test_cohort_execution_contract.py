@@ -942,3 +942,33 @@ def test_base_commit_is_ancestor_of_head() -> None:
         check=False,
     )
     assert merge_base.returncode == 0, "pinned packet base must be an ancestor of HEAD"
+
+
+def test_envelope_planned_lane_ids_are_unique() -> None:
+    """F6r4: the physical contract is unique (execution_attempt_id, lane_id); duplicates fail closed."""
+
+    envelope = _envelope()
+    lane_refs = envelope["ordered_planned_lane_refs"]
+    hostile = {
+        **envelope,
+        "ordered_planned_lane_refs": [
+            dict(lane_refs[0]),
+            {**lane_refs[1], "lane_id": lane_refs[0]["lane_id"]},
+        ],
+    }
+    hostile["envelope_digest"] = compute_cohort_execution_envelope_digest(hostile)
+    _expect_invalid(parse_cohort_execution_envelope, hostile)
+    # result and commit parsing inherit the same fence through the authoritative envelope pin
+    with pytest.raises(CohortExecutionContractError):
+        parse_cohort_execution_result(
+            canonical_json(_execution_result()),
+            candidate_set=canonical_json(_candidate_set()),
+            envelope=canonical_json(hostile),
+        )
+    with pytest.raises(CohortExecutionContractError):
+        parse_cohort_execution_commit(
+            canonical_json(_commit()),
+            candidate_set=canonical_json(_candidate_set()),
+            envelope=canonical_json(hostile),
+        )
+    assert parse_cohort_execution_envelope(canonical_json(envelope)) == envelope

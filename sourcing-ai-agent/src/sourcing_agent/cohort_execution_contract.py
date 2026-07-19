@@ -102,6 +102,7 @@ RETAINED_LOOKUP_FORBIDDEN = (
 )
 
 _SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+_HTTPS_URL_RE = re.compile(r"^https://[^\s]+$")
 
 # Ref resolution is lazy: populated with literal -> parse function after the
 # parse functions below are defined.  An unresolvable ref fails closed.
@@ -158,9 +159,7 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
             _fail(label, "enum violation")
         if descriptor.get("format") == "sha256_hex" and not _SHA256_HEX_RE.fullmatch(value):
             _fail(label, "sha256_hex format violation")
-        if descriptor.get("format") == "https_url" and not (
-            value.startswith("https://") and not any(character.isspace() for character in value)
-        ):
+        if descriptor.get("format") == "https_url" and not _HTTPS_URL_RE.fullmatch(value):
             _fail(label, "https_url format violation")
     elif declared == "integer":
         if type(value) is not int:  # rejects bool and float aliases
@@ -875,6 +874,12 @@ def parse_cohort_execution_envelope(value: Any) -> CanonicalJsonObject:
     ordinals = [lane["ordinal"] for lane in ordered["ordered_planned_lane_refs"]]
     if ordinals != list(range(len(ordinals))):
         _fail("ordered_planned_lane_refs", "ordinals must be the exact zero-based planning-v2 order")
+    planned_lane_ids = [lane["lane_id"] for lane in ordered["ordered_planned_lane_refs"]]
+    if len(set(planned_lane_ids)) != len(planned_lane_ids):
+        _fail(
+            "ordered_planned_lane_refs",
+            "lane_id values must be unique (the physical contract is unique (execution_attempt_id, lane_id))",
+        )
     if ordered["envelope_digest"] != compute_cohort_execution_envelope_digest(ordered):
         _fail("envelope_digest", "does not recompute over all preceding fields")
     return _canonical_json_object(ordered)

@@ -203,8 +203,12 @@ def test_mint_rejects_invalid_inputs_fail_closed() -> None:
 def test_public_record_is_exact_public_subset() -> None:
     record = _valid_ref_record()
     public = agent_runtime_namespace_ref_public_record(record)
-    assert list(public) == ["schema_version", "namespace_ref_id", "ref_digest"]
+    assert public == {"schema_version": "agent_runtime_namespace_ref.v1", "namespace_ref_id": "ns-1", "ref_digest": record["ref_digest"]}
     assert set(AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS) == set(public)
+    # trusted output: exact built-in JSON types, never a dict subclass, so the
+    # decision-locked downstream validators accept it without conversion.
+    assert type(public) is dict
+    assert all(type(value) is str for value in public.values())
     # workspace, path, lifecycle, provider_mode, policy_revision, generation never cross the boundary.
     for private in ("workspace_id", "provider_mode", "policy_revision", "generation", "owner"):
         assert private not in public
