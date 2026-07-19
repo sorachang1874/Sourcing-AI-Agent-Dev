@@ -30,132 +30,234 @@ LEGACY_TARGET_PUBLIC_WEB_TABLES = (
     "target_candidate_public_web_promotions",
 )
 
-PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES = frozenset(
+# Canonical per-table portability registry for the generic control-plane
+# snapshot export/import path.  Every table in the PG live inventory
+# (``control_plane_live_postgres.CONTROL_PLANE_LIVE_TABLES``) plus the
+# file-backed ``generation_index_entries`` snapshot pseudo-table has exactly
+# one entry here; the default inventory (``DEFAULT_CONTROL_PLANE_TABLES``),
+# the export gap / import-boundary exclusion set
+# (``GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES``), and the two category views
+# below are all derived from this single mapping, so no second hand-maintained
+# set can drift from the classification.
+
+CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE = "portable_projection_domain"
+CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE = "pg_only_durable_runtime_causal_aggregate"
+CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION = "nonportable_runtime_coordination"
+CONTROL_PLANE_TABLE_PORTABILITY_CATEGORIES = frozenset(
     {
-        # The durable runtime is one PG-only causal aggregate: commands, their
-        # event/current-state/outbox children, the Action/Operation rows that
-        # plan them, the agent result slots/attempts/journal that accept them,
-        # and the Activity/EntityDelta evidence they produce.  Generic
-        # snapshots and migration-only SQLite mirrors cannot safely replace,
-        # truncate, or upsert any slice of that aggregate: restoring a subset
-        # would pair new command children with unrelated retained target
-        # commands, so the complete aggregate is excluded from generic
-        # export/import and every generic restore boundary rejects it.
-        "workflow_commands",
-        "workflow_events",
-        "workflow_current_state",
-        "runtime_outbox",
-        "agent_actions",
-        "operation_runs",
-        "agent_tool_result_slots",
-        "agent_tool_result_attempts",
-        "agent_tool_result_journal",
-        "workflow_activity_runs",
-        "workflow_activity_attempts",
-        "workflow_entity_deltas",
-        "operation_events",
+        CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE,
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
     }
+)
+
+_PORTABLE_PROJECTION_DOMAIN_REASON = (
+    "Projection/domain control-plane state that a generic snapshot export/import may safely replace, "
+    "truncate, or upsert without pairing against durable-runtime causality or live fencing state."
+)
+_DURABLE_RUNTIME_AGGREGATE_REASON = (
+    "Part of the PG-only durable runtime causal aggregate: commands, their event/current-state/outbox "
+    "children, the Action/Operation rows that plan them, the agent result slots/attempts/journal that accept "
+    "them, and the Activity/EntityDelta evidence they produce. Generic snapshots and migration-only SQLite "
+    "mirrors cannot safely replace, truncate, or upsert any slice of that aggregate: restoring a subset "
+    "would pair new command children with unrelated retained target commands, so the complete aggregate is "
+    "excluded from generic export/import and every generic restore boundary rejects it."
+)
+_ACQUISITION_RUNTIME_ROWS_REASON = (
+    "Acquisition runtime rows are owned by the Action/Operation/command/event causal aggregate; importing "
+    "them without that aggregate preserves a partial runtime slice of orphaned run/lane rows whose planning "
+    "owners are absent. They are excluded with the complete aggregate at export and every restore boundary."
+)
+_NONPORTABLE_COORDINATION_REASON = (
+    "Live execution/recovery/lease/cost-control coordination state. Generic export/import can neither "
+    "observe nor mutate it: exporting would snapshot live fencing state, and a generic restore "
+    "(truncate/upsert) could resurrect work, block current owners, or clear active limiter leases and admit "
+    "provider calls beyond the configured concurrency budget."
+)
+_AGENT_WORKER_RUNS_REASON = (
+    "Active worker run state: status, interrupt flags, attempt counts, lease owner, and lease expiry fence "
+    "currently running workers. Generic truncate/upsert can erase active workers, resurrect stale lease "
+    "rows, or double-run a worker lane, so the table is excluded at export and every restore boundary."
+)
+_PROFILE_REGISTRY_LEASES_REASON = (
+    "Profile-URL scheduler leases fence current owners. Generic export would snapshot live fencing state "
+    "and a generic restore could resurrect stale leases, block current owners, or permit duplicate provider "
+    "dispatch, so the table is excluded at export and every restore boundary."
+)
+_GENERATION_INDEX_ENTRIES_REASON = (
+    "File-backed generation index carried through the snapshot as a pseudo-table; portable because it has "
+    "no durable-runtime causality or live fencing coupling."
+)
+
+CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY: dict[str, tuple[str, str]] = {
+    "candidates": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "evidence": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "jobs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_results": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_events": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_progress_event_summaries": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_result_views": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_result_lifecycle": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_board_visible_patches": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "job_materialization_items": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "plan_review_sessions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "manual_review_items": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "candidate_review_registry": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "target_candidates": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "asset_default_pointers": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "asset_default_pointer_history": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_public_web_batches": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_public_web_runs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "person_public_web_assets": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "person_public_web_signals": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "person_assets": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "person_evidence": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "person_assertions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "raw_profile_index": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "candidate_evidence_index": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "projection_person_search_index": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_records": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_engagements": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_events": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_tasks": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "crm_public_web_promotions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "company_public_web_asset_runs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "company_public_web_assets": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "company_assets": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "company_evidence": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "company_assertions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "frontend_history_links": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "agent_runtime_sessions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "agent_trace_spans": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "agent_worker_runs": (CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION, _AGENT_WORKER_RUNS_REASON),
+    "acquisition_plan_previews": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "acquisition_runs": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _ACQUISITION_RUNTIME_ROWS_REASON),
+    "acquisition_discovery_lanes": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _ACQUISITION_RUNTIME_ROWS_REASON,
+    ),
+    "query_dispatches": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "confidence_policy_runs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "confidence_policy_controls": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "criteria_feedback": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "criteria_patterns": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "criteria_versions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "criteria_compiler_runs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "criteria_result_diffs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "criteria_pattern_suggestions": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "organization_asset_registry": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "organization_execution_profiles": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "acquisition_shard_registry": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "cloud_asset_operation_ledger": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "asset_materialization_generations": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "asset_membership_index": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "candidate_materialization_state": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "snapshot_materialization_runs": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "serving_projections": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "serving_projection_members": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "projection_manifest_shards": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "run_projection_links": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "collection_authoritative_pointers": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "generation_index_entries": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _GENERATION_INDEX_ENTRIES_REASON),
+    "linkedin_profile_registry": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "linkedin_profile_registry_aliases": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "linkedin_profile_registry_leases": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _PROFILE_REGISTRY_LEASES_REASON,
+    ),
+    "linkedin_profile_registry_events": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "linkedin_profile_registry_backfill_runs": (
+        CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE,
+        _PORTABLE_PROJECTION_DOMAIN_REASON,
+    ),
+    "model_invocation_envelopes": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "workflow_commands": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
+    "workflow_events": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
+    "workflow_current_state": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "runtime_outbox": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
+    "agent_actions": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
+    "operation_runs": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
+    "agent_tool_result_slots": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "agent_tool_result_attempts": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "agent_tool_result_journal": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "workflow_activity_runs": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "workflow_activity_attempts": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "workflow_entity_deltas": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _DURABLE_RUNTIME_AGGREGATE_REASON,
+    ),
+    "operation_events": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
+    "workflow_job_leases": (CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION, _NONPORTABLE_COORDINATION_REASON),
+    "workflow_recovery_intents": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _NONPORTABLE_COORDINATION_REASON,
+    ),
+    "runtime_provider_limiter_leases": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _NONPORTABLE_COORDINATION_REASON,
+    ),
+}
+
+
+def _validate_control_plane_table_portability_registry() -> None:
+    for table_name, entry in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items():
+        if not table_name or table_name != table_name.strip():
+            raise ValueError(f"portability registry key must be normalized text: {table_name!r}")
+        category, reason = entry
+        if category not in CONTROL_PLANE_TABLE_PORTABILITY_CATEGORIES:
+            raise ValueError(f"portability registry table {table_name!r} has unknown category {category!r}")
+        if not str(reason or "").strip():
+            raise ValueError(f"portability registry table {table_name!r} requires a non-empty reason")
+
+
+_validate_control_plane_table_portability_registry()
+
+PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES = frozenset(
+    table_name
+    for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+    if category == CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE
 )
 
 NONPORTABLE_RUNTIME_COORDINATION_TABLES = frozenset(
-    {
-        # Live execution/recovery/lease/cost-control coordination state.  Job
-        # leases and recovery intents fence current owners and pending
-        # takeovers; provider limiter leases cap cross-process provider
-        # concurrency.  Generic export/import can neither observe nor mutate
-        # them: exporting would snapshot live fencing state, and a generic
-        # restore (truncate/upsert) could resurrect work, block current
-        # owners, or clear active limiter leases and admit provider calls
-        # beyond the configured concurrency budget.  They are excluded at
-        # export and at every generic restore boundary.
-        "workflow_job_leases",
-        "workflow_recovery_intents",
-        "runtime_provider_limiter_leases",
-    }
+    table_name
+    for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+    if category == CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION
 )
 
 GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES = frozenset(
-    PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES | NONPORTABLE_RUNTIME_COORDINATION_TABLES
+    table_name
+    for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+    if category != CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE
 )
 
 DEFAULT_CONTROL_PLANE_TABLES = [
     # Portable projection/domain control-plane inventory used by generic
-    # snapshot export and migration-only runtime sync.  The complete PG-only
+    # snapshot export and migration-only runtime sync.  Derived exclusively
+    # from CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY: the complete PG-only
     # durable runtime causal aggregate and the nonportable live
     # execution/recovery/lease/cost-control coordination tables are
     # deliberately absent; see GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES.
-    "candidates",
-    "evidence",
-    "jobs",
-    "job_results",
-    "job_events",
-    "job_progress_event_summaries",
-    "job_result_views",
-    "job_result_lifecycle",
-    "job_board_visible_patches",
-    "job_materialization_items",
-    "plan_review_sessions",
-    "manual_review_items",
-    "candidate_review_registry",
-    "target_candidates",
-    "asset_default_pointers",
-    "asset_default_pointer_history",
-    "crm_public_web_batches",
-    "crm_public_web_runs",
-    "person_public_web_assets",
-    "person_public_web_signals",
-    "person_assets",
-    "person_evidence",
-    "person_assertions",
-    "raw_profile_index",
-    "candidate_evidence_index",
-    "projection_person_search_index",
-    "crm_records",
-    "crm_engagements",
-    "crm_events",
-    "crm_tasks",
-    "crm_public_web_promotions",
-    "company_public_web_asset_runs",
-    "company_public_web_assets",
-    "company_assets",
-    "company_evidence",
-    "company_assertions",
-    "frontend_history_links",
-    "agent_runtime_sessions",
-    "agent_trace_spans",
-    "agent_worker_runs",
-    "acquisition_plan_previews",
-    "acquisition_runs",
-    "acquisition_discovery_lanes",
-    "query_dispatches",
-    "confidence_policy_runs",
-    "confidence_policy_controls",
-    "criteria_feedback",
-    "criteria_patterns",
-    "criteria_versions",
-    "criteria_compiler_runs",
-    "criteria_result_diffs",
-    "criteria_pattern_suggestions",
-    "organization_asset_registry",
-    "organization_execution_profiles",
-    "acquisition_shard_registry",
-    "cloud_asset_operation_ledger",
-    "asset_materialization_generations",
-    "asset_membership_index",
-    "candidate_materialization_state",
-    "snapshot_materialization_runs",
-    "serving_projections",
-    "serving_projection_members",
-    "projection_manifest_shards",
-    "run_projection_links",
-    "collection_authoritative_pointers",
-    "generation_index_entries",
-    "linkedin_profile_registry",
-    "linkedin_profile_registry_aliases",
-    "linkedin_profile_registry_leases",
-    "linkedin_profile_registry_events",
-    "linkedin_profile_registry_backfill_runs",
-    "model_invocation_envelopes",
+    table_name
+    for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+    if category == CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE
 ]
 
 _CONTROL_PLANE_UNIQUE_INDEXES: dict[str, tuple[tuple[str, tuple[str, ...], str], ...]] = {

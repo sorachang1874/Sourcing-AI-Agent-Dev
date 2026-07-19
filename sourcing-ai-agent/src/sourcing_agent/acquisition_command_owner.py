@@ -72,6 +72,13 @@ from .durable_runtime import (
     default_stage_id_for_command_type,
 )
 from .json_contract import json_contract_equal
+from .workflow_progressed_child_contract import (
+    canonical_progressed_child_identity,
+    expected_progressed_child_row,
+    progressed_child_completion_contract,
+    progressed_child_plan_event_id,
+    progressed_child_plan_event_violation,
+)
 
 _ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION = "acquisition_root_command_payload.v2"
 
@@ -498,31 +505,50 @@ class AcquisitionCommandOwner:
         if not event or not bool(event.get("persisted_json_contract_valid")):
             return {"status": "invalid", "reason": "acquisition_root_plan_event_json_contract_invalid"}
         event_sequence = max(0, int(event.get("sequence_number") or 0))
-        expected_event_id = (
-            "evt_"
-            + hashlib.sha1(
-                f"{workflow_run_id}:{event_sequence}:{event_spec.get('idempotency_key')}".encode("utf-8")
-            ).hexdigest()[:24]
+        completion_contract = progressed_child_completion_contract("acquisition_root")
+        if completion_contract is None:
+            return {"status": "invalid", "reason": "acquisition_root_completion_contract_unregistered"}
+        expected_event_id = progressed_child_plan_event_id(
+            workflow_run_id,
+            event_sequence,
+            str(event_spec.get("idempotency_key") or "").strip(),
+        )
+        expected_child_identity = canonical_progressed_child_identity(
+            expected_progressed_child_row(
+                contract=completion_contract,
+                parent_command_id=root_command_id,
+                workflow_run_id=workflow_run_id,
+                operation_id=str(root.get("operation_id") or "").strip(),
+                child_command=child_spec,
+                child_causality={
+                    **dict(contract.get("child_causality") or {}),
+                    "source_event_id": expected_event_id,
+                    "source_event_type": "CommandPlanRequested",
+                },
+            )
+        )
+        event_violation = (
+            progressed_child_plan_event_violation(
+                contract=completion_contract,
+                parent_command_id=root_command_id,
+                parent_source_sequence=root_source_sequence,
+                child_identity=expected_child_identity,
+                event={
+                    **event,
+                    "payload": dict(event.get("payload") or {}),
+                    "artifact_refs": list(event.get("artifact_refs") or []),
+                },
+            )
+            if expected_child_identity is not None
+            else "child_identity_invalid"
         )
         event_matches = bool(
-            event_sequence > 0
-            and root_source_sequence > 0
-            and event_sequence > root_source_sequence
-            and str(event.get("event_id") or "").strip() == expected_event_id
-            and str(event.get("workflow_run_id") or "").strip() == workflow_run_id
-            and str(event.get("operation_id") or "").strip() == str(event_spec.get("operation_id") or "").strip()
-            and str(event.get("event_family") or "").strip() == "workflow_event"
-            and str(event.get("event_type") or "").strip() == "CommandPlanRequested"
-            and str(event.get("activity_attempt_id") or "").strip() == ""
-            and str(event.get("idempotency_key") or "").strip() == str(event_spec.get("idempotency_key") or "").strip()
-            and str(event.get("actor") or "").strip() == str(event_spec.get("actor") or "").strip()
-            and str(event.get("source") or "").strip() == str(event_spec.get("source") or "").strip()
+            not event_violation
             and json_contract_equal(
                 dict(event.get("payload") or {}),
                 dict(event_spec.get("payload") or {}),
             )
             and json_contract_equal(list(event.get("artifact_refs") or []), [])
-            and str(event.get("schema_version") or "").strip() == "workflow_event_v1"
         )
         if not event_matches:
             return {"status": "invalid", "reason": "acquisition_root_plan_event_identity_mismatch"}
@@ -539,60 +565,16 @@ class AcquisitionCommandOwner:
         )
         if not child or not bool(child.get("persisted_json_contract_valid")):
             return {"status": "invalid", "reason": "acquisition_root_intent_child_json_contract_invalid"}
-        expected_causality = {
-            **dict(contract.get("child_causality") or {}),
-            "source_event_id": expected_event_id,
-            "source_event_type": "CommandPlanRequested",
-        }
-        expected_child_payload = {
-            **dict(child_spec.get("payload") or {}),
-            "causality": expected_causality,
-        }
-        immutable_fields = {
-            "workflow_run_id": str(child_spec.get("workflow_run_id") or "").strip(),
-            "operation_id": str(child_spec.get("operation_id") or "").strip(),
-            "command_id": str(child_spec.get("command_id") or "").strip(),
-            "command_type": str(child_spec.get("command_type") or "").strip(),
-            "owner": str(child_spec.get("owner") or "").strip(),
-            "stage_id": str(expected_causality.get("stage_id") or "").strip(),
-            "causal_group_id": str(expected_causality.get("causal_group_id") or "").strip(),
-            "parent_command_id": root_command_id,
-            "source_event_id": expected_event_id,
-            "source_event_type": "CommandPlanRequested",
-            "idempotency_key": str(child_spec.get("idempotency_key") or "").strip(),
-            "no_op_reason": str(expected_causality.get("no_op_reason") or "").strip(),
-            "readiness_effect": str(expected_causality.get("readiness_effect") or "").strip(),
-            "causality_schema_version": str(expected_causality.get("schema_version") or "").strip(),
-            "schema_version": "workflow_command_v1",
-        }
-        child_matches = all(
-            str(child.get(field) or "").strip() == expected for field, expected in immutable_fields.items()
-        ) and bool(
-            json_contract_equal(dict(child.get("payload") or {}), expected_child_payload)
-            and json_contract_equal(list(child.get("artifact_refs") or []), [])
-            and json_contract_equal(
-                list(child.get("input_artifact_refs") or []),
-                list(expected_causality.get("input_artifact_refs") or []),
-            )
-            and json_contract_equal(
-                list(child.get("output_artifact_refs") or []),
-                list(expected_causality.get("output_artifact_refs") or []),
-            )
-            and json_contract_equal(
-                dict(child.get("produced_entity_counts") or {}),
-                dict(expected_causality.get("produced_entity_counts") or {}),
-            )
-            and json_contract_equal(
-                list(child.get("downstream_command_ids") or []),
-                list(expected_causality.get("downstream_command_ids") or []),
-            )
-            and int(child.get("max_attempts") or 0) == int(child_spec.get("max_attempts") or 0)
-            and json_contract_equal(
-                dict(child.get("retry_policy") or {}),
-                dict(child_spec.get("retry_policy") or {}),
-            )
-        )
-        if not child_matches:
+        # The shared versioned progressed-child contract: every immutable
+        # child/causality field exact-compared; only explicitly mutable
+        # lifecycle fields (status, attempt, lease, result, not_before_at,
+        # downstream ids) may differ from the completion-time row.
+        persisted_child_identity = canonical_progressed_child_identity(child)
+        if (
+            persisted_child_identity is None
+            or expected_child_identity is None
+            or not json_contract_equal(persisted_child_identity, expected_child_identity)
+        ):
             return {"status": "invalid", "reason": "acquisition_root_intent_child_identity_mismatch"}
         return {"status": "ready", "event": event, "child_command": child}
 

@@ -15,6 +15,7 @@ from .acquisition_start_v2 import (
     AcquisitionStartV2Error,
 )
 from .agent_canary_registry import START_ACQUISITION_RUN_TOOL_SPEC
+from .json_contract import JsonContractShapeError, json_contract_equal, loads_json_contract_strict
 from .operation_runtime import ACTION_START_ACQUISITION_RUN, DEFAULT_ACTION_REGISTRY
 
 ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_NOT_ENABLED = (
@@ -58,7 +59,12 @@ def _json_carrier_state(
     ``{}``, which silently erases provenance.  Provenance classification must
     instead distinguish a genuinely absent carrier from a present-but-malformed
     one, and from a record whose decoded and raw JSON forms disagree, so that a
-    corrupt start carrier can never be silently treated as missing.
+    corrupt start carrier can never be silently treated as missing.  Raw text is
+    parsed by the canonical strict contract decoder (duplicate object keys and
+    non-finite ``NaN``/``Infinity`` constants are malformed, never normalized),
+    and decoded/raw comparison uses type-strict contract equality so
+    ``1 == True`` and ``1 == 1.0`` can never alias a conflicting carrier into a
+    matching one.
     """
 
     decoded_value = record.get(decoded_field)
@@ -71,8 +77,8 @@ def _json_carrier_state(
         raw_mapping = dict(raw_value)
     elif raw_present:
         try:
-            loaded = json.loads(str(raw_value))
-        except (TypeError, ValueError, json.JSONDecodeError):
+            loaded = loads_json_contract_strict(str(raw_value))
+        except JsonContractShapeError:
             raw_malformed = True
         else:
             if isinstance(loaded, Mapping):
@@ -80,7 +86,7 @@ def _json_carrier_state(
             else:
                 raw_malformed = True
     if decoded_mapping is not None:
-        if raw_malformed or (raw_mapping is not None and raw_mapping != decoded_mapping):
+        if raw_malformed or (raw_mapping is not None and not json_contract_equal(raw_mapping, decoded_mapping)):
             return _JSON_CARRIER_CONFLICT, {}
         return _JSON_CARRIER_DECODED, decoded_mapping
     if decoded_value is not None and decoded_value != "":

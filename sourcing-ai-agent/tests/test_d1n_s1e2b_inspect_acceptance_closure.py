@@ -119,6 +119,19 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
                     cursor.execute(f"ALTER TABLE {table} ENABLE TRIGGER USER")
             connection.commit()
 
+    def _execute_with_workflow_command_trigger_disabled(self, sql: str, params: tuple[Any, ...]) -> None:
+        fixture, quoted_schema = self._schema_connection()
+        assert psycopg is not None
+        table = f"{quoted_schema}.{quote_control_plane_postgres_identifier('workflow_commands')}"
+        with psycopg.connect(fixture.dsn, client_encoding="utf8") as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
+                try:
+                    cursor.execute(sql.replace("{schema}", quoted_schema), params)
+                finally:
+                    cursor.execute(f"ALTER TABLE {table} ENABLE TRIGGER USER")
+            connection.commit()
+
     def _effect_counts(self) -> dict[str, int]:
         return {
             table: len(self._rows(table))
@@ -672,6 +685,172 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
             owner_ref=owner_ref,
             suffix="progressed_missing_event",
         )
+
+    def _rewrite_command_payload(self, command_id: str, mutate: Any) -> None:
+        row = self._command_row(command_id)
+        payload = json.loads(row["payload_json"])
+        mutate(payload)
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET payload_json = %s WHERE command_id = %s",
+            (json.dumps(payload), command_id),
+        )
+
+    def _rewrite_event_payload(self, event_id: str, mutate: Any) -> None:
+        rows = self._rows("workflow_events", where="event_id = %s", params=(event_id,))
+        self.assertEqual(len(rows), 1)
+        payload = json.loads(rows[0]["payload_json"])
+        mutate(payload)
+        self._execute(
+            "UPDATE {schema}.workflow_events SET payload_json = %s WHERE event_id = %s",
+            (json.dumps(payload), event_id),
+        )
+
+    def test_inspect_rejects_progressed_child_outside_the_versioned_child_contract(self) -> None:
+        def _foreign_type(child_id: str) -> None:
+            # The shape trigger fences identity-moving UPDATEs in normal writes;
+            # a semantically foreign child can only exist when that floor is
+            # bypassed, so the probe installs one with triggers disabled and
+            # keeps column and payload causality fully self-consistent.
+            self._execute_with_workflow_command_trigger_disabled(
+                "UPDATE {schema}.workflow_commands SET command_type = %s WHERE command_id = %s",
+                ("foreign.command", child_id),
+            )
+            self._rewrite_command_payload(
+                child_id,
+                lambda payload: payload["causality"].update(command_type="foreign.command"),
+            )
+
+        def _foreign_owner(child_id: str) -> None:
+            self._execute(
+                "UPDATE {schema}.workflow_commands SET owner = %s WHERE command_id = %s",
+                ("foreign_owner", child_id),
+            )
+            self._rewrite_command_payload(
+                child_id,
+                lambda payload: payload["causality"].update(owner="foreign_owner"),
+            )
+
+        column_cases = (
+            (
+                "stage_drift",
+                "UPDATE {schema}.workflow_commands SET stage_id = %s WHERE command_id = %s",
+                lambda _child_id: ("drifted_stage",),
+            ),
+            (
+                "causal_group_drift",
+                "UPDATE {schema}.workflow_commands SET causal_group_id = %s WHERE command_id = %s",
+                lambda _child_id: ("drifted_group",),
+            ),
+            (
+                "causality_schema_drift",
+                "UPDATE {schema}.workflow_commands SET causality_schema_version = %s WHERE command_id = %s",
+                lambda _child_id: ("command_causality_v999",),
+            ),
+            (
+                "readiness_effect_drift",
+                "UPDATE {schema}.workflow_commands SET readiness_effect = %s WHERE command_id = %s",
+                lambda _child_id: ("drifted_readiness",),
+            ),
+            (
+                "input_artifact_refs_drift",
+                "UPDATE {schema}.workflow_commands SET input_artifact_refs_json = %s WHERE command_id = %s",
+                lambda _child_id: (json.dumps(["artifact://drifted"]),),
+            ),
+            (
+                "produced_counts_drift",
+                "UPDATE {schema}.workflow_commands SET produced_entity_counts_json = %s WHERE command_id = %s",
+                lambda _child_id: (json.dumps({"people": 99}),),
+            ),
+        )
+        for ordinal, (label, sql, extra_params) in enumerate(column_cases, start=1):
+            with self.subTest(drift=label):
+                start_occurrence, owner_ref = self._arrange_created(suffix=f"child_contract_col_{ordinal}")
+                self._release_start_hold(start_occurrence=start_occurrence, suffix=f"child_contract_col_{ordinal}")
+                progressed = self._complete_root_with_real_child(
+                    owner_ref=owner_ref,
+                    suffix=f"child_contract_col_{ordinal}",
+                )
+                child_id = str(progressed["child"]["command_id"])
+                self._execute(sql, (*extra_params(child_id), child_id))
+                self._assert_inspect_rejects_without_effects(
+                    start_occurrence=start_occurrence,
+                    owner_ref=owner_ref,
+                    suffix=f"child_contract_col_{ordinal}",
+                )
+
+        for label, mutate in (("wrong_type", _foreign_type), ("wrong_owner", _foreign_owner)):
+            with self.subTest(drift=label):
+                start_occurrence, owner_ref = self._arrange_created(suffix=f"child_contract_{label}")
+                self._release_start_hold(start_occurrence=start_occurrence, suffix=f"child_contract_{label}")
+                progressed = self._complete_root_with_real_child(
+                    owner_ref=owner_ref,
+                    suffix=f"child_contract_{label}",
+                )
+                mutate(str(progressed["child"]["command_id"]))
+                self._assert_inspect_rejects_without_effects(
+                    start_occurrence=start_occurrence,
+                    owner_ref=owner_ref,
+                    suffix=f"child_contract_{label}",
+                )
+
+    def test_inspect_rejects_progressed_child_plan_event_identity_drift(self) -> None:
+        def _event_id_for(progressed: dict[str, Any]) -> str:
+            child_row = self._command_row(str(progressed["child"]["command_id"]))
+            source_event_id = str(child_row["source_event_id"])
+            self.assertTrue(source_event_id)
+            return source_event_id
+
+        event_cases = (
+            (
+                "event_idempotency",
+                lambda event_id: self._execute(
+                    "UPDATE {schema}.workflow_events SET idempotency_key = %s WHERE event_id = %s",
+                    ("drifted_plan_idempotency", event_id),
+                ),
+            ),
+            (
+                "event_actor",
+                lambda event_id: self._execute(
+                    "UPDATE {schema}.workflow_events SET actor = %s WHERE event_id = %s",
+                    ("drifted_actor", event_id),
+                ),
+            ),
+            (
+                "event_source",
+                lambda event_id: self._execute(
+                    "UPDATE {schema}.workflow_events SET source = %s WHERE event_id = %s",
+                    ("drifted.source", event_id),
+                ),
+            ),
+            (
+                "event_nested_payload",
+                lambda event_id: self._rewrite_event_payload(
+                    event_id,
+                    lambda payload: payload["payload"].update(query="drifted query"),
+                ),
+            ),
+            (
+                "event_artifact_refs",
+                lambda event_id: self._execute(
+                    "UPDATE {schema}.workflow_events SET artifact_refs_json = %s WHERE event_id = %s",
+                    (json.dumps(["artifact://drifted"]), event_id),
+                ),
+            ),
+        )
+        for ordinal, (label, mutate) in enumerate(event_cases, start=1):
+            with self.subTest(drift=label):
+                start_occurrence, owner_ref = self._arrange_created(suffix=f"child_event_{ordinal}")
+                self._release_start_hold(start_occurrence=start_occurrence, suffix=f"child_event_{ordinal}")
+                progressed = self._complete_root_with_real_child(
+                    owner_ref=owner_ref,
+                    suffix=f"child_event_{ordinal}",
+                )
+                mutate(_event_id_for(progressed))
+                self._assert_inspect_rejects_without_effects(
+                    start_occurrence=start_occurrence,
+                    owner_ref=owner_ref,
+                    suffix=f"child_event_{ordinal}",
+                )
 
     def test_inspect_rejects_command_lifecycle_states_outside_the_explicit_contract(self) -> None:
         cases = (

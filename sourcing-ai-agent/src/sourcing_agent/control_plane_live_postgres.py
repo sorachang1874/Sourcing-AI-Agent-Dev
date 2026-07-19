@@ -57,6 +57,14 @@ from .projection_search_index_contract import (
     preserve_projection_search_index_products,
 )
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
+from .workflow_progressed_child_contract import (
+    canonical_progressed_child_identity,
+    expected_progressed_child_row,
+    progressed_child_completion_contract,
+    progressed_child_plan_event_id,
+    progressed_child_plan_event_idempotency_key,
+    progressed_child_plan_event_violation,
+)
 
 _COMPANY_PUBLIC_WEB_IDEMPOTENCY_ASCII_WHITESPACE = " \t\n\r\f\v"
 _COMPANY_PUBLIC_WEB_SOURCE_COMMAND_ID_KEY = "source_workflow_command_id"
@@ -910,6 +918,12 @@ _RUNNING_RECOVERABLE_WAIT_STAGES = {
     "persisting_terminal_harvest_profiles",
 }
 _RETRYABLE_POSTGRES_SQLSTATES = {"40P01", "40001"}
+# PostgreSQL read-only transaction violation (``read_only_sql_transaction``).
+# Public raw-SQL probes run inside ``SET TRANSACTION READ ONLY`` so any write
+# reached through database-resolved objects (mutating views, RLS policies,
+# user operators/casts, allowlist-shadowing function overloads) fails with
+# this sqlstate instead of committing.
+_POSTGRES_READ_ONLY_VIOLATION_SQLSTATE = "25006"
 
 # Pool exhaustion (pool.getconn() timed out waiting for a free connection) is
 # transient and must be retried like a deadlock/serialization failure. Import
@@ -11760,31 +11774,7 @@ class LiveControlPlanePostgresAdapter:
         if not self.should_prefer_read("workflow_commands"):
             return None
         contract_name = str(completion_contract or "acquisition_root").strip()
-        completion_contracts = {
-            "acquisition_root": {
-                "parent_command_type": "acquisition.run.create",
-                "parent_owner": "acquisition_run_writer",
-                "child_command_type": "acquisition.intent.resolve",
-                "child_owner": "acquisition_planner",
-                "reason_prefix": "acquisition_root",
-                "child_reason_prefix": "acquisition_root_intent_child",
-                "committed_reason": "acquisition_root_intent_child_committed",
-                "entity_delta_count": 0,
-                "entity_delta_type": "",
-            },
-            "company_public_web_source": {
-                "parent_command_type": "company.public_web.source.collect",
-                "parent_owner": "company_public_web_owner",
-                "child_command_type": "company.public_web.assets.materialize",
-                "child_owner": "company_public_web_owner",
-                "reason_prefix": "company_public_web_source",
-                "child_reason_prefix": "company_public_web_source_materialize_child",
-                "committed_reason": "company_public_web_source_materialize_child_committed",
-                "entity_delta_count": 1,
-                "entity_delta_type": "company_public_web_run",
-            },
-        }
-        contract = completion_contracts.get(contract_name)
+        contract = progressed_child_completion_contract(contract_name)
         if contract is None:
             raise ValueError("complete_acquisition_root_command completion_contract is not registered")
         parent_command_type = str(contract["parent_command_type"])
@@ -11830,6 +11820,9 @@ class LiveControlPlanePostgresAdapter:
             str(event_spec.get("command_id") or "").strip() != normalized_command_id
             or str(event_spec.get("event_family") or "").strip() != "workflow_event"
             or str(event_spec.get("event_type") or "").strip() != "CommandPlanRequested"
+            or event_idempotency_key != progressed_child_plan_event_idempotency_key(child_idempotency_key)
+            or str(event_spec.get("actor") or "").strip() != str(contract["child_plan_event_actor"]).strip()
+            or str(event_spec.get("source") or "").strip() != str(contract["child_plan_event_source"]).strip()
             or str(child_spec.get("workflow_run_id") or "").strip() != workflow_run_id
             or str(child_spec.get("operation_id") or "").strip() != operation_id
             or str(child_spec.get("command_type") or "").strip() != child_command_type
@@ -12076,11 +12069,10 @@ class LiveControlPlanePostgresAdapter:
                                 (row_value[0] if isinstance(row_value, (list, tuple)) and row_value else row_value) or 0
                             )
                             sequence_number = max_sequence + 1
-                            event_id = (
-                                "evt_"
-                                + sha1(
-                                    f"{workflow_run_id}:{sequence_number}:{event_idempotency_key}".encode("utf-8")
-                                ).hexdigest()[:24]
+                            event_id = progressed_child_plan_event_id(
+                                workflow_run_id,
+                                sequence_number,
+                                event_idempotency_key,
                             )
                             event_row = {
                                 "event_id": event_id,
@@ -12128,25 +12120,37 @@ class LiveControlPlanePostgresAdapter:
                                     command=root,
                                     event=event,
                                 )
-                            expected_event_id = (
-                                "evt_"
-                                + sha1(
-                                    f"{workflow_run_id}:{sequence_number}:{event_idempotency_key}".encode("utf-8")
-                                ).hexdigest()[:24]
+                            expected_child_identity = canonical_progressed_child_identity(
+                                expected_progressed_child_row(
+                                    contract=contract,
+                                    parent_command_id=normalized_command_id,
+                                    workflow_run_id=workflow_run_id,
+                                    operation_id=operation_id,
+                                    child_command=child_spec,
+                                    child_causality={
+                                        **causality_template,
+                                        "source_event_id": str(event.get("event_id") or "").strip(),
+                                        "source_event_type": "CommandPlanRequested",
+                                    },
+                                )
+                            )
+                            event_violation = (
+                                progressed_child_plan_event_violation(
+                                    contract=contract,
+                                    parent_command_id=normalized_command_id,
+                                    parent_source_sequence=root_source_sequence,
+                                    child_identity=expected_child_identity,
+                                    event={
+                                        **event,
+                                        "payload": persisted_event_payload,
+                                        "artifact_refs": persisted_event_artifact_refs,
+                                    },
+                                )
+                                if expected_child_identity is not None
+                                else "child_identity_invalid"
                             )
                             event_matches = bool(
-                                sequence_number > 0
-                                and sequence_number > root_source_sequence
-                                and str(event.get("event_id") or "").strip() == expected_event_id
-                                and str(event.get("operation_id") or "").strip() == operation_id
-                                and str(event.get("command_id") or "").strip() == normalized_command_id
-                                and str(event.get("activity_attempt_id") or "").strip() == ""
-                                and str(event.get("event_family") or "").strip() == "workflow_event"
-                                and str(event.get("event_type") or "").strip() == "CommandPlanRequested"
-                                and str(event.get("idempotency_key") or "").strip() == event_idempotency_key
-                                and str(event.get("actor") or "").strip() == str(event_spec.get("actor") or "").strip()
-                                and str(event.get("source") or "").strip()
-                                == str(event_spec.get("source") or "").strip()
+                                not event_violation
                                 and json_contract_equal(
                                     persisted_event_payload,
                                     event_payload,
@@ -12155,7 +12159,6 @@ class LiveControlPlanePostgresAdapter:
                                     persisted_event_artifact_refs,
                                     event_artifact_refs,
                                 )
-                                and str(event.get("schema_version") or "").strip() == "workflow_event_v1"
                             )
                             if not event_matches:
                                 connection.rollback()
@@ -12275,33 +12278,58 @@ class LiveControlPlanePostgresAdapter:
                         if child_requires_validation:
                             assert child is not None
                             try:
-                                persisted_child_payload = decode_json_contract(
-                                    child.get("payload_json"),
-                                    expected_type=dict,
+                                persisted_child_identity = canonical_progressed_child_identity(
+                                    {
+                                        **{
+                                            field: child.get(field)
+                                            for field in (
+                                                "command_id",
+                                                "workflow_run_id",
+                                                "operation_id",
+                                                "command_type",
+                                                "owner",
+                                                "stage_id",
+                                                "causal_group_id",
+                                                "parent_command_id",
+                                                "source_event_id",
+                                                "source_event_type",
+                                                "no_op_reason",
+                                                "readiness_effect",
+                                                "causality_schema_version",
+                                                "idempotency_key",
+                                                "schema_version",
+                                                "max_attempts",
+                                            )
+                                        },
+                                        "input_artifact_refs": decode_json_contract(
+                                            child.get("input_artifact_refs_json"),
+                                            expected_type=list,
+                                        ),
+                                        "output_artifact_refs": decode_json_contract(
+                                            child.get("output_artifact_refs_json"),
+                                            expected_type=list,
+                                        ),
+                                        "produced_entity_counts": decode_json_contract(
+                                            child.get("produced_entity_counts_json"),
+                                            expected_type=dict,
+                                        ),
+                                        "payload": decode_json_contract(
+                                            child.get("payload_json"),
+                                            expected_type=dict,
+                                        ),
+                                        "artifact_refs": decode_json_contract(
+                                            child.get("artifact_refs_json"),
+                                            expected_type=list,
+                                        ),
+                                        "retry_policy": decode_json_contract(
+                                            child.get("retry_policy_json"),
+                                            expected_type=dict,
+                                        ),
+                                    }
                                 )
-                                persisted_child_artifact_refs = decode_json_contract(
-                                    child.get("artifact_refs_json"),
-                                    expected_type=list,
-                                )
-                                persisted_child_input_artifact_refs = decode_json_contract(
-                                    child.get("input_artifact_refs_json"),
-                                    expected_type=list,
-                                )
-                                persisted_child_output_artifact_refs = decode_json_contract(
-                                    child.get("output_artifact_refs_json"),
-                                    expected_type=list,
-                                )
-                                persisted_child_produced_counts = decode_json_contract(
-                                    child.get("produced_entity_counts_json"),
-                                    expected_type=dict,
-                                )
-                                persisted_child_downstream_ids = decode_json_contract(
+                                decode_json_contract(
                                     child.get("downstream_command_ids_json"),
                                     expected_type=list,
-                                )
-                                persisted_child_retry_policy = decode_json_contract(
-                                    child.get("retry_policy_json"),
-                                    expected_type=dict,
                                 )
                                 decode_json_contract(
                                     child.get("result_json"),
@@ -12316,57 +12344,26 @@ class LiveControlPlanePostgresAdapter:
                                     child=child,
                                     event=event,
                                 )
-                            immutable_child_fields = (
-                                "command_id",
-                                "workflow_run_id",
-                                "operation_id",
-                                "command_type",
-                                "owner",
-                                "stage_id",
-                                "causal_group_id",
-                                "parent_command_id",
-                                "source_event_id",
-                                "source_event_type",
-                                "no_op_reason",
-                                "readiness_effect",
-                                "idempotency_key",
-                                "causality_schema_version",
-                                "schema_version",
+                            # The shared versioned progressed-child contract:
+                            # every immutable child/causality field must equal
+                            # the expected committed row exactly; only the
+                            # explicitly mutable lifecycle fields (status,
+                            # attempt, lease, result, not_before_at,
+                            # downstream ids) may differ.
+                            expected_child_identity = canonical_progressed_child_identity(
+                                expected_progressed_child_row(
+                                    contract=contract,
+                                    parent_command_id=normalized_command_id,
+                                    workflow_run_id=workflow_run_id,
+                                    operation_id=operation_id,
+                                    child_command=child_spec,
+                                    child_causality=child_causality_payload,
+                                )
                             )
-                            child_matches = all(
-                                str(child.get(field) or "").strip() == str(child_row.get(field) or "").strip()
-                                for field in immutable_child_fields
-                            ) and bool(
-                                json_contract_equal(
-                                    persisted_child_payload,
-                                    child_payload,
-                                )
-                                and json_contract_equal(
-                                    persisted_child_artifact_refs,
-                                    list(child_spec.get("artifact_refs") or []),
-                                )
-                                and json_contract_equal(
-                                    persisted_child_input_artifact_refs,
-                                    list(child_causality_payload.get("input_artifact_refs") or []),
-                                )
-                                and json_contract_equal(
-                                    persisted_child_output_artifact_refs,
-                                    list(child_causality_payload.get("output_artifact_refs") or []),
-                                )
-                                and json_contract_equal(
-                                    persisted_child_produced_counts,
-                                    dict(child_causality_payload.get("produced_entity_counts") or {}),
-                                )
-                                and json_contract_equal(
-                                    persisted_child_downstream_ids,
-                                    list(child_causality_payload.get("downstream_command_ids") or []),
-                                )
-                                and int(child.get("max_attempts") or 0)
-                                == max(1, int(child_spec.get("max_attempts") or 3))
-                                and json_contract_equal(
-                                    persisted_child_retry_policy,
-                                    dict(child_spec.get("retry_policy") or {}),
-                                )
+                            child_matches = bool(
+                                persisted_child_identity is not None
+                                and expected_child_identity is not None
+                                and json_contract_equal(persisted_child_identity, expected_child_identity)
                             )
                             if not child_matches:
                                 connection.rollback()
@@ -15902,11 +15899,68 @@ class LiveControlPlanePostgresAdapter:
 
     def execute_returning_one(self, sql: str, params: tuple[Any, ...] | list[Any]) -> dict[str, Any] | None:
         _require_public_read_only_sql(sql, method="execute_returning_one")
-        return self._execute_returning_one(sql, params)
+        return self._execute_public_probe(sql, params, fetch_one=True, method="execute_returning_one")
 
     def execute_non_query(self, sql: str, params: tuple[Any, ...] | list[Any]) -> int:
         _require_public_read_only_sql(sql, method="execute_non_query")
-        return self._execute_non_query(sql, params)
+        return self._execute_public_probe(sql, params, fetch_one=False, method="execute_non_query")
+
+    def _execute_public_probe(
+        self,
+        sql: str,
+        params: tuple[Any, ...] | list[Any],
+        *,
+        fetch_one: bool,
+        method: str,
+    ) -> Any:
+        """Run one lexically admitted public probe inside a database-enforced read-only transaction.
+
+        The lexical allowlist (``_require_public_read_only_sql``) is defense in
+        depth, not the mutation boundary: a plainly shaped ``SELECT`` can still
+        reach writes through database-resolved objects the lexer never sees —
+        a view whose definition calls a volatile mutating function, RLS
+        policies, user-defined operators/casts, or function overloads that
+        shadow an allowlisted builtin.  ``SET TRANSACTION READ ONLY`` runs as
+        the first statement of the probe transaction (psycopg opens the
+        transaction with that first statement), so PostgreSQL itself rejects
+        every such write with sqlstate ``25006``; the violation is re-raised as
+        the public contract error and never committed.  The private
+        migration/test interface (``_execute_returning_one`` /
+        ``_execute_non_query``) is deliberately unchanged and keeps executing
+        legitimate DDL/DML.  A dedicated SELECT-only probe role remains an
+        optional deployment-level hardening on top of this boundary; the
+        read-only transaction already covers every catalog-level indirection
+        because any mutation it reaches executes as DML inside the probe
+        transaction.
+        """
+
+        self.ensure_bootstrapped()
+        normalized_params = tuple(_normalize_postgres_payload(item) for item in params)
+        attempt = 0
+        while True:
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET TRANSACTION READ ONLY")
+                        cursor.execute(sql, normalized_params)
+                        if fetch_one:
+                            result: Any = _fetch_one_dict_row(cursor, cursor.fetchone())
+                        else:
+                            result = int(cursor.rowcount or 0)
+                    connection.commit()
+                return result
+            except Exception as exc:
+                sqlstate = str(getattr(exc, "sqlstate", "") or "").strip().upper()
+                if sqlstate == _POSTGRES_READ_ONLY_VIOLATION_SQLSTATE:
+                    raise ValueError(
+                        f"{method} database-enforced read-only transaction rejected the statement "
+                        f"(PostgreSQL read-only transaction violation {_POSTGRES_READ_ONLY_VIOLATION_SQLSTATE}); "
+                        "use the private migration/test SQL interface"
+                    ) from exc
+                attempt += 1
+                if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
+                    raise
+                time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
 
     def _advisory_lock_key(self, lock_key: str) -> str:
         # Advisory locks are database-global, not schema-scoped; prefixing the
@@ -16191,6 +16245,14 @@ def _require_public_read_only_sql(sql: str, *, method: str) -> None:
     (``MERGE INTO ONLY``, cross-table ``CREATE RULE``, ``DROP SCHEMA
     CASCADE``, side-effecting ``SELECT fn()``) all fail by default rather than
     by enumerating dangerous shapes.
+
+    This lexical allowlist is defense in depth, not the sole mutation
+    boundary: it cannot inspect database-resolved objects (view definitions,
+    RLS policies, user operators/casts, allowlist-shadowing function
+    overloads).  Admitted probes therefore execute inside a database-enforced
+    read-only transaction (``_execute_public_probe``), where PostgreSQL
+    rejects any write the catalog hides behind an apparently read-only
+    statement.
     """
 
     if not _postgres_public_sql_is_read_only(sql):

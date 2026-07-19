@@ -7,13 +7,20 @@ from types import SimpleNamespace
 from typing import Literal
 from unittest import mock
 
+from sourcing_agent.control_plane_live_postgres import CONTROL_PLANE_LIVE_TABLES
 from sourcing_agent.control_plane_postgres import (
     ACQUISITION_SHARD_REGISTRY_CURRENT_TABLE,
     ACQUISITION_SHARD_REGISTRY_FORMER_TABLE,
     ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE,
+    CONTROL_PLANE_TABLE_PORTABILITY_CATEGORIES,
+    CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+    CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+    CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE,
+    CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY,
     DEFAULT_CONTROL_PLANE_TABLES,
     GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
     NONPORTABLE_RUNTIME_COORDINATION_TABLES,
+    PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES,
     _connect_postgres,
     control_plane_postgres_sync_state_path,
     ensure_acquisition_shard_registry_split_schema,
@@ -40,11 +47,15 @@ _PG_ONLY_CAUSAL_AGGREGATE_TABLES = (
     "workflow_activity_attempts",
     "workflow_entity_deltas",
     "operation_events",
+    "acquisition_runs",
+    "acquisition_discovery_lanes",
 )
 _NONPORTABLE_COORDINATION_TABLES = (
     "workflow_job_leases",
     "workflow_recovery_intents",
     "runtime_provider_limiter_leases",
+    "agent_worker_runs",
+    "linkedin_profile_registry_leases",
 )
 _EXPECTED_EXCLUSION_GAP = sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)
 
@@ -219,6 +230,75 @@ class ControlPlanePostgresTest(unittest.TestCase):
         self.assertTrue(NONPORTABLE_RUNTIME_COORDINATION_TABLES.issubset(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES))
         for table_name in _NONPORTABLE_COORDINATION_TABLES:
             self.assertNotIn(table_name, DEFAULT_CONTROL_PLANE_TABLES)
+
+    def test_portability_registry_is_the_single_source_for_inventory_export_and_import_sets(self) -> None:
+        # Fast preflight: every derived public set must equal the canonical
+        # per-table registry, and the registry must classify every live PG
+        # table exactly once (``generation_index_entries`` is the file-backed
+        # snapshot pseudo-table, not a PG table).
+        portable_from_registry = [
+            table_name
+            for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+            if category == CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE
+        ]
+        self.assertEqual(DEFAULT_CONTROL_PLANE_TABLES, portable_from_registry)
+        self.assertEqual(
+            GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
+            frozenset(
+                table_name
+                for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+                if category != CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE
+            ),
+        )
+        self.assertEqual(
+            PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES,
+            frozenset(
+                table_name
+                for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+                if category == CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE
+            ),
+        )
+        self.assertEqual(
+            NONPORTABLE_RUNTIME_COORDINATION_TABLES,
+            frozenset(
+                table_name
+                for table_name, (category, _reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items()
+                if category == CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION
+            ),
+        )
+        self.assertEqual(
+            set(CONTROL_PLANE_LIVE_TABLES),
+            set(CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY) - {"generation_index_entries"},
+        )
+        for table_name, (category, reason) in CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY.items():
+            with self.subTest(table_name=table_name):
+                self.assertIn(category, CONTROL_PLANE_TABLE_PORTABILITY_CATEGORIES)
+                self.assertTrue(str(reason or "").strip())
+
+    def test_portability_registry_treats_active_worker_lease_and_acquisition_runtime_state_as_nonportable(
+        self,
+    ) -> None:
+        # Active worker rows carry status/interrupt/lease state and profile
+        # registry leases fence scheduler owners: both are live coordination.
+        for table_name in ("agent_worker_runs", "linkedin_profile_registry_leases"):
+            with self.subTest(table_name=table_name):
+                self.assertEqual(
+                    CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY[table_name][0],
+                    CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+                )
+                self.assertIn(table_name, NONPORTABLE_RUNTIME_COORDINATION_TABLES)
+                self.assertNotIn(table_name, DEFAULT_CONTROL_PLANE_TABLES)
+        # Acquisition run/lane rows are owned by the excluded
+        # Action/Operation/command/event aggregate; importing them alone
+        # preserves a partial runtime slice.
+        for table_name in ("acquisition_runs", "acquisition_discovery_lanes"):
+            with self.subTest(table_name=table_name):
+                self.assertEqual(
+                    CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY[table_name][0],
+                    CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+                )
+                self.assertIn(table_name, PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES)
+                self.assertNotIn(table_name, DEFAULT_CONTROL_PLANE_TABLES)
 
     def _snapshot_payload(
         self,
@@ -1590,6 +1670,37 @@ class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unitte
                 "2026-07-19T00:00:00Z",
             ),
         )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO agent_worker_runs (worker_id, session_id, job_id, lane_id, worker_key, status, "
+            "interrupt_requested, attempt_count, lease_owner, lease_expires_at, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                1,
+                1,
+                "job-active-worker",
+                "lane-active-worker",
+                "worker-key-active-lease",
+                "running",
+                0,
+                3,
+                "worker-daemon-1",
+                "2099-01-01 00:00:00",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO linkedin_profile_registry_leases (profile_url_key, lease_owner, lease_token, "
+            "lease_expires_at, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                "profile-url-key-active-lease",
+                "scheduler-daemon-1",
+                "profile-lease-token-1",
+                "2099-01-01 00:00:00",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
         coordination_baseline = {
             table_name: self._coordination_rows(table_name) for table_name in _NONPORTABLE_COORDINATION_TABLES
         }
@@ -1608,7 +1719,10 @@ class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unitte
         self.assertEqual(snapshot_payload["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
         for table_name in _NONPORTABLE_COORDINATION_TABLES:
             self.assertNotIn(table_name, snapshot_payload["tables"])
-        self.assertNotIn("job-active-lease", output_path.read_text(encoding="utf-8"))
+        snapshot_text = output_path.read_text(encoding="utf-8")
+        self.assertNotIn("job-active-lease", snapshot_text)
+        self.assertNotIn("worker-key-active-lease", snapshot_text)
+        self.assertNotIn("profile-url-key-active-lease", snapshot_text)
 
         synced = sync_control_plane_snapshot_to_postgres(
             snapshot_path=output_path,
@@ -1641,6 +1755,116 @@ class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unitte
                         tables=[table_name],
                     )
             self.assertEqual(self._coordination_rows(table_name), coordination_baseline[table_name])
+
+    def test_generic_export_import_ignores_orphaned_acquisition_runtime_rows(self) -> None:
+        # acquisition_runs / acquisition_discovery_lanes rows are owned by the
+        # Action/Operation/command/event aggregate (itself excluded); generic
+        # export/import must neither observe nor mutate the orphaned slice.
+        acquisition_tables = ("acquisition_runs", "acquisition_discovery_lanes")
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO acquisition_runs (acquisition_run_id, workspace_id, operation_run_id, workflow_run_id, "
+            "plan_id, plan_review_id, target_company, query, status, current_phase, request_json, plan_json, "
+            "execution_bundle_json, metadata_json, idempotency_key, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "acq-run-orphaned-runtime",
+                "workspace-1",
+                "op-run-orphaned",
+                "wf-run-orphaned",
+                "plan-orphaned",
+                7,
+                "Acme",
+                "find people",
+                "running",
+                "discovery",
+                "{}",
+                "{}",
+                "{}",
+                "{}",
+                "acq-run-orphaned-idempotency",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO acquisition_discovery_lanes (lane_id, workspace_id, acquisition_run_id, workflow_run_id, "
+            "operation_run_id, source_command_id, activity_run_id, target_company, query, provider, status, phase, "
+            "lane_plan_json, provider_ref_json, artifact_refs_json, entity_counts_json, downstream_command_ids_json, "
+            "idempotency_key, metadata_json, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "lane-orphaned-runtime",
+                "workspace-1",
+                "acq-run-orphaned-runtime",
+                "wf-run-orphaned",
+                "op-run-orphaned",
+                "cmd-orphaned-source",
+                "activity-run-orphaned",
+                "Acme",
+                "find people",
+                "apollo",
+                "running",
+                "discover",
+                "{}",
+                "{}",
+                "[]",
+                "{}",
+                "[]",
+                "lane-orphaned-idempotency",
+                "{}",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        runtime_baseline = {table_name: self._coordination_rows(table_name) for table_name in acquisition_tables}
+        self.assertTrue(all(runtime_baseline.values()))
+
+        output_path = Path(self.tempdir.name) / "snapshot-acquisition.json"
+        exported = export_control_plane_snapshot(
+            runtime_dir=self.runtime_dir,
+            output_path=output_path,
+            source_backend="postgres",
+        )
+
+        self.assertEqual(exported["status"], "exported")
+        self.assertEqual(exported["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
+        snapshot_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        for table_name in acquisition_tables:
+            self.assertNotIn(table_name, snapshot_payload["tables"])
+        snapshot_text = output_path.read_text(encoding="utf-8")
+        self.assertNotIn("acq-run-orphaned-runtime", snapshot_text)
+        self.assertNotIn("lane-orphaned-runtime", snapshot_text)
+
+        synced = sync_control_plane_snapshot_to_postgres(
+            snapshot_path=output_path,
+            truncate_first=True,
+        )
+        self.assertEqual(synced["status"], "synced")
+        for table_name in acquisition_tables:
+            self.assertEqual(self._coordination_rows(table_name), runtime_baseline[table_name])
+
+        for table_name in acquisition_tables:
+            with self.subTest(boundary="export", table_name=table_name):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"cannot restore PG-only durable runtime tables: {table_name}",
+                ):
+                    export_control_plane_snapshot(
+                        runtime_dir=self.runtime_dir,
+                        output_path=Path(self.tempdir.name) / f"snapshot-{table_name}.json",
+                        source_backend="postgres",
+                        tables=[table_name],
+                    )
+            with self.subTest(boundary="sync", table_name=table_name):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"cannot restore PG-only durable runtime tables: {table_name}",
+                ):
+                    sync_control_plane_snapshot_to_postgres(
+                        snapshot_path=output_path,
+                        tables=[table_name],
+                    )
+            self.assertEqual(self._coordination_rows(table_name), runtime_baseline[table_name])
 
 
 if __name__ == "__main__":

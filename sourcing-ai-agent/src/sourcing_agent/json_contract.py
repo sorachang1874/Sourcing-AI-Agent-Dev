@@ -45,3 +45,37 @@ def json_contract_equal(left: Any, right: Any) -> bool:
         )
     except (TypeError, ValueError):
         return False
+
+
+def _reject_duplicate_json_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise JsonContractShapeError(f"persisted_json_duplicate_key:{key}")
+        result[key] = value
+    return result
+
+
+def _reject_non_finite_json_constant(value: str) -> Any:
+    raise JsonContractShapeError(f"persisted_json_non_finite_number:{value}")
+
+
+def loads_json_contract_strict(text: str) -> Any:
+    """Parse contract JSON, rejecting duplicate object keys and non-finite numbers.
+
+    ``json.loads`` silently keeps the last value of a duplicated object key and
+    accepts the non-standard ``NaN`` / ``Infinity`` / ``-Infinity`` constants.
+    Both forms are non-canonical for persisted JSON contracts and must fail
+    instead of being normalized into a value the contract never recorded.
+    """
+
+    try:
+        return json.loads(
+            str(text),
+            object_pairs_hook=_reject_duplicate_json_object_keys,
+            parse_constant=_reject_non_finite_json_constant,
+        )
+    except JsonContractShapeError:
+        raise
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise JsonContractShapeError("persisted_json_invalid") from exc

@@ -10,6 +10,7 @@ from sourcing_agent.local_postgres import quote_control_plane_postgres_identifie
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, psycopg
 
 _READ_ONLY_MESSAGE = "plainly read-only single statements"
+_READ_ONLY_TRANSACTION_MESSAGE = "database-enforced read-only transaction"
 
 
 class D1nS1e2bRawSqlWorkflowCommandFenceUnitTest(unittest.TestCase):
@@ -27,29 +28,38 @@ class D1nS1e2bRawSqlWorkflowCommandFenceUnitTest(unittest.TestCase):
 
     def _assert_public_rejects_before_delegate(self, rejected_sql: tuple[str, ...]) -> None:
         public_methods = (
-            ("execute_non_query", "_execute_non_query", 1),
-            ("execute_returning_one", "_execute_returning_one", {"command_id": "cmd_held"}),
+            ("execute_non_query", 1, False),
+            ("execute_returning_one", {"command_id": "cmd_held"}, True),
         )
-        for public_name, private_name, delegate_result in public_methods:
+        for public_name, delegate_result, fetch_one in public_methods:
             for sql in rejected_sql:
                 with self.subTest(public_method=public_name, sql=sql):
-                    with mock.patch.object(self.adapter, private_name, return_value=delegate_result) as delegate:
+                    with mock.patch.object(
+                        self.adapter, "_execute_public_probe", return_value=delegate_result
+                    ) as delegate:
                         with self.assertRaisesRegex(ValueError, _READ_ONLY_MESSAGE):
                             getattr(self.adapter, public_name)(sql, ())
                         delegate.assert_not_called()
 
     def _assert_public_allows_read_only(self, allowed_sql: tuple[str, ...]) -> None:
         public_methods = (
-            ("execute_non_query", "_execute_non_query", 7),
-            ("execute_returning_one", "_execute_returning_one", {"marker": 1}),
+            ("execute_non_query", 7, False),
+            ("execute_returning_one", {"marker": 1}, True),
         )
-        for public_name, private_name, delegate_result in public_methods:
+        for public_name, delegate_result, fetch_one in public_methods:
             for sql in allowed_sql:
                 with self.subTest(public_method=public_name, sql=sql):
-                    with mock.patch.object(self.adapter, private_name, return_value=delegate_result) as delegate:
+                    with mock.patch.object(
+                        self.adapter, "_execute_public_probe", return_value=delegate_result
+                    ) as delegate:
                         result = getattr(self.adapter, public_name)(sql, ("parameter",))
                         self.assertEqual(result, delegate_result)
-                        delegate.assert_called_once_with(sql, ("parameter",))
+                        delegate.assert_called_once_with(
+                            sql,
+                            ("parameter",),
+                            fetch_one=fetch_one,
+                            method=public_name,
+                        )
 
     def test_public_raw_sql_rejects_dml_ddl_and_target_smuggling_before_delegate(self) -> None:
         rejected_sql = (
@@ -498,6 +508,141 @@ class D1nS1e2bRawSqlWorkflowCommandFencePGTest(PGControlPlaneStoreTestMixin, uni
         self.assertEqual(self._held_not_before_at(), "2000-01-01 00:00:00")
         self._restore_held_row()
         self.assertEqual(self._workflow_command_snapshot(), baseline)
+
+    def test_public_probe_rejects_mutating_view_on_real_pg(self) -> None:
+        # A plainly shaped ``SELECT * FROM view`` hides a proven mutator behind
+        # the view definition: the lexical allowlist cannot see it, so the
+        # database-enforced read-only transaction is the boundary that stops it.
+        quoted_schema = self._quoted_schema()
+        qualified_table = self._qualified_command_table()
+        quoted_function = quote_control_plane_postgres_identifier("s1e2b_view_mutator")
+        quoted_view = quote_control_plane_postgres_identifier("s1e2b_mutating_view")
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"CREATE FUNCTION {quoted_schema}.{quoted_function}() RETURNS integer "
+            "LANGUAGE plpgsql AS $$ "
+            f"BEGIN UPDATE {qualified_table} SET not_before_at = '2000-01-01 00:00:00' "
+            f"WHERE command_id = '{self.command_id}'; RETURN 1; END $$",
+            (),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"CREATE VIEW {quoted_schema}.{quoted_view} AS SELECT {quoted_schema}.{quoted_function}() AS probe",
+            (),
+        )
+        self.addCleanup(
+            lambda: self.adapter._execute_non_query(  # noqa: SLF001
+                f"DROP FUNCTION IF EXISTS {quoted_schema}.{quoted_function}()",
+                (),
+            )
+        )
+        self.addCleanup(
+            lambda: self.adapter._execute_non_query(  # noqa: SLF001
+                f"DROP VIEW IF EXISTS {quoted_schema}.{quoted_view}",
+                (),
+            )
+        )
+
+        # Control: reading the view through the private interface fires the
+        # hidden mutator — the catalog indirection is real, not hypothetical.
+        invoked = self.adapter._execute_returning_one(  # noqa: SLF001
+            f"SELECT * FROM {quoted_schema}.{quoted_view}",
+            (),
+        )
+        self.assertIsNotNone(invoked)
+        self.assertEqual(self._held_not_before_at(), "2000-01-01 00:00:00")
+        self._restore_held_row()
+        baseline = self._workflow_command_snapshot()
+
+        attempts = (
+            f"SELECT * FROM {quoted_view}",
+            f"SELECT probe FROM {quoted_schema}.{quoted_view}",
+            f"EXPLAIN ANALYZE SELECT * FROM {quoted_schema}.{quoted_view}",
+        )
+        for sql in attempts:
+            for public_method in ("execute_returning_one", "execute_non_query"):
+                with self.subTest(public_method=public_method, sql=sql):
+                    with self.assertRaisesRegex(ValueError, _READ_ONLY_TRANSACTION_MESSAGE):
+                        getattr(self.adapter, public_method)(sql, ())
+                    self.assertEqual(self._workflow_command_snapshot(), baseline)
+
+    def test_public_probe_rejects_allowlisted_function_overload_on_real_pg(self) -> None:
+        # A schema-local ``lower(integer)`` overload shadows the allowlisted
+        # ``pg_catalog.lower`` for ``SELECT lower(1)``; overload resolution is a
+        # database decision, so the read-only transaction is the boundary.
+        quoted_schema = self._quoted_schema()
+        qualified_table = self._qualified_command_table()
+        quoted_function = quote_control_plane_postgres_identifier("lower")
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"CREATE FUNCTION {quoted_schema}.{quoted_function}(integer) RETURNS integer "
+            "LANGUAGE plpgsql AS $$ "
+            f"BEGIN UPDATE {qualified_table} SET not_before_at = '2000-01-01 00:00:00' "
+            f"WHERE command_id = '{self.command_id}'; RETURN 1; END $$",
+            (),
+        )
+        self.addCleanup(
+            lambda: self.adapter._execute_non_query(  # noqa: SLF001
+                f"DROP FUNCTION IF EXISTS {quoted_schema}.{quoted_function}(integer)",
+                (),
+            )
+        )
+
+        # Control: the overload resolves to the mutator through the private
+        # interface, proving the shadowing is live.
+        invoked = self.adapter._execute_returning_one("SELECT lower(1) AS probe", ())  # noqa: SLF001
+        self.assertIsNotNone(invoked)
+        self.assertEqual(self._held_not_before_at(), "2000-01-01 00:00:00")
+        self._restore_held_row()
+        baseline = self._workflow_command_snapshot()
+
+        for public_method in ("execute_returning_one", "execute_non_query"):
+            with self.subTest(public_method=public_method):
+                with self.assertRaisesRegex(ValueError, _READ_ONLY_TRANSACTION_MESSAGE):
+                    getattr(self.adapter, public_method)("SELECT lower(1)", ())
+                self.assertEqual(self._workflow_command_snapshot(), baseline)
+
+    def test_public_probe_rejects_user_operator_hiding_mutator_on_real_pg(self) -> None:
+        # A user operator whose procedure mutates is another catalog object the
+        # lexer cannot resolve behind the ``OPERATOR(schema.##)`` construct.
+        quoted_schema = self._quoted_schema()
+        qualified_table = self._qualified_command_table()
+        quoted_function = quote_control_plane_postgres_identifier("s1e2b_operator_mutator")
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"CREATE FUNCTION {quoted_schema}.{quoted_function}(integer, integer) RETURNS integer "
+            "LANGUAGE plpgsql AS $$ "
+            f"BEGIN UPDATE {qualified_table} SET not_before_at = '2000-01-01 00:00:00' "
+            f"WHERE command_id = '{self.command_id}'; RETURN 1; END $$",
+            (),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"CREATE OPERATOR {quoted_schema}.## "
+            f"(PROCEDURE = {quoted_schema}.{quoted_function}, LEFTARG = integer, RIGHTARG = integer)",
+            (),
+        )
+        self.addCleanup(
+            lambda: self.adapter._execute_non_query(  # noqa: SLF001
+                f"DROP FUNCTION IF EXISTS {quoted_schema}.{quoted_function}(integer, integer)",
+                (),
+            )
+        )
+        self.addCleanup(
+            lambda: self.adapter._execute_non_query(  # noqa: SLF001
+                f"DROP OPERATOR IF EXISTS {quoted_schema}.## (integer, integer)",
+                (),
+            )
+        )
+
+        probe_sql = f"SELECT 1 OPERATOR({quoted_schema}.##) 2"
+        # Control: the operator fires the mutator through the private interface.
+        invoked = self.adapter._execute_returning_one(probe_sql, ())  # noqa: SLF001
+        self.assertIsNotNone(invoked)
+        self.assertEqual(self._held_not_before_at(), "2000-01-01 00:00:00")
+        self._restore_held_row()
+        baseline = self._workflow_command_snapshot()
+
+        for public_method in ("execute_returning_one", "execute_non_query"):
+            with self.subTest(public_method=public_method):
+                with self.assertRaisesRegex(ValueError, _READ_ONLY_TRANSACTION_MESSAGE):
+                    getattr(self.adapter, public_method)(probe_sql, ())
+                self.assertEqual(self._workflow_command_snapshot(), baseline)
 
 
 if __name__ == "__main__":

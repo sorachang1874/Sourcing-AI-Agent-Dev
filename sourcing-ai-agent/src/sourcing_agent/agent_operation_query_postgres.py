@@ -51,6 +51,11 @@ from .operation_runtime import (
     operation_run_control_state,
     operation_run_control_state_fail_closed,
 )
+from .workflow_progressed_child_contract import (
+    canonical_progressed_child_identity,
+    progressed_child_completion_contract_for,
+    progressed_child_plan_event_violation,
+)
 
 INSPECT_OPERATION_OWNER_TARGET_KIND = "operation_state_event_v1"
 INSPECT_OPERATION_MASKED_ABSENCE_OWNER_TARGET_KIND = "inspect_operation_masked_error_v1"
@@ -468,12 +473,19 @@ def _verify_progressed_workflow_command_children(
     path, which commits the child command, its ``CommandPlanRequested`` workflow
     event, and the root ``downstream_command_ids`` edge in one transaction.
     Inspect must therefore re-verify that exact physical lineage for every
-    referenced identifier instead of trusting the edge list: the child row must
-    exist (locked ``FOR UPDATE`` by the base-owner loader), belong to the same
-    workflow run and operation, point back at the root through
-    ``parent_command_id``, carry payload causality that matches its own columns,
-    and reference exactly one same-run ``CommandPlanRequested`` event that names
-    the root command and the child command type/idempotency pair.
+    referenced identifier instead of trusting the edge list, and it must do so
+    against the same versioned progressed-child contract the owner path commits
+    (``workflow_progressed_child_contract``): the child row must exist (locked
+    ``FOR UPDATE`` by the base-owner loader), belong to the same workflow run
+    and operation, point back at the root through ``parent_command_id``, carry
+    the registered child command type/owner for the root's completion contract,
+    hold payload causality equal to every one of its own causality columns
+    (stage, causal group, source-event identity, artifact refs, produced
+    counts, no-op/readiness fields, causality schema), and reference exactly
+    one same-run ``CommandPlanRequested`` event whose full immutable identity
+    (registered ``<child>:plan`` idempotency, deterministic event id, pinned
+    actor/source, ordering after the root's own source event, and complete plan
+    payload) matches the child it planned.
     """
 
     root_contract = _canonical_workflow_command_contract(workflow_command)
@@ -481,6 +493,23 @@ def _verify_progressed_workflow_command_children(
     root_workflow_run_id = str(root_contract["workflow_run_id"] or "")
     root_operation_id = str(root_contract["operation_id"] or "")
     downstream_ids = list(root_contract["downstream_command_ids"])
+    resolved_contract = progressed_child_completion_contract_for(
+        parent_command_type=str(root_contract["command_type"] or ""),
+        parent_owner=str(root_contract["owner"] or ""),
+    )
+    if resolved_contract is None:
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    _completion_name, completion_contract = resolved_contract
+    root_source_events = [
+        event
+        for event in workflow_events
+        if str(event.get("event_id") or "") == str(root_contract["source_event_id"] or "")
+    ]
+    if len(root_source_events) != 1:
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    root_source_sequence = root_source_events[0].get("sequence_number")
+    if type(root_source_sequence) is not int or root_source_sequence <= 0:
+        raise ValueError("agent tool inspect result workflow command link mismatch")
     children_by_id: dict[str, dict[str, Any]] = {}
     for child in child_commands:
         child_contract = _canonical_workflow_command_contract(child)
@@ -492,48 +521,42 @@ def _verify_progressed_workflow_command_children(
         raise ValueError("agent tool inspect result workflow command link mismatch")
     for child_id in downstream_ids:
         child_contract = children_by_id[child_id]
-        child_command_type = str(child_contract["command_type"] or "")
-        child_idempotency_key = str(child_contract["idempotency_key"] or "")
-        source_event_id = str(child_contract["source_event_id"] or "")
+        child_identity = canonical_progressed_child_identity(child_contract)
+        if child_identity is None:
+            raise ValueError("agent tool inspect result workflow command link mismatch")
         if (
-            str(child_contract["workflow_run_id"] or "") != root_workflow_run_id
-            or str(child_contract["operation_id"] or "") != root_operation_id
-            or str(child_contract["parent_command_id"] or "") != root_command_id
-            or not source_event_id
-            or str(child_contract["source_event_type"] or "") != "CommandPlanRequested"
+            child_identity["command_type"] != str(completion_contract["child_command_type"] or "")
+            or child_identity["owner"] != str(completion_contract["child_owner"] or "")
+            or child_identity["workflow_run_id"] != root_workflow_run_id
+            or child_identity["operation_id"] != root_operation_id
+            or child_identity["parent_command_id"] != root_command_id
+            or not child_identity["source_event_id"]
+            or child_identity["source_event_type"] != "CommandPlanRequested"
         ):
             raise ValueError("agent tool inspect result workflow command link mismatch")
-        child_causality = child_contract["payload"].get("causality")
-        if not isinstance(child_causality, dict) or (
-            str(child_causality.get("workflow_run_id") or "") != root_workflow_run_id
-            or str(child_causality.get("operation_id") or "") != root_operation_id
-            or str(child_causality.get("command_type") or "") != child_command_type
-            or str(child_causality.get("owner") or "") != str(child_contract["owner"] or "")
-            or str(child_causality.get("idempotency_key") or "") != child_idempotency_key
-            or str(child_causality.get("parent_command_id") or "") != root_command_id
-            or str(child_causality.get("source_event_id") or "") != source_event_id
-            or str(child_causality.get("source_event_type") or "") != "CommandPlanRequested"
-        ):
-            raise ValueError("agent tool inspect result workflow command link mismatch")
-        source_events = [event for event in workflow_events if str(event.get("event_id") or "") == source_event_id]
+        source_events = [
+            event for event in workflow_events if str(event.get("event_id") or "") == child_identity["source_event_id"]
+        ]
         if len(source_events) != 1:
             raise ValueError("agent tool inspect result workflow command link mismatch")
         source_event = source_events[0]
-        event_payload = _required_json_dict(
-            source_event.get("payload_json"),
-            field="workflow child plan event payload",
-        )
-        if (
-            str(source_event.get("workflow_run_id") or "") != root_workflow_run_id
-            or str(source_event.get("operation_id") or "") != root_operation_id
-            or str(source_event.get("command_id") or "") != root_command_id
-            or str(source_event.get("activity_attempt_id") or "") != ""
-            or str(source_event.get("event_family") or "") != "workflow_event"
-            or str(source_event.get("event_type") or "") != "CommandPlanRequested"
-            or str(source_event.get("schema_version") or "") != "workflow_event_v1"
-            or str(event_payload.get("command_type") or "") != child_command_type
-            or str(event_payload.get("idempotency_key") or "") != child_idempotency_key
-            or str(event_payload.get("parent_command_id") or "") != root_command_id
+        decoded_event = {
+            **dict(source_event),
+            "payload": _required_json_dict(
+                source_event.get("payload_json"),
+                field="workflow child plan event payload",
+            ),
+            "artifact_refs": _required_json_list(
+                source_event.get("artifact_refs_json"),
+                field="workflow child plan event artifact refs",
+            ),
+        }
+        if progressed_child_plan_event_violation(
+            contract=completion_contract,
+            parent_command_id=root_command_id,
+            parent_source_sequence=root_source_sequence,
+            child_identity=child_identity,
+            event=decoded_event,
         ):
             raise ValueError("agent tool inspect result workflow command link mismatch")
 

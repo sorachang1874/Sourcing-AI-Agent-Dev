@@ -474,6 +474,12 @@ _CORRUPT_CARRIER_CASES = (
     "operation_workflow_ref_incomplete_ids",
     "action_metadata_decoded_raw_conflict",
     "action_result_ref_decoded_raw_conflict",
+    "action_metadata_decoded_raw_bool_int_alias",
+    "action_result_ref_decoded_raw_int_float_alias",
+    "action_metadata_duplicate_key_raw_json",
+    "action_metadata_nested_duplicate_key_raw_json",
+    "action_metadata_non_finite_raw_json",
+    "action_result_ref_non_finite_raw_json",
 )
 
 
@@ -509,6 +515,24 @@ def _corrupt_carrier(records: tuple[dict[str, Any], dict[str, Any]], case: str) 
     elif case == "action_result_ref_decoded_raw_conflict":
         action["result_ref"] = {"schema_version": "unrelated_ref.v1"}
         action["result_ref_json"] = json.dumps({"schema_version": "other_ref.v2"})
+    elif case == "action_metadata_decoded_raw_bool_int_alias":
+        # Ordinary Python equality aliases True == 1; contract equality must not.
+        action["metadata"] = {"marker": True}
+        action["metadata_json"] = '{"marker": 1}'
+    elif case == "action_result_ref_decoded_raw_int_float_alias":
+        # Ordinary Python equality aliases 2 == 2.0; contract equality must not.
+        action["result_ref"] = {"schema_version": "unrelated_ref.v1", "marker": 2}
+        action["result_ref_json"] = '{"schema_version": "unrelated_ref.v1", "marker": 2.0}'
+    elif case == "action_metadata_duplicate_key_raw_json":
+        # A duplicate object key must be malformed, never last-value-wins.
+        action["metadata_json"] = '{"marker": 1, "marker": 2}'
+    elif case == "action_metadata_nested_duplicate_key_raw_json":
+        action["metadata_json"] = '{"outer": {"marker": 1, "marker": 2}}'
+    elif case == "action_metadata_non_finite_raw_json":
+        # NaN is not a canonical JSON number; it must never parse as content.
+        action["metadata_json"] = '{"marker": NaN}'
+    elif case == "action_result_ref_non_finite_raw_json":
+        action["result_ref_json"] = '{"schema_version": "unrelated_ref.v1", "marker": -Infinity}'
     else:  # pragma: no cover - parametrization guard
         raise AssertionError(f"unknown corrupt carrier case {case}")
 

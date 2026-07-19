@@ -1,9 +1,10 @@
 # Track D D1n S1e2b — formal review response
 
 Status: fixed-forward implementation response to the latest formal S1e2b `NO-GO` artifact
+`runtime/reviews/20260719T154500Z_Track_D_D1n_S1e2b_fixed-forward_A-H_integrated_closure_rerun2.md` (4 P1,
+`4f246b3..a546c4d`), closed by the FF-I batch recorded below. The immediately prior artifact
 `runtime/reviews/20260719T111300Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_rerun.md` (4 P1 + 2 P2,
-`4f246b3..a98e3df`), closed by the FF-H batch recorded below. The immediately prior artifact
-`runtime/reviews/20260719T074000Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_retry2.md` (4 P1) was closed
+`4f246b3..a98e3df`) was closed by `8807784` (FF-H); `runtime/reviews/20260719T074000Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_retry2.md` (4 P1) was closed
 by `a98e3df` (FF-G); `runtime/reviews/20260718T095734Z_Track_D_D1n_S1e2b_closed_acceptance_and_total_held-command_fence.md`
 and earlier S1e2b artifacts remain historical evidence, not a substitute for a fresh pinned review.
 
@@ -29,7 +30,7 @@ provider/model invocation gates.
   causal aggregate is excluded from default inventory, recorded as a typed gap in snapshot headers and sync summaries,
   and rejected at every generic restore boundary.
 
-### FF-H (this batch) — the six rerun findings
+### FF-H (`8807784`) — the six rerun findings
 
 1. **Progressed lifecycle child verification** (`agent_operation_query_postgres.py`): a `progressed` root no longer
    accepts dangling child identifiers. `load_inspect_operation_base_owner` locks every referenced child `FOR UPDATE`
@@ -76,6 +77,58 @@ provider/model invocation gates.
    tri-state corrupt-carrier rule. `docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md` and
    `docs/LOCAL_POSTGRES_CONTROL_PLANE.md` describe the read-only allowlist, the centralized portability registry, and
    the required exclusion declaration.
+
+Residuals `R-019`/`R-029` stay open. Author evidence is not a formal review; this batch requires a fresh pinned
+independent review before any live/W6/manual signoff.
+
+### FF-I (this batch) — the four rerun2 findings
+
+1. **Versioned progressed-child contract** (`workflow_progressed_child_contract.py`, new;
+   `agent_operation_query_postgres.py`, `control_plane_live_postgres.py`, `acquisition_command_owner.py`): the
+   registered parent-root → progressed-child completion contracts, the immutable field sets, and the child plan-event
+   derivations now live in one shared module (`PROGRESSED_CHILD_CONTRACT_VERSION`) consumed by
+   `complete_acquisition_root_command`, the succeeded-replay validator, and inspection — no second hand-maintained copy.
+   Inspection now requires the registered child command type/owner for the root's completion contract and exact-compares
+   every immutable child/event/causality field: payload causality must mirror every causality column (stage, causal
+   group, source-event identity, artifact refs, produced counts, no-op/readiness fields, causality schema), and the
+   child plan event must match its full immutable identity (registered `<child>:plan` idempotency, deterministic
+   `evt_<sha1>` id, pinned per-contract actor/source, sequence ordered after the root's own source event, empty
+   artifact refs, complete plan payload bound to the child). Only the explicitly mutable child lifecycle fields
+   (status, attempt, lease, result, `not_before_at`, `downstream_command_ids`) may differ. New regressions cover
+   wrong-type, wrong-owner, stage/group drift, causality-schema drift, readiness drift, artifact/count drift,
+   event-idempotency/actor/source/artifact/nested-payload drift: 12 of 13 proven to pass the old verifier
+   (stash-verified), the 13th (`wrong_type`) additionally pinned by the registry.
+2. **Database-enforced read-only public probes** (`control_plane_live_postgres.py`): the lexical allowlist is now
+   defense in depth rather than the sole mutation boundary. Public raw-SQL probes admitted by the allowlist execute
+   inside `SET TRANSACTION READ ONLY` (first statement of the probe transaction), so any write hidden behind
+   database-resolved objects — mutating views, RLS policies, user operators/casts, allowlist-shadowing function
+   overloads — fails with sqlstate `25006` and is re-raised as the public contract error without committing. The
+   private migration/test interface (`_execute_returning_one`/`_execute_non_query`) is unchanged and keeps executing
+   legitimate DDL/DML. Real-PG regressions prove a mutating view (`SELECT * FROM s1e2b_mutating_view` and
+   `EXPLAIN ANALYZE` of it), a schema-local `lower(integer)` overload shadowing the allowlisted builtin, and a user
+   operator (`OPERATOR(schema.##)`) hiding a proven mutator are all rejected with the held command table byte-identical;
+   each control fires the same object through the private interface first to prove the indirection is live. A dedicated
+   SELECT-only probe role remains optional deployment-level hardening on top of this boundary (the read-only
+   transaction already covers every catalog-level indirection because any mutation it reaches executes as DML inside
+   the probe transaction).
+3. **Canonical per-table portability registry** (`control_plane_postgres.py`):
+   `CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY` is now the single source of truth; `DEFAULT_CONTROL_PLANE_TABLES`,
+   `PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES`, `NONPORTABLE_RUNTIME_COORDINATION_TABLES`, and
+   `GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES` are all derived from it. `agent_worker_runs` (active worker
+   status/interrupt/lease state) and `linkedin_profile_registry_leases` (profile-URL scheduler leases) join the
+   nonportable coordination category; `acquisition_runs` and `acquisition_discovery_lanes` join the durable-runtime
+   causal aggregate category (their Action/Operation/command/event owners were already excluded, so importing them
+   preserved a partial runtime slice). A fast preflight test proves the derived sets equal the registry and that the
+   registry classifies every `CONTROL_PLANE_LIVE_TABLES` table exactly once; real-PG export/import tests prove active
+   worker/profile leases and orphaned acquisition runtime rows are neither observed nor mutated by generic
+   export/import and are rejected at the explicit export and snapshot→PG sync boundaries.
+4. **Canonical type-strict tri-state carriers** (`json_contract.py`, `acquisition_start_v2_control.py`):
+   `loads_json_contract_strict` rejects duplicate object keys (at any depth) and non-finite `NaN`/`Infinity` constants
+   instead of normalizing them, and decoded/raw carrier comparison now uses type-strict `json_contract_equal`, so
+   `1 == True` and `1 == 1.0` can never alias a conflicting carrier into a matching one. The corrupt-carrier matrix
+   grows from 12 to 18 cases (bool/int alias, int/float alias, top-level and nested duplicate keys, `NaN`, and
+   `-Infinity`), each run under both erased and legacy-coherent pins; all six new families classified as `decoded`
+   (→ `non_v2`) before the fix and now force `partial_or_mixed_v2`.
 
 Residuals `R-019`/`R-029` stay open. Author evidence is not a formal review; this batch requires a fresh pinned
 independent review before any live/W6/manual signoff.
@@ -163,6 +216,22 @@ independent review before any live/W6/manual signoff.
 
 ## New regression evidence
 
+- `tests/test_d1n_s1e2b_inspect_acceptance_closure.py` (FF-I) adds the versioned progressed-child negatives: six
+  causality-column drift cases (stage, causal group, causality schema, readiness effect, input artifact refs, produced
+  counts), the fully self-consistent foreign `foreign.command`/`foreign_owner` child probes, and five plan-event
+  identity drift cases (idempotency, actor, source, nested plan payload, artifact refs); 12 of 13 are stash-verified to
+  pass the pre-fix verifier, and `wrong_type` is additionally pinned by the registered contract.
+- `tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py` (FF-I) adds the database-enforced read-only transaction
+  regressions: a mutating view read and its `EXPLAIN ANALYZE`, an allowlisted-shadowing `lower(integer)` overload, and
+  a user operator hiding a proven mutator, each rejected with sqlstate `25006` after the same object is fired once
+  through the private interface as the live control; the unit seam moved to the `_execute_public_probe` delegate.
+- `tests/test_control_plane_postgres.py` (FF-I) adds the canonical portability-registry preflight (derived sets equal
+  `CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY`; every `CONTROL_PLANE_LIVE_TABLES` table classified exactly once) and the
+  real-PG export/import proofs for active `agent_worker_runs`/`linkedin_profile_registry_leases` rows and orphaned
+  `acquisition_runs`/`acquisition_discovery_lanes` rows (not observed, not mutated, rejected at explicit boundaries).
+- `tests/test_d1n_s1e2b_start_v2_provenance.py` (FF-I) grows the corrupt-carrier matrix from 12 to 18 cases under both
+  erased and legacy-coherent pins: bool/int and int/float decoded/raw aliases, top-level and nested duplicate keys,
+  `NaN`, and `-Infinity`; all six new families classified as `decoded` (→ `non_v2`) before the fix.
 - `tests/test_d1n_start_acquisition_v2_create_uow.py` covers overlong, control-character, surrogate, malformed, and
   overlong policy values before adapter access.
 - `tests/test_d1n_start_acquisition_v2_create_pg.py` covers:
@@ -197,8 +266,39 @@ independent review before any live/W6/manual signoff.
 
 ## Fixed-forward validation evidence
 
-Exact-head FF-H evidence (this batch; commands and counts are recorded for the pinned head commit, whose SHA is
-recorded in `.coord/handoffs/s1e2b-ff-h-v1.md`):
+Exact-head FF-I evidence (this batch; commands and counts are recorded for the pinned head commit, whose SHA is
+recorded in `.coord/handoffs/s1e2b-ff-i-v1.md`):
+
+- `python -m pytest tests/test_d1n_s1e2b_acceptance_contract.py tests/test_d1n_s1e2b_inspect_acceptance_closure.py
+  tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py tests/test_d1n_s1e2b_start_v2_provenance.py
+  tests/test_control_plane_postgres.py tests/test_pre_agent_contract_review.py
+  tests/test_d1n_start_acquisition_v2_create_pg.py -q`: `278 passed, 579 subtests passed in 314.65s`, zero
+  failures/errors. (The worktree lacks `frontend-demo/node_modules`; the one esbuild-dependent case ran with
+  `SOURCING_TEST_ESBUILD_MODULE_PATH` pointed at the main tree's module. Without that override the same case fails
+  identically on the base commit, so it is an environment artifact, not a regression.)
+- Per-suite counts inside that battery: inspect acceptance closure `17 passed + 32 subtests`; raw-SQL fence
+  `12 passed + 275 subtests`; start-v2 provenance `102 passed`; control-plane postgres `36 passed + 178 subtests`.
+- Touched-suite adjacency: `tests/test_cloud_asset_import.py`, `tests/test_control_plane_pool.py`,
+  `tests/test_d0f_model_invocation_envelope_postgres.py`, `tests/test_recovery_drain_registry.py`,
+  `tests/test_recovery_takeover_intent.py`, `tests/test_request_scope_owner_fencing_pg.py`,
+  `tests/test_export_async_task.py`: `65 passed`; progressed-child owner/replay adjacency
+  `tests/test_d1n_start_acquisition_v2_create_pg.py` + `tests/test_d1m_company_public_web_atomic_owner.py` +
+  `tests/test_d1i_acquisition_root_action_activation.py`: `82 passed + 163 subtests`.
+- Ruff check and ruff format on every changed file: clean (the repo-wide ruff baseline carries 27 pre-existing
+  findings in untouched files). Scoped mypy (`make typecheck` file set): `81 errors / 4 files`, exactly the allowed
+  global baseline; this batch adds zero new mypy errors. `git diff --check`: clean.
+- Pre-existing non-regressions observed and re-confirmed against the stashed base: the
+  `test_d3c1_public_mapper_is_closed_and_preserves_only_safe_diagnostics` mapper-cardinality assertion (`85` expected,
+  `86` current, introduced by the base-commit Luna batch runner, identical with this batch stashed) and the
+  `test_first_party_markdown_files_have_status_banner` missing-banner list (identical with this batch stashed).
+- Every new regression was stash-verified to fail before its fix: 12 of 13 progressed-child drift cases pass the
+  pre-fix verifier (`wrong_type` was already caught by the pre-fix event-payload cross-check and is now additionally
+  pinned by the registered contract); all six new carrier families classify as `decoded` (→ `non_v2`) pre-fix; the
+  mutating-view/overload/operator probes commit through the pre-fix public path (the reviewer artifact's probes) and
+  are rejected post-fix with the held table byte-identical; the four reclassified tables were portable pre-fix by
+  construction of the old hand-maintained sets.
+
+Exact-head FF-H evidence (`8807784`; retained from the prior batch):
 
 - `python -m pytest tests/test_d1n_s1e2b_acceptance_contract.py tests/test_d1n_s1e2b_inspect_acceptance_closure.py
   tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py tests/test_d1n_s1e2b_start_v2_provenance.py

@@ -243,10 +243,17 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
   `control_plane_snapshot.json`）只是 projection/domain-only 的迁移快照：完整的 PG-only durable runtime 因果聚合
   （`workflow_commands`、`workflow_events`、`workflow_current_state`、`runtime_outbox`、`agent_actions`、
   `operation_runs`、`agent_tool_result_slots` / `agent_tool_result_attempts` / `agent_tool_result_journal`、
-  `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas`、`operation_events`）
+  `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas`、`operation_events`，
+  以及其 Action/Operation/command/event owner 同属该聚合的 acquisition 运行时行
+  `acquisition_runs`、`acquisition_discovery_lanes`）
   以及不可移植的 live execution/recovery/lease/cost-control 协调表
-  （`workflow_job_leases`、`workflow_recovery_intents`、`runtime_provider_limiter_leases`）
-  一律不进入 generic export；snapshot 头部用 `excluded_pg_only_durable_runtime_tables` 显式记录这个 typed gap，
+  （`workflow_job_leases`、`workflow_recovery_intents`、`runtime_provider_limiter_leases`、
+  活跃 worker 行 `agent_worker_runs`、profile-URL 调度租约 `linkedin_profile_registry_leases`）
+  一律不进入 generic export；可移植性分类的唯一权威是 canonical per-table registry
+  `CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY`（`DEFAULT_CONTROL_PLANE_TABLES`、
+  `PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES`、`NONPORTABLE_RUNTIME_COORDINATION_TABLES`、
+  `GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES` 全部由它派生，不存在第二份手工维护的集合）；
+  snapshot 头部用 `excluded_pg_only_durable_runtime_tables` 显式记录这个 typed gap，
   且所有 generic import/restore 边界（PG snapshot sync、runtime mirror sync、SQLite restore）在导入前强制要求
   这份 exact schema-versioned exclusion declaration（缺失或不匹配即拒绝）、拒绝这些表、并把验证过的 gap 复制到
   每个 restore/sync/cloud-import summary，因此任何部分聚合或 live 协调切片都无法冒充完整恢复。
