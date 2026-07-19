@@ -21,6 +21,7 @@ import {
   prepareHistoryForHydration,
   shouldUseReusedCompletedFlow,
 } from "../lib/historyRecovery";
+import { createDefaultCohortLocationSelection } from "../lib/cohortSelection";
 import { summarizeSearchQuery } from "../lib/historySummary";
 import {
   readSearchHistoryItem,
@@ -47,6 +48,7 @@ import {
   hydrateHistoryWithResult,
 } from "../lib/workflow";
 import type {
+  CohortLocationSelection,
   CohortSelection,
   CohortSelectionOptions,
   DashboardData,
@@ -127,6 +129,13 @@ export function SearchPage() {
   const flowRef = useRef<SearchHistoryItem>(emptyFlow);
   const [queryText, setQueryText] = useState("");
   const [cohortSelection, setCohortSelection] = useState<CohortSelection | null>(null);
+  // Request-owned location state (review finding 1): the composer's
+  // presence-aware location selection lives HERE, not in the picker and not
+  // in a module-global registry, so cohort option edits never reset it and
+  // the initial submit passes it explicitly.
+  const [cohortLocations, setCohortLocations] = useState<CohortLocationSelection>(
+    () => createDefaultCohortLocationSelection(),
+  );
   const [cohortOptions, setCohortOptions] = useState<CohortSelectionOptions | null>(null);
   const [isLoadingCohortOptions, setIsLoadingCohortOptions] = useState(false);
   const [cohortOptionsError, setCohortOptionsError] = useState("");
@@ -222,6 +231,7 @@ export function SearchPage() {
     commitFlow(emptyFlow);
     setQueryText("");
     setCohortSelection(null);
+    setCohortLocations(createDefaultCohortLocationSelection());
     setDashboard(null);
     setRunStatus(null);
     setIsStartingExcelWorkflow(false);
@@ -1088,6 +1098,9 @@ export function SearchPage() {
           nextQuery,
           "",
           cohortSelection || undefined,
+          // Request-owned location state rides alongside the cohort object;
+          // never attached to a non-Cohort request.
+          cohortSelection ? cohortLocations : undefined,
         );
       submittedHistoryId = nextHistoryId;
       if (!isRequestEpochActive(requestEpoch)) {
@@ -1244,11 +1257,29 @@ export function SearchPage() {
     setErrorMessage("");
     setIsLoadingResults(false);
     try {
+      // Revision carries the request-owned cohort + location state
+      // explicitly (review finding 1): the review decision wins, the plan
+      // mirror is the fallback, so a recovered flow rehydrates the recovered
+      // request's locations instead of silently falling back to the server
+      // default. Presence tri-state is preserved (absent / explicit opt-out
+      // / explicit values).
+      const revisionCohort =
+        currentFlow.reviewDecision.cohortSelection || currentFlow.plan.cohortSelection || undefined;
+      const revisionLocations: CohortLocationSelection | undefined = revisionCohort
+        ? {
+            targetLocations:
+              currentFlow.reviewDecision.targetLocations ?? currentFlow.plan.targetLocations,
+            excludeTargetLocations:
+              currentFlow.reviewDecision.excludeTargetLocations
+              ?? currentFlow.plan.excludeTargetLocations,
+          }
+        : undefined;
       const { plan: planned, reviewId, historyId: nextHistoryId, status, raw } =
         await sourcingBackendClient.planNaturalLanguageSearch(
           [currentFlow.queryText, currentFlow.revisionText].filter(Boolean).join(" "),
           currentFlow.id,
-          currentFlow.reviewDecision.cohortSelection || currentFlow.plan.cohortSelection,
+          revisionCohort,
+          revisionLocations,
         );
       if (!isRequestEpochActive(requestEpoch)) {
         return;
@@ -1592,6 +1623,7 @@ export function SearchPage() {
         cohortOptions={cohortOptions}
         isLoadingCohortOptions={isLoadingCohortOptions}
         cohortOptionsError={cohortOptionsError}
+        cohortLocations={cohortLocations}
         plan={plan}
         timelineSteps={timelineSteps}
         dashboard={dashboard}
@@ -1626,6 +1658,7 @@ export function SearchPage() {
         isContinuingStage2={isContinuingStage2}
         onQueryChange={setQueryText}
         onCohortSelectionChange={setCohortSelection}
+        onCohortLocationChange={setCohortLocations}
         onRetryCohortOptions={() => {
           void loadCohortOptions();
         }}

@@ -5,7 +5,6 @@ import { FacetMultiSelect } from "./FacetMultiSelect";
 import {
   type CandidateFacetOption,
   buildEmploymentOptions,
-  buildFunctionOptions,
   buildLocationOptions,
   buildRecallBucketOptions,
   computeCandidateIntentKeywordHits,
@@ -632,16 +631,22 @@ export function ResultsBoardPanel({
       ),
     [candidateFacetSummary?.locations, dashboard.candidates, hasBoardRuntimeState, hasGlobalFacetSummary],
   );
+  // Function facet options have ONE source — the canonical backend facet
+  // summary (FT2 fixed-forward r2, review finding 5). When that summary is
+  // unavailable the facet is DISABLED (empty options); it is never rebuilt
+  // from candidate rows, and stale selections below are gated off so they
+  // cannot reach the backend filter while the facet is disabled.
   const functionOptions = useMemo(
     () =>
       canonicalBoardFacetOptions(
         hasGlobalFacetSummary,
         candidateFacetSummary?.functions,
-        buildFunctionOptions(dashboard.candidates),
+        [],
         hasBoardRuntimeState,
       ),
-    [candidateFacetSummary?.functions, dashboard.candidates, hasBoardRuntimeState, hasGlobalFacetSummary],
+    [candidateFacetSummary?.functions, hasBoardRuntimeState, hasGlobalFacetSummary],
   );
+  const functionFacetAvailable = functionOptions.length > 0;
   const auditStatusOptions = useMemo(
     () => buildAuditStatusOptions(dashboard.candidates, reviewStatusMap),
     [dashboard.candidates, reviewStatusMap],
@@ -870,7 +875,7 @@ export function ResultsBoardPanel({
           recallBuckets: filterControlsAvailable ? selectedRecallBuckets : [],
           employmentStatuses: filterControlsAvailable ? selectedEmploymentStatuses : [],
           locations: filterControlsAvailable ? selectedLocations : [],
-          functionBuckets: filterControlsAvailable ? selectedFunctionBuckets : [],
+          functionBuckets: filterControlsAvailable && functionFacetAvailable ? selectedFunctionBuckets : [],
           searchKeyword: filterControlsAvailable ? keyword : "",
         },
         dashboard.intentKeywords,
@@ -879,6 +884,7 @@ export function ResultsBoardPanel({
       dashboard.candidates,
       dashboard.intentKeywords,
       filterControlsAvailable,
+      functionFacetAvailable,
       keyword,
       selectedFunctionBuckets,
       selectedEmploymentStatuses,
@@ -918,7 +924,9 @@ export function ResultsBoardPanel({
             recallBuckets: selectedBackendFacetFilterIds(selectedRecallBuckets, recallOptions, ["all"]),
             employmentStatuses: selectedBackendFacetFilterIds(selectedEmploymentStatuses, employmentFacetOptions),
             locations: selectedBackendFacetFilterIds(selectedLocations, locationOptions),
-            functionBuckets: selectedBackendFacetFilterIds(selectedFunctionBuckets, functionOptions),
+            functionBuckets: functionFacetAvailable
+              ? selectedBackendFacetFilterIds(selectedFunctionBuckets, functionOptions)
+              : [],
             layerIncludes: includedLayerIds,
             layerExcludes: excludedLayerIds,
             auditStatuses: selectedBackendFacetFilterIds(
@@ -942,6 +950,7 @@ export function ResultsBoardPanel({
       employmentFacetOptions,
       excludedLayerIds,
       filterControlsAvailable,
+      functionFacetAvailable,
       functionOptions,
       includedLayerIds,
       keyword,
@@ -1511,8 +1520,8 @@ export function ResultsBoardPanel({
             summary={facetSummaryLabel(functionOptions, selectedFunctionBuckets, "全量")}
             options={functionOptions}
             selectedIds={selectedFunctionBuckets}
-            disabled={!filterControlsAvailable}
-            disabledSummary={disabledFilterSummary}
+            disabled={!filterControlsAvailable || !functionFacetAvailable}
+            disabledSummary={!filterControlsAvailable ? disabledFilterSummary : "统计未生成"}
             showCounts={hasGlobalFacetSummary}
             emptyMessage={canonicalFacetUnavailable ? canonicalFacetUnavailableMessage : "当前没有职能筛选项。"}
             onToggle={(optionId) => {

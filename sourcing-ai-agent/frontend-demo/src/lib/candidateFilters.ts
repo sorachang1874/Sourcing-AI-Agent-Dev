@@ -222,9 +222,12 @@ function candidateFunctionBuckets(candidate: Candidate): string[] | null {
  * Employment membership truth (FT0 §6): for Cohort-produced candidates the
  * server-owned `cohortEmploymentStatuses` set is the ONLY authoritative
  * membership — a dual-status candidate matches BOTH `current` and `former`
- * while its top-level display status stays single-valued. Legacy records
- * carry no membership and keep the documented display-status compatibility
- * semantic (`lead` matches only when both statuses are selected).
+ * while its top-level display status stays single-valued. The display-status
+ * compat path exists ONLY for genuinely legacy records with no Cohort
+ * provenance: the projection layer (api.ts `parseCohortEmploymentStatuses`)
+ * fails closed when Cohort provenance is present without a valid membership,
+ * so a Cohort-produced candidate can never reach this fallback (FT2
+ * fixed-forward r2, review finding 4). The `lead` semantic is unchanged.
  */
 function candidateEmploymentMembership(candidate: Candidate): string[] {
   const membership = (candidate.cohortEmploymentStatuses || []).filter(
@@ -385,36 +388,17 @@ export function defaultLocationSelection(options: CandidateFacetOption[]): strin
   return options.slice(0, 1).map((option) => option.id);
 }
 
-export function buildFunctionOptions(candidates: Candidate[]): CandidateFacetOption[] {
-  const counts = candidates.reduce<Record<string, number>>((accumulator, candidate) => {
-    const buckets = candidateFunctionBuckets(candidate);
-    if (!buckets) {
-      // Server facet unavailable for this row: it contributes no membership
-      // to any bucket (never a synthesized `unknown`).
-      return accumulator;
-    }
-    for (const key of buckets) {
-      accumulator[key] = (accumulator[key] || 0) + 1;
-    }
-    return accumulator;
-  }, {});
-  // Options are derived from server-provided bucket ids only; the canonical
-  // board path prefers the backend facet summary (labels included) and this
-  // local fallback intentionally keeps raw server ids as labels instead of
-  // re-creating a local option enum.
-  return Object.entries(counts)
-    .sort((left, right) => left[0].localeCompare(right[0]))
-    .map(([id, count]) => ({ id, label: id, count }));
-}
-
-export function defaultFunctionSelection(options: CandidateFacetOption[]): string[] {
-  const nonEmpty = options.filter((option) => option.count > 0).map((option) => option.id);
-  if (nonEmpty.length > 0) {
-    return nonEmpty;
-  }
-  return options.slice(0, 1).map((option) => option.id);
-}
-
+/**
+ * There is NO frontend function-facet option source (FT2 fixed-forward r2,
+ * review finding 5): the board consumes ONLY the canonical backend facet
+ * summary for function options, counts, labels, and ordering. When that
+ * summary is unavailable the function facet is DISABLED — options are never
+ * rebuilt from candidate rows (the round-1 `buildFunctionOptions` /
+ * `defaultFunctionSelection` row-rebuild fallback is deleted, and per the
+ * FT0 §5.3 deletion rule no second taxonomy may return). The per-candidate
+ * `matchesFunctionSelection` helper below only MATCHES already-served
+ * membership ids against a selection; it never creates options.
+ */
 export function computeCandidateIntentKeywordHits(candidate: Candidate, intentKeywords: string[]): string[] {
   if (intentKeywords.length === 0) {
     return [];

@@ -2,11 +2,9 @@ import { useState } from "react";
 import {
   appendLocationValue,
   buildCohortShardPreview,
-  canonicalCohortSelectionKey,
   cloneCohortSelection,
   createDefaultCohortLocationSelection,
   createDefaultCohortSelection,
-  publishCohortLocationDraft,
   removeLocationValue,
   SERVER_DEFAULT_TARGET_LOCATION_DISPLAY,
   summarizeCohortSelection,
@@ -29,21 +27,22 @@ interface CohortSelectionPickerProps {
   compact?: boolean;
   /**
    * Controlled location selection (sibling of the cohort object, never part
-   * of it). When omitted, the picker owns the location state locally AND
-   * publishes it into the explicit draft registry consumed by the pinned
-   * request payload builders, so unleased parents that only transport the
-   * cohort object still submit the user's real locations (FT2 fixed-forward,
-   * review finding 1).
+   * of it). Location state is REQUEST-OWNED (FT2 fixed-forward r2, review
+   * finding 1): the parent holds the presence-aware selection and passes it
+   * in explicitly; the picker keeps NO local copy and there is no
+   * module-global draft registry, so cohort option edits can never silently
+   * reset locations and recovered flows rehydrate from the recovered request.
    */
   locationValue?: CohortLocationSelection | null;
   onLocationChange?: (value: CohortLocationSelection) => void;
   /**
-   * Disable ONLY the location controls (review finding 2): location editing
-   * is exposed exclusively when the backend review gate authorizes the
-   * location editable fields; otherwise the effective values render
-   * read-only.
+   * Independent per-field authorization (review finding 2): the two location
+   * fields are independent contracts, so the backend review gate authorizes
+   * each one separately. Cohort locking (`locked`) never disables location
+   * controls — only these flags (and the whole-picker `disabled`) do.
    */
-  locationDisabled?: boolean;
+  targetLocationsDisabled?: boolean;
+  excludeLocationsDisabled?: boolean;
   /** Set false when the embedding surface renders its own shard preview. */
   showShardPreview?: boolean;
   onChange: (value: CohortSelection | null) => void;
@@ -134,30 +133,24 @@ export function CohortSelectionPicker({
   compact = false,
   locationValue = null,
   onLocationChange,
-  locationDisabled = false,
+  targetLocationsDisabled = false,
+  excludeLocationsDisabled = false,
   showShardPreview = true,
   onChange,
   onRetryOptions,
 }: CohortSelectionPickerProps) {
   const controlsDisabled = disabled || locked || !options;
   const canEnable = Boolean(options) && !disabled && !locked;
-  const locationsReadOnly = controlsDisabled || locationDisabled;
-  // Local location state is bound to the exact cohort object it belongs to:
-  // when the controlled cohort identity changes (new search, recovered
-  // flow), the local copy resets to the absent/server-default seed instead
-  // of leaking a previous flow's locations into display or submission.
-  const cohortKey = value ? canonicalCohortSelectionKey(value) : "";
-  const [localLocations, setLocalLocations] = useState<{
-    cohortKey: string;
-    selection: CohortLocationSelection;
-  }>(() => ({
-    cohortKey,
-    selection: createDefaultCohortLocationSelection(),
-  }));
-  if (!locationValue && localLocations.cohortKey !== cohortKey) {
-    setLocalLocations({ cohortKey, selection: createDefaultCohortLocationSelection() });
-  }
-  const locations = locationValue || localLocations.selection;
+  // Cohort locking and location authorization are SEPARATE concerns (review
+  // finding 2): a locked (plan-owned) cohort disables only the cohort option
+  // controls above; the location fields are governed exclusively by their own
+  // per-field authorization flags.
+  const targetLocationsReadOnly = disabled || targetLocationsDisabled;
+  const excludeLocationsReadOnly = disabled || excludeLocationsDisabled;
+  // The controlled parent owns the location state; without a controlled value
+  // the picker renders the absent (server-default) state and never writes
+  // anywhere.
+  const locations = locationValue || createDefaultCohortLocationSelection();
 
   const updateSelection = (patch: Partial<CohortSelection>) => {
     if (!value || controlsDisabled) {
@@ -170,12 +163,6 @@ export function CohortSelectionPicker({
   };
 
   const updateLocations = (next: CohortLocationSelection) => {
-    if (!locationValue) {
-      setLocalLocations({ cohortKey, selection: next });
-      if (value) {
-        publishCohortLocationDraft(next, value);
-      }
-    }
     onLocationChange?.(next);
   };
 
@@ -209,28 +196,14 @@ export function CohortSelectionPicker({
                 const nextCohort = createDefaultCohortSelection(options);
                 onChange(nextCohort);
                 // Location is a sibling request field: seed the absent
-                // (server-default) state alongside the cohort object and
-                // publish it for the request payload builders.
-                const seed = createDefaultCohortLocationSelection();
-                if (!locationValue) {
-                  setLocalLocations({
-                    cohortKey: canonicalCohortSelectionKey(nextCohort),
-                    selection: seed,
-                  });
-                  publishCohortLocationDraft(seed, nextCohort);
-                }
-                onLocationChange?.(seed);
+                // (server-default) state alongside the cohort object in the
+                // request-owned parent state.
+                onLocationChange?.(createDefaultCohortLocationSelection());
               } else if (!event.target.checked) {
                 onChange(null);
                 // Clear the sibling location state atomically with the
-                // cohort object (local copy, draft registry, and any
-                // controlled parent alike).
-                const cleared = createDefaultCohortLocationSelection();
-                if (!locationValue) {
-                  setLocalLocations({ cohortKey: "", selection: cleared });
-                  publishCohortLocationDraft(null, null);
-                }
-                onLocationChange?.(cleared);
+                // cohort object in the request-owned parent state.
+                onLocationChange?.(createDefaultCohortLocationSelection());
               }
             }}
           />
@@ -346,7 +319,7 @@ export function CohortSelectionPicker({
             </div>
           </fieldset>
 
-          <fieldset disabled={locationsReadOnly} data-testid={`${idPrefix}-target-locations`}>
+          <fieldset disabled={targetLocationsReadOnly} data-testid={`${idPrefix}-target-locations`}>
             <legend>目标地区（可多值）</legend>
             <p className="cohort-picker-hint">
               自由文本，由后端校验；未选择时服务端按默认 {SERVER_DEFAULT_TARGET_LOCATION_DISPLAY} 执行。
@@ -364,7 +337,7 @@ export function CohortSelectionPicker({
                 type="checkbox"
                 data-testid={`${idPrefix}-target-locations-optout`}
                 checked={targetOptedOut}
-                disabled={locationsReadOnly}
+                disabled={targetLocationsReadOnly}
                 onChange={(event) =>
                   updateLocations({
                     ...locations,
@@ -388,7 +361,7 @@ export function CohortSelectionPicker({
                 hint="添加后按所选地区执行（用户选择完整覆盖服务端默认，不做合并）。"
                 values={locations.targetLocations ?? []}
                 placeholder={SERVER_DEFAULT_TARGET_LOCATION_DISPLAY}
-                disabled={locationsReadOnly}
+                disabled={targetLocationsReadOnly}
                 onChange={(targetValues) =>
                   updateLocations({
                     ...locations,
@@ -405,7 +378,7 @@ export function CohortSelectionPicker({
             hint="自由文本，命中排除地区的成员不纳入召回。"
             values={locations.excludeTargetLocations ?? []}
             placeholder="例如：European Union"
-            disabled={locationsReadOnly}
+            disabled={excludeLocationsReadOnly}
             onChange={(excludeValues) =>
               updateLocations({
                 ...locations,
@@ -414,7 +387,7 @@ export function CohortSelectionPicker({
             }
           />
 
-          {locationDisabled ? (
+          {targetLocationsReadOnly && excludeLocationsReadOnly ? (
             <p className="cohort-picker-hint" data-testid={`${idPrefix}-locations-locked`}>
               地区边界当前未获编辑授权，仅展示生效值。
             </p>

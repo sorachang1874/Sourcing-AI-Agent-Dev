@@ -15,7 +15,6 @@ import {
   parseCohortLocationMirror,
   parseCohortSelectionOptionsPayload,
   parseCohortSelectionPayload,
-  readCohortLocationDraft,
 } from "./cohortSelection";
 import { normalizeWorkflowStatus, resolveWorkflowStatus } from "./workflowStatus";
 import {
@@ -46,6 +45,7 @@ import type {
   CandidateSourceMatch,
   BoardRuntimeState,
   CohortLocationSelection,
+  CohortRegistryPin,
   CohortSelection,
   CohortSelectionOptions,
   DashboardData,
@@ -5097,6 +5097,61 @@ function extractPlanCohortLocations(
   return cloneCohortLocationSelection(canonical);
 }
 
+/**
+ * Server-owned cohort registry pin of the plan (FT2 fixed-forward r2, review
+ * finding 3). The backend CohortProviderCompiler embeds
+ * `{registry_version, registry_digest}` into the provider execution manifest
+ * (`cohort_provider_compiler.py:628-629`); the plan response and the
+ * frontend-history recovery metadata may mirror that same manifest. Every
+ * present manifest mirror must agree byte-exactly (conflict fails closed,
+ * same posture as the cohort/location mirrors); a manifest without registry
+ * pin fields is invalid pin evidence and fails closed. When no manifest
+ * carries pin evidence the plan pin is `undefined` — confirmation of an
+ * explicit-Cohort plan must then block on unavailable pin evidence.
+ */
+function extractPlanCohortRegistryPin(
+  payload: any,
+  explainPayload: any,
+): CohortRegistryPin | undefined {
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const payloadStrategy =
+    (payload?.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const explainStrategy =
+    (explainPayload?.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const manifestRecords = [
+    payloadStrategy.provider_execution_manifest,
+    payload?.plan?.provider_execution_manifest,
+    explainStrategy.provider_execution_manifest,
+    explainPayload?.plan?.provider_execution_manifest,
+    payload?.provider_execution_manifest,
+    explainPayload?.provider_execution_manifest,
+    metadata.provider_execution_manifest,
+  ].filter(
+    (value): value is Record<string, unknown> =>
+      Boolean(value) && typeof value === "object" && !Array.isArray(value),
+  );
+  const pins: CohortRegistryPin[] = [];
+  for (const manifest of manifestRecords) {
+    const hasVersion = Object.prototype.hasOwnProperty.call(manifest, "registry_version");
+    const hasDigest = Object.prototype.hasOwnProperty.call(manifest, "registry_digest");
+    if (!hasVersion && !hasDigest) {
+      continue;
+    }
+    const version = manifest.registry_version;
+    const digest = manifest.registry_digest;
+    if (typeof version !== "string" || !version || typeof digest !== "string" || !digest) {
+      throw new Error("Plan response has an invalid cohort registry pin.");
+    }
+    if (!pins.some((pin) => pin.registryVersion === version && pin.registryDigest === digest)) {
+      pins.push({ registryVersion: version, registryDigest: digest });
+    }
+  }
+  if (pins.length > 1) {
+    throw new Error("Plan response contains conflicting cohort registry pins.");
+  }
+  return pins[0];
+}
+
 function mapPlanReviewDecisionDefaults(
   payload: any,
   requestPreview: Record<string, unknown>,
@@ -5288,6 +5343,7 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
   );
   const cohortSelection = extractPlanCohortSelection(payload, explain, requestPreview);
   const cohortLocations = extractPlanCohortLocations(payload, explain, requestPreview);
+  const cohortRegistryPin = extractPlanCohortRegistryPin(payload, explain);
   const organizationExecutionProfile =
     (explain.organization_execution_profile as Record<string, unknown>) ||
     (payload.organization_execution_profile as Record<string, unknown>) ||
@@ -5383,36 +5439,27 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     excludeTargetLocations: cohortLocations?.excludeTargetLocations
       ? [...cohortLocations.excludeTargetLocations]
       : undefined,
+    cohortRegistryPin,
   };
 }
 
 /**
  * Resolve the location payload fragment for a plan submit/revision/explain
- * request (FT2 fixed-forward, review finding 1).
+ * request (FT2 fixed-forward r2, review finding 1).
  *
- * Explicit caller arguments always win. When the caller passes no location
- * arguments, the picker-owned draft registry is consulted so the composer's
- * location edits enter the REAL initial and revision request state even
- * though the (unleased) parent components only transport the cohort object.
- * The draft is bound to the exact cohort object being submitted; a stale or
- * foreign draft reads as absent and the server default applies (fail-safe).
- * Location fields never materialize on non-Cohort requests.
+ * Location state is REQUEST-OWNED: the caller passes the presence-aware
+ * selection explicitly (SearchPage for initial submit, the review
+ * decision/plan mirror for revision). There is no ambient or module-global
+ * location state to consult — an absent argument serializes as an absent
+ * field (server default applies), an explicit `[]` as opt-out, and a present
+ * null/invalid shape fails closed via the payload builder. Location fields
+ * are only ever passed alongside a cohort selection by the callers.
  */
 function resolveRequestLocationPayload(
-  cohortSelection: CohortSelection | undefined,
   targetLocations?: string[],
   excludeTargetLocations?: string[],
 ): Record<string, unknown> {
-  if (targetLocations !== undefined || excludeTargetLocations !== undefined) {
-    return buildCohortLocationApiPayload(targetLocations, excludeTargetLocations);
-  }
-  if (cohortSelection) {
-    const draft = readCohortLocationDraft(cohortSelection);
-    if (draft) {
-      return buildCohortLocationApiPayload(draft.targetLocations, draft.excludeTargetLocations);
-    }
-  }
-  return {};
+  return buildCohortLocationApiPayload(targetLocations, excludeTargetLocations);
 }
 
 export async function getWorkflowExplain(
@@ -5427,7 +5474,7 @@ export async function getWorkflowExplain(
       raw_user_request: queryText,
       planning_mode: "model_assisted",
       ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
-      ...resolveRequestLocationPayload(cohortSelection, targetLocations, excludeTargetLocations),
+      ...resolveRequestLocationPayload(targetLocations, excludeTargetLocations),
       ...DEFAULT_RECALL_LIMITS,
     }),
   }, PLAN_API_TIMEOUT_MS);
@@ -5523,7 +5570,7 @@ function buildPlanSubmitPayload(
     raw_user_request: queryText,
     ...(normalizedHistoryId ? { history_id: normalizedHistoryId } : {}),
     ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
-    ...resolveRequestLocationPayload(cohortSelection, targetLocations, excludeTargetLocations),
+    ...resolveRequestLocationPayload(targetLocations, excludeTargetLocations),
     planning_mode: "model_assisted",
     ...DEFAULT_RECALL_LIMITS,
   };
@@ -9792,9 +9839,8 @@ function pickFunctionIds(sourceShardFilters: unknown, ...sources: unknown[]): st
  * `{function_bucket_ids, function_bucket_source}` is ONE atomic pair owned
  * by the backend projection build. The frontend consumes it verbatim from a
  * single authoritative layer and never re-derives, repairs, or mixes it
- * (FT2 fixed-forward, review findings 7/8): ids and provenance may not be
- * selected through independent fallback ladders, a partial pair fails
- * closed, and conflicting mirrors fail closed.
+ * (FT2 fixed-forward r2, review finding 6): no trimming, no dedupe, no
+ * case repair, and no present-null-as-absence — any deviation fails closed.
  */
 const FUNCTION_BUCKET_SOURCES = new Set(["lane_membership", "registry_evidence", "legacy_inference"]);
 
@@ -9808,10 +9854,20 @@ function parseFunctionBucketFacetLayer(
   sourceValue: unknown,
   layerLabel: string,
 ): FunctionBucketFacetPair | undefined {
-  const hasIds = idsValue !== undefined && idsValue !== null;
-  const hasSource = sourceValue !== undefined && sourceValue !== null && sourceValue !== "";
-  if (!hasIds && !hasSource) {
+  const idsAbsent = idsValue === undefined;
+  const sourceAbsent = sourceValue === undefined;
+  if (idsAbsent && sourceAbsent) {
     return undefined;
+  }
+  if (idsValue === null || sourceValue === null) {
+    throw new Error(
+      `Served candidate has an invalid function_bucket pair (${layerLabel}: present null).`,
+    );
+  }
+  if (idsAbsent || sourceAbsent) {
+    throw new Error(
+      `Served candidate has an incomplete function_bucket pair (${layerLabel}: one field missing).`,
+    );
   }
   if (!Array.isArray(idsValue) || idsValue.length === 0) {
     throw new Error(
@@ -9820,17 +9876,25 @@ function parseFunctionBucketFacetLayer(
   }
   const ids: string[] = [];
   for (const item of idsValue) {
-    if (typeof item !== "string" || !item.trim()) {
+    if (
+      typeof item !== "string" ||
+      item.length === 0 ||
+      item !== item.trim()
+    ) {
       throw new Error(
-        `Served candidate has malformed function_bucket_ids (${layerLabel}: items must be non-empty strings).`,
+        `Served candidate has malformed function_bucket_ids (${layerLabel}: items must be exact non-empty strings).`,
       );
     }
-    const id = item.trim();
-    if (!ids.includes(id)) {
-      ids.push(id);
+    if (ids.includes(item)) {
+      throw new Error(
+        `Served candidate has duplicate function_bucket_ids (${layerLabel}).`,
+      );
     }
+    ids.push(item);
   }
-  const source = typeof sourceValue === "string" ? sourceValue.trim() : "";
+  // Byte-exact source: no trim/case repair — a whitespace or case variant
+  // is invalid, never normalized into a valid provenance.
+  const source = typeof sourceValue === "string" ? sourceValue : "";
   if (!FUNCTION_BUCKET_SOURCES.has(source)) {
     throw new Error(
       `Served candidate has an invalid function_bucket_source (${layerLabel}: ${source || "missing"}).`,
@@ -9847,10 +9911,13 @@ function equalFunctionBucketFacetPair(
 }
 
 /**
- * Resolve the atomic pair from the authoritative top-level served layer,
- * requiring complete-pair equality with the metadata mirror when both are
- * present. Returns undefined when neither layer carries the pair (legacy
- * records); partial or conflicting data fails closed.
+ * Resolve the atomic pair from the authoritative top-level served layer —
+ * the build-point pair computed once on the served candidate row (FT0 §5.2).
+ * The metadata mirror is a documented COMPARISON mirror only: it must equal
+ * the top-level pair byte-exactly when both are present, and a mirror
+ * without the canonical top-level pair fails closed (a comparison layer may
+ * never become the source of membership). Returns undefined only when
+ * neither layer carries anything (genuinely legacy records).
  */
 function deriveFunctionBucketFacet(record: Record<string, unknown>): FunctionBucketFacetPair | undefined {
   const metadata = (record.metadata as Record<string, unknown>) || {};
@@ -9864,38 +9931,62 @@ function deriveFunctionBucketFacet(record: Record<string, unknown>): FunctionBuc
     metadata.function_bucket_source,
     "metadata mirror",
   );
-  if (topLevel && mirror && !equalFunctionBucketFacetPair(topLevel, mirror)) {
+  if (!topLevel) {
+    if (mirror) {
+      throw new Error(
+        "Served candidate has a metadata function_bucket mirror without the canonical top-level pair.",
+      );
+    }
+    return undefined;
+  }
+  if (mirror && !equalFunctionBucketFacetPair(topLevel, mirror)) {
     throw new Error("Served candidate has conflicting function_bucket mirrors.");
   }
-  return topLevel || mirror;
+  return topLevel;
 }
 
 /**
  * Server-owned employment membership truth (FT0 §6): the verbatim
- * `metadata.cohort_employment_statuses` set. Absent on legacy records;
- * present-but-malformed values fail closed rather than being repaired into
- * client-side membership.
+ * `metadata.cohort_employment_statuses` set. Absent (key missing) on legacy
+ * records; present-but-invalid data fails closed and is NEVER repaired into
+ * client-side membership (FT2 fixed-forward r2, review finding 4):
+ * - a present `null`, non-list, empty list, duplicate entries, or any value
+ *   other than the exact bytes `current` / `former` (no trim/lowercase) is
+ *   invalid;
+ * - when Cohort provenance is expected (`metadata.cohort_lane_membership`
+ *   present) an absent membership is a contract violation, not a legacy
+ *   record — the candidate must not fall back to the lossy display status.
  */
 function parseCohortEmploymentStatuses(
   record: Record<string, unknown>,
 ): Candidate["cohortEmploymentStatuses"] {
   const metadata = (record.metadata as Record<string, unknown>) || {};
+  const hasKey = Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses");
   const value = metadata.cohort_employment_statuses;
-  if (value === undefined || value === null) {
+  if (!hasKey || value === undefined) {
+    const hasCohortProvenance = Object.prototype.hasOwnProperty.call(
+      metadata,
+      "cohort_lane_membership",
+    );
+    if (hasCohortProvenance) {
+      throw new Error(
+        "Served candidate has Cohort provenance without cohort_employment_statuses membership.",
+      );
+    }
     return undefined;
   }
-  if (!Array.isArray(value)) {
+  if (value === null || !Array.isArray(value)) {
     throw new Error("Served candidate has a malformed cohort_employment_statuses membership.");
   }
   const statuses: Array<"current" | "former"> = [];
   for (const item of value) {
-    const status = typeof item === "string" ? item.trim().toLowerCase() : "";
-    if (status !== "current" && status !== "former") {
+    if (item !== "current" && item !== "former") {
       throw new Error("Served candidate has an invalid cohort_employment_statuses value.");
     }
-    if (!statuses.includes(status)) {
-      statuses.push(status);
+    if (statuses.includes(item)) {
+      throw new Error("Served candidate has duplicate cohort_employment_statuses values.");
     }
+    statuses.push(item);
   }
   if (statuses.length === 0) {
     throw new Error("Served candidate has an empty cohort_employment_statuses membership.");
@@ -10120,11 +10211,31 @@ function deriveCandidateFromNormalizedRecord(
         "",
       base.name,
     );
-  // The function-facet pair overlays as ONE atomic unit: a complete
-  // materialized pair replaces the base pair wholesale; ids and provenance
-  // are never mixed across layers (FT2 fixed-forward, review finding 8).
+  // The function-facet pair belongs to the canonical build point (the served
+  // candidate record, already resolved inside `deriveCandidate`). A
+  // materialized/profile layer may NEVER override it (FT2 fixed-forward r2,
+  // review finding 6): when the enrichment record carries a pair it must
+  // equal the build-point pair byte-exactly, and a pair without a
+  // build-point pair fails closed — the enriched candidate always keeps
+  // `base.functionBucketIds`/`base.functionBucketSource`.
   const materializedFunctionBucketFacet = deriveFunctionBucketFacet(materialized);
   const materializedCohortEmploymentStatuses = parseCohortEmploymentStatuses(materialized);
+  if (materializedFunctionBucketFacet) {
+    const baseFacet: FunctionBucketFacetPair | undefined =
+      base.functionBucketIds && base.functionBucketSource
+        ? { ids: base.functionBucketIds, source: base.functionBucketSource }
+        : undefined;
+    if (!baseFacet) {
+      throw new Error(
+        "Served candidate enrichment carries a function_bucket pair without the canonical build-point pair.",
+      );
+    }
+    if (!equalFunctionBucketFacetPair(baseFacet, materializedFunctionBucketFacet)) {
+      throw new Error(
+        "Served candidate enrichment conflicts with the canonical function_bucket pair.",
+      );
+    }
+  }
 
   const enriched = {
     ...base,
@@ -10160,8 +10271,8 @@ function deriveCandidateFromNormalizedRecord(
       materialized.function_ids,
       base.functionIds,
     ),
-    functionBucketIds: materializedFunctionBucketFacet?.ids ?? base.functionBucketIds,
-    functionBucketSource: materializedFunctionBucketFacet?.source ?? base.functionBucketSource,
+    functionBucketIds: base.functionBucketIds,
+    functionBucketSource: base.functionBucketSource,
     cohortEmploymentStatuses: materializedCohortEmploymentStatuses ?? base.cohortEmploymentStatuses,
     linkedinUrl,
     sourceDataset:

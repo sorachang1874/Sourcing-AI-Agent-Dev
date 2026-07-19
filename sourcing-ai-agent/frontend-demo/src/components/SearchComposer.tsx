@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { CohortSelection, CohortSelectionOptions } from "../types";
+import type { CohortLocationSelection, CohortSelection, CohortSelectionOptions } from "../types";
 import { CohortSelectionPicker } from "./CohortSelectionPicker";
 
 interface SearchComposerProps {
@@ -13,8 +13,15 @@ interface SearchComposerProps {
   cohortOptions?: CohortSelectionOptions | null;
   isLoadingCohortOptions?: boolean;
   cohortOptionsError?: string;
+  /**
+   * Request-owned location state (sibling of the cohort object): owned by
+   * SearchPage, passed explicitly so the real request carries the user's
+   * locations and cohort option edits never reset them (review finding 1).
+   */
+  cohortLocations?: CohortLocationSelection | null;
   onChange: (value: string) => void;
   onCohortSelectionChange?: (value: CohortSelection | null) => void;
+  onCohortLocationChange?: (value: CohortLocationSelection) => void;
   onRetryCohortOptions?: () => void;
   onSubmit: (value: string) => void;
   onPickPrompt?: (value: string) => void;
@@ -31,8 +38,10 @@ export function SearchComposer({
   cohortOptions = null,
   isLoadingCohortOptions = false,
   cohortOptionsError = "",
+  cohortLocations = null,
   onChange,
   onCohortSelectionChange,
+  onCohortLocationChange,
   onRetryCohortOptions,
   onSubmit,
   onPickPrompt,
@@ -76,7 +85,9 @@ export function SearchComposer({
             errorMessage={cohortOptionsError}
             disabled={isSubmitting}
             compact
+            locationValue={cohortLocations}
             onChange={onCohortSelectionChange}
+            onLocationChange={onCohortLocationChange}
             onRetryOptions={onRetryCohortOptions}
           />
         ) : null}

@@ -13,7 +13,14 @@ import {
   startWorkflowRun,
 } from "./api";
 import { normalizeWorkflowLaunchStatus, normalizeWorkflowStatus } from "./workflowStatus";
-import type { CohortSelection, DashboardData, DemoPlan, PlanReviewDecision, RunStatusData } from "../types";
+import type {
+  CohortLocationSelection,
+  CohortSelection,
+  DashboardData,
+  DemoPlan,
+  PlanReviewDecision,
+  RunStatusData,
+} from "../types";
 
 export interface NaturalLanguagePlanResult {
   plan: DemoPlan | null;
@@ -126,9 +133,19 @@ export class SourcingBackendClient {
     queryText: string,
     historyId = "",
     cohortSelection?: CohortSelection,
+    cohortLocations?: CohortLocationSelection,
   ): Promise<NaturalLanguagePlanResult> {
     const trimmed = queryText.trim();
-    return submitPlanEnvelope(trimmed, historyId, cohortSelection);
+    // Location state is request-owned (review finding 1): the caller passes
+    // the presence-aware selection explicitly; the sibling fields ride
+    // alongside (never inside) the cohort object on the wire.
+    return submitPlanEnvelope(
+      trimmed,
+      historyId,
+      cohortSelection,
+      cohortLocations?.targetLocations,
+      cohortLocations?.excludeTargetLocations,
+    );
   }
 
   async approvePlan(reviewId: string, plan: DemoPlan | null, decision?: PlanReviewDecision): Promise<void> {

@@ -219,12 +219,16 @@ export function PlanCard({
     targetLocations: reviewDecision.targetLocations ?? plan.targetLocations,
     excludeTargetLocations: reviewDecision.excludeTargetLocations ?? plan.excludeTargetLocations,
   };
-  // Location review edits are exposed ONLY when the backend review gate
-  // authorizes BOTH location editable fields; otherwise the review decision
-  // has no authorized application path and the controls stay read-only
-  // (FT2 fixed-forward, review finding 2).
-  const locationEditingAuthorized =
-    supportsField(plan, "target_locations") && supportsField(plan, "exclude_target_locations");
+  // Location review edits are authorized INDEPENDENTLY per field (FT2
+  // fixed-forward r2, review finding 2): `target_locations` and
+  // `exclude_target_locations` are independent contracts, and a plan-owned
+  // (locked) cohort never disables location controls — only the backend
+  // review gate does. When the gate authorizes neither field, the review
+  // decision has no authorized application path and the controls stay
+  // read-only.
+  const targetLocationsAuthorized = supportsField(plan, "target_locations");
+  const excludeLocationsAuthorized = supportsField(plan, "exclude_target_locations");
+  const locationEditingAuthorized = targetLocationsAuthorized || excludeLocationsAuthorized;
   const planShardPreview =
     effectiveCohortSelection && cohortOptions
       ? buildCohortShardPreview(effectiveCohortSelection, cohortOptions)
@@ -249,6 +253,31 @@ export function PlanCard({
     }
     if (!cohortOptions) {
       return { message: "缺少服务端可选人群，无法验证分片预览与预算说明。", retryable: true };
+    }
+    // Registry pin binding (review finding 3): the plan's server-owned
+    // registry version/digest must EXACTLY equal the cohort options response
+    // pin; otherwise a registry revision that keeps ids but changes labels or
+    // provider hints could produce a "validated" preview for a differently
+    // pinned plan. Missing pin evidence or a mismatch blocks confirmation —
+    // only a fresh plan generation can resolve it, so there is no options
+    // retry affordance here.
+    const planRegistryPin = plan.cohortRegistryPin;
+    if (!planRegistryPin) {
+      return {
+        message:
+          "方案缺少服务端人群注册表 pin（registry version/digest），无法验证方案与当前选项的一致性；请通过「修改方案」重新生成方案后再确认。",
+        retryable: false,
+      };
+    }
+    if (
+      planRegistryPin.registryVersion !== cohortOptions.registryVersion
+      || planRegistryPin.registryDigest !== cohortOptions.registryDigest
+    ) {
+      return {
+        message:
+          `方案人群注册表 pin（${planRegistryPin.registryVersion}）与当前选项（${cohortOptions.registryVersion}）不一致；该方案基于不同的注册表版本，请通过「修改方案」重新生成后再确认。`,
+        retryable: false,
+      };
     }
     if (planShardPreview?.hasUnavailableSelections) {
       const unavailable = [
@@ -388,15 +417,22 @@ export function PlanCard({
           errorMessage={cohortOptionsError}
           locked={Boolean(plan.cohortSelection)}
           locationValue={effectiveLocations}
-          locationDisabled={!locationEditingAuthorized}
+          targetLocationsDisabled={!targetLocationsAuthorized}
+          excludeLocationsDisabled={!excludeLocationsAuthorized}
           showShardPreview={false}
           onChange={(value) => onReviewDecisionChange({ cohortSelection: value || undefined })}
           onLocationChange={
             locationEditingAuthorized
               ? (next) =>
                   onReviewDecisionChange({
-                    targetLocations: next.targetLocations,
-                    excludeTargetLocations: next.excludeTargetLocations,
+                    // Only the gate-authorized fields may enter the review
+                    // decision; the other field keeps its plan-mirror value.
+                    ...(targetLocationsAuthorized
+                      ? { targetLocations: next.targetLocations }
+                      : {}),
+                    ...(excludeLocationsAuthorized
+                      ? { excludeTargetLocations: next.excludeTargetLocations }
+                      : {}),
                   })
               : undefined
           }

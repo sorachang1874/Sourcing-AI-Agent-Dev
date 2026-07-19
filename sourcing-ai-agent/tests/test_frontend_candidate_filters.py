@@ -277,11 +277,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             vm.runInNewContext(compiled, { module, exports: module.exports, require, console }, {
               filename: "candidateFilters.js",
             });
-            const {
-              buildFunctionOptions,
-              defaultFunctionSelection,
-              filterCandidatesByFacets,
-            } = module.exports;
+            const { filterCandidatesByFacets } = module.exports;
             const baseCandidate = {
               name: "",
               summary: "",
@@ -341,7 +337,6 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 functionIds: ["24"],
               },
             ];
-            const options = buildFunctionOptions(candidates);
             const filterSelection = (functionBuckets) => ({
               layers: [],
               recallBuckets: [],
@@ -351,7 +346,11 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               searchKeyword: "",
             });
             console.log(JSON.stringify({
-              options,
+              // FT2 fixed-forward r2 (review finding 5): the frontend has NO
+              // function-facet option source — options come only from the
+              // canonical backend facet summary; these helpers are deleted.
+              buildFunctionOptionsExported: typeof module.exports.buildFunctionOptions,
+              defaultFunctionSelectionExported: typeof module.exports.defaultFunctionSelection,
               engineeringHits: filterCandidatesByFacets(candidates, filterSelection(["engineering"]), [])
                 .map((candidate) => candidate.id),
               infraHits: filterCandidatesByFacets(candidates, filterSelection(["infra_systems"]), [])
@@ -364,7 +363,6 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 .map((candidate) => candidate.id),
               unfilteredHits: filterCandidatesByFacets(candidates, filterSelection([]), [])
                 .map((candidate) => candidate.id),
-              defaultSelection: defaultFunctionSelection(options),
             }));
             """
         )
@@ -376,16 +374,10 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             check=True,
         )
         payload = json.loads(completed.stdout)
-        self.assertEqual(
-            payload["options"],
-            [
-                {"id": "engineering", "label": "engineering", "count": 1},
-                {"id": "founding", "label": "founding", "count": 1},
-                {"id": "infra_systems", "label": "infra_systems", "count": 1},
-                {"id": "research", "label": "research", "count": 1},
-                {"id": "unknown", "label": "unknown", "count": 1},
-            ],
-        )
+        # No second option source may exist (FT0 §5.3 deletion rule).
+        self.assertEqual(payload["buildFunctionOptionsExported"], "undefined")
+        self.assertEqual(payload["defaultFunctionSelectionExported"], "undefined")
+        # Per-candidate MATCHING against server ids still works verbatim.
         self.assertEqual(payload["engineeringHits"], ["dual-bucket-member"])
         self.assertEqual(payload["infraHits"], ["dual-bucket-member"])
         self.assertEqual(payload["foundingHits"], ["founder-member"])
@@ -402,10 +394,6 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 "server-says-research",
                 "server-unknown",
             ],
-        )
-        self.assertEqual(
-            payload["defaultSelection"],
-            ["engineering", "founding", "infra_systems", "research", "unknown"],
         )
 
     def test_employment_facets_use_server_membership_truth(self) -> None:
@@ -540,8 +528,17 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn("canonicalFacetUnavailableMessage", source)
         self.assertIn("统计未生成", source)
         self.assertIn("selectedBackendFacetFilterIds(selectedEmploymentStatuses, employmentFacetOptions)", source)
-        self.assertIn("selectedBackendFacetFilterIds(selectedFunctionBuckets, functionOptions)", source)
         self.assertIn("selectedBackendFacetFilterIds(selectedLocations, locationOptions)", source)
+        # FT2 fixed-forward r2 (review finding 5): the function facet consumes
+        # ONLY the canonical backend facet summary — no rebuild from
+        # candidate rows — and stale selections are gated off while the facet
+        # is disabled.
+        self.assertNotIn("buildFunctionOptions", source)
+        self.assertIn("candidateFacetSummary?.functions", source)
+        self.assertIn("const functionFacetAvailable = functionOptions.length > 0", source)
+        self.assertIn("functionBuckets: filterControlsAvailable && functionFacetAvailable ? selectedFunctionBuckets : []", source)
+        self.assertIn("functionBuckets: functionFacetAvailable", source)
+        self.assertIn("disabled={!filterControlsAvailable || !functionFacetAvailable}", source)
         self.assertIn("resultsBoardFacetSessionState", source)
         self.assertIn("readResultsBoardFacetSessionState(resultsContextKey)", source)
         self.assertIn("showCounts={hasGlobalFacetSummary}", source)

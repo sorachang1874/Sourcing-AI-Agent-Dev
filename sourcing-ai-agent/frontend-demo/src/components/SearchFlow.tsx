@@ -13,6 +13,7 @@ import {
 } from "../lib/dashboardHydration";
 import type {
   CandidateReviewStatus,
+  CohortLocationSelection,
   CohortSelection,
   CohortSelectionOptions,
   DashboardData,
@@ -40,6 +41,7 @@ interface SearchFlowProps {
   cohortOptions: CohortSelectionOptions | null;
   isLoadingCohortOptions: boolean;
   cohortOptionsError: string;
+  cohortLocations?: CohortLocationSelection | null;
   plan: DemoPlan | null;
   timelineSteps: SearchTimelineStep[];
   dashboard: DashboardData | null;
@@ -57,6 +59,7 @@ interface SearchFlowProps {
   isContinuingStage2: boolean;
   onQueryChange: (value: string) => void;
   onCohortSelectionChange: (value: CohortSelection | null) => void;
+  onCohortLocationChange?: (value: CohortLocationSelection) => void;
   onRetryCohortOptions: () => void;
   onSubmitSearch: (value: string) => void;
   onPickPrompt?: (value: string) => void;
@@ -122,6 +125,7 @@ export function SearchFlow({
   cohortOptions,
   isLoadingCohortOptions,
   cohortOptionsError,
+  cohortLocations = null,
   plan,
   timelineSteps,
   dashboard,
@@ -139,6 +143,7 @@ export function SearchFlow({
   isContinuingStage2,
   onQueryChange,
   onCohortSelectionChange,
+  onCohortLocationChange,
   onRetryCohortOptions,
   onSubmitSearch,
   onPickPrompt,
@@ -253,8 +258,10 @@ export function SearchFlow({
           cohortOptions={cohortOptions}
           isLoadingCohortOptions={isLoadingCohortOptions}
           cohortOptionsError={cohortOptionsError}
+          cohortLocations={cohortLocations}
           onChange={onQueryChange}
           onCohortSelectionChange={onCohortSelectionChange}
+          onCohortLocationChange={onCohortLocationChange}
           onRetryCohortOptions={onRetryCohortOptions}
           onSubmit={onSubmitSearch}
           onPickPrompt={onPickPrompt}

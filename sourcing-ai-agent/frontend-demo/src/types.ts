@@ -123,6 +123,18 @@ export interface TargetCompanyIdentityPreview {
   localAssetAvailable?: boolean;
 }
 
+/**
+ * Server-owned cohort registry pin of ONE plan (FT2 fixed-forward r2, review
+ * finding 3): the registry version/digest embedded in the plan's provider
+ * execution manifest by the backend compiler. Confirmation of an explicit-
+ * Cohort plan requires EXACT equality with the cohort options response pin;
+ * a mismatch or missing pin evidence blocks confirmation.
+ */
+export interface CohortRegistryPin {
+  registryVersion: string;
+  registryDigest: string;
+}
+
 export interface ProviderExecutionLanePreview {
   laneId: string;
   employmentStatus: string;
@@ -163,6 +175,7 @@ export interface DemoPlan {
   cohortSelection?: CohortSelection;
   targetLocations?: string[];
   excludeTargetLocations?: string[];
+  cohortRegistryPin?: CohortRegistryPin;
 }
 
 export interface TimelineSourceTag {

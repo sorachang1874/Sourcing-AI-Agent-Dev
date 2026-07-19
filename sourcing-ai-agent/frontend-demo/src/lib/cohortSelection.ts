@@ -319,70 +319,16 @@ export function buildCohortLocationApiPayload(
 }
 
 /**
- * Explicit draft registry for the sibling location fields (FT2 fixed-forward,
- * review finding 1).
- *
- * Owner: the active uncontrolled-location CohortSelectionPicker (the search
- * composer). It publishes the user's effective location selection on every
- * picker action — enable seeds the absent/server-default state, edits and
- * the opt-out/restore affordances update it, and disabling the cohort clears
- * it atomically with the cohort object.
- *
- * Reader: the pinned request payload builders in `api.ts`
- * (`buildPlanSubmitPayload` / `getWorkflowExplain`), consulted ONLY when the
- * caller supplies no explicit location arguments, so explicitly wired paths
- * always win. The draft is bound to the canonical key of the cohort object
- * it was published for: a stale draft left behind by a previous flow can
- * never attach its locations to a different cohort — mismatch reads as
- * absent and the server default applies (fail-safe).
+ * Location state is REQUEST-OWNED (FT2 fixed-forward r2, review finding 1):
+ * the presence-aware selection lives in the request owner (SearchPage for the
+ * composer, the review decision for plan review) and is passed explicitly
+ * through SearchComposer → SourcingBackendClient → the payload builders.
+ * There is deliberately NO module-global draft registry: the round-1 draft
+ * was keyed by cohort content, so editing any cohort option silently dropped
+ * the user's locations from the real request, and recovered flows had no
+ * draft to rehydrate. The payload builders now accept the explicit location
+ * arguments only; an absent argument means the server default applies.
  */
-interface CohortLocationDraft {
-  cohortKey: string;
-  selection: CohortLocationSelection;
-}
-
-let pendingCohortLocationDraft: CohortLocationDraft | null = null;
-
-/** Canonical identity of one cohort selection for draft binding. */
-export function canonicalCohortSelectionKey(value: CohortSelection): string {
-  return JSON.stringify([
-    value.schema_version,
-    value.role_bucket_ids,
-    value.employment_statuses,
-    value.role_match,
-    value.source,
-  ]);
-}
-
-export function publishCohortLocationDraft(
-  selection: CohortLocationSelection | null,
-  cohort: CohortSelection | null,
-): void {
-  if (!selection || !cohort) {
-    pendingCohortLocationDraft = null;
-    return;
-  }
-  pendingCohortLocationDraft = {
-    cohortKey: canonicalCohortSelectionKey(cohort),
-    selection: cloneCohortLocationSelection(selection),
-  };
-}
-
-/**
- * Read the published draft for exactly this cohort object. Returns undefined
- * when no draft exists or the draft belongs to a different cohort (stale).
- */
-export function readCohortLocationDraft(
-  cohort: CohortSelection | undefined,
-): CohortLocationSelection | undefined {
-  if (!cohort || !pendingCohortLocationDraft) {
-    return undefined;
-  }
-  if (pendingCohortLocationDraft.cohortKey !== canonicalCohortSelectionKey(cohort)) {
-    return undefined;
-  }
-  return cloneCohortLocationSelection(pendingCohortLocationDraft.selection);
-}
 
 export function appendLocationValue(list: string[], value: string): string[] {
   const name = value.trim();

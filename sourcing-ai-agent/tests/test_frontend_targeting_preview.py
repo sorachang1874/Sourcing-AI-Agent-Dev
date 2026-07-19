@@ -1,9 +1,10 @@
 """FT2 frontend targeting + preview contract tests (frontend VM harness).
 
 Pins the FT0 v2 handoff (.coord/handoffs/tml-ft0-targeting-decision-v2.md)
-§10.2 six-row matrix, reworked per the FT2 fixed-forward review so every row
-exercises the PRODUCTION paths (real payload builders, real rendered
-components, real projection functions) instead of reimplemented mirror logic:
+§10.2 six-row matrix, reworked per the FT2 fixed-forward r2 review so every
+row exercises the PRODUCTION paths (real payload builders, real rendered
+components, real projection functions, real interaction wiring) instead of
+reimplemented mirror logic or source-string proxies:
 
 1. Options remain server-derived; picker-off omits the object; picker-on
    defaults roles [] + both statuses with the server-default location
@@ -14,21 +15,30 @@ components, real projection functions) instead of reimplemented mirror logic:
 3. Full-recall warning renders when roles empty and both statuses selected;
    shard count/list + bounded-budget note render before confirmation, and
    confirmation is DISABLED without a validated preview (options loading /
-   failure / stale registry), with a retryable blocking state.
-4. Location editing: values flow through the real initial submit, revision,
-   review, and recovery paths; absent -> server default (omitted), explicit
-   [] -> opt-out (serialized), present null / invalid bounds fail closed;
-   stale historical values display preserved (no silent deletion).
+   failure / stale registry / missing or mismatched plan registry pin).
+4. Location editing is REQUEST-OWNED end-to-end: SearchPage holds the
+   presence-aware state, passes it through SearchComposer ->
+   SourcingBackendClient -> the real initial submit and revision payloads;
+   cohort option edits never silently reset locations; recovered revisions
+   rehydrate the recovered request's locations (never a silent default-US);
+   absent -> server default (omitted), explicit [] -> opt-out (serialized),
+   present null / invalid bounds fail closed.
 5. Facet consumption: the atomic server pair
-   {function_bucket_ids, function_bucket_source} is consumed verbatim from
-   one authoritative layer; partial/conflicting/malformed pairs fail closed;
-   missing pairs disable the facet instead of synthesizing membership.
+   {function_bucket_ids, function_bucket_source} is consumed byte-exactly
+   from the canonical top-level served layer; the metadata mirror is a
+   comparison-only layer; materialized/profile layers never override the
+   build-point pair; and the function facet OPTION source is only the
+   canonical backend facet summary (no rebuild from candidate rows).
 6. Dual-status candidate (server membership truth) appears under BOTH
-   employment filters; card still shows one display status.
+   employment filters; membership bytes are exact (no trim/lowercase/dedupe
+   repair, no present-null-as-absence), and Cohort provenance without a
+   valid membership fails closed instead of falling back to display status.
 
-All checks run against the frontend TypeScript VM harness (real modules,
-real React server renders): zero provider/model/network calls, served=0
-unchanged.
+The interaction matrix (review finding 7) renders the REAL SearchPage /
+SearchFlow / SearchComposer / PlanCard / CohortSelectionPicker /
+SourcingBackendClient / api transport chain inside a minimal DOM with a
+stubbed backend (fake fetch): no provider/model/network calls, served=0
+unchanged. Source-string assertions remain only as deletion/wiring pins.
 """
 
 from __future__ import annotations
@@ -42,18 +52,541 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-_LOAD_MODULE_PREAMBLE = r"""
-const fs = require("fs");
+_MINIDOM_PREAMBLE = r"""
+// ---------------------------------------------------------------------------
+// Minimal DOM sufficient for react-dom 18 client mounts + real event
+// dispatch (no jsdom in the dependency set; this shim implements exactly the
+// surface react-dom uses: node tree ops, attributes, event capture/bubble,
+// text inputs/checkboxes, selection/focus stubs).
+// ---------------------------------------------------------------------------
 const path = require("path");
+
+const XHTML_NS = "http://www.w3.org/1999/xhtml";
+
+class MiniEvent {
+  constructor(type, options = {}) {
+    this.type = type;
+    this.bubbles = Boolean(options.bubbles);
+    this.cancelable = Boolean(options.cancelable);
+    this.composed = Boolean(options.composed);
+    this.defaultPrevented = false;
+    this.propagationStopped = false;
+    this.immediatePropagationStopped = false;
+    this.target = null;
+    this.currentTarget = null;
+    this.eventPhase = 0;
+    this.isTrusted = false;
+    this.timeStamp = Date.now();
+    const { bubbles, cancelable, composed, ...rest } = options;
+    Object.assign(this, rest);
+  }
+  preventDefault() { if (this.cancelable) this.defaultPrevented = true; }
+  stopPropagation() { this.propagationStopped = true; }
+  stopImmediatePropagation() { this.immediatePropagationStopped = true; this.propagationStopped = true; }
+  composedPath() { return this._path || []; }
+}
+
+class MiniNode {
+  constructor(nodeType, nodeName, ownerDocument) {
+    this.nodeType = nodeType;
+    this.nodeName = nodeName;
+    this.ownerDocument = ownerDocument || null;
+    this.parentNode = null;
+    this.childNodes = [];
+    this._listeners = {};
+  }
+  get firstChild() { return this.childNodes[0] || null; }
+  get lastChild() { return this.childNodes[this.childNodes.length - 1] || null; }
+  get nextSibling() {
+    if (!this.parentNode) return null;
+    const siblings = this.parentNode.childNodes;
+    const index = siblings.indexOf(this);
+    return index >= 0 && index + 1 < siblings.length ? siblings[index + 1] : null;
+  }
+  get previousSibling() {
+    if (!this.parentNode) return null;
+    const siblings = this.parentNode.childNodes;
+    const index = siblings.indexOf(this);
+    return index > 0 ? siblings[index - 1] : null;
+  }
+  get parentElement() {
+    return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
+  }
+  appendChild(node) {
+    if (node.parentNode) node.parentNode.removeChild(node);
+    node.parentNode = this;
+    this.childNodes.push(node);
+    return node;
+  }
+  insertBefore(node, before) {
+    if (before == null) return this.appendChild(node);
+    if (node.parentNode) node.parentNode.removeChild(node);
+    const index = this.childNodes.indexOf(before);
+    if (index < 0) throw new Error("insertBefore: reference node not found");
+    node.parentNode = this;
+    this.childNodes.splice(index, 0, node);
+    return node;
+  }
+  removeChild(node) {
+    const index = this.childNodes.indexOf(node);
+    if (index < 0) throw new Error("removeChild: node not found");
+    this.childNodes.splice(index, 1);
+    node.parentNode = null;
+    return node;
+  }
+  replaceChild(next, prev) {
+    this.insertBefore(next, prev);
+    this.removeChild(prev);
+    return prev;
+  }
+  contains(node) {
+    let current = node;
+    while (current) {
+      if (current === this) return true;
+      current = current.parentNode;
+    }
+    return false;
+  }
+  addEventListener(type, listener, capture) {
+    if (!this._listeners[type]) this._listeners[type] = [];
+    this._listeners[type].push({ listener, capture: Boolean(capture) });
+  }
+  removeEventListener(type, listener, capture) {
+    const list = this._listeners[type] || [];
+    this._listeners[type] = list.filter(
+      (entry) => entry.listener !== listener || entry.capture !== Boolean(capture),
+    );
+  }
+  dispatchEvent(event) {
+    if (!event.target) {
+      Object.defineProperty(event, "target", { value: this, configurable: true });
+    }
+    const path = [];
+    let current = this;
+    while (current) { path.push(current); current = current.parentNode; }
+    event._path = path.slice();
+    event.eventPhase = 1;
+    for (let i = path.length - 1; i >= 1 && !event.propagationStopped; i -= 1) {
+      const node = path[i];
+      event.currentTarget = node;
+      for (const entry of (node._listeners[event.type] || []).slice()) {
+        if (!entry.capture) continue;
+        entry.listener.call(node, event);
+        if (event.immediatePropagationStopped) break;
+      }
+    }
+    for (let i = 0; i < path.length && !event.propagationStopped; i += 1) {
+      const node = path[i];
+      event.currentTarget = node;
+      event.eventPhase = i === 0 ? 2 : 3;
+      for (const entry of (node._listeners[event.type] || []).slice()) {
+        if (entry.capture && i !== 0) continue;
+        entry.listener.call(node, event);
+        if (event.immediatePropagationStopped) break;
+      }
+    }
+    event.currentTarget = null;
+    return !event.defaultPrevented;
+  }
+  get textContent() {
+    if (this.nodeType === 3 || this.nodeType === 8) return this.nodeValue || "";
+    return this.childNodes.map((child) => child.textContent).join("");
+  }
+  set textContent(value) {
+    if (this.nodeType === 3 || this.nodeType === 8) { this.nodeValue = String(value); return; }
+    this.childNodes = [];
+    const text = String(value ?? "");
+    if (text) {
+      const node = this.ownerDocument.createTextNode(text);
+      node.parentNode = this;
+      this.childNodes.push(node);
+    }
+  }
+}
+
+class MiniTextNode extends MiniNode {
+  constructor(text, ownerDocument) {
+    super(3, "#text", ownerDocument);
+    this.nodeValue = String(text);
+  }
+  get data() { return this.nodeValue; }
+  set data(value) { this.nodeValue = String(value); }
+  get length() { return this.nodeValue.length; }
+  splitText(offset) {
+    const rest = this.nodeValue.slice(offset);
+    this.nodeValue = this.nodeValue.slice(0, offset);
+    const next = this.ownerDocument.createTextNode(rest);
+    if (this.parentNode) this.parentNode.insertBefore(next, this.nextSibling);
+    return next;
+  }
+}
+
+class MiniCommentNode extends MiniNode {
+  constructor(text, ownerDocument) {
+    super(8, "#comment", ownerDocument);
+    this.nodeValue = String(text);
+  }
+}
+
+class MiniElement extends MiniNode {
+  constructor(tagName, ownerDocument) {
+    super(1, tagName.toUpperCase(), ownerDocument);
+    this.tagName = this.nodeName;
+    this.localName = tagName.toLowerCase();
+    this.namespaceURI = XHTML_NS;
+    this.attributes = {};
+    this.style = {};
+    this.dataset = {};
+  }
+  setAttribute(name, value) {
+    const text = String(value);
+    this.attributes[name] = text;
+    if (name === "class") this.className = text;
+    else if (!name.startsWith("data-") && !name.startsWith("aria-")) this[name] = text;
+    if (name.startsWith("data-")) {
+      const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      this.dataset[key] = text;
+    }
+  }
+  getAttribute(name) {
+    return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null;
+  }
+  hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name); }
+  removeAttribute(name) { delete this.attributes[name]; }
+  setAttributeNS(ns, name, value) { this.setAttribute(name, value); }
+  getAttributeNS(ns, name) { return this.getAttribute(name); }
+  removeAttributeNS(ns, name) { this.removeAttribute(name); }
+  get children() { return this.childNodes.filter((node) => node.nodeType === 1); }
+  get classList() {
+    const self = this;
+    const parse = () => String(self.attributes.class || "").split(/\s+/).filter(Boolean);
+    return {
+      add: (...names) => { const set = new Set([...parse(), ...names]); self.setAttribute("class", [...set].join(" ")); },
+      remove: (...names) => { const drop = new Set(names); self.setAttribute("class", parse().filter((n) => !drop.has(n)).join(" ")); },
+      contains: (name) => parse().includes(name),
+      toggle: (name) => { parse().includes(name) ? self.classList.remove(name) : self.classList.add(name); },
+    };
+  }
+  focus() { this.ownerDocument.activeElement = this; }
+  blur() { if (this.ownerDocument.activeElement === this) this.ownerDocument.activeElement = null; }
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
+  getElementsByTagName(tag) {
+    const wanted = tag.toUpperCase();
+    const out = [];
+    const walk = (node) => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === 1 && (wanted === "*" || child.nodeName === wanted)) out.push(child);
+        walk(child);
+      }
+    };
+    walk(this);
+    return out;
+  }
+  get innerHTML() {
+    return this.childNodes.map((child) => {
+      if (child.nodeType === 3) return child.nodeValue;
+      if (child.nodeType === 8) return `<!--${child.nodeValue}-->`;
+      const attrs = Object.entries(child.attributes).map(([k, v]) => ` ${k}="${v}"`).join("");
+      return `<${child.localName}${attrs}>${child.innerHTML}</${child.localName}>`;
+    }).join("");
+  }
+  set innerHTML(value) {
+    this.childNodes = [];
+    if (value) throw new Error("innerHTML setter only supports clearing in MiniDom");
+  }
+}
+
+class MiniDocument extends MiniNode {
+  constructor() {
+    super(9, "#document", null);
+    this.ownerDocument = this;
+    this.documentElement = new MiniElement("html", this);
+    this.body = new MiniElement("body", this);
+    this.head = new MiniElement("head", this);
+    this.documentElement.parentNode = this;
+    this.childNodes.push(this.documentElement);
+    this.documentElement.childNodes.push(this.head, this.body);
+    this.head.parentNode = this.documentElement;
+    this.body.parentNode = this.documentElement;
+    this.activeElement = this.body;
+    this.defaultView = null;
+  }
+  createElement(tagName) { return new MiniElement(tagName, this); }
+  createElementNS(ns, tagName) { const el = new MiniElement(tagName, this); el.namespaceURI = ns; return el; }
+  createTextNode(text) { return new MiniTextNode(text, this); }
+  createComment(text) { return new MiniCommentNode(text, this); }
+  createDocumentFragment() { return new MiniNode(11, "#document-fragment", this); }
+  getSelection() {
+    return { rangeCount: 0, getRangeAt: () => null, removeAllRanges: () => {}, addRange: () => {}, extend: () => {} };
+  }
+}
+
+// React feature detection (`isEventSupported`) checks `'on<input>' in
+// document` at react-dom LOAD time; the handler properties must exist on the
+// prototype before react-dom is required.
+for (const handlerName of [
+  "oninput", "onchange", "onclick", "onkeydown", "onkeyup", "onkeypress",
+  "onblur", "onfocus", "onfocusin", "onfocusout", "onscroll", "onselect",
+  "onsubmit", "onmouseover", "onmouseout", "onmousedown", "onmouseup",
+  "ondblclick", "oncontextmenu", "onpointerdown", "onpointerup", "ontouchstart",
+  "ontouchend", "ondragstart", "ondrop", "onanimationend", "ontransitionend",
+]) {
+  if (!(handlerName in MiniNode.prototype)) {
+    Object.defineProperty(MiniNode.prototype, handlerName, {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
+function createMiniWindow() {
+  const document = new MiniDocument();
+  const window = {
+    document,
+    Event: MiniEvent,
+    KeyboardEvent: MiniEvent,
+    MouseEvent: MiniEvent,
+    CustomEvent: MiniEvent,
+    InputEvent: MiniEvent,
+    FocusEvent: MiniEvent,
+    Node: MiniNode,
+    Element: MiniElement,
+    HTMLElement: MiniElement,
+    HTMLIFrameElement: class HTMLIFrameElement extends MiniElement {},
+    ShadowRoot: class ShadowRoot extends MiniNode {},
+    DocumentFragment: MiniNode,
+    navigator: { userAgent: "mini-dom" },
+    location: { protocol: "http:", hostname: "localhost", search: "", href: "http://localhost/" },
+    setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
+    MessageChannel: global.MessageChannel,
+    requestAnimationFrame: (cb) => setTimeout(cb, 0),
+    cancelAnimationFrame: (id) => clearTimeout(id),
+    getSelection: () => document.getSelection(),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => true,
+    localStorage: (() => {
+      const store = new Map();
+      return {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k),
+        clear: () => store.clear(),
+        key: (i) => [...store.keys()][i] ?? null,
+        get length() { return store.size; },
+      };
+    })(),
+  };
+  window.self = window;
+  window.window = window;
+  window.top = window;
+  window.parent = window;
+  document.defaultView = window;
+  return window;
+}
+
+// Globals must exist BEFORE react-dom is required (its input-event feature
+// detection reads the global document at module load).
+const miniWindow = createMiniWindow();
+globalThis.window = miniWindow;
+globalThis.document = miniWindow.document;
+globalThis.navigator = miniWindow.navigator;
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const fs = require("fs");
 const vm = require("vm");
 const ts = require("./frontend-demo/node_modules/typescript");
 const React = require(path.join(process.cwd(), "frontend-demo/node_modules/react"));
 const ReactDOMServer = require(path.join(process.cwd(), "frontend-demo/node_modules/react-dom/server"));
+const ReactDOMClient = require(path.join(process.cwd(), "frontend-demo/node_modules/react-dom/client"));
 const ReactJsxRuntime = require(path.join(process.cwd(), "frontend-demo/node_modules/react/jsx-runtime"));
+const { act } = React;
+const el = React.createElement;
+const render = (element) => ReactDOMServer.renderToStaticMarkup(element);
+"""
 
-function loadModule(relativePath, overrides = {}) {
+_HARNESS_PREAMBLE = r"""
+// ---------------------------------------------------------------------------
+// TypeScript module harness: one shared vm context (shared globals), real
+// modules compiled on demand, per-path stubs for non-exercised leaves, and a
+// fake fetch routing the real api.ts transport to a stubbed backend.
+// ---------------------------------------------------------------------------
+const fetchCalls = [];
+const fetchRoutes = [];
+const addRoute = (method, pathPrefix, handler) => {
+  fetchRoutes.push({ method, pathPrefix, handler });
+};
+const fakeFetch = async (url, options = {}) => {
+  const method = String(options.method || "GET").toUpperCase();
+  const urlText = String(url);
+  const pathname = urlText.startsWith("http") ? new URL(urlText).pathname : urlText;
+  const body = typeof options.body === "string" ? JSON.parse(options.body) : null;
+  fetchCalls.push({ method, path: pathname, body });
+  const route = fetchRoutes.find(
+    (entry) => entry.method === method && pathname.startsWith(entry.pathPrefix),
+  );
+  const payload = route ? route.handler(body, pathname) : null;
+  const ok = Boolean(route) && payload && payload.__status !== 404;
+  const status = ok ? 200 : 404;
+  const responseBody = ok ? payload : { error: `no stubbed route for ${method} ${pathname}` };
+  return {
+    ok,
+    status,
+    headers: {
+      get: (name) => (String(name).toLowerCase() === "content-type" ? "application/json" : null),
+    },
+    text: async () => JSON.stringify(responseBody),
+    json: async () => responseBody,
+  };
+};
+const callsTo = (pathPrefix) =>
+  fetchCalls.filter((call) => call.path.startsWith(pathPrefix));
+
+const sessionState = { queryText: "", activeHistoryId: "" };
+const searchHistoryStore = new Map();
+const routeParams = { history: "", job: "" };
+// react-router-dom returns a STABLE setSearchParams; SearchPage's route
+// effect depends on it, so an unstable reference would re-run the effect
+// (and its session reset) on every render.
+const stableSetSearchParams = (next) => {
+  routeParams.history = next.history || "";
+  routeParams.job = next.job || "";
+};
+const reactRouterDomStub = {
+  useSearchParams: () => {
+    const params = { get: (key) => routeParams[key] || null };
+    return [params, stableSetSearchParams];
+  },
+  useNavigate: () => () => {},
+  useLocation: () => ({ pathname: "/", search: "", hash: "", state: null }),
+  useParams: () => ({}),
+  Link: ({ children }) => children || null,
+  NavLink: ({ children }) => children || null,
+};
+
+const moduleStubs = {
+  "frontend-demo/src/data/mockData.ts": {
+    mockCandidateDetails: {},
+    mockDashboard: {},
+    mockManualReviewItems: [],
+    mockPlan: {},
+    mockRunStatus: {},
+  },
+  "frontend-demo/src/lib/demoSession.ts": {
+    readDemoSession: () => ({
+      queryText: sessionState.queryText || "",
+      plan: null,
+      reviewApproved: false,
+      lastVisitedStage: "search",
+      activeHistoryId: sessionState.activeHistoryId || "",
+      phase: "idle",
+      revisionText: "",
+      timelineSteps: [],
+      selectedCandidateId: "",
+    }),
+    writeDemoSession: (patch) => Object.assign(sessionState, patch || {}),
+  },
+  "frontend-demo/src/lib/searchHistory.ts": {
+    readSearchHistoryItem: (id) => searchHistoryStore.get(id) || null,
+    upsertSearchHistoryItem: (item) => searchHistoryStore.set(item.id, item),
+    replaceSearchHistoryItem: (previousId, item) => {
+      searchHistoryStore.delete(previousId);
+      searchHistoryStore.set(item.id, item);
+    },
+    startNewSearchEventName: () => "frontend-demo-start-new-search",
+  },
+  "frontend-demo/src/hooks/useDashboardCandidateHydration.ts": {
+    useDashboardCandidateHydration: () => ({
+      isHydratingCandidates: false,
+      candidateHydrationError: "",
+    }),
+  },
+  "frontend-demo/src/hooks/useCandidateReviewState.ts": {
+    useCandidateReviewState: () => ({
+      backendItems: [],
+      localRecords: {},
+      effectiveReviewCount: 0,
+      reviewStatusMap: {},
+      refresh: async () => {},
+    }),
+  },
+  "frontend-demo/src/components/ExcelWorkflowIntakePanel.tsx": {
+    ExcelWorkflowIntakePanel: () => null,
+  },
+  "frontend-demo/src/components/ExecutionTimeline.tsx": {
+    ExecutionTimeline: () => null,
+  },
+  "frontend-demo/src/components/ManualReviewQueuePanel.tsx": {
+    ManualReviewQueuePanel: () => null,
+  },
+  "frontend-demo/src/components/TargetCandidatesPanel.tsx": {
+    TargetCandidatesPanel: () => null,
+  },
+  "frontend-demo/src/components/Avatar.tsx": { Avatar: () => null },
+  "frontend-demo/src/lib/reviewRegistry.ts": {
+    addCandidateToReviewRegistry: () => {},
+  },
+  "frontend-demo/src/lib/targetCandidatesStore.ts": {
+    addTargetCandidate: () => {},
+    addTargetCandidates: () => {},
+    readTargetCandidates: () => [],
+    targetCandidatesUpdatedEventName: () => "target-candidates-updated",
+  },
+  "frontend-demo/src/lib/workflowContext.ts": {
+    buildWorkflowRoute: () => "/workflow",
+  },
+};
+
+const sandboxGlobal = {
+  console,
+  TextEncoder,
+  URL,
+  URLSearchParams,
+  Headers,
+  FormData,
+  Blob,
+  AbortController,
+  setTimeout,
+  clearTimeout,
+  setInterval,
+  clearInterval,
+  queueMicrotask,
+  fetch: fakeFetch,
+  window: miniWindow,
+  document: miniWindow.document,
+  navigator: miniWindow.navigator,
+  localStorage: miniWindow.localStorage,
+  location: miniWindow.location,
+  crypto: (() => {
+    let counter = 0;
+    return { randomUUID: () => `uuid-${(counter += 1)}` };
+  })(),
+};
+
+const resolveModulePath = (fromPath, specifier) => {
+  const joined = path.normalize(path.join(path.dirname(fromPath), specifier));
+  for (const candidate of [joined, `${joined}.ts`, `${joined}.tsx`, `${joined}/index.ts`]) {
+    if (fs.existsSync(path.join(process.cwd(), candidate))) {
+      return candidate;
+    }
+  }
+  throw new Error(`Cannot resolve ${specifier} from ${fromPath}`);
+};
+
+const moduleCache = new Map();
+function loadTs(relPath, overrides = {}) {
+  if (Object.prototype.hasOwnProperty.call(overrides, relPath)) {
+    return overrides[relPath];
+  }
+  if (Object.prototype.hasOwnProperty.call(moduleStubs, relPath)) {
+    return moduleStubs[relPath];
+  }
+  if (moduleCache.has(relPath)) {
+    return moduleCache.get(relPath);
+  }
   const source = fs
-    .readFileSync(path.join(process.cwd(), relativePath), "utf8")
+    .readFileSync(path.join(process.cwd(), relPath), "utf8")
     .replaceAll("import.meta.env", "({})");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -63,83 +596,120 @@ function loadModule(relativePath, overrides = {}) {
     },
   }).outputText;
   const module = { exports: {} };
+  moduleCache.set(relPath, module.exports);
   const localRequire = (specifier) => {
-    if (specifier === "react") {
-      return React;
-    }
-    if (specifier === "react/jsx-runtime") {
-      return ReactJsxRuntime;
-    }
-    if (Object.prototype.hasOwnProperty.call(overrides, specifier)) {
-      return overrides[specifier];
-    }
-    if (specifier === "./workflowStatus") {
-      return {
-        normalizeWorkflowStatus: () => "failed",
-        resolveWorkflowStatus: () => ({ status: "failed", terminal: true }),
-      };
-    }
-    return require(specifier);
+    if (specifier === "react") return React;
+    if (specifier === "react/jsx-runtime") return ReactJsxRuntime;
+    if (specifier === "react-dom/client") return ReactDOMClient;
+    if (specifier === "react-dom/server") return ReactDOMServer;
+    if (specifier === "react-router-dom") return reactRouterDomStub;
+    return loadTs(resolveModulePath(relPath, specifier));
   };
+  // One context per module (the shared globals are passed by reference), so
+  // each module's `require`/`module` bindings stay its own.
   vm.runInNewContext(
     compiled,
     {
+      ...sandboxGlobal,
       module,
       exports: module.exports,
       require: localRequire,
-      console,
-      TextEncoder,
-      crypto: { randomUUID: () => "test-id" },
     },
-    { filename: path.basename(relativePath) },
+    { filename: path.basename(relPath) },
   );
+  moduleCache.set(relPath, module.exports);
   return module.exports;
 }
 
-const cohortSelection = loadModule("frontend-demo/src/lib/cohortSelection.ts");
-const runtimeContract = loadModule("contracts/frontend_api_runtime_contract.ts");
-const api = loadModule("frontend-demo/src/lib/api.ts", {
-  "../data/mockData": {
-    mockCandidateDetails: {},
-    mockDashboard: {},
-    mockManualReviewItems: [],
-    mockPlan: {},
-    mockRunStatus: {},
-  },
-  "./dashboardHydration": {
-    dashboardExpectedCandidateCount: () => 0,
-    dashboardHasRenderableCandidates: () => false,
-  },
-  "./resultViewLifecycle": {
-    lifecycleEffectiveDeltaMaterializedCount: () => 0,
-  },
-  "./cohortSelection": cohortSelection,
-  "../../../contracts/frontend_api_runtime_contract": runtimeContract,
-});
-const picker = loadModule("frontend-demo/src/components/CohortSelectionPicker.tsx", {
-  "../lib/cohortSelection": cohortSelection,
-});
-const planCard = loadModule("frontend-demo/src/components/PlanCard.tsx", {
-  "../lib/cohortSelection": cohortSelection,
-  "./CohortSelectionPicker": picker,
-});
-const historyRecovery = loadModule("frontend-demo/src/lib/historyRecovery.ts", {
-  "./cohortSelection": cohortSelection,
-  "./historySummary": { summarizeSearchQuery: () => "query summary" },
-  "./workflow": {
-    buildReusedCompletedTimelineSteps: () => [],
-    isReusedCompletedHistory: () => false,
-  },
-});
-const candidateFilters = loadModule("frontend-demo/src/lib/candidateFilters.ts");
+const cohortSelection = loadTs("frontend-demo/src/lib/cohortSelection.ts");
+const api = loadTs("frontend-demo/src/lib/api.ts");
+const sourcingBackend = loadTs("frontend-demo/src/lib/sourcingBackend.ts");
+const historyRecovery = loadTs("frontend-demo/src/lib/historyRecovery.ts");
+const candidateFilters = loadTs("frontend-demo/src/lib/candidateFilters.ts");
+const picker = loadTs("frontend-demo/src/components/CohortSelectionPicker.tsx");
+const planCard = loadTs("frontend-demo/src/components/PlanCard.tsx");
+const searchFlow = loadTs("frontend-demo/src/components/SearchFlow.tsx");
+const searchPage = loadTs("frontend-demo/src/pages/SearchPage.tsx");
 
-const el = React.createElement;
-const render = (element) => ReactDOMServer.renderToStaticMarkup(element);
+// -- Mini-DOM query + event helpers -----------------------------------------
+const findByTestId = (node, id) => {
+  if (node.nodeType === 1 && node.getAttribute && node.getAttribute("data-testid") === id) {
+    return node;
+  }
+  for (const child of node.childNodes || []) {
+    const found = findByTestId(child, id);
+    if (found) return found;
+  }
+  return null;
+};
+const findAllByTestId = (node, id, out = []) => {
+  if (node.nodeType === 1 && node.getAttribute && node.getAttribute("data-testid") === id) {
+    out.push(node);
+  }
+  for (const child of node.childNodes || []) {
+    findAllByTestId(child, id, out);
+  }
+  return out;
+};
+const findInputByValue = (node, value) => {
+  if (node.nodeType === 1 && node.nodeName === "INPUT" && node.value === value) {
+    return node;
+  }
+  for (const child of node.childNodes || []) {
+    const found = findInputByValue(child, value);
+    if (found) return found;
+  }
+  return null;
+};
+const clickEl = (node) =>
+  node.dispatchEvent(new MiniEvent("click", { bubbles: true, cancelable: true }));
+const setInputValue = (node, value) => {
+  node.value = value;
+  node.dispatchEvent(new MiniEvent("input", { bubbles: true, cancelable: true }));
+};
+const setCheckbox = (node, checked) => {
+  node.checked = checked;
+  node.dispatchEvent(new MiniEvent("click", { bubbles: true, cancelable: true }));
+};
+const pressEnter = (node) =>
+  node.dispatchEvent(new MiniEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+const settle = async (rounds = 8) => {
+  for (let index = 0; index < rounds; index += 1) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+};
+const mountApp = async () => {
+  const container = miniWindow.document.createElement("div");
+  miniWindow.document.body.appendChild(container);
+  const root = ReactDOMClient.createRoot(container);
+  await act(async () => {
+    root.render(el(searchPage.SearchPage));
+  });
+  await settle();
+  return { container, root };
+};
+const captureError = (callback) => {
+  try {
+    callback();
+    return "";
+  } catch (error) {
+    return String(error?.message || error || "");
+  }
+};
+"""
 
+_FIXTURES_PREAMBLE = r"""
+// ---------------------------------------------------------------------------
+// Shared fixtures (server-derived options, cohorts, plans, backend envelopes)
+// ---------------------------------------------------------------------------
+const REGISTRY_VERSION = "cohort_selection.registry.v1";
+const REGISTRY_DIGEST = "registry-digest";
 const optionsPayload = {
   schema_version: "cohort_selection.v1",
-  registry_version: "cohort_selection.registry.v1",
-  registry_digest: "registry-digest",
+  registry_version: REGISTRY_VERSION,
+  registry_digest: REGISTRY_DIGEST,
   role_buckets: [
     { id: "engineering", label: "Engineer", order: 20 },
     { id: "research", label: "Researcher", order: 10 },
@@ -172,14 +742,12 @@ const selectionFor = (roleIds, statusIds, roleMatch = "any") => ({
   role_match: roleMatch,
   source: "user_explicit",
 });
-const captureError = (callback) => {
-  try {
-    callback();
-    return "";
-  } catch (error) {
-    return String(error?.message || error || "");
-  }
-};
+const manifestPin = (overrides = {}) => ({
+  registry_version: REGISTRY_VERSION,
+  registry_digest: REGISTRY_DIGEST,
+  manifest_digest: "manifest-digest-1",
+  ...overrides,
+});
 
 const makePlan = (overrides = {}) => ({
   planId: "plan-1",
@@ -193,6 +761,10 @@ const makePlan = (overrides = {}) => ({
   estimatedCostLevel: "low",
   reviewRequired: true,
   status: "pending_review",
+  cohortRegistryPin: {
+    registryVersion: REGISTRY_VERSION,
+    registryDigest: REGISTRY_DIGEST,
+  },
   reviewGate: {
     status: "pending",
     requiredBeforeExecution: true,
@@ -260,6 +832,98 @@ const filterSelection = (patch) => ({
   searchKeyword: "",
   ...patch,
 });
+
+// -- Stubbed backend payloads -------------------------------------------------
+const planResponseForRequest = (requestBody, overrides = {}) => {
+  const cohort = requestBody.cohort_selection || explicitCohort;
+  const requestMirror = {
+    raw_user_request: requestBody.raw_user_request || "find people",
+    cohort_selection: cohort,
+    ...(Object.prototype.hasOwnProperty.call(requestBody, "target_locations")
+      ? { target_locations: requestBody.target_locations }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(requestBody, "exclude_target_locations")
+      ? { exclude_target_locations: requestBody.exclude_target_locations }
+      : {}),
+  };
+  return {
+    status: "pending",
+    history_id: overrides.historyId || "hist-server-1",
+    request: requestMirror,
+    request_preview: { ...requestMirror },
+    plan: {
+      target_company: "ACME",
+      acquisition_strategy: {
+        provider_execution_manifest: overrides.manifest === undefined ? manifestPin() : overrides.manifest,
+      },
+    },
+    plan_review_gate: {
+      status: "pending",
+      required_before_execution: true,
+      risk_level: "low",
+      reasons: [],
+      confirmation_items: [],
+      editable_fields: overrides.editableFields || [],
+      suggested_actions: [],
+      scope_hints: [],
+      execution_mode_hints: [],
+    },
+    plan_review_session: { review_id: overrides.reviewId || "review-1", status: "pending" },
+    metadata: overrides.metadata === undefined
+      ? { provider_execution_manifest: manifestPin() }
+      : overrides.metadata,
+  };
+};
+const recoveryEnvelopeFor = (historyId, planResponse, extra = {}) => ({
+  recovery: {
+    history_id: historyId,
+    query_text: planResponse.request.raw_user_request,
+    phase: "plan",
+    review_id: planResponse.plan_review_session.review_id,
+    job_id: "",
+    request: planResponse.request,
+    request_preview: planResponse.request_preview,
+    plan: planResponse.plan,
+    plan_review_gate: planResponse.plan_review_gate,
+    plan_review_session: planResponse.plan_review_session,
+    metadata: planResponse.metadata,
+    created_at: "2026-07-19T00:00:00Z",
+    updated_at: "2026-07-19T00:00:00Z",
+    ...extra,
+  },
+});
+const registerPlanBackend = (overrides = {}) => {
+  addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+  addRoute("POST", "/api/plan/submit", (body) => planResponseForRequest(body, overrides));
+  addRoute("GET", "/api/frontend-history/", () => {
+    const lastSubmit = callsTo("/api/plan/submit").slice(-1)[0];
+    const response = planResponseForRequest(lastSubmit ? lastSubmit.body : {}, overrides);
+    return recoveryEnvelopeFor(response.history_id, response);
+  });
+};
+const seedPlanHistoryItem = (historyId, plan, reviewId) => ({
+  id: historyId,
+  createdAt: "2026-07-19T00:00:00Z",
+  updatedAt: "2026-07-19T00:00:00Z",
+  queryText: "find people",
+  summary: "find people",
+  phase: "plan",
+  errorMessage: "",
+  plan,
+  reviewId,
+  jobId: "",
+  revisionText: "",
+  reviewDecision: {
+    confirmedCompanyScope: [],
+    targetCompanyLinkedinUrl: "",
+    extraSourceFamilies: [],
+  },
+  reviewChecklistConfirmed: true,
+  requiresReview: true,
+  timelineSteps: [],
+  selectedCandidateId: "",
+  historyMetadata: {},
+});
 """
 
 
@@ -281,25 +945,31 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
 
     def test_options_server_derived_and_picker_defaults(self) -> None:
         script = textwrap.dedent(
-            _LOAD_MODULE_PREAMBLE
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
             + """
             const pickerOffSubmit = api.__testBuildPlanSubmitPayload("find people");
             const defaultCohort = cohortSelection.createDefaultCohortSelection(parsedOptions);
             const defaultLocations = cohortSelection.createDefaultCohortLocationSelection();
-            // Real render of the production picker (uncontrolled locations):
-            // enabled with the default cohort -> the server-default location
-            // display seed renders; the opt-out affordance stays unchecked.
+            // Real render of the production picker with the request-owned
+            // (controlled) absent location seed: the server-default location
+            // display renders; the opt-out affordance stays unchecked.
             const enabledMarkup = render(el(picker.CohortSelectionPicker, {
               idPrefix: "search",
               value: defaultCohort,
               options: parsedOptions,
+              locationValue: defaultLocations,
               onChange: () => {},
+              onLocationChange: () => {},
             }));
             const disabledMarkup = render(el(picker.CohortSelectionPicker, {
               idPrefix: "search",
               value: null,
               options: parsedOptions,
+              locationValue: defaultLocations,
               onChange: () => {},
+              onLocationChange: () => {},
             }));
             console.log(JSON.stringify({
               parsedRoleIds: parsedOptions.roleBuckets.map((option) => option.id),
@@ -358,9 +1028,22 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertTrue(payload["enabledRendersOptionLabels"])
         self.assertTrue(payload["disabledHidesLocationFields"])
 
+        # Deletion pins (review finding 1): the module-global draft registry
+        # may not return; location state is request-owned end-to-end.
+        cohort_source = (REPO_ROOT / "frontend-demo/src/lib/cohortSelection.ts").read_text(encoding="utf-8")
+        self.assertNotIn("publishCohortLocationDraft", cohort_source)
+        self.assertNotIn("readCohortLocationDraft", cohort_source)
+        self.assertNotIn("canonicalCohortSelectionKey", cohort_source)
+        self.assertNotIn("pendingCohortLocationDraft", cohort_source)
+        api_source = (REPO_ROOT / "frontend-demo/src/lib/api.ts").read_text(encoding="utf-8")
+        self.assertNotIn("readCohortLocationDraft", api_source)
+        self.assertNotIn("pendingCohortLocationDraft", api_source)
+
     def test_shard_preview_math_and_stale_selection_surfacing(self) -> None:
         script = textwrap.dedent(
-            _LOAD_MODULE_PREAMBLE
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
             + """
             const allRolesBothStatuses = cohortSelection.buildCohortShardPreview(
               selectionFor([], ["current", "former"]),
@@ -483,7 +1166,9 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
 
     def test_full_recall_warning_budget_and_confirmation_gate(self) -> None:
         script = textwrap.dedent(
-            _LOAD_MODULE_PREAMBLE
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
             + """
             const fullRecallCohort = selectionFor([], ["current", "former"]);
             const scopedCohort = selectionFor(["research"], ["current"]);
@@ -527,6 +1212,24 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             // Scoped (non full-recall) cohort: preview without the warning.
             const scopedMarkup = renderPlanCard({
               plan: makePlan({ cohortSelection: scopedCohort }),
+              reviewDecision: makeDecision({ cohortSelection: scopedCohort }),
+            });
+
+            // Review finding 3: confirmation binds to the plan's server-owned
+            // registry pin. A plan pin MISSING from the mapped payload blocks.
+            const missingPinMarkup = renderPlanCard({
+              plan: makePlan({ cohortSelection: scopedCohort, cohortRegistryPin: undefined }),
+              reviewDecision: makeDecision({ cohortSelection: scopedCohort }),
+            });
+            // A plan pin that does not EXACTLY equal the options pin blocks.
+            const mismatchPinMarkup = renderPlanCard({
+              plan: makePlan({
+                cohortSelection: scopedCohort,
+                cohortRegistryPin: {
+                  registryVersion: "cohort_selection.registry.v1",
+                  registryDigest: "other-digest",
+                },
+              }),
               reviewDecision: makeDecision({ cohortSelection: scopedCohort }),
             });
 
@@ -575,6 +1278,18 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 hasFullRecallWarning: scopedMarkup.includes('data-testid="plan-full-recall-warning"'),
                 confirmDisabled: buttonTag(scopedMarkup, "plan-confirm-button").includes("disabled"),
               },
+              missingPin: {
+                confirmDisabled: buttonTag(missingPinMarkup, "plan-confirm-button").includes("disabled"),
+                hasBlocker: missingPinMarkup.includes('data-testid="plan-cohort-preview-blocked"'),
+                blockerMentionsPin: missingPinMarkup.includes("注册表 pin"),
+                hasPreview: missingPinMarkup.includes('data-testid="plan-cohort-shard-preview"'),
+              },
+              mismatchPin: {
+                confirmDisabled: buttonTag(mismatchPinMarkup, "plan-confirm-button").includes("disabled"),
+                hasBlocker: mismatchPinMarkup.includes('data-testid="plan-cohort-preview-blocked"'),
+                blockerMentionsMismatch: mismatchPinMarkup.includes("不一致"),
+                hasPreview: mismatchPinMarkup.includes('data-testid="plan-cohort-shard-preview"'),
+              },
             }));
             """
         )
@@ -617,6 +1332,21 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertFalse(scoped["hasFullRecallWarning"])
         self.assertFalse(scoped["confirmDisabled"])
 
+        # Review finding 3: pin evidence unavailable -> blocked; pin mismatch
+        # vs the options response -> blocked; the validated preview is hidden
+        # in both cases.
+        missing_pin = payload["missingPin"]
+        self.assertTrue(missing_pin["confirmDisabled"])
+        self.assertTrue(missing_pin["hasBlocker"])
+        self.assertTrue(missing_pin["blockerMentionsPin"])
+        self.assertFalse(missing_pin["hasPreview"])
+
+        mismatch_pin = payload["mismatchPin"]
+        self.assertTrue(mismatch_pin["confirmDisabled"])
+        self.assertTrue(mismatch_pin["hasBlocker"])
+        self.assertTrue(mismatch_pin["blockerMentionsMismatch"])
+        self.assertFalse(mismatch_pin["hasPreview"])
+
         # The fail-closed handler is bound on the production button, and the
         # disabled state is the same cohortPreviewBlocker that gates it.
         plan_source = (REPO_ROOT / "frontend-demo/src/components/PlanCard.tsx").read_text(encoding="utf-8")
@@ -626,55 +1356,51 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
 
     def test_location_fields_round_trip_through_real_request_paths(self) -> None:
         script = textwrap.dedent(
-            _LOAD_MODULE_PREAMBLE
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
             + """
             const defaultCohort = cohortSelection.createDefaultCohortSelection(parsedOptions);
 
-            // --- Initial submit + revision through the REAL draft-registry ->
-            // payload-builder path (the exact functions the picker binds). ---
-            cohortSelection.publishCohortLocationDraft(
-              cohortSelection.createDefaultCohortLocationSelection(),
-              defaultCohort,
-            );
+            // --- Initial submit + revision through the REAL payload builder
+            // with EXPLICIT request-owned location arguments (no ambient
+            // registry exists anymore). ---
             const seedSubmit = api.__testBuildPlanSubmitPayload("find people", "", defaultCohort);
-
-            cohortSelection.publishCohortLocationDraft(
-              { targetLocations: ["Canada"], excludeTargetLocations: ["Europe"] },
+            const editedSubmit = api.__testBuildPlanSubmitPayload(
+              "find people",
+              "",
               defaultCohort,
+              ["Canada"],
+              ["Europe"],
             );
-            const editedSubmit = api.__testBuildPlanSubmitPayload("find people", "", defaultCohort);
             const editedRevision = api.__testBuildPlanSubmitPayload(
               "find people with revision",
               "history-server-owned-1",
               defaultCohort,
+              ["Canada"],
+              ["Europe"],
             );
-
-            cohortSelection.publishCohortLocationDraft({ targetLocations: [] }, defaultCohort);
-            const optOutSubmit = api.__testBuildPlanSubmitPayload("find people", "", defaultCohort);
-
-            // Stale draft bound to a different cohort must fail safe.
-            const otherCohort = selectionFor(["research"], ["current", "former"]);
-            const staleSubmit = api.__testBuildPlanSubmitPayload("find people", "", otherCohort);
-
-            // Disable clears atomically; non-cohort submits never gain locations.
-            cohortSelection.publishCohortLocationDraft(null, null);
-            const clearedSubmit = api.__testBuildPlanSubmitPayload("find people", "", defaultCohort);
-            cohortSelection.publishCohortLocationDraft({ targetLocations: ["Canada"] }, defaultCohort);
-            const nonCohortSubmit = api.__testBuildPlanSubmitPayload("find people");
-            cohortSelection.publishCohortLocationDraft(null, null);
-
-            // Explicit caller arguments always beat the draft.
-            cohortSelection.publishCohortLocationDraft({ targetLocations: ["Canada"] }, defaultCohort);
-            const explicitArgsSubmit = api.__testBuildPlanSubmitPayload(
+            const optOutSubmit = api.__testBuildPlanSubmitPayload(
               "find people",
               "",
               defaultCohort,
-              ["Mexico"],
+              [],
               undefined,
             );
-            cohortSelection.publishCohortLocationDraft(null, null);
+            // Non-Cohort requests never gain locations, even when the caller
+            // forgets to gate the arguments.
+            const nonCohortSubmit = api.__testBuildPlanSubmitPayload("find people");
+            // Presence tri-state: absent on both axes omits the keys.
+            const absentCohortSubmit = api.__testBuildPlanSubmitPayload(
+              "find people",
+              "",
+              defaultCohort,
+              undefined,
+              undefined,
+            );
 
-            // --- Review path: locations only through the authorized channel. ---
+            // --- Review path: locations only through the authorized channel,
+            // and the two fields are independent contracts. ---
             const unauthorizedReview = api.planReviewDecisionToApiPayload(
               makeDecision({
                 cohortSelection: explicitCohort,
@@ -682,6 +1408,22 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 excludeTargetLocations: ["Europe"],
               }),
               [],
+            );
+            const targetOnlyReview = api.planReviewDecisionToApiPayload(
+              makeDecision({
+                cohortSelection: explicitCohort,
+                targetLocations: ["Canada"],
+                excludeTargetLocations: ["Europe"],
+              }),
+              ["target_locations"],
+            );
+            const excludeOnlyReview = api.planReviewDecisionToApiPayload(
+              makeDecision({
+                cohortSelection: explicitCohort,
+                targetLocations: ["Canada"],
+                excludeTargetLocations: [],
+              }),
+              ["exclude_target_locations"],
             );
             const authorizedReview = api.planReviewDecisionToApiPayload(
               makeDecision({
@@ -789,11 +1531,11 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               editedSubmit,
               editedRevision,
               optOutSubmit,
-              staleSubmit,
-              clearedSubmit,
               nonCohortSubmit,
-              explicitArgsSubmit,
+              absentCohortSubmit,
               unauthorizedReview,
+              targetOnlyReview,
+              excludeOnlyReview,
               authorizedReview,
               nullReviewError,
               clonedDecision: {
@@ -840,6 +1582,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         # Seeded (absent) state: omitted -> server default applies.
         self.assertNotIn("target_locations", payload["seedSubmit"])
         self.assertNotIn("exclude_target_locations", payload["seedSubmit"])
+        self.assertNotIn("target_locations", payload["absentCohortSubmit"])
 
         # Edited locations enter BOTH the real initial and revision payloads,
         # alongside (never inside) the closed 5-field cohort object.
@@ -858,22 +1601,20 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         # Explicit [] = opt-out: serialized, not omitted.
         self.assertEqual(payload["optOutSubmit"]["target_locations"], [])
 
-        # Stale draft for a different cohort fails safe (omitted).
-        self.assertNotIn("target_locations", payload["staleSubmit"])
-
-        # Disable clears atomically; non-cohort submits never gain locations.
-        self.assertNotIn("target_locations", payload["clearedSubmit"])
+        # Non-cohort submits never gain locations.
         self.assertNotIn("target_locations", payload["nonCohortSubmit"])
         self.assertNotIn("cohort_selection", payload["nonCohortSubmit"])
 
-        # Explicit caller arguments win over the draft.
-        self.assertEqual(payload["explicitArgsSubmit"]["target_locations"], ["Mexico"])
-
-        # Review: unauthorized decisions carry NO location fields; the
-        # authorized channel carries them presence-intact (explicit [] kept).
+        # Review: unauthorized decisions carry NO location fields; the two
+        # fields serialize INDEPENDENTLY through their own authorized
+        # channels (independent contracts, review finding 2).
         self.assertNotIn("target_locations", payload["unauthorizedReview"])
         self.assertNotIn("exclude_target_locations", payload["unauthorizedReview"])
         self.assertEqual(payload["unauthorizedReview"]["cohort_selection"], explicit_cohort)
+        self.assertEqual(payload["targetOnlyReview"]["target_locations"], ["Canada"])
+        self.assertNotIn("exclude_target_locations", payload["targetOnlyReview"])
+        self.assertNotIn("target_locations", payload["excludeOnlyReview"])
+        self.assertEqual(payload["excludeOnlyReview"]["exclude_target_locations"], [])
         self.assertEqual(payload["authorizedReview"]["target_locations"], ["Canada"])
         self.assertEqual(payload["authorizedReview"]["exclude_target_locations"], [])
         self.assertIn("target_locations must be a list of names", payload["nullReviewError"])
@@ -914,20 +1655,16 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
 
     def test_facet_consumption_atomic_pair_and_fail_closed(self) -> None:
         script = textwrap.dedent(
-            _LOAD_MODULE_PREAMBLE
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
             + """
-            // --- Real projection path: the atomic pair from one layer. ---
+            // --- Real projection path: the atomic pair from the canonical
+            // top-level served layer, byte-exact (review finding 6). ---
             const topLevel = api.__testDeriveCandidate({
               candidate_id: "served-top",
               function_bucket_ids: ["research", "engineering"],
               function_bucket_source: "lane_membership",
-            });
-            const mirrorOnly = api.__testDeriveCandidate({
-              candidate_id: "served-mirror",
-              metadata: {
-                function_bucket_ids: ["founding"],
-                function_bucket_source: "registry_evidence",
-              },
             });
             const matchingMirrors = api.__testDeriveCandidate({
               candidate_id: "served-agree",
@@ -943,6 +1680,17 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               function_bucket_ids: ["Research"],
               function_bucket_source: "registry_evidence",
             });
+            // The metadata mirror is comparison-only: a mirror without the
+            // canonical top-level pair fails closed.
+            const mirrorOnlyError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "bad-mirror-only",
+                metadata: {
+                  function_bucket_ids: ["founding"],
+                  function_bucket_source: "registry_evidence",
+                },
+              }),
+            );
             const conflictError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "bad-conflict",
@@ -998,6 +1746,44 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 function_bucket_source: "client_guess",
               }),
             );
+            // Strict bytes (review finding 6): whitespace variants, duplicate
+            // ids, present nulls, and padded provenance all fail closed —
+            // nothing is trimmed/deduped/repaired into validity.
+            const whitespaceIdError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "bad-whitespace-id",
+                function_bucket_ids: [" research "],
+                function_bucket_source: "registry_evidence",
+              }),
+            );
+            const duplicateIdsError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "bad-duplicate-ids",
+                function_bucket_ids: ["research", "research"],
+                function_bucket_source: "registry_evidence",
+              }),
+            );
+            const nullIdsError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "bad-null-ids",
+                function_bucket_ids: null,
+                function_bucket_source: "registry_evidence",
+              }),
+            );
+            const nullSourceError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "bad-null-source",
+                function_bucket_ids: ["research"],
+                function_bucket_source: null,
+              }),
+            );
+            const paddedSourceError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "bad-padded-source",
+                function_bucket_ids: ["research"],
+                function_bucket_source: " registry_evidence ",
+              }),
+            );
             // Legacy record without the pair (functionIds ["24"] would have
             // been projected as research by the backend): no facet membership
             // is synthesized client-side.
@@ -1005,16 +1791,41 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               candidate_id: "legacy-no-pair",
               function_ids: ["24"],
             });
-            // Materialized/base overlay: the pair overlays as one atomic unit.
-            const overlay = api.__testDeriveCandidateFromNormalizedRecord(
+            // Materialized/profile layers never override the build-point
+            // pair: a conflicting enrichment pair fails closed, a
+            // materialized-only pair fails closed, an identical pair keeps
+            // the base bytes, and an absent enrichment pair keeps the base.
+            const overlayConflictError = captureError(() =>
+              api.__testDeriveCandidateFromNormalizedRecord(
+                {
+                  candidate_id: "overlay-conflict",
+                  function_bucket_ids: ["research"],
+                  function_bucket_source: "registry_evidence",
+                },
+                {
+                  function_bucket_ids: ["engineering"],
+                  function_bucket_source: "lane_membership",
+                },
+              ),
+            );
+            const overlayMaterializedOnlyError = captureError(() =>
+              api.__testDeriveCandidateFromNormalizedRecord(
+                { candidate_id: "overlay-materialized-only" },
+                {
+                  function_bucket_ids: ["engineering"],
+                  function_bucket_source: "lane_membership",
+                },
+              ),
+            );
+            const overlayIdentical = api.__testDeriveCandidateFromNormalizedRecord(
               {
-                candidate_id: "overlay-base",
+                candidate_id: "overlay-identical",
                 function_bucket_ids: ["research"],
                 function_bucket_source: "registry_evidence",
               },
               {
-                function_bucket_ids: ["engineering"],
-                function_bucket_source: "lane_membership",
+                function_bucket_ids: ["research"],
+                function_bucket_source: "registry_evidence",
               },
             );
             const overlayKeepsBase = api.__testDeriveCandidateFromNormalizedRecord(
@@ -1026,7 +1837,8 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               {},
             );
 
-            // --- Real filter helpers over the derived candidates. ---
+            // --- Real filter matching over the derived candidates (the
+            // per-candidate MATCH path; there is no local OPTION source). ---
             const candidates = [
               {
                 ...baseCandidate,
@@ -1052,7 +1864,6 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 functionIds: ["24"],
               },
             ];
-            const options = candidateFilters.buildFunctionOptions(candidates);
             const hits = (functionBuckets) =>
               candidateFilters
                 .filterCandidatesByFacets(candidates, filterSelection({ functionBuckets }), [])
@@ -1062,15 +1873,12 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 functionBucketIds: topLevel.functionBucketIds,
                 functionBucketSource: topLevel.functionBucketSource,
               },
-              mirrorOnly: {
-                functionBucketIds: mirrorOnly.functionBucketIds,
-                functionBucketSource: mirrorOnly.functionBucketSource,
-              },
               matchingMirrors: {
                 functionBucketIds: matchingMirrors.functionBucketIds,
                 functionBucketSource: matchingMirrors.functionBucketSource,
               },
               verbatimIds: verbatimCase.functionBucketIds,
+              mirrorOnlyError,
               conflictError,
               sourceConflictError,
               missingPartnerError,
@@ -1078,19 +1886,28 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               wrongShapeError,
               emptyListError,
               badSourceError,
+              whitespaceIdError,
+              duplicateIdsError,
+              nullIdsError,
+              nullSourceError,
+              paddedSourceError,
               legacyNoPair: {
                 functionBucketIds: legacyNoPair.functionBucketIds ?? null,
                 functionBucketSource: legacyNoPair.functionBucketSource ?? null,
               },
-              overlay: {
-                functionBucketIds: overlay.functionBucketIds,
-                functionBucketSource: overlay.functionBucketSource,
+              overlayConflictError,
+              overlayMaterializedOnlyError,
+              overlayIdentical: {
+                functionBucketIds: overlayIdentical.functionBucketIds,
+                functionBucketSource: overlayIdentical.functionBucketSource,
               },
               overlayKeepsBase: {
                 functionBucketIds: overlayKeepsBase.functionBucketIds,
                 functionBucketSource: overlayKeepsBase.functionBucketSource,
               },
-              options,
+              localOptionSourceExported:
+                typeof candidateFilters.buildFunctionOptions !== "undefined"
+                || typeof candidateFilters.defaultFunctionSelection !== "undefined",
               engineeringHits: hits(["engineering"]),
               infraHits: hits(["infra_systems"]),
               foundingHits: hits(["founding"]),
@@ -1104,42 +1921,45 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         # Atomic pair, verbatim from the authoritative top-level layer.
         self.assertEqual(payload["topLevel"]["functionBucketIds"], ["research", "engineering"])
         self.assertEqual(payload["topLevel"]["functionBucketSource"], "lane_membership")
-        self.assertEqual(payload["mirrorOnly"]["functionBucketIds"], ["founding"])
-        self.assertEqual(payload["mirrorOnly"]["functionBucketSource"], "registry_evidence")
         self.assertEqual(payload["matchingMirrors"]["functionBucketIds"], ["research"])
-        # Ids are consumed verbatim (trim-only), never case-normalized.
+        # Ids are consumed verbatim, never case-normalized.
         self.assertEqual(payload["verbatimIds"], ["Research"])
 
-        # Fail closed on every malformed/conflicting shape.
+        # Fail closed on every malformed/conflicting shape, including the
+        # comparison-only mirror without a top-level pair.
+        self.assertIn("without the canonical top-level pair", payload["mirrorOnlyError"])
         self.assertIn("conflicting function_bucket mirrors", payload["conflictError"])
         self.assertIn("conflicting function_bucket mirrors", payload["sourceConflictError"])
-        self.assertIn("invalid function_bucket_source", payload["missingPartnerError"])
-        self.assertIn("incomplete function_bucket pair", payload["sourceOnlyError"])
+        self.assertIn("one field missing", payload["missingPartnerError"])
+        self.assertIn("one field missing", payload["sourceOnlyError"])
         self.assertIn("incomplete function_bucket pair", payload["wrongShapeError"])
         self.assertIn("incomplete function_bucket pair", payload["emptyListError"])
         self.assertIn("invalid function_bucket_source", payload["badSourceError"])
+
+        # Strict bytes: no trim/dedupe/null repair anywhere.
+        self.assertIn("malformed function_bucket_ids", payload["whitespaceIdError"])
+        self.assertIn("duplicate function_bucket_ids", payload["duplicateIdsError"])
+        self.assertIn("present null", payload["nullIdsError"])
+        self.assertIn("present null", payload["nullSourceError"])
+        self.assertIn("invalid function_bucket_source", payload["paddedSourceError"])
 
         # Missing pair: facet unavailable, never repaired into membership.
         self.assertIsNone(payload["legacyNoPair"]["functionBucketIds"])
         self.assertIsNone(payload["legacyNoPair"]["functionBucketSource"])
 
-        # Overlay: whole pair from the materialized layer; never mixed.
-        self.assertEqual(payload["overlay"]["functionBucketIds"], ["engineering"])
-        self.assertEqual(payload["overlay"]["functionBucketSource"], "lane_membership")
+        # Materialized/profile layers never override the build-point pair.
+        self.assertIn("conflicts with the canonical function_bucket pair", payload["overlayConflictError"])
+        self.assertIn("without the canonical build-point pair", payload["overlayMaterializedOnlyError"])
+        self.assertEqual(payload["overlayIdentical"]["functionBucketIds"], ["research"])
+        self.assertEqual(payload["overlayIdentical"]["functionBucketSource"], "registry_evidence")
         self.assertEqual(payload["overlayKeepsBase"]["functionBucketIds"], ["research"])
         self.assertEqual(payload["overlayKeepsBase"]["functionBucketSource"], "registry_evidence")
 
-        # Options/filtering: server ids only, including infra_systems/founding;
-        # the unavailable-facet row contributes nothing and matches no bucket.
-        self.assertEqual(
-            payload["options"],
-            [
-                {"id": "engineering", "label": "engineering", "count": 1},
-                {"id": "founding", "label": "founding", "count": 1},
-                {"id": "infra_systems", "label": "infra_systems", "count": 1},
-                {"id": "unknown", "label": "unknown", "count": 1},
-            ],
-        )
+        # Review finding 5: no local function-facet OPTION source is exported.
+        self.assertFalse(payload["localOptionSourceExported"])
+
+        # Matching: server ids only, including infra_systems/founding; the
+        # unavailable-facet row claims no membership in any bucket.
         self.assertEqual(payload["engineeringHits"], ["dual-bucket-member"])
         self.assertEqual(payload["infraHits"], ["dual-bucket-member"])
         self.assertEqual(payload["foundingHits"], ["founding-member"])
@@ -1149,7 +1969,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             ["dual-bucket-member", "facet-unavailable", "founding-member", "server-unknown"],
         )
 
-        # The deleted local taxonomy may not return.
+        # The deleted local taxonomy and option source may not return.
         filters_source = (REPO_ROOT / "frontend-demo/src/lib/candidateFilters.ts").read_text(encoding="utf-8")
         self.assertNotIn("const ROLE_BUCKET_TO_FUNCTION_BUCKET", filters_source)
         self.assertNotIn("const FUNCTION_BUCKET_KEYWORDS", filters_source)
@@ -1158,6 +1978,10 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertNotIn('normalizedIds.includes("24")', filters_source)
         self.assertNotIn('normalizedIds.includes("8")', filters_source)
         self.assertNotIn('normalizedIds.includes("19")', filters_source)
+        self.assertNotIn("export function buildFunctionOptions", filters_source)
+        self.assertNotIn("export function defaultFunctionSelection", filters_source)
+        self.assertNotIn("buildFunctionOptions(", filters_source)
+        self.assertNotIn("defaultFunctionSelection(", filters_source)
         self.assertIn("candidate.functionBucketIds", filters_source)
         api_source = (REPO_ROOT / "frontend-demo/src/lib/api.ts").read_text(encoding="utf-8")
         self.assertNotIn("pickNonEmptyStringList", api_source)
@@ -1165,7 +1989,9 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
 
     def test_employment_membership_dual_status_and_single_display(self) -> None:
         script = textwrap.dedent(
-            _LOAD_MODULE_PREAMBLE
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
             + """
             // Real projection: server membership truth mapped verbatim while
             // the top-level display status stays single (FT0 §6).
@@ -1194,6 +2020,42 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               api.__testDeriveCandidate({
                 candidate_id: "invalid-membership",
                 metadata: { cohort_employment_statuses: ["contractor"] },
+              }),
+            );
+            // Strict bytes (review finding 4): present null is invalid (not
+            // absence), whitespace/case variants are invalid (no
+            // trim/lowercase repair), duplicates are invalid (no dedupe).
+            const nullMembershipError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "null-membership",
+                metadata: { cohort_employment_statuses: null },
+              }),
+            );
+            const paddedMembershipError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "padded-membership",
+                metadata: { cohort_employment_statuses: [" Current "] },
+              }),
+            );
+            const caseMembershipError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "case-membership",
+                metadata: { cohort_employment_statuses: ["CURRENT"] },
+              }),
+            );
+            const duplicateMembershipError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "duplicate-membership",
+                metadata: { cohort_employment_statuses: ["current", "current"] },
+              }),
+            );
+            // Cohort provenance without membership: fail closed — the lossy
+            // display status may not become membership truth.
+            const provenanceWithoutMembershipError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "provenance-without-membership",
+                employment_status: "current",
+                metadata: { cohort_lane_membership: [{ employment_status: "current" }] },
               }),
             );
 
@@ -1235,6 +2097,11 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               malformedError,
               emptyMembershipError,
               invalidMembershipError,
+              nullMembershipError,
+              paddedMembershipError,
+              caseMembershipError,
+              duplicateMembershipError,
+              provenanceWithoutMembershipError,
               employmentOptions,
               currentOnly: hits(["current"]),
               formerOnly: hits(["former"]),
@@ -1252,6 +2119,19 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertIn("malformed cohort_employment_statuses", payload["malformedError"])
         self.assertIn("empty cohort_employment_statuses", payload["emptyMembershipError"])
         self.assertIn("invalid cohort_employment_statuses", payload["invalidMembershipError"])
+
+        # Strict bytes: present-null / padded / case / duplicate all invalid.
+        self.assertIn("malformed cohort_employment_statuses", payload["nullMembershipError"])
+        self.assertIn("invalid cohort_employment_statuses", payload["paddedMembershipError"])
+        self.assertIn("invalid cohort_employment_statuses", payload["caseMembershipError"])
+        self.assertIn("duplicate cohort_employment_statuses", payload["duplicateMembershipError"])
+
+        # Cohort provenance without membership fails closed (no display-status
+        # fallback when Cohort provenance is expected).
+        self.assertIn(
+            "Cohort provenance without cohort_employment_statuses",
+            payload["provenanceWithoutMembershipError"],
+        )
 
         # The dual-status candidate counts in BOTH buckets.
         self.assertEqual(
@@ -1279,6 +2159,496 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             payload["displayStatuses"],
             ["current", "former", "current", "lead"],
         )
+
+    # ------------------------------------------------------------------
+    # Review finding 7: rendered production-integration matrix over the REAL
+    # SearchPage -> SearchFlow -> SearchComposer/PlanCard -> picker ->
+    # SourcingBackendClient -> api transport chain with a stubbed backend.
+    # ------------------------------------------------------------------
+    def test_request_owned_location_survives_cohort_edits_and_submits(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              registerPlanBackend();
+              const { container } = await mountApp();
+
+              // Type the query, enable the cohort, add a location.
+              setInputValue(findByTestId(container, "search-composer-input"), "find people");
+              await settle(2);
+              setCheckbox(findByTestId(container, "search-cohort-enabled"), true);
+              await settle(2);
+              const targetInput = findByTestId(container, "search-target-locations-input-input");
+              setInputValue(targetInput, "Canada");
+              pressEnter(targetInput);
+              await settle(2);
+              const tagsAfterLocationEdit = findAllByTestId(
+                container,
+                "search-target-locations-input-tag",
+              ).map((node) => node.textContent.replace(/×/g, "").trim());
+
+              // Now EDIT the cohort options (toggle the research role on).
+              // Request-owned location state must NOT be silently reset.
+              const researchCheckbox = findInputByValue(
+                findByTestId(container, "search-cohort-roles"),
+                "research",
+              );
+              setCheckbox(researchCheckbox, true);
+              await settle(2);
+              const tagsAfterCohortEdit = findAllByTestId(
+                container,
+                "search-target-locations-input-tag",
+              ).map((node) => node.textContent.replace(/×/g, "").trim());
+
+              // Submit through the REAL SearchPage -> SourcingBackendClient
+              // -> buildPlanSubmitPayload -> fake fetch path.
+              clickEl(findByTestId(container, "search-composer-submit"));
+              await settle();
+              const submits = callsTo("/api/plan/submit");
+              const submitBody = submits.length ? submits[submits.length - 1].body : null;
+              const planLocations = findByTestId(container, "plan-cohort-locations");
+
+              console.log(JSON.stringify({
+                tagsAfterLocationEdit,
+                tagsAfterCohortEdit,
+                submitCallCount: submits.length,
+                submitBody,
+                planLocationsText: planLocations ? planLocations.textContent : "",
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # The location edit renders, and the cohort option edit does NOT
+        # silently reset it (round-1 defect: the draft key changed and the
+        # location vanished from the request).
+        self.assertEqual(payload["tagsAfterLocationEdit"], ["Canada"])
+        self.assertEqual(payload["tagsAfterCohortEdit"], ["Canada"])
+
+        # The real submit payload carries BOTH the edited cohort and the
+        # request-owned locations.
+        self.assertEqual(payload["submitCallCount"], 1)
+        submit = payload["submitBody"]
+        self.assertEqual(submit["cohort_selection"]["role_bucket_ids"], ["research"])
+        self.assertEqual(
+            submit["cohort_selection"]["employment_statuses"],
+            ["current", "former"],
+        )
+        self.assertEqual(submit["target_locations"], ["Canada"])
+        self.assertNotIn("exclude_target_locations", submit)
+        self.assertNotIn("target_locations", submit["cohort_selection"])
+
+        # The plan mirror displays the submitted locations.
+        self.assertIn("Canada", payload["planLocationsText"])
+
+    def test_recovered_revision_rehydrates_locations(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            const findTextareaById = (node, id) => {
+              if (node.nodeType === 1 && node.nodeName === "TEXTAREA" && node.getAttribute("id") === id) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findTextareaById(child, id);
+                if (found) return found;
+              }
+              return null;
+            };
+            const findButtonByText = (node, text) => {
+              if (node.nodeType === 1 && node.nodeName === "BUTTON" && node.textContent.trim() === text) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findButtonByText(child, text);
+                if (found) return found;
+              }
+              return null;
+            };
+            (async () => {
+              const recoveredCohort = selectionFor(["research"], ["current", "former"]);
+              const recoveredResponse = planResponseForRequest(
+                {
+                  raw_user_request: "find people",
+                  cohort_selection: recoveredCohort,
+                  target_locations: ["Canada"],
+                  exclude_target_locations: ["Europe"],
+                },
+                { historyId: "hist-rec", reviewId: "review-9" },
+              );
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-rec", recoveredResponse));
+              addRoute("POST", "/api/plan/submit", (body) =>
+                planResponseForRequest(body, { historyId: "hist-rec", reviewId: "review-9" }));
+
+              // Local copy simulates lost location state; the backend
+              // recovery envelope is the source of truth.
+              const localPlan = makePlan({
+                cohortSelection: recoveredCohort,
+                targetLocations: undefined,
+                excludeTargetLocations: undefined,
+              });
+              searchHistoryStore.set("hist-rec", seedPlanHistoryItem("hist-rec", localPlan, "review-9"));
+              routeParams.history = "hist-rec";
+
+              const { container } = await mountApp();
+              const planLocations = findByTestId(container, "plan-cohort-locations");
+
+              // Revise the recovered plan through the REAL revision path.
+              setInputValue(findTextareaById(container, "plan-revision"), "only senior people");
+              await settle(2);
+              clickEl(findButtonByText(container, "修改方案"));
+              await settle();
+              const submits = callsTo("/api/plan/submit");
+              const revisionBody = submits.length ? submits[submits.length - 1].body : null;
+
+              console.log(JSON.stringify({
+                planLocationsText: planLocations ? planLocations.textContent : "",
+                submitCallCount: submits.length,
+                revisionBody,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # The recovered request's locations are rehydrated into the review
+        # surface (never silently default-US).
+        self.assertIn("Canada", payload["planLocationsText"])
+        self.assertIn("Europe", payload["planLocationsText"])
+
+        # The revision submit carries the recovered request's locations —
+        # not a silent server-default fallback.
+        self.assertEqual(payload["submitCallCount"], 1)
+        revision = payload["revisionBody"]
+        self.assertEqual(revision["history_id"], "hist-rec")
+        self.assertEqual(revision["target_locations"], ["Canada"])
+        self.assertEqual(revision["exclude_target_locations"], ["Europe"])
+        self.assertEqual(revision["cohort_selection"]["role_bucket_ids"], ["research"])
+
+    def test_plan_review_location_authorization_and_confirmation(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            const findButtonByText = (node, text) => {
+              if (node.nodeType === 1 && node.nodeName === "BUTTON" && node.textContent.trim().includes(text)) {
+                return node;
+              }
+              for (const child of node.childNodes || []) {
+                const found = findButtonByText(child, text);
+                if (found) return found;
+              }
+              return null;
+            };
+            (async () => {
+              const authorizedCohort = selectionFor(["research"], ["current", "former"]);
+              const authorizedResponse = planResponseForRequest(
+                {
+                  raw_user_request: "find people",
+                  cohort_selection: authorizedCohort,
+                  target_locations: ["Canada"],
+                  exclude_target_locations: ["Europe"],
+                },
+                {
+                  historyId: "hist-auth",
+                  reviewId: "review-7",
+                  editableFields: ["target_locations"],
+                },
+              );
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-auth", authorizedResponse));
+              addRoute("POST", "/api/plan/review", () => ({ status: "approved" }));
+              addRoute("POST", "/api/workflows", () => ({
+                job_id: "job-1",
+                status: "completed",
+                stage: "completed",
+              }));
+              addRoute("GET", "/api/jobs/", () => ({
+                candidates: [],
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: 0,
+                manualReviewCount: 0,
+              }));
+
+              searchHistoryStore.set(
+                "hist-auth",
+                seedPlanHistoryItem(
+                  "hist-auth",
+                  makePlan({
+                    cohortSelection: authorizedCohort,
+                    targetLocations: ["Canada"],
+                    excludeTargetLocations: ["Europe"],
+                    reviewGate: {
+                      status: "pending",
+                      requiredBeforeExecution: true,
+                      riskLevel: "low",
+                      reasons: [],
+                      confirmationItems: [],
+                      editableFields: ["target_locations"],
+                      suggestedActions: [],
+                      scopeHints: [],
+                      executionModeHints: [],
+                    },
+                  }),
+                  "review-7",
+                ),
+              );
+              routeParams.history = "hist-auth";
+
+              const { container } = await mountApp();
+
+              // Review finding 2: the locked cohort disables ONLY the cohort
+              // option controls (their fieldset); the backend-authorized
+              // location field stays editable and the unauthorized one stays
+              // read-only.
+              const rolesGrid = findByTestId(container, "plan-review-cohort-roles");
+              const rolesFieldset = rolesGrid ? rolesGrid.parentNode : null;
+              const targetInput = findByTestId(container, "plan-review-target-locations-input-input");
+              const excludeInput = findByTestId(container, "plan-review-exclude-locations-input");
+              const controls = {
+                cohortRoleDisabled: Boolean(rolesFieldset && rolesFieldset.hasAttribute("disabled")),
+                targetInputDisabled: Boolean(targetInput && targetInput.hasAttribute("disabled")),
+                excludeInputDisabled: Boolean(excludeInput && excludeInput.hasAttribute("disabled")),
+              };
+
+              // Exercise the authorized control: append Mexico.
+              setInputValue(targetInput, "Mexico");
+              pressEnter(targetInput);
+              await settle(2);
+
+              // Confirm through the REAL approve + start path.
+              clickEl(findByTestId(container, "plan-confirm-button"));
+              await settle();
+              const reviewCalls = callsTo("/api/plan/review");
+              const workflowCalls = callsTo("/api/workflows");
+              console.log(JSON.stringify({
+                controls,
+                reviewCallCount: reviewCalls.length,
+                reviewBody: reviewCalls.length ? reviewCalls[0].body : null,
+                workflowCallCount: workflowCalls.length,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Cohort locked but location authorized INDEPENDENTLY: the target
+        # field is editable, the exclude field is not, cohort roles locked.
+        self.assertTrue(payload["controls"]["cohortRoleDisabled"])
+        self.assertFalse(payload["controls"]["targetInputDisabled"])
+        self.assertTrue(payload["controls"]["excludeInputDisabled"])
+
+        # The authorized edit reached the REAL review payload through the
+        # authorized channel only; the unauthorized field is absent.
+        self.assertEqual(payload["reviewCallCount"], 1)
+        decision = payload["reviewBody"]["decision"]
+        self.assertEqual(decision["target_locations"], ["Canada", "Mexico"])
+        self.assertNotIn("exclude_target_locations", decision)
+
+        # Confirmation proceeded to the workflow start.
+        self.assertEqual(payload["workflowCallCount"], 1)
+
+    def test_blocked_confirmation_makes_no_approval_or_start_request(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const unpinnedCohort = selectionFor(["research"], ["current", "former"]);
+              const unpinnedResponse = planResponseForRequest(
+                {
+                  raw_user_request: "find people",
+                  cohort_selection: unpinnedCohort,
+                  target_locations: ["Canada"],
+                },
+                {
+                  historyId: "hist-unpinned",
+                  reviewId: "review-8",
+                  editableFields: ["target_locations"],
+                  manifest: {},
+                  metadata: {},
+                },
+              );
+              addRoute("GET", "/api/cohort-selection/options", () => optionsPayload);
+              addRoute("GET", "/api/frontend-history/", () =>
+                recoveryEnvelopeFor("hist-unpinned", unpinnedResponse));
+              addRoute("POST", "/api/plan/review", () => ({ status: "approved" }));
+              addRoute("POST", "/api/workflows", () => ({ job_id: "job-9", status: "running" }));
+
+              searchHistoryStore.set(
+                "hist-unpinned",
+                seedPlanHistoryItem(
+                  "hist-unpinned",
+                  makePlan({
+                    cohortSelection: unpinnedCohort,
+                    cohortRegistryPin: undefined,
+                    targetLocations: ["Canada"],
+                    reviewGate: {
+                      status: "pending",
+                      requiredBeforeExecution: true,
+                      riskLevel: "low",
+                      reasons: [],
+                      confirmationItems: [],
+                      editableFields: ["target_locations"],
+                      suggestedActions: [],
+                      scopeHints: [],
+                      executionModeHints: [],
+                    },
+                  }),
+                  "review-8",
+                ),
+              );
+              routeParams.history = "hist-unpinned";
+
+              const { container } = await mountApp();
+              const blocker = findByTestId(container, "plan-cohort-preview-blocked");
+              const confirmButton = findByTestId(container, "plan-confirm-button");
+              const confirmDisabled = Boolean(confirmButton && confirmButton.hasAttribute("disabled"));
+
+              // Even a (synthetic) click on the blocked button must not reach
+              // the approve/start path — the handler fails closed too.
+              clickEl(confirmButton);
+              await settle();
+
+              console.log(JSON.stringify({
+                blockerText: blocker ? blocker.textContent : "",
+                confirmDisabled,
+                reviewCallCount: callsTo("/api/plan/review").length,
+                workflowCallCount: callsTo("/api/workflows").length,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Pin evidence unavailable -> blocked render + disabled button.
+        self.assertIn("注册表 pin", payload["blockerText"])
+        self.assertTrue(payload["confirmDisabled"])
+
+        # Blocked confirmation made NO approval or start request.
+        self.assertEqual(payload["reviewCallCount"], 0)
+        self.assertEqual(payload["workflowCallCount"], 0)
+
+    def test_function_facet_disabled_without_canonical_summary(self) -> None:
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            const resultsBoard = loadTs("frontend-demo/src/components/ResultsBoardPanel.tsx");
+            const boardProps = (dashboard) => ({
+              dashboard,
+              projectionId: "proj-1",
+              historyId: "",
+              jobId: "job-x",
+              initialCandidateId: "",
+              isHydratingCandidates: false,
+              candidateHydrationError: "",
+              reviewStatusMap: {},
+              onSelectedCandidateChange: () => {},
+              onOpenManualReview: () => {},
+              onReviewStateChanged: () => {},
+            });
+            const boardCandidate = (patch) => ({
+              ...baseCandidate,
+              evidence: [],
+              confidence: "high",
+              avatarUrl: "",
+              ...patch,
+            });
+            const candidates = [
+              boardCandidate({
+                id: "row-1",
+                employmentStatus: "current",
+                functionBucketIds: ["engineering"],
+                functionBucketSource: "lane_membership",
+              }),
+              boardCandidate({
+                id: "row-2",
+                employmentStatus: "former",
+                functionBucketIds: ["research"],
+                functionBucketSource: "registry_evidence",
+              }),
+            ];
+            // Legacy / no-canonical-summary board: candidate rows DO carry
+            // server bucket ids, but there is NO canonical facet summary.
+            const legacyDashboard = {
+              candidates,
+              layers: [],
+              intentKeywords: [],
+              totalCandidates: 2,
+              manualReviewCount: 0,
+              projectionId: "proj-1",
+            };
+            const legacyMarkup = render(el(resultsBoard.ResultsBoardPanel, boardProps(legacyDashboard)));
+            // Canonical backend summary: the function options come from the
+            // summary (labels included), not from the rows.
+            const canonicalDashboard = {
+              ...legacyDashboard,
+              candidateFacetSummary: {
+                candidateCount: 2,
+                layers: [],
+                recall: [],
+                employment: [],
+                locations: [],
+                functions: [
+                  { id: "research", label: "Researcher", count: 1 },
+                  { id: "engineering", label: "Engineer", count: 1 },
+                ],
+              },
+              candidateFacetSummaryScope: "global_full_population",
+            };
+            const canonicalMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(canonicalDashboard)),
+            );
+            const functionSection = (markup) => {
+              const start = markup.indexOf("职能");
+              if (start < 0) return "";
+              const end = markup.indexOf("</details>", start);
+              return end >= 0 ? markup.slice(start, end) : markup.slice(start, start + 400);
+            };
+            console.log(JSON.stringify({
+              legacyFunctionSection: functionSection(legacyMarkup),
+              canonicalFunctionSection: functionSection(canonicalMarkup),
+            }));
+            """
+        )
+        payload = _run_node(script)
+
+        legacy_section = payload["legacyFunctionSection"]
+        # Facet disabled: no rebuilt options, an explicit unavailable message.
+        self.assertIn("统计未生成", legacy_section)
+        self.assertIn("facet-empty-message", legacy_section)
+        self.assertNotIn('class="facet-option"', legacy_section)
+
+        canonical_section = payload["canonicalFunctionSection"]
+        # Canonical summary: options render from the backend summary only.
+        self.assertIn("Researcher", canonical_section)
+        self.assertIn("Engineer", canonical_section)
+        self.assertNotIn("facet-empty-message", canonical_section)
 
 
 if __name__ == "__main__":
