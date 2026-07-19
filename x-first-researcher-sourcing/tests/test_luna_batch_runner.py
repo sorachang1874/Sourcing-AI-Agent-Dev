@@ -493,6 +493,43 @@ class LunaBatchRunnerTest(unittest.TestCase):
             )
         self.assertEqual(transport.calls, [])
 
+    def test_not_found_resolution_shape_and_live_fit_repairs(self) -> None:
+        seed = self.seed_by_ref[self.refs[1]]
+        base = copy.deepcopy(self.bundles[self.refs[1]])
+        # explicit negative resolution: empty handle + negative-search receipts
+        not_found = copy.deepcopy(base)
+        not_found["account_resolution"] = {
+            "handle": "",
+            "resolution_confidence": "not_found",
+            "evidence_receipts": [
+                {"receipt_kind": "x_user_search", "receipt_ref": "negative:name+labs"},
+            ],
+        }
+        checked = lbr.validate_candidate_bundle(not_found, seed=seed)
+        self.assertEqual(checked["account_resolution"]["resolution_confidence"], "not_found")
+        # not_found with a non-empty handle or without receipts fails closed
+        for mutate in (
+            lambda value: value["account_resolution"].update({"handle": "s0mehandle"}),
+            lambda value: value["account_resolution"].update({"evidence_receipts": []}),
+        ):
+            bad = copy.deepcopy(not_found)
+            mutate(bad)
+            with self.assertRaisesRegex(lbr.LunaBatchRunnerError, "account_resolution_not_found_invalid"):
+                lbr.validate_candidate_bundle(bad, seed=seed)
+        # live-fit repairs: narration-tolerant terminal JSON extraction, caller-owned
+        # ref normalization, and CLI-minted session adoption
+        class NarrationTransport:
+            def run(self, *, argv, prompt, session_id, timeout_ms):
+                return {
+                    "sessionId": "cli-minted-session",
+                    "stopReason": "EndTurn",
+                    "text": f"narrating the search first. {json.dumps(base)}",
+                }
+
+        bundle, receipt = lbr.collect_candidate_bundle(seed, transport=NarrationTransport())
+        self.assertEqual(bundle["candidate_ref"], seed["seed_ref"])
+        self.assertEqual(receipt["session_id"], "cli-minted-session")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -95,7 +95,7 @@ _SEED_SOURCE_KINDS = frozenset({"x_account", "linkedin_profile", "professional_p
 _FACT_TYPES = frozenset({"affiliation", "role", "education", "project", "location", "other"})
 _FACT_TEMPORAL_STATES = frozenset({"current", "historical", "ambiguous", "not_applicable"})
 _BUNDLE_ITEM_KINDS = frozenset({"post", "reply"})
-_RESOLUTION_CONFIDENCES = frozenset({"high", "medium", "low"})
+_RESOLUTION_CONFIDENCES = frozenset({"high", "medium", "low", "not_found"})
 
 _ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -171,6 +171,47 @@ def _strict_json_loads(text: str) -> Any:
         object_pairs_hook=reject_duplicate_keys,
         parse_constant=reject_non_finite,
     )
+
+
+def _strict_decoder() -> json.JSONDecoder:
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate_json_key")
+            value[key] = item
+        return value
+
+    def reject_non_finite(token: str) -> Any:
+        raise ValueError(f"non_finite_json_number:{token}")
+
+    return json.JSONDecoder(object_pairs_hook=reject_duplicate_keys, parse_constant=reject_non_finite)
+
+
+def _terminal_json_object(text: str) -> Any:
+    """Extract one terminal JSON object from model narration (bounded repair).
+
+    Agentic CLI models legitimately narrate before the final payload. Try each
+    `{` from the end of the text backwards and accept the first candidate that
+    decodes — under the duplicate-key/non-finite-rejecting strict decoder — and
+    consumes the rest of the message except trailing whitespace. The candidate
+    bundle validator remains the integrity gate; unbalanced or absent payloads
+    still fail closed.
+    """
+
+    decoder = _strict_decoder()
+    for start in range(len(text) - 1, -1, -1):
+        if text[start] != "{":
+            continue
+        try:
+            parsed, end = decoder.raw_decode(text, start)
+        except (ValueError, RecursionError):
+            continue
+        if text[end:].strip():
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("no_terminal_json_object")
 
 
 def _scan_json(value: Any, *, max_depth: int = 64, max_nodes: int = 4096) -> list[str]:
@@ -306,7 +347,7 @@ def validate_candidate_bundle(bundle: Any, *, seed: Mapping[str, Any]) -> dict[s
     resolution = bundle["account_resolution"]
     if not isinstance(resolution, dict) or set(resolution) != _ACCOUNT_RESOLUTION_KEYS:
         raise LunaBatchRunnerError("account_resolution_shape_invalid")
-    if not isinstance(resolution["handle"], str) or _HANDLE_RE.fullmatch(resolution["handle"]) is None:
+    if not isinstance(resolution["handle"], str):
         raise LunaBatchRunnerError("account_resolution_handle_invalid")
     if resolution["resolution_confidence"] not in _RESOLUTION_CONFIDENCES:
         raise LunaBatchRunnerError("account_resolution_confidence_invalid")
@@ -314,6 +355,13 @@ def validate_candidate_bundle(bundle: Any, *, seed: Mapping[str, Any]) -> dict[s
         raise LunaBatchRunnerError("account_resolution_receipts_invalid")
     for receipt in resolution["evidence_receipts"]:
         _validate_receipt_ref(receipt, error="account_resolution_receipt_invalid")
+    if resolution["resolution_confidence"] == "not_found":
+        # Explicit negative resolution: the collector proved no plausible account;
+        # the handle stays empty and the negative-search receipts carry the proof.
+        if resolution["handle"] != "" or not resolution["evidence_receipts"]:
+            raise LunaBatchRunnerError("account_resolution_not_found_invalid")
+    elif _HANDLE_RE.fullmatch(resolution["handle"]) is None:
+        raise LunaBatchRunnerError("account_resolution_handle_invalid")
     bio = bundle["x_bio"]
     if not isinstance(bio, dict) or set(bio) != _BIO_KEYS:
         raise LunaBatchRunnerError("x_bio_shape_invalid")
@@ -521,11 +569,26 @@ def build_grok_identity_prompt(
         f"- past lab(s): {past_labs}\n"
         f"LinkedIn professional facts (identity context):\n{facts_block}\n"
         "Return strict JSON with keys candidate_ref, seed_ref, account_resolution "
-        "(handle, resolution_confidence, evidence_receipts), x_bio (exact reported "
-        "text), and items[] (stable_post_id, kind post|reply, source_url, "
-        "author_handle, authored_at, text, retrieval_receipt). Use only public X "
+        "(handle, resolution_confidence, evidence_receipts), x_bio, and items[]. "
+        "When no plausible account exists after a real search, return "
+        "resolution_confidence `not_found` with an empty handle and "
+        "evidence_receipts documenting the negative searches you ran; never invent "
+        "or guess a handle. "
+        "x_bio MUST be an object with exactly one key: text (the exact reported bio "
+        "text, or an empty string when none). Each items[] entry MUST have exactly "
+        "the keys stable_post_id (the numeric X post id as a string), kind (post or "
+        "reply), source_url (https URL of the post), author_handle, authored_at "
+        "(ISO-8601), text, and retrieval_receipt. candidate_ref and "
+        f"seed_ref MUST both be exactly `{seed['seed_ref']}` (copy it verbatim). "
+        "Every receipt — each "
+        "entry of evidence_receipts and each item's retrieval_receipt — MUST be an "
+        "object with exactly two string keys: receipt_kind (the retrieval method, at "
+        "most 64 characters) and receipt_ref (the query text, URL, or id it was "
+        "retrieved with, at most 512 characters). Use only public X "
         "data; do not infer ethnicity, nationality, or another protected identity; "
-        "do not rank, decide eligibility, or authorize outreach."
+        "do not rank, decide eligibility, or authorize outreach. Your entire response "
+        "must be exactly one strict JSON object — no prose, narration, or markdown "
+        "fences."
     )
 
 
@@ -659,8 +722,11 @@ def _bundle_from_envelope(envelope: Any, *, session_id: str) -> dict[str, Any]:
         raise LunaBatchRunnerError("grok_envelope_text_invalid")
     try:
         parsed = _strict_json_loads(text)
-    except (ValueError, RecursionError) as exc:
-        raise LunaBatchRunnerError("grok_envelope_text_invalid") from exc
+    except (ValueError, RecursionError):
+        try:
+            parsed = _terminal_json_object(text)
+        except (ValueError, RecursionError) as exc:
+            raise LunaBatchRunnerError("grok_envelope_text_invalid") from exc
     if not isinstance(parsed, dict):
         raise LunaBatchRunnerError("grok_envelope_text_invalid")
     return parsed
@@ -688,7 +754,18 @@ def collect_candidate_bundle(
     started_at = _timestamp(now())
     started = clock()
     envelope = transport.run(argv=argv, prompt=prompt, session_id=session, timeout_ms=timeout_ms)
+    # Real CLI provenance: a live headless CLI mints its own session id; when the
+    # envelope carries one, adopt it as the receipt session instead of the
+    # caller-generated placeholder (prompt/argv hashes already bind the call).
+    envelope_session = envelope.get("sessionId") if isinstance(envelope, dict) else None
+    if isinstance(envelope_session, str) and envelope_session.strip():
+        session = envelope_session
     bundle = _bundle_from_envelope(envelope, session_id=session)
+    # Caller-owned echo fields: the runner issued exactly one collection call for
+    # this seed, so the returned bundle necessarily belongs to it. Normalize the
+    # model's transcription of the caller-owned refs instead of trusting it.
+    bundle["candidate_ref"] = checked_seed["seed_ref"]
+    bundle["seed_ref"] = checked_seed["seed_ref"]
     checked_bundle = validate_candidate_bundle(bundle, seed=checked_seed)
     elapsed_ms = max(0, int((clock() - started) * 1000))
     cost = envelope.get("total_cost_usd")
