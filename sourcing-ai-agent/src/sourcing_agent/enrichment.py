@@ -877,17 +877,17 @@ def _recommended_harvest_profile_live_fetch_window(
             desired_batch_count = max(2, (count + target_batch_size - 1) // target_batch_size)
             target_workers = 2
         elif roster_ratio >= 0.6:
-            if count >= 360:
-                target_batch_size = 125
-                minimum_batches = 3
-            elif count >= 180:
-                target_batch_size = 110
-                minimum_batches = 2
+            if count >= 180:
+                # Broad-recall roster waves: 4-8 concurrent actor runs balance
+                # worker communication overhead against per-worker execution
+                # time instead of one or two very large shards.
+                target_batch_size = 48
+                minimum_batches = 4
             else:
                 target_batch_size = 100
                 minimum_batches = 2
             desired_batch_count = max(minimum_batches, (count + target_batch_size - 1) // target_batch_size)
-            target_workers = 2 if count >= 180 else 1
+            target_workers = min(8, desired_batch_count) if count >= 180 else 1
         elif profile_search_ratio >= 0.5:
             target_batch_size = 45 if count < 240 else 55
             desired_batch_count = max(3 if count >= 120 else 2, (count + target_batch_size - 1) // target_batch_size)

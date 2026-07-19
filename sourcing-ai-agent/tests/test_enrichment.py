@@ -43,6 +43,7 @@ from sourcing_agent.enrichment import (
     _prioritize_candidates,
     _prioritize_scholar_coauthor_prospects,
     _profile_prefetch_oldest_deferred_coalescing_age_ms,
+    _recommended_harvest_profile_live_fetch_window,
     _recommended_harvest_profile_prefetch_dispatch_window,
     _record_profile_prefetch_batch_plan_items,
     build_people_search_url,
@@ -10862,6 +10863,33 @@ class EnrichmentHelpersTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             self.assertEqual(batch_contexts[0]["planned_deferred_url_count"], 0)
             self.assertEqual(batch_contexts[0]["planned_dispatch_worker_count"], 1)
             self.assertTrue(batch_contexts[0]["nonblocking_submit"])
+
+
+class ProfileFetchWindowPolicyTest(unittest.TestCase):
+    _SPLIT_ENV = {
+        "HARVEST_PROFILE_PREFETCH_ACTOR_SLOT_URL_TARGET": "48",
+        "HARVEST_PROFILE_PREFETCH_DURABLE_UNIT_MAX_URLS": "48",
+        "HARVEST_PROFILE_PREFETCH_PROVIDER_ENVELOPE_MAX_URLS": "48",
+    }
+
+    def test_roster_wave_scales_to_four_to_eight_workers(self) -> None:
+        shards = {f"https://www.linkedin.com/in/u{i}": ["company_roster"] for i in range(232)}
+        with mock.patch("sourcing_agent.enrichment._external_provider_mode", return_value="live"):
+            with mock.patch.dict("os.environ", self._SPLIT_ENV, clear=False):
+                inner = _recommended_harvest_profile_live_fetch_window(232, source_shards_by_url=shards)
+                outer = _recommended_harvest_profile_prefetch_dispatch_window(232, priority=False, source_shards_by_url=shards)
+        self.assertGreaterEqual(inner["max_workers"], 4)
+        self.assertLessEqual(inner["max_workers"], 8)
+        self.assertGreaterEqual(inner["batch_count"], 4)
+        self.assertEqual(outer["max_workers"], inner["max_workers"])
+        self.assertEqual(outer["batch_count"], inner["batch_count"])
+
+    def test_small_roster_wave_stays_single_worker(self) -> None:
+        shards = {f"https://www.linkedin.com/in/u{i}": ["company_roster"] for i in range(80)}
+        with mock.patch("sourcing_agent.enrichment._external_provider_mode", return_value="live"):
+            with mock.patch.dict("os.environ", self._SPLIT_ENV, clear=False):
+                inner = _recommended_harvest_profile_live_fetch_window(80, source_shards_by_url=shards)
+        self.assertEqual(inner["max_workers"], 1)
 
 
 if __name__ == "__main__":
