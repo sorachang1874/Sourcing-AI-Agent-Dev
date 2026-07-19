@@ -429,8 +429,9 @@ const fakeFetch = async (url, options = {}) => {
   // Awaited so a route may defer its response behind a test-controlled gate
   // (deferred-promise interleavings for the revision/confirmation overlap
   // matrix); sync handlers are unaffected (await on a non-promise is the
-  // identity).
-  const payload = route ? await route.handler(body, pathname) : null;
+  // identity). The full URL (with query string) is passed as the third arg
+  // so handlers can echo request pagination/filter parameters.
+  const payload = route ? await route.handler(body, pathname, urlText) : null;
   const ok = Boolean(route) && payload && payload.__status !== 404;
   const status = ok ? 200 : 404;
   const responseBody = ok ? payload : { error: `no stubbed route for ${method} ${pathname}` };
@@ -2241,6 +2242,25 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 { employment_statuses: ["current"] },
               ),
             );
+            // Rerun4 finding 6: the materialized record's OWN two mirrors
+            // (top-level + metadata) must agree byte-exactly — a dual-present
+            // conflict fails closed instead of the top level silently winning.
+            const enrichmentDualMirrorConflictError = captureError(() =>
+              api.__testDeriveCandidateFromNormalizedRecord(
+                baseDual,
+                {
+                  employment_statuses: ["current", "former"],
+                  metadata: { cohort_employment_statuses: ["former"] },
+                },
+              ),
+            );
+            const enrichmentDualMirrorAgreeing = api.__testDeriveCandidateFromNormalizedRecord(
+              baseDual,
+              {
+                employment_statuses: ["current", "former"],
+                metadata: { cohort_employment_statuses: ["current", "former"] },
+              },
+            );
 
             const candidates = [
               {
@@ -2298,6 +2318,8 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               enrichmentConflictError,
               enrichmentMetadataMirrorError,
               enrichmentWithoutBaseError,
+              enrichmentDualMirrorConflictError,
+              enrichmentDualMirrorAgreeing: enrichmentDualMirrorAgreeing.cohortEmploymentStatuses,
               employmentOptions,
               currentOnly: hits(["current"]),
               formerOnly: hits(["former"]),
@@ -2357,6 +2379,16 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertIn(
             "without the canonical build-point membership",
             payload["enrichmentWithoutBaseError"],
+        )
+        # Rerun4 finding 6: a dual-present conflict INSIDE the materialized
+        # record fails closed; dual-present agreement keeps the base.
+        self.assertIn(
+            "conflicting employment membership mirrors",
+            payload["enrichmentDualMirrorConflictError"],
+        )
+        self.assertEqual(
+            payload["enrichmentDualMirrorAgreeing"],
+            ["current", "former"],
         )
 
         # The dual-status candidate counts in BOTH buckets.
@@ -2863,6 +2895,35 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 plan: cohortPlanRecord(),
                 metadata: { request: { cohort_selection: cohort, target_locations: ["United States"] } },
               });
+              // Rerun4 finding 1: cohort_selection is REQUEST-OWNED. A
+              // preview or metadata mirror carrying Cohort data while the
+              // canonical request lacks it must fail closed — never a
+              // borrowed explicit-Cohort plan (and never a valid-looking
+              // registry pin manufactured from stale frontend evidence).
+              const previewOwnedCohortBorrow = mapError({
+                request: { raw_user_request: "find people" },
+                request_preview: { cohort_selection: cohort },
+                plan: cohortPlanRecord(),
+              });
+              const metadataOwnedCohortBorrow = mapError({
+                request: { raw_user_request: "find people" },
+                plan: cohortPlanRecord(),
+                metadata: { request_preview: { cohort_selection: cohort } },
+              });
+              // The first-truthy preview ladder must not hide a conflicting
+              // preview: payload.request_preview agrees with the canonical
+              // owner while metadata.request_preview carries a DIFFERENT
+              // cohort — every variant is enumerated, so this conflicts.
+              const hiddenConflictingPreview = mapError({
+                request: { cohort_selection: cohort },
+                request_preview: { cohort_selection: cohort },
+                plan: cohortPlanRecord(),
+                metadata: {
+                  request_preview: {
+                    cohort_selection: selectionFor(["engineering"], ["current"]),
+                  },
+                },
+              });
               // Presence-intact happy paths: every present mirror agrees.
               const agreedValues = api.__testMapPlanPayloadToDemoPlan(
                 {
@@ -2923,6 +2984,9 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 missingCanonicalRequest,
                 nonObjectCanonicalRequest,
                 staleCompleteMirror,
+                previewOwnedCohortBorrow,
+                metadataOwnedCohortBorrow,
+                hiddenConflictingPreview,
                 agreedValues: {
                   targetLocations: agreedValues.targetLocations ?? null,
                   hasTargetKey: Object.prototype.hasOwnProperty.call(agreedValues, "targetLocations"),
@@ -2965,6 +3029,20 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         # Missing/non-object canonical ownership fails closed (never borrowed).
         self.assertIn("missing the canonical request owner", payload["missingCanonicalRequest"])
         self.assertIn("missing the canonical request owner", payload["nonObjectCanonicalRequest"])
+
+        # Rerun4 finding 1: a preview/metadata mirror carrying Cohort data
+        # without the canonical request owner fails closed (no borrowed
+        # explicit-Cohort plan); a conflicting preview hidden behind the
+        # first-truthy ladder is enumerated and conflicts.
+        self.assertIn(
+            "cohort_selection mirrors without the canonical request owner",
+            payload["previewOwnedCohortBorrow"],
+        )
+        self.assertIn(
+            "cohort_selection mirrors without the canonical request owner",
+            payload["metadataOwnedCohortBorrow"],
+        )
+        self.assertIn("conflicting cohort_selection mirrors", payload["hiddenConflictingPreview"])
 
         # Production-shape preview omission is NOT a conflict: the canonical
         # request's values / opt-out / exclude round-trip exactly.
@@ -3704,8 +3782,46 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             const canonicalMarkup = render(
               el(resultsBoard.ResultsBoardPanel, boardProps(canonicalDashboard)),
             );
+            // Rerun4 finding 2 (component mirror agreement): the canonical
+            // summary EXISTS and the top-level scope is valid, but the
+            // board-runtime mirror is MISSING — one remaining mirror must not
+            // become authoritative, so the facet stays disabled.
+            const missingMirrorDashboard = {
+              ...canonicalDashboard,
+              boardRuntimeState: {
+                expectedCandidateCount: 2,
+                rowPublicationRevision: "rev-1",
+                rowPublicationTier: "serving_projection_members",
+                facetSummaryStatus: "complete",
+                facetSummaryScope: "",
+                facetSummaryCandidateCount: 2,
+                filterContract: {
+                  source: "serving_projection_reader",
+                  facetCountScope: "exact_projection",
+                  rowFilterScope: "projection_membership",
+                  backendFilteredPagingSupported: true,
+                },
+              },
+            };
+            const missingMirrorMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(missingMirrorDashboard)),
+            );
+            // ...and a PADDED board-runtime mirror is invalid evidence, not
+            // a trim-repaired match.
+            const paddedMirrorDashboard = {
+              ...missingMirrorDashboard,
+              boardRuntimeState: {
+                ...missingMirrorDashboard.boardRuntimeState,
+                facetSummaryScope: " global_full_population ",
+              },
+            };
+            const paddedMirrorMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(paddedMirrorDashboard)),
+            );
             const functionSection = (markup) => {
-              const start = markup.indexOf("职能");
+              // The exact function-facet label (the canonicalFacetUnavailable
+              // notice also mentions 职能筛选, so a bare 职能 match is wrong).
+              const start = markup.indexOf("职能</span>");
               if (start < 0) return "";
               const end = markup.indexOf("</details>", start);
               return end >= 0 ? markup.slice(start, end) : markup.slice(start, start + 400);
@@ -3713,6 +3829,8 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             console.log(JSON.stringify({
               legacyFunctionSection: functionSection(legacyMarkup),
               canonicalFunctionSection: functionSection(canonicalMarkup),
+              missingMirrorFunctionSection: functionSection(missingMirrorMarkup),
+              paddedMirrorFunctionSection: functionSection(paddedMirrorMarkup),
             }));
             """
         )
@@ -3730,16 +3848,28 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertIn("Engineer", canonical_section)
         self.assertNotIn("facet-empty-message", canonical_section)
 
+        # Rerun4 finding 2: a missing or padded board-runtime mirror disables
+        # the facet — one remaining/padded mirror never becomes authoritative.
+        for key in ("missingMirrorFunctionSection", "paddedMirrorFunctionSection"):
+            section = payload[key]
+            self.assertIn("facet-empty-message", section, key)
+            self.assertNotIn('class="facet-option"', section, key)
+            self.assertNotIn("Researcher", section, key)
+
     def test_facet_scope_contracts_consumed_independently(self) -> None:
-        """Rerun3 finding 2: summary scope and filter-contract scope are
-        independent backend-owned contracts — consumed from their own owners,
-        never minted (`exact_projection` default) or copied into each other,
-        and disabled on missing or conflicting evidence."""
+        """Rerun3 finding 2 + rerun4 finding 2: summary scope and
+        filter-contract scope are independent backend-owned contracts —
+        consumed from their own owners through ONE strict byte-exact adapter
+        (closed values, no trimming, agreement across all documented
+        mirrors), never minted (`exact_projection` default) or copied into
+        each other, and disabled on missing, padded, or conflicting
+        evidence."""
         script = textwrap.dedent(
             _MINIDOM_PREAMBLE
             + _HARNESS_PREAMBLE
             + _FIXTURES_PREAMBLE
             + """
+            (async () => {
             // Production-shaped projection dashboard payload (the pinned
             // serving_projection_reader shape): membership revision + exact
             // read contract + consistent counts.
@@ -3819,12 +3949,74 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 delete payload.projection.counts.facet_count_scope;
               }),
             );
+            // Rerun4 finding 2: padded identity bytes are INVALID evidence,
+            // never trimmed into a match — on either mirror.
+            const paddedInnerScope = scopeTriple(
+              projectionPayload((payload) => {
+                payload.facet_summary.count_scope = " exact_projection ";
+              }),
+            );
+            const paddedTopLevelScope = scopeTriple(
+              projectionPayload((payload) => {
+                payload.facet_summary_scope = " exact_projection ";
+              }),
+            );
+            // The JOB candidate-page endpoint goes through the SAME strict
+            // adapter: a top-level exact_projection with a conflicting inner
+            // count_scope is NOT admitted (the top level no longer wins).
+            addRoute("GET", "/api/jobs/job-scope/candidates", () => ({
+              job_id: "job-scope",
+              result_mode: "asset_population",
+              offset: 0,
+              limit: 24,
+              returned_count: 0,
+              total_candidates: 2,
+              filtered_candidate_count: 2,
+              has_more: false,
+              candidates: [],
+              board_runtime_state: {
+                expected_candidate_count: 2,
+                row_publication_revision: "rev-1",
+                row_publication_tier: "serving_projection_members",
+                facet_summary_status: "complete",
+                facet_summary_scope: "exact_projection",
+                facet_summary_candidate_count: 2,
+                filter_contract: {
+                  source: "serving_projection_reader",
+                  facet_count_scope: "exact_projection",
+                  row_filter_scope: "projection_membership",
+                  backend_filtered_paging_supported: true,
+                },
+              },
+              facet_summary: {
+                status: "complete",
+                count_scope: "global_full_population",
+                candidate_count: 2,
+              },
+              facet_summary_scope: "exact_projection",
+              filter_contract: {
+                source: "serving_projection_reader",
+                facet_count_scope: "exact_projection",
+                row_filter_scope: "projection_membership",
+                backend_filtered_paging_supported: true,
+              },
+            }));
+            const jobPageConflicting = await api
+              .getDashboardCandidatePage("job-scope", { forceRefresh: true })
+              .then((page) => page.candidateFacetSummaryScope);
             console.log(JSON.stringify({
               agreeingScopes,
               missingSummaryScope,
               conflictingSummaryScope,
               missingFilterScope,
+              paddedInnerScope,
+              paddedTopLevelScope,
+              jobPageConflicting,
             }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
             """
         )
         payload = _run_node(script)
@@ -3852,6 +4044,17 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         missing_filter = payload["missingFilterScope"]
         self.assertEqual(missing_filter["filterFacetCountScope"], "unavailable")
         self.assertEqual(missing_filter["boardSummaryScope"], "exact_projection")
+
+        # Rerun4 finding 2: padded identity bytes are invalid evidence on
+        # EITHER mirror — never trimmed into a canonical match.
+        for key in ("paddedInnerScope", "paddedTopLevelScope"):
+            self.assertEqual(payload[key]["topLevelSummaryScope"], "", key)
+            self.assertEqual(payload[key]["boardSummaryScope"], "unavailable", key)
+
+        # The job candidate-page endpoint uses the same strict adapter: a
+        # conflicting inner count_scope disables the scope (the top-level
+        # exact_projection no longer wins).
+        self.assertEqual(payload["jobPageConflicting"], "")
 
     def test_transient_summary_gap_preserves_function_filter(self) -> None:
         """Rerun3 findings 4/8: a transient canonical-summary gap after a user
@@ -3881,6 +4084,10 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               const boardRuntimeFor = (facet) => ({
                 expectedCandidateCount: 2,
                 rowPublicationRevision: REV,
+                // Production tier: without it the projection-revision
+                // binding is vacuous and the kept-page branch is never
+                // genuinely exercised (rerun4 review finding 4).
+                rowPublicationTier: "serving_projection_members",
                 facetSummaryStatus: facet ? "complete" : "unavailable",
                 facetSummaryScope: facet ? "global_full_population" : "unavailable",
                 facetSummaryCandidateCount: facet ? 2 : 0,
@@ -4071,6 +4278,527 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertEqual(len(restored), len(narrowed) + 1)
         self.assertIn("function_buckets=research", restored[-1])
         self.assertFalse(payload["restoredNotice"])
+
+    def test_summary_gap_preserves_audit_and_layer_narrowing(self) -> None:
+        """Rerun4 finding 3: audit-only and layer-only narrowing are
+        preserved through a canonical-summary gap by the GENERIC
+        last-resolved/applied filter signature — no widened request, the
+        blocking notice appears, and the restored summary resubmits the
+        preserved axis."""
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const resultsBoard = loadTs("frontend-demo/src/components/ResultsBoardPanel.tsx");
+              const REV = "rev-1";
+              const summary = {
+                candidateCount: 2,
+                layers: [
+                  { id: "layer_0", label: "Layer 0", count: 2 },
+                  { id: "layer_1", label: "Layer 1", count: 1 },
+                ],
+                recall: [],
+                employment: [],
+                locations: [],
+                functions: [{ id: "research", label: "Researcher", count: 2 }],
+              };
+              const boardRuntimeFor = (facet) => ({
+                expectedCandidateCount: 2,
+                rowPublicationRevision: REV,
+                rowPublicationTier: "serving_projection_members",
+                facetSummaryStatus: facet ? "complete" : "unavailable",
+                facetSummaryScope: facet ? "global_full_population" : "unavailable",
+                facetSummaryCandidateCount: facet ? 2 : 0,
+                filterContract: {
+                  source: "serving_projection_reader",
+                  facetCountScope: "exact_projection",
+                  rowFilterScope: "projection_membership",
+                  backendFilteredPagingSupported: true,
+                },
+              });
+              const boardCandidate = (patch) => ({
+                ...baseCandidate,
+                evidence: [],
+                confidence: "high",
+                avatarUrl: "",
+                ...patch,
+              });
+              const candidates = [
+                boardCandidate({ id: "row-1", employmentStatus: "current" }),
+                boardCandidate({ id: "row-2", employmentStatus: "former" }),
+              ];
+              const dashboardFor = (withSummary) => ({
+                candidates,
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: 2,
+                manualReviewCount: 0,
+                projectionId: "proj-1",
+                candidateFacetSummary: withSummary ? summary : undefined,
+                candidateFacetSummaryScope: withSummary ? "global_full_population" : "",
+                boardRuntimeState: boardRuntimeFor(withSummary),
+              });
+              const boardProps = (dashboard) => ({
+                dashboard,
+                projectionId: "proj-1",
+                historyId: "",
+                jobId: "",
+                initialCandidateId: "",
+                isHydratingCandidates: false,
+                candidateHydrationError: "",
+                reviewStatusMap: {},
+                onSelectedCandidateChange: () => {},
+                onOpenManualReview: () => {},
+                onReviewStateChanged: () => {},
+              });
+              const pagePayload = {
+                status: "ready",
+                projection: {
+                  projection_id: "proj-1",
+                  source_run_id: "run-1",
+                  membership_revision: REV,
+                  visible_member_count: 2,
+                  read_contract: {
+                    source: "serving_projection_members",
+                    fallback_used: false,
+                    fail_closed: true,
+                  },
+                  counts: {
+                    count_scope: "exact_projection",
+                    result_count: 2,
+                    candidate_count: 2,
+                    visible_member_count: 2,
+                    facet_count_scope: "exact_projection",
+                  },
+                  readiness: {},
+                },
+                total_candidates: 2,
+                filtered_candidate_count: 1,
+                offset: 0,
+                limit: 24,
+                has_more: false,
+                next_offset: null,
+                candidates: [],
+                facet_summary: {
+                  status: "complete",
+                  count_scope: "exact_projection",
+                  candidate_count: 2,
+                },
+                filter_contract: {
+                  source: "serving_projection_reader",
+                  facet_count_scope: "exact_projection",
+                  row_filter_scope: "projection_membership",
+                  backend_filtered_paging_supported: true,
+                },
+              };
+              addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayload);
+
+              const container = miniWindow.document.createElement("div");
+              miniWindow.document.body.appendChild(container);
+              const root = ReactDOMClient.createRoot(container);
+              const renderBoard = async (dashboard) => {
+                await act(async () => {
+                  root.render(el(resultsBoard.ResultsBoardPanel, boardProps(dashboard)));
+                });
+                await settle();
+              };
+              const pageRequestUrls = () =>
+                callsTo("/api/projections/proj-1/candidates").map((call) => call.url || call.path);
+              const findFacetOptionInput = (labelText) => {
+                let found = null;
+                const visit = (node) => {
+                  if (found || !node) return;
+                  if (
+                    node.nodeType === 1 &&
+                    node.nodeName === "LABEL" &&
+                    String(node.getAttribute("class") || "").includes("facet-option") &&
+                    node.textContent.includes(labelText)
+                  ) {
+                    found = (node.childNodes || []).find((child) => child.nodeName === "INPUT") || null;
+                    return;
+                  }
+                  for (const child of node.childNodes || []) visit(child);
+                };
+                visit(container);
+                return found;
+              };
+              const findLayerButton = (labelText) => {
+                let found = null;
+                const visit = (node) => {
+                  if (found || !node) return;
+                  if (
+                    node.nodeType === 1 &&
+                    node.nodeName === "BUTTON" &&
+                    String(node.getAttribute("class") || "").includes("layer-tristate-option") &&
+                    node.textContent.includes(labelText)
+                  ) {
+                    found = node;
+                    return;
+                  }
+                  for (const child of node.childNodes || []) visit(child);
+                };
+                visit(container);
+                return found;
+              };
+
+              // --- Audit-only narrowing (rerun4 probe axis) ---
+              await renderBoard(dashboardFor(true));
+              const auditInput = findFacetOptionInput("已核实候选人");
+              setCheckbox(auditInput, false);
+              await settle();
+              const auditNarrowedUrls = pageRequestUrls();
+              await renderBoard(dashboardFor(false));
+              await settle();
+              const auditGapCount = pageRequestUrls().length;
+              const auditGapNotice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+              await renderBoard(dashboardFor(true));
+              await settle();
+              const auditRestoredUrls = pageRequestUrls();
+              const auditRestoredNotice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+
+              // Back to the all-selected (inactive) audit state, then
+              // --- Layer-only narrowing (no user-edit flag covers layers;
+              // the generic filter signature must catch it) ---
+              setCheckbox(findFacetOptionInput("已核实候选人"), true);
+              await settle();
+              clickEl(findLayerButton("Layer 1"));
+              await settle();
+              const layerNarrowedUrls = pageRequestUrls();
+              await renderBoard(dashboardFor(false));
+              await settle();
+              const layerGapCount = pageRequestUrls().length;
+              const layerGapNotice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+              await renderBoard(dashboardFor(true));
+              await settle();
+              const layerRestoredUrls = pageRequestUrls();
+              const layerRestoredNotice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+
+              console.log(JSON.stringify({
+                auditNarrowedUrls,
+                auditGapCount,
+                auditGapNotice,
+                auditRestoredUrls,
+                auditRestoredNotice,
+                layerNarrowedUrls,
+                layerGapCount,
+                layerGapNotice,
+                layerRestoredUrls,
+                layerRestoredNotice,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Audit-only: narrowed request carries audit_statuses (minus the
+        # unchecked option); the gap fires nothing and shows the notice; the
+        # restore resubmits the preserved audit axis.
+        audit_narrowed = payload["auditNarrowedUrls"]
+        self.assertTrue(any("audit_statuses=" in url for url in audit_narrowed), audit_narrowed)
+        self.assertFalse(any("verified_keep" in url for url in audit_narrowed), audit_narrowed)
+        self.assertEqual(payload["auditGapCount"], len(audit_narrowed))
+        self.assertTrue(payload["auditGapNotice"])
+        audit_restored = payload["auditRestoredUrls"]
+        self.assertEqual(len(audit_restored), len(audit_narrowed) + 1)
+        self.assertIn("audit_statuses=", audit_restored[-1])
+        self.assertNotIn("verified_keep", audit_restored[-1])
+        self.assertFalse(payload["auditRestoredNotice"])
+
+        # Layer-only: narrowed request carries layer_includes; the gap fires
+        # nothing and shows the notice; the restore resubmits it.
+        layer_narrowed = payload["layerNarrowedUrls"]
+        self.assertTrue(any("layer_includes=layer_1" in url for url in layer_narrowed), layer_narrowed)
+        self.assertEqual(payload["layerGapCount"], len(layer_narrowed))
+        self.assertTrue(payload["layerGapNotice"])
+        layer_restored = payload["layerRestoredUrls"]
+        self.assertEqual(len(layer_restored), len(layer_narrowed) + 1)
+        self.assertIn("layer_includes=layer_1", layer_restored[-1])
+        self.assertFalse(payload["layerRestoredNotice"])
+
+    def test_summary_gap_kept_page_requires_exact_identity(self) -> None:
+        """Rerun4 finding 4: the preserved gap page is reused ONLY on an
+        exact {revision, filterSignature, offset, limit} tuple match — a
+        completed UNFILTERED page from the same revision while the narrowed
+        request is still in flight yields the blocking empty state, and a
+        nonzero-offset kept page is bound to its offset."""
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const resultsBoard = loadTs("frontend-demo/src/components/ResultsBoardPanel.tsx");
+              const REV = "rev-1";
+              const summaryFor = (count) => ({
+                candidateCount: count,
+                layers: [],
+                recall: [],
+                employment: [],
+                locations: [],
+                functions: [
+                  { id: "research", label: "Researcher", count: count / 2 },
+                  { id: "engineering", label: "Engineer", count: count / 2 },
+                ],
+              });
+              const boardRuntimeFor = (facet, count) => ({
+                expectedCandidateCount: count,
+                rowPublicationRevision: REV,
+                rowPublicationTier: "serving_projection_members",
+                facetSummaryStatus: facet ? "complete" : "unavailable",
+                facetSummaryScope: facet ? "global_full_population" : "unavailable",
+                facetSummaryCandidateCount: facet ? count : 0,
+                filterContract: {
+                  source: "serving_projection_reader",
+                  facetCountScope: "exact_projection",
+                  rowFilterScope: "projection_membership",
+                  backendFilteredPagingSupported: true,
+                },
+              });
+              const boardCandidate = (patch) => ({
+                ...baseCandidate,
+                evidence: [],
+                confidence: "high",
+                avatarUrl: "",
+                ...patch,
+              });
+              const candidates = [
+                boardCandidate({
+                  id: "row-1",
+                  employmentStatus: "current",
+                  functionBucketIds: ["engineering"],
+                  functionBucketSource: "lane_membership",
+                }),
+                boardCandidate({
+                  id: "row-2",
+                  employmentStatus: "former",
+                  functionBucketIds: ["research"],
+                  functionBucketSource: "registry_evidence",
+                }),
+              ];
+              const dashboardFor = (withSummary, count, projId = "proj-1") => ({
+                candidates,
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: count,
+                manualReviewCount: 0,
+                projectionId: projId,
+                candidateFacetSummary: withSummary ? summaryFor(count) : undefined,
+                candidateFacetSummaryScope: withSummary ? "global_full_population" : "",
+                boardRuntimeState: boardRuntimeFor(withSummary, count),
+              });
+              const boardProps = (dashboard, projId = "proj-1") => ({
+                dashboard,
+                projectionId: projId,
+                historyId: "",
+                jobId: "",
+                initialCandidateId: "",
+                isHydratingCandidates: false,
+                candidateHydrationError: "",
+                reviewStatusMap: {},
+                onSelectedCandidateChange: () => {},
+                onOpenManualReview: () => {},
+                onReviewStateChanged: () => {},
+              });
+              const pagePayloadFor = (count, offset, projId = "proj-1") => ({
+                status: "ready",
+                projection: {
+                  projection_id: projId,
+                  source_run_id: "run-1",
+                  membership_revision: REV,
+                  visible_member_count: count,
+                  read_contract: {
+                    source: "serving_projection_members",
+                    fallback_used: false,
+                    fail_closed: true,
+                  },
+                  counts: {
+                    count_scope: "exact_projection",
+                    result_count: count,
+                    candidate_count: count,
+                    visible_member_count: count,
+                    facet_count_scope: "exact_projection",
+                  },
+                  readiness: {},
+                },
+                total_candidates: count,
+                filtered_candidate_count: count,
+                offset,
+                limit: 24,
+                has_more: offset + 24 < count,
+                next_offset: offset + 24 < count ? offset + 24 : null,
+                candidates: [
+                  {
+                    candidate_id: "m-1",
+                    employment_scope: "current",
+                    public_summary: { display_name: "Member One" },
+                  },
+                  {
+                    candidate_id: "m-2",
+                    employment_scope: "former",
+                    public_summary: { display_name: "Member Two" },
+                  },
+                ],
+                facet_summary: {
+                  status: "complete",
+                  count_scope: "exact_projection",
+                  candidate_count: count,
+                },
+                filter_contract: {
+                  source: "serving_projection_reader",
+                  facet_count_scope: "exact_projection",
+                  row_filter_scope: "projection_membership",
+                  backend_filtered_paging_supported: true,
+                },
+              });
+              const requestOffset = (url) =>
+                Number(new URL(url, "http://stub.local").searchParams.get("offset") || 0);
+              const findFacetOptionInput = (labelText, rootNode) => {
+                let found = null;
+                const visit = (node) => {
+                  if (found || !node) return;
+                  if (
+                    node.nodeType === 1 &&
+                    node.nodeName === "LABEL" &&
+                    String(node.getAttribute("class") || "").includes("facet-option") &&
+                    node.textContent.includes(labelText)
+                  ) {
+                    found = (node.childNodes || []).find((child) => child.nodeName === "INPUT") || null;
+                    return;
+                  }
+                  for (const child of node.childNodes || []) visit(child);
+                };
+                visit(rootNode);
+                return found;
+              };
+              const findButtonByText = (rootNode, text) => {
+                let found = null;
+                const visit = (node) => {
+                  if (found || !node) return;
+                  if (
+                    node.nodeType === 1 &&
+                    node.nodeName === "BUTTON" &&
+                    node.textContent.trim().includes(text)
+                  ) {
+                    found = node;
+                    return;
+                  }
+                  for (const child of node.childNodes || []) visit(child);
+                };
+                visit(rootNode);
+                return found;
+              };
+              const mountBoard = () => {
+                const container = miniWindow.document.createElement("div");
+                miniWindow.document.body.appendChild(container);
+                const root = ReactDOMClient.createRoot(container);
+                return { container, root };
+              };
+              const renderBoard = async (root, dashboard, projId = "proj-1") => {
+                await act(async () => {
+                  root.render(el(resultsBoard.ResultsBoardPanel, boardProps(dashboard, projId)));
+                });
+                await settle();
+              };
+              const noticeText = (container) => {
+                const notice = findByTestId(container, "facet-gap-preserved-notice");
+                return notice ? notice.textContent : "";
+              };
+
+              // --- Scenario A: completed UNFILTERED page + narrowed request
+              // still in flight when the gap starts (the rerun4 probe) ---
+              let resolveNarrowed;
+              const narrowedGate = new Promise((resolve) => {
+                resolveNarrowed = resolve;
+              });
+              addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) =>
+                String(url).includes("function_buckets")
+                  ? narrowedGate.then(() => pagePayloadFor(2, 0))
+                  : pagePayloadFor(2, 0),
+              );
+              const mountA = mountBoard();
+              await renderBoard(mountA.root, dashboardFor(true, 2));
+              // Narrow the function facet to research-only; the narrowed
+              // request is DEFERRED behind the gate.
+              setCheckbox(findFacetOptionInput("Engineer", mountA.container), false);
+              await settle(2);
+              await renderBoard(mountA.root, dashboardFor(false, 2));
+              await settle();
+              const blockedNotice = noticeText(mountA.container);
+              // The deferred narrowed response then lands — but the effect's
+              // cleanup CANCELLED the pre-gap request, so it must NOT be
+              // misread as the kept page: the blocking empty state stays.
+              resolveNarrowed();
+              await settle();
+              const stillBlockedAfterLanding = noticeText(mountA.container);
+
+              // --- Scenario B: the nonzero-offset kept page is reused ONLY
+              // on its exact tuple. The user narrows and pages to offset 24
+              // (the narrowed page completes there); the gap starts with the
+              // page position preserved, so the offset-24 page matches the
+              // {revision, signature, offset, limit} tuple and the kept-page
+              // copy shows; navigating back to page 1 inside the gap breaks
+              // the offset component and the blocking empty state must show —
+              // never the mismatched page — and no new request fires. A
+              // DISTINCT projection id keeps this mount's facet-session
+              // context clean (mount A's preserved session must not leak in).
+              addRoute("GET", "/api/projections/proj-2/candidates", (body, pathname, url) =>
+                pagePayloadFor(48, requestOffset(String(url)), "proj-2"),
+              );
+              const mountB = mountBoard();
+              await renderBoard(mountB.root, dashboardFor(true, 48, "proj-2"), "proj-2");
+              setCheckbox(findFacetOptionInput("Engineer", mountB.container), false);
+              await settle();
+              clickEl(findButtonByText(mountB.container, "下一页"));
+              await settle();
+              const preGapRequestCount = callsTo("/api/projections/proj-2/candidates").length;
+              await renderBoard(mountB.root, dashboardFor(false, 48, "proj-2"), "proj-2");
+              await settle();
+              const keptOffsetNotice = noticeText(mountB.container);
+              clickEl(findButtonByText(mountB.container, "上一页"));
+              await settle();
+              const offsetMismatchNotice = noticeText(mountB.container);
+              const gapRequestCount = callsTo("/api/projections/proj-2/candidates").length;
+
+              console.log(JSON.stringify({
+                blockedNotice,
+                stillBlockedAfterLanding,
+                keptOffsetNotice,
+                offsetMismatchNotice,
+                preGapRequestCount,
+                gapRequestCount,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Scenario A: with only the older UNFILTERED page completed, the gap
+        # shows the blocking EMPTY state (not the "keeping filtered result"
+        # copy); the deferred narrowed response landing mid-gap is cancelled
+        # by the effect cleanup and must NOT be misread as the kept page.
+        self.assertIn("已保留你的筛选设置", payload["blockedNotice"])
+        self.assertIn("暂不显示候选人", payload["blockedNotice"])
+        self.assertNotIn("保持索引不可用前", payload["blockedNotice"])
+        self.assertIn("暂不显示候选人", payload["stillBlockedAfterLanding"])
+        self.assertNotIn("保持索引不可用前", payload["stillBlockedAfterLanding"])
+
+        # Scenario B (nonzero offset): the offset-24 narrowed page matches the
+        # tuple and shows the kept-page copy; paging away inside the gap
+        # breaks the offset component and flips to the blocking empty state
+        # (never the mismatched page), and no new request fires either way.
+        self.assertIn("保持索引不可用前最近一次同修订", payload["keptOffsetNotice"])
+        self.assertIn("已保留你的筛选设置", payload["offsetMismatchNotice"])
+        self.assertIn("暂不显示候选人", payload["offsetMismatchNotice"])
+        self.assertNotIn("保持索引不可用前", payload["offsetMismatchNotice"])
+        self.assertEqual(payload["gapRequestCount"], payload["preGapRequestCount"])
 
 
 if __name__ == "__main__":

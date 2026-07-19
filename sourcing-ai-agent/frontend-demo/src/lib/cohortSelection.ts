@@ -373,8 +373,9 @@ export function buildCohortLocationApiPayload(
 
 /**
  * Tagged plan-REVIEW wire contract for the location fields (FT2
- * fixed-forward r4, rerun3 review finding 6). The review-decision payload
- * must distinguish three states per authorized axis:
+ * fixed-forward r4, rerun3 review finding 6; tracked per rerun4 review
+ * finding 5). The review-decision payload must distinguish three states per
+ * authorized axis:
  * - values / explicit `[]`  -> replace the canonical request axis
  *   (serialized as the normalized list, unchanged);
  * - restored ABSENCE        -> an explicit clear operation
@@ -382,10 +383,13 @@ export function buildCohortLocationApiPayload(
  *   restore-absence decision into the canonical request instead of reading
  *   an omitted key as "field not part of this decision";
  * - unauthorized / uninitialized axis -> the key is omitted entirely.
- * The backend review gate + application owner for these fields is still
- * pending (see the r4 handoff): until the gate lists a location field as
- * editable the frontend never serializes either operation, so the tagged
- * contract cannot reach the wire unauthorized.
+ * The authoritative contract entry is `docs/COHORT_SELECTION_CONTRACT.md`
+ * §"Plan-review location decision wire contract (dormant pending backend
+ * owner)"; the dormancy is tracked as `docs/RESIDUAL_LEDGER.md` R-032 with
+ * the backend application owner (`f6-backend-plan-review` lane) as the
+ * closing owner. Until the review gate lists a location field as editable
+ * the frontend never serializes either operation, so the tagged contract
+ * cannot reach the wire unauthorized.
  */
 export const LOCATION_REVIEW_CLEAR_OPERATION = "clear";
 

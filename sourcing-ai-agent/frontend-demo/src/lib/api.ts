@@ -4486,22 +4486,74 @@ function mapCandidateFacetSummary(source: unknown): CandidateFacetSummary | unde
 
 /**
  * Facet-SUMMARY scope is a backend-owned contract (FT2 fixed-forward r4,
- * rerun3 review finding 2): the only legitimate evidence is the explicit
- * summary-scope keys (`facet_summary_scope` at payload top level and
- * `facet_summary.count_scope` inside the summary record). The frontend
- * NEVER synthesizes the scope (no `exact_projection` default) and never
- * borrows it from the SEPARATE filter contract (`facet_count_scope`) or
- * from undocumented keys — AGENTS.md forbids deriving one contract field
- * from another. Every present mirror must agree byte-for-byte; missing or
- * conflicting evidence yields "" so facet consumption stays disabled.
+ * rerun3 review finding 2; r5 hardening per rerun4 review finding 2): the
+ * only legitimate evidence is the explicit summary-scope keys
+ * (`facet_summary_scope` at payload top level and `facet_summary.count_scope`
+ * inside the summary record). The frontend NEVER synthesizes the scope (no
+ * `exact_projection` default) and never borrows it from the SEPARATE filter
+ * contract (`facet_count_scope`) or from undocumented keys — AGENTS.md
+ * forbids deriving one contract field from another.
+ *
+ * ONE strict adapter for every endpoint:
+ * - EXACT STRING BYTES, no trimming/repair — a padded or undocumented value
+ *   is INVALID evidence (not a near-match), and any invalid mirror fails
+ *   the whole scope closed;
+ * - CLOSED allowed values — the documented backend vocabulary
+ *   (`global_full_population`, `exact_projection`, `current_served_partial`,
+ *   `unavailable`);
+ * - AGREEMENT across every documented mirror — mirrors must agree
+ *   byte-for-byte; missing or conflicting evidence yields "" so facet
+ *   consumption stays disabled.
  */
+const FACET_SUMMARY_SCOPE_ALLOWED_VALUES: ReadonlySet<string> = new Set([
+  "global_full_population",
+  "exact_projection",
+  "current_served_partial",
+  "unavailable",
+]);
+
+type FacetSummaryScopeMirror = "absent" | "invalid" | string;
+
+function readFacetSummaryScopeMirror(value: unknown): FacetSummaryScopeMirror {
+  if (value === undefined || value === null || value === "") {
+    return "absent";
+  }
+  if (typeof value !== "string") {
+    return "invalid";
+  }
+  return FACET_SUMMARY_SCOPE_ALLOWED_VALUES.has(value) ? value : "invalid";
+}
+
 function mapCandidateFacetSummaryScope(...evidence: unknown[]): string {
-  const present = evidence.map((value) => asString(value)).filter((value) => value !== "");
+  const mirrors = evidence.map(readFacetSummaryScopeMirror);
+  if (mirrors.some((mirror) => mirror === "invalid")) {
+    return "";
+  }
+  const present = mirrors.filter(
+    (mirror): mirror is string => mirror !== "absent" && mirror !== "invalid",
+  );
   if (present.length === 0) {
     return "";
   }
   const first = present[0];
   return present.every((value) => value === first) ? first : "";
+}
+
+/**
+ * Agreement over the COMPLETE set of applicable summary-scope mirrors
+ * (rerun4 review finding 2): every applicable mirror must carry a valid
+ * closed-vocabulary value and all must agree byte-exactly. A missing,
+ * invalid, or disagreeing mirror yields "" (consumption disabled) instead
+ * of letting one remaining mirror become authoritative.
+ */
+export function agreeCanonicalFacetSummaryScope(mirrors: unknown[]): string {
+  const read = mirrors.map(readFacetSummaryScopeMirror);
+  if (read.some((mirror) => mirror === "invalid" || mirror === "absent")) {
+    return "";
+  }
+  const values = read as string[];
+  const first = values[0];
+  return values.every((value) => value === first) ? first : "";
 }
 
 function isCanonicalFacetSummaryScope(scope: string | undefined): boolean {
@@ -5038,34 +5090,62 @@ function mapPlanReviewGate(payload: any, requestPreview: Record<string, unknown>
   };
 }
 
+/**
+ * Cohort selection is REQUEST-OWNED (FT2 fixed-forward r5, rerun4 review
+ * finding 1): `payload.request.cohort_selection` is the SOLE canonical
+ * owner. Every other documented record — ALL request_preview variants (the
+ * first-truthy display ladder must not hide a conflicting preview), every
+ * intent_view, and the stored request mirrors — is a comparison-only
+ * mirror that must agree byte-exactly and can never BECOME the owner:
+ * - a mirror carrying Cohort data while the canonical request is missing,
+ *   non-object, or lacks the field fails closed (a borrowed preview or
+ *   metadata mirror would otherwise manufacture an explicit-Cohort plan —
+ *   and a valid-looking registry pin — that the plan-review submission path
+ *   could then upgrade into the backend's legacy request);
+ * - only when NO record carries `cohort_selection` anywhere is the plan a
+ *   legacy non-Cohort plan (`undefined`).
+ */
 function extractPlanCohortSelection(
   payload: any,
   explainPayload: any,
   requestPreview: Record<string, unknown>,
 ): CohortSelection | undefined {
   const metadata = (payload?.metadata as Record<string, unknown>) || {};
-  const records = [
-    payload?.request,
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const canonicalRequest = isRecord(payload?.request) ? payload.request : null;
+  const mirrorRecords = [
     explainPayload?.request,
     requestPreview,
+    payload?.request_preview,
+    explainPayload?.request_preview,
+    metadata.request_preview,
     payload?.intent_view,
     explainPayload?.intent_view,
     payload?.plan?.intent_view,
     metadata.request,
-    metadata.request_preview,
-  ].filter(
-    (value): value is Record<string, unknown> =>
-      Boolean(value) && typeof value === "object" && !Array.isArray(value),
+  ].filter(isRecord);
+  const mirrorsWithCohort = mirrorRecords.filter((record) =>
+    Object.prototype.hasOwnProperty.call(record, "cohort_selection"),
   );
-  const selections = records
-    .filter((record) => Object.prototype.hasOwnProperty.call(record, "cohort_selection"))
-    .map((record) => parseCohortSelectionPayload(record.cohort_selection));
-  if (selections.length === 0) {
+  const canonicalHasCohort = Boolean(
+    canonicalRequest && Object.prototype.hasOwnProperty.call(canonicalRequest, "cohort_selection"),
+  );
+  if (!canonicalHasCohort) {
+    if (mirrorsWithCohort.length > 0) {
+      throw new Error(
+        canonicalRequest
+          ? "Plan response has cohort_selection mirrors without the canonical request owner."
+          : "Plan response is missing the canonical request owner for cohort_selection.",
+      );
+    }
     return undefined;
   }
-  const canonical = selections[0];
-  if (selections.some((selection) => !equalCohortSelection(canonical, selection))) {
-    throw new Error("Plan response contains conflicting cohort_selection mirrors.");
+  const canonical = parseCohortSelectionPayload(canonicalRequest.cohort_selection);
+  for (const record of mirrorsWithCohort) {
+    if (!equalCohortSelection(canonical, parseCohortSelectionPayload(record.cohort_selection))) {
+      throw new Error("Plan response contains conflicting cohort_selection mirrors.");
+    }
   }
   return cloneCohortSelection(canonical);
 }
@@ -8193,7 +8273,14 @@ export async function getDashboardCandidatePage(
             (payload.board_runtime_state as Record<string, unknown>) || {},
           ),
           candidateFacetSummary: mapCandidateFacetSummary(payload.facet_summary),
-          candidateFacetSummaryScope: asString(payload.facet_summary_scope),
+          // The ONE strict scope adapter on every endpoint (rerun4 review
+          // finding 2): the job page compares BOTH documented mirrors —
+          // a conflicting or padded inner `count_scope` disables the scope
+          // instead of the top-level key silently winning.
+          candidateFacetSummaryScope: mapCandidateFacetSummaryScope(
+            payload.facet_summary_scope,
+            (payload.facet_summary as Record<string, unknown> | undefined)?.count_scope,
+          ),
           filterSignature: asString(payload.filter_signature) || filterSignature,
           filterContract: mapCandidatePageFilterContract(payload.filter_contract),
         };
@@ -10194,28 +10281,37 @@ function parseCohortEmploymentStatuses(
  * metadata mirror shape) is extracted under the same strict validation, but
  * WITHOUT ownership — it may only be compared against the canonical
  * build-point membership, never substituted for it. Returns undefined when
- * the enrichment record carries no membership evidence at all.
+ * the enrichment record carries no membership evidence at all. When BOTH
+ * layers are present they must agree byte-exactly (FT2 fixed-forward r5,
+ * rerun4 review finding 6): a materialized record whose own two mirrors
+ * contradict each other is contradictory stale evidence and fails closed,
+ * never silently accepted.
  */
 function parseEmploymentMembershipMirror(
   record: Record<string, unknown>,
 ): Array<"current" | "former"> | undefined {
   const metadata = (record.metadata as Record<string, unknown>) || {};
-  if (
+  const hasTopLevel =
     Object.prototype.hasOwnProperty.call(record, "employment_statuses") &&
-    record.employment_statuses !== undefined
-  ) {
-    return parseEmploymentMembershipValue(record.employment_statuses, "employment_statuses");
-  }
-  if (
+    record.employment_statuses !== undefined;
+  const hasMetadataMirror =
     Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses") &&
-    metadata.cohort_employment_statuses !== undefined
-  ) {
-    return parseEmploymentMembershipValue(
-      metadata.cohort_employment_statuses,
-      "cohort_employment_statuses",
+    metadata.cohort_employment_statuses !== undefined;
+  const topLevel = hasTopLevel
+    ? parseEmploymentMembershipValue(record.employment_statuses, "employment_statuses")
+    : undefined;
+  const metadataMirror = hasMetadataMirror
+    ? parseEmploymentMembershipValue(
+        metadata.cohort_employment_statuses,
+        "cohort_employment_statuses",
+      )
+    : undefined;
+  if (topLevel && metadataMirror && !equalEmploymentMembership(topLevel, metadataMirror)) {
+    throw new Error(
+      "Served candidate enrichment has conflicting employment membership mirrors.",
     );
   }
-  return undefined;
+  return topLevel || metadataMirror;
 }
 
 function deriveCandidate(record: Record<string, unknown>): Candidate {

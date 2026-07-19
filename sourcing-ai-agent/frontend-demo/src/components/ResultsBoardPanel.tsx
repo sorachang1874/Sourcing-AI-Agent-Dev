@@ -35,6 +35,7 @@ import {
 } from "../lib/targetCandidatesStore";
 import { getFormattedEducationExperience, getFormattedWorkExperience } from "../lib/profileFormatting";
 import {
+  agreeCanonicalFacetSummaryScope,
   dashboardCandidatePageFilterSignature,
   dashboardCandidatePageRevisionMatches,
   exportProjectionCandidatesArchive,
@@ -218,6 +219,43 @@ function selectedBackendFacetFilterIds(
   return normalizedSelected;
 }
 
+/**
+ * Does a serialized backend page filter NARROW the served population?
+ * (FT2 fixed-forward r5, rerun4 review finding 3) Every axis — keyword,
+ * recall, employment, locations, functions, audit, and layer include/exclude
+ * — is read from the ONE filter contract, so no per-facet hand-written
+ * predicate can silently omit an axis. An all-selected default resolves to
+ * an empty axis upstream (INACTIVE no-op), so any non-empty axis is a real
+ * narrowing. The layer axes are compared against the DEFAULT applied layer
+ * filter (include `layer_0`, no excludes): the default layer view is the
+ * product baseline, not user narrowing.
+ */
+function dashboardCandidatePageFilterNarrows(filterSignature: string): boolean {
+  if (!filterSignature) {
+    return false;
+  }
+  try {
+    const filter = JSON.parse(filterSignature) as DashboardCandidatePageFilter;
+    const layerIncludes = filter.layerIncludes || [];
+    const layerExcludes = filter.layerExcludes || [];
+    const layerNarrows =
+      layerExcludes.length > 0 ||
+      layerIncludes.length !== 1 ||
+      layerIncludes[0] !== "layer_0";
+    return Boolean(
+      String(filter.searchKeyword || "").trim() !== "" ||
+        (filter.recallBuckets || []).length > 0 ||
+        (filter.employmentStatuses || []).length > 0 ||
+        (filter.locations || []).length > 0 ||
+        (filter.functionBuckets || []).length > 0 ||
+        layerNarrows ||
+        (filter.auditStatuses || []).length > 0,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function hasCanonicalFacetSummaryForServedPopulation(
   dashboard: DashboardData,
   expectedCandidateCount: number,
@@ -226,21 +264,15 @@ function hasCanonicalFacetSummaryForServedPopulation(
   // The summary scope is consumed ONLY from its own backend owners (the
   // top-level mapping and the board-runtime mirror). The filter contract's
   // `facetCountScope` is a SEPARATE contract and is never summary-scope
-  // evidence (FT2 fixed-forward r4, rerun3 review finding 2); the two
-  // summary-scope owners must agree — missing or conflicting evidence
-  // disables facet consumption instead of being promoted into a canonical
-  // summary.
-  const summaryScopeEvidence = [
+  // evidence (FT2 fixed-forward r4, rerun3 review finding 2; r5 hardening
+  // per rerun4 review finding 2). EVERY applicable mirror must carry a
+  // valid closed-vocabulary value and all must agree byte-exactly — a
+  // missing, padded, or disagreeing mirror disables facet consumption
+  // instead of letting one remaining mirror become authoritative.
+  const facetSummaryScope = agreeCanonicalFacetSummaryScope([
     dashboard.candidateFacetSummaryScope,
-    dashboard.boardRuntimeState?.facetSummaryScope,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter((value) => value !== "");
-  const facetSummaryScope =
-    summaryScopeEvidence.length > 0 &&
-    summaryScopeEvidence.every((value) => value === summaryScopeEvidence[0])
-      ? summaryScopeEvidence[0]
-      : "";
+    ...(dashboard.boardRuntimeState ? [dashboard.boardRuntimeState.facetSummaryScope] : []),
+  ]);
   const canonicalScope =
     facetSummaryScope === "global_full_population" || facetSummaryScope === "exact_projection";
   const summaryCandidateCount = Math.max(0, Number(summary?.candidateCount || 0));
@@ -572,6 +604,11 @@ export function ResultsBoardPanel({
     ? `/targets?collection=${encodeURIComponent(collectionId.trim())}`
     : "/targets";
   const skipNextFacetSessionSaveRef = useRef(false);
+  // Last backend filter signature RESOLVED outside a canonical-summary gap
+  // (FT2 fixed-forward r5, rerun4 review finding 3): the generic record of
+  // the user's narrowing intent over every filter axis, keyed to the real
+  // filter contract rather than a hand-written facet list.
+  const lastResolvedFilterSignatureRef = useRef("");
 
   const candidateFacetSummary = dashboard.candidateFacetSummary;
   const expectedCandidateCount = dashboardExpectedCandidateCount(dashboard);
@@ -899,27 +936,32 @@ export function ResultsBoardPanel({
   }, []);
 
   // Canonical-summary gap with preserved narrowing intent (FT2 fixed-forward
-  // r4, rerun3 review finding 4): while the canonical facet summary is
-  // transiently unavailable, a user-narrowed selection (or keyword) stays
-  // preserved inertly. The board must NOT submit a widened backend filter
-  // and must NOT present an unfiltered population as if it were the filtered
-  // result — it keeps the last same-revision page (or a blocking unavailable
-  // state) until the summary returns and the preserved selection reconciles
-  // against the restored canonical options.
+  // r4, rerun3 review finding 4; r5 hardening per rerun4 review finding 3):
+  // while the canonical facet summary is transiently unavailable, a
+  // user-narrowed selection stays preserved inertly. Narrowing intent is
+  // derived GENERICALLY from the last resolved/applied backend filter
+  // signature — every axis (keyword, recall, employment, locations,
+  // functions, audit, and layer include/exclude) is covered by the one
+  // filter contract, so audit-only or layer-only narrowing can never slip
+  // through a partial hand-written predicate and let a widened request
+  // through. The current keyword / layer state and the user-edit flags
+  // additionally cover the restored-session edge (a first render that lands
+  // inside the gap before any filter could be resolved or applied).
+  const layerSelectionNarrows = Object.entries(selectedLayerStates).some(
+    ([id, state]) => state !== (defaultLayerSelectionStates()[id] || "neutral"),
+  );
   const preservedFacetIntentDuringGap = Boolean(
     canonicalFacetUnavailable &&
-      (keyword.trim() !== "" ||
+      (dashboardCandidatePageFilterNarrows(backendCandidatePageRequestSignature) ||
+        dashboardCandidatePageFilterNarrows(lastResolvedFilterSignatureRef.current) ||
+        keyword.trim() !== "" ||
+        layerSelectionNarrows ||
         userEditedFacetRefs.current.recall ||
         userEditedFacetRefs.current.employment ||
         userEditedFacetRefs.current.locations ||
-        userEditedFacetRefs.current.functions),
+        userEditedFacetRefs.current.functions ||
+        userEditedFacetRefs.current.audit),
   );
-  const gapKeptBackendPage =
-    preservedFacetIntentDuringGap &&
-    backendCandidatePage &&
-    dashboardCandidatePageRevisionMatches(dashboard, backendCandidatePage)
-      ? backendCandidatePage
-      : null;
 
   const fallbackBaseVisibleCandidates = useMemo(
     () =>
@@ -1022,10 +1064,38 @@ export function ResultsBoardPanel({
     () => dashboardCandidatePageFilterSignature(backendPageFilter),
     [backendPageFilter],
   );
+  useEffect(() => {
+    // Record the last filter signature RESOLVED outside a canonical-summary
+    // gap; during a gap the resolved filter collapses to the empty object,
+    // so the recorded signature is the only generic record of the user's
+    // narrowing intent over every axis.
+    if (!canonicalFacetUnavailable && backendFilterSignature) {
+      lastResolvedFilterSignatureRef.current = backendFilterSignature;
+    }
+  }, [backendFilterSignature, canonicalFacetUnavailable]);
   const backendFilteredPagingSupported = Boolean(
     dashboard.boardRuntimeState?.filterContract?.backendFilteredPagingSupported,
   );
   const backendPageOffset = Math.max(0, (currentPage - 1) * RESULTS_PAGE_SIZE);
+  // The kept gap page is bound to its FULL identity tuple (FT2 fixed-forward
+  // r5, rerun4 review finding 4): same projection membership revision AND
+  // the exact preserved filter signature AND the current offset/limit. An
+  // older page from the same revision but a different filter (e.g. the
+  // completed unfiltered page while the narrowed request was still in
+  // flight) is NOT a valid "recent filtered result" — the board falls back
+  // to the blocking empty state instead of presenting it as one.
+  const preservedFilterSignature =
+    lastResolvedFilterSignatureRef.current || backendCandidatePageRequestSignature;
+  const gapKeptBackendPage =
+    preservedFacetIntentDuringGap &&
+    backendCandidatePage &&
+    dashboardCandidatePageRevisionMatches(dashboard, backendCandidatePage) &&
+    backendCandidatePageRequestSignature !== "" &&
+    backendCandidatePageRequestSignature === preservedFilterSignature &&
+    backendCandidatePage.offset === backendPageOffset &&
+    backendCandidatePage.limit <= RESULTS_PAGE_SIZE
+      ? backendCandidatePage
+      : null;
   const backendPageReady = Boolean(
     backendFilteredPagingSupported &&
       backendCandidatePage &&
@@ -1137,10 +1207,14 @@ export function ResultsBoardPanel({
   useEffect(() => {
     setCurrentPage(1);
     // Filter changed: clear last-known totals so the new filter doesn't
-    // inherit stale pagination width.
+    // inherit stale pagination width. `filterControlsAvailable` is
+    // deliberately NOT a trigger: entering/leaving a canonical-summary gap
+    // is not a user filter change, and the preserved gap page is bound to
+    // its {revision, filterSignature, offset, limit} tuple — the user's
+    // page position must survive the gap for that binding to work (FT2
+    // fixed-forward r5, rerun4 review finding 4).
     setLastKnownFilteredCandidateCount(0);
   }, [
-    filterControlsAvailable,
     keyword,
     selectedRecallBuckets,
     selectedEmploymentStatuses,
@@ -1163,6 +1237,10 @@ export function ResultsBoardPanel({
       // review finding 4). Keep the last same-revision page; the next
       // request fires only after the summary returns and the preserved
       // selection has reconciled against the restored canonical options.
+      // The in-flight pre-gap request is cancelled by this effect's cleanup,
+      // so its response can never be misread as the kept page (rerun4
+      // finding 4) — clear the loading flag it left behind.
+      setBackendCandidatePageLoading(false);
       return;
     }
     let cancelled = false;

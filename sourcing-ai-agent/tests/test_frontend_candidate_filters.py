@@ -590,7 +590,12 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertIn("mergedBoardRuntimeState,", api_source)
         self.assertIn("pickCanonicalCandidateFacetSummary(pageFacetSummary, currentFacetSummary)", api_source)
         self.assertIn("mapCandidateFacetSummaryScope(", api_source)
-        self.assertIn("asString(payload.facet_summary_scope)", api_source)
+        # Rerun4 finding 2: the job candidate-page scope goes through the ONE
+        # strict byte-exact adapter over BOTH documented mirrors — the
+        # trimming top-level-only read may not return.
+        self.assertNotIn("asString(payload.facet_summary_scope)", api_source)
+        self.assertIn("(payload.facet_summary as Record<string, unknown> | undefined)?.count_scope,", api_source)
+        self.assertIn("FACET_SUMMARY_SCOPE_ALLOWED_VALUES", api_source)
         self.assertIn("DashboardCandidatePageFilter", api_source)
         self.assertIn("dashboardCandidatePageFilterSignature", api_source)
         self.assertIn("function_buckets: normalized.functionBuckets.length > 0", api_source)
