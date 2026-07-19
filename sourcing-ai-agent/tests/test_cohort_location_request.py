@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import threading
 import unittest
+import unittest.mock
 from pathlib import Path
 from urllib import request as urllib_request
 from urllib.error import HTTPError
 
+from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.acquisition_strategy import DEFAULT_PRIMARY_LOCATION, compile_acquisition_strategy
 from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
@@ -30,7 +33,9 @@ from sourcing_agent.cohort_selection import (
 )
 from sourcing_agent.criteria_request_provenance import prepare_criteria_write_payload
 from sourcing_agent.domain import JobRequest, RetrievalPlan
+from sourcing_agent.local_postgres import resolve_control_plane_postgres_dsn
 from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.planning import build_sourcing_plan
 from sourcing_agent.request_matching import (
     _normalized_effective_request_payload,
@@ -40,6 +45,15 @@ from sourcing_agent.request_matching import (
     request_family_signature,
     request_signature,
 )
+from sourcing_agent.semantic_provider import LocalSemanticProvider
+from sourcing_agent.settings import (
+    AppSettings,
+    HarvestActorSettings,
+    HarvestSettings,
+    QwenSettings,
+    SemanticProviderSettings,
+)
+from sourcing_agent.storage import ControlPlaneStore
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CONTRACT_DOC = _REPO_ROOT / "docs" / "COHORT_SELECTION_CONTRACT.md"
@@ -364,6 +378,65 @@ class LocationHttpIngressTest(unittest.TestCase):
                 received = self.orchestrator.received_payloads[call_name]
                 self.assertEqual(received.get("target_locations"), ["Germany"])
                 self.assertEqual(received.get("exclude_target_locations"), ["France"])
+
+
+class LocationOrchestratorIngressTest(unittest.TestCase):
+    """O1 regression: direct submit/explain paths return typed ``invalid``
+    results (HTTP-400-mappable) for invalid location values instead of
+    uncaught HTTP 500s. Fake/scripted: zero provider/model/network/PG calls.
+    """
+
+    def setUp(self) -> None:
+        dsn = str(resolve_control_plane_postgres_dsn(_REPO_ROOT) or "").strip()
+        if not dsn:
+            self.skipTest("no local control-plane Postgres DSN resolved (make local-pg-up)")
+        self._env_patch = unittest.mock.patch.dict(
+            os.environ,
+            {"SOURCING_CONTROL_PLANE_POSTGRES_DSN": dsn},
+            clear=False,
+        )
+        self._env_patch.start()
+        self.addCleanup(self._env_patch.stop)
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        catalog = AssetCatalog.discover()
+        store = ControlPlaneStore(Path(self.tempdir.name) / "test.db")
+        self.addCleanup(store.close)
+        settings = AppSettings(
+            project_root=Path(self.tempdir.name),
+            runtime_dir=Path(self.tempdir.name),
+            secrets_file=Path(self.tempdir.name) / "providers.local.json",
+            jobs_dir=Path(self.tempdir.name) / "jobs",
+            company_assets_dir=Path(self.tempdir.name) / "company_assets",
+            db_path=Path(self.tempdir.name) / "test.db",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        model_client = DeterministicModelClient()
+        acquisition_engine = AcquisitionEngine(catalog, settings, store, model_client)
+        self.orchestrator = SourcingOrchestrator(
+            catalog=catalog,
+            store=store,
+            jobs_dir=f"{self.tempdir.name}/jobs",
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=acquisition_engine,
+        )
+
+    def test_explain_returns_typed_invalid_for_invalid_location_values(self) -> None:
+        result = self.orchestrator.explain_workflow(
+            {"target_company": "Acme", "target_locations": "United States"}
+        )
+        self.assertEqual(result.get("status"), "invalid")
+        self.assertEqual(result.get("reason"), "request_location_invalid_type")
+
+    def test_queue_returns_typed_invalid_for_invalid_location_values(self) -> None:
+        result = self.orchestrator.queue_workflow(
+            {"target_company": "Acme", "target_locations": ["x"] * 17}
+        )
+        self.assertEqual(result.get("status"), "invalid")
+        self.assertEqual(result.get("reason"), "request_location_too_many_items")
 
 
 class LocationSignatureIdentityTest(unittest.TestCase):

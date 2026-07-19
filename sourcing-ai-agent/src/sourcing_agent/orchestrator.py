@@ -2985,7 +2985,10 @@ class SourcingOrchestrator:
         )
         if execution_gate is not None:
             return execution_gate
-        request = JobRequest.from_payload(dict(resolved.get("request") or {}))
+        try:
+            request = JobRequest.from_payload(dict(resolved.get("request") or {}))
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
         plan = hydrate_sourcing_plan(dict(resolved.get("plan") or {}))
         asset_reuse_plan = dict(plan.asset_reuse_plan or {})
         runtime_execution_mode = str(payload.get("runtime_execution_mode") or "hosted").strip().lower() or "hosted"
@@ -60104,9 +60107,12 @@ class SourcingOrchestrator:
                 },
             }
 
-        prepared_payload, prepare_request_breakdown_ms = self._prepare_request_payload_with_diagnostics(payload)
+        try:
+            prepared_payload, prepare_request_breakdown_ms = self._prepare_request_payload_with_diagnostics(payload)
+            ingress_request = JobRequest.from_payload(prepared_payload)
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
         prepare_request_ms = float(prepare_request_breakdown_ms.get("total") or 0.0)
-        ingress_request = JobRequest.from_payload(prepared_payload)
 
         plan_started_at = time.perf_counter()
         plan = self._build_augmented_sourcing_plan(ingress_request)
@@ -60241,7 +60247,10 @@ class SourcingOrchestrator:
                 "intent_rewrite": _build_intent_rewrite_payload(request_payload=request_payload),
             }
 
-        request = JobRequest.from_payload(self._prepare_request_payload(payload))
+        try:
+            request = JobRequest.from_payload(self._prepare_request_payload(payload))
+        except CohortSelectionValidationError as exc:
+            return exc.to_result()
         plan = self._build_augmented_sourcing_plan(request)
         effective_request = _build_effective_retrieval_request(request, plan)
         plan_review_gate = build_plan_review_gate(request, plan)
