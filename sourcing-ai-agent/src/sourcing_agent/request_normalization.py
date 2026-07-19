@@ -646,8 +646,12 @@ def merge_unique_request_string_values(*sources: Any, target_company: str = "") 
     for source in sources:
         if isinstance(source, str):
             items = [source]
+        elif isinstance(source, (list, tuple, set, frozenset)):
+            items = list(source)
         else:
-            items = list(source or [])
+            # Model-emitted enrichment values are untrusted input: a malformed
+            # container (bool/int/dict) is dropped, never crashes the request path.
+            items = []
         for item in items:
             value = normalize_request_query_signal(str(item or ""), target_company=target_company)
             if not value:

@@ -1,7 +1,12 @@
 import unittest
 
 from sourcing_agent.domain import JobRequest
-from sourcing_agent.request_normalization import resolve_request_intent_view, supplement_request_query_signals
+from sourcing_agent.request_normalization import (
+    expand_request_intent_axes_patch,
+    merge_unique_request_string_values,
+    resolve_request_intent_view,
+    supplement_request_query_signals,
+)
 from sourcing_agent.semantic_intent import compile_semantic_brief
 
 
@@ -216,6 +221,34 @@ class SemanticIntentTest(unittest.TestCase):
             intent_view["requested_population_boundary"]["boundary_type"],
             "scoped_directional",
         )
+
+
+class RequestNormalizationRobustnessTest(unittest.TestCase):
+    def test_merge_helper_drops_malformed_model_emitted_containers(self) -> None:
+        merged = merge_unique_request_string_values(
+            True,
+            7,
+            {"nested": "dict"},
+            ["Valid Company", "valid company", "Another Lab"],
+            None,
+            target_company="Acme",
+        )
+        self.assertEqual(merged, ["Valid Company", "Another Lab"])
+
+    def test_axes_patch_ignores_bool_confirmed_company_scope(self) -> None:
+        patch = expand_request_intent_axes_patch(
+            {
+                "intent_axes": {
+                    "scope_boundary": {
+                        "target_company": "Thinking Machines Lab",
+                        "confirmed_company_scope": True,
+                    }
+                }
+            },
+            target_company="Thinking Machines Lab",
+        )
+        execution_preferences = dict(patch.get("execution_preferences") or {})
+        self.assertNotIn("confirmed_company_scope", execution_preferences)
 
 
 if __name__ == "__main__":
