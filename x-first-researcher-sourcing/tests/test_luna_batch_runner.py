@@ -4,6 +4,8 @@ import copy
 import hashlib
 import json
 import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -492,6 +494,111 @@ class LunaBatchRunnerTest(unittest.TestCase):
                 approval=malformed,
             )
         self.assertEqual(transport.calls, [])
+
+    def test_streaming_pipeline_interleaves_collection_and_judgment_per_candidate(self) -> None:
+        events: list[tuple[str, str]] = []
+        lock = threading.Lock()
+
+        class EventGrok(lbr.OfflineFakeGrokTransport):
+            def run(self, *, argv, prompt, session_id, timeout_ms):
+                ref = next(r for r in self._bundles if f"candidate_ref: {r}" in prompt)
+                with lock:
+                    events.append(("grok", ref))
+                return super().run(argv=argv, prompt=prompt, session_id=session_id, timeout_ms=timeout_ms)
+
+        class EventLuna(lbr.OfflineFakeLunaTransport):
+            def complete(self, *, payload, timeout_ms):
+                with lock:
+                    events.append(("luna", payload["metadata"]["candidate_ref"]))
+                return super().complete(payload=payload, timeout_ms=timeout_ms)
+
+        result = lbr.run_streaming_pipeline(
+            seeds=self.seeds,
+            grok_transport=EventGrok(bundles=self.bundles),
+            luna_transport=EventLuna(outputs=self.outputs),
+            approval=self._approval(),
+            worker_count=1,
+        )
+        # one worker fuses collect->judge per candidate: strict interleaving, no stage barrier
+        expected = [(kind, ref) for ref in self.refs for kind in ("grok", "luna")]
+        self.assertEqual(events, expected)
+        self.assertEqual(result["schema_version"], lbr.PIPELINE_RESULT_SCHEMA_VERSION)
+        self.assertEqual(result["grok_completed_count"], len(self.refs))
+        self.assertEqual(result["luna_completed_count"], len(self.refs))
+        for row in result["results"]:
+            self.assertEqual(row["grok"]["status"], "completed")
+            self.assertEqual(row["luna"]["status"], "completed")
+            self.assertIsNotNone(row["luna"]["review"])
+            self.assertEqual([r["candidate_ref"] for r in result["results"]], self.refs)
+
+    def test_streaming_pipeline_grok_failure_marks_luna_not_attempted(self) -> None:
+        failing = self.refs[1]
+        grok = lbr.OfflineFakeGrokTransport(bundles=self.bundles, failures={failing: "grok_cli_exit_nonzero"})
+        luna = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        result = lbr.run_streaming_pipeline(
+            seeds=self.seeds,
+            grok_transport=grok,
+            luna_transport=luna,
+            approval=self._approval(),
+            worker_count=3,
+        )
+        by_ref = {row["candidate_ref"]: row for row in result["results"]}
+        self.assertEqual(by_ref[failing]["grok"]["status"], "failed")
+        self.assertEqual(by_ref[failing]["grok"]["error_code"], "grok_cli_exit_nonzero")
+        self.assertEqual(by_ref[failing]["luna"]["status"], "not_attempted")
+        self.assertIsNone(by_ref[failing]["luna"]["execution_receipt"])
+        self.assertEqual(by_ref[self.refs[0]]["luna"]["status"], "completed")
+        self.assertEqual(result["luna_completed_count"], len(self.refs) - 1)
+        judged = {call["payload"]["metadata"]["candidate_ref"] for call in luna.calls}
+        self.assertNotIn(failing, judged)
+
+    def test_streaming_pipeline_luna_failure_never_discards_bundle(self) -> None:
+        failing = self.refs[0]
+        luna = lbr.OfflineFakeLunaTransport(outputs=self.outputs, failures={failing: "luna_transport_failed"})
+        result = lbr.run_streaming_pipeline(
+            seeds=self.seeds,
+            grok_transport=lbr.OfflineFakeGrokTransport(bundles=self.bundles),
+            luna_transport=luna,
+            approval=self._approval(),
+            worker_count=2,
+        )
+        by_ref = {row["candidate_ref"]: row for row in result["results"]}
+        self.assertEqual(by_ref[failing]["grok"]["status"], "completed")
+        self.assertIsNotNone(by_ref[failing]["grok"]["bundle"])
+        self.assertEqual(by_ref[failing]["luna"]["status"], "failed")
+        self.assertEqual(by_ref[failing]["luna"]["error_code"], "luna_transport_failed")
+        self.assertEqual(result["grok_completed_count"], len(self.refs))
+        self.assertEqual(result["luna_completed_count"], len(self.refs) - 1)
+
+    def test_streaming_pipeline_requires_approval_before_any_transport_call(self) -> None:
+        grok = lbr.OfflineFakeGrokTransport(bundles=self.bundles)
+        luna = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        with self.assertRaisesRegex(PermissionError, "luna_approval_receipt_required"):
+            lbr.run_streaming_pipeline(
+                seeds=self.seeds,
+                grok_transport=grok,
+                luna_transport=luna,
+                approval=None,
+            )
+        self.assertEqual(grok.calls, [])
+        self.assertEqual(luna.calls, [])
+
+    def test_streaming_pipeline_event_level_no_idle_under_skew(self) -> None:
+        # slow grok for the first seed must not idle the fast candidate's judgment
+        slow, fast = self.refs[0], self.refs[1]
+        grok = lbr.OfflineFakeGrokTransport(bundles=self.bundles, latency_s={slow: 0.6})
+        luna = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        started = time.monotonic()
+        result = lbr.run_streaming_pipeline(
+            seeds=[self.seed_by_ref[slow], self.seed_by_ref[fast]],
+            grok_transport=grok,
+            luna_transport=luna,
+            approval=self._approval(refs=[slow, fast]),
+            worker_count=2,
+        )
+        elapsed = time.monotonic() - started
+        self.assertEqual(result["luna_completed_count"], 2)
+        self.assertLess(elapsed, 1.2, "fused pipeline must overlap independent candidates")
 
     def test_not_found_resolution_shape_and_live_fit_repairs(self) -> None:
         seed = self.seed_by_ref[self.refs[1]]

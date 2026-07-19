@@ -64,6 +64,7 @@ EXECUTION_RECEIPT_SCHEMA_VERSION = "x.source_neutral.mapping.luna_batch_runner.e
 GROK_OPERATOR_RECEIPT_SCHEMA_VERSION = "x.source_neutral.mapping.luna_batch_runner.grok_operator_receipt.v1"
 LUNA_BATCH_RESULT_SCHEMA_VERSION = "x.source_neutral.mapping.luna_batch_runner.result.v1"
 GROK_COLLECTION_RESULT_SCHEMA_VERSION = "x.source_neutral.mapping.luna_batch_runner.grok_collection_result.v1"
+PIPELINE_RESULT_SCHEMA_VERSION = "x.source_neutral.mapping.luna_batch_runner.pipeline_result.v1"
 
 MODEL_ID = legacy.MODEL_ID
 BASE_URL = legacy.BASE_URL
@@ -1318,6 +1319,132 @@ def run_luna_batch(
         "candidate_count": len(results),
         "completed_count": completed,
         "failed_count": len(results) - completed,
+        "results": results,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Event-level streaming pipeline: per candidate, collect -> judge fused.
+# ---------------------------------------------------------------------------
+
+
+def run_streaming_pipeline(
+    *,
+    seeds: Sequence[Mapping[str, Any]],
+    grok_transport: GrokTransport,
+    luna_transport: LunaTransport,
+    approval: Mapping[str, Any] | None,
+    worker_count: int = DEFAULT_WORKER_COUNT,
+    grok_timeout_ms: int = 300_000,
+    luna_timeout_ms: int = 180_000,
+    target_direction: str = "pre-training",
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+    grok_binary: str = "grok",
+    wall_clock: Callable[[], datetime] | None = None,
+    monotonic: Callable[[], float] | None = None,
+) -> dict[str, Any]:
+    """Fuse Grok collection and Luna judgment per candidate (operator directive 2026-07-20).
+
+    No global stage barrier: a candidate's Luna call starts the moment its own
+    bundle validates, so at 1000+ candidate scale a slow collection never idles
+    the judgment capacity of the others.  The approval receipt is validated
+    BEFORE any transport call (no receipt, no calls at all).  Failures stay
+    per-candidate: a failed collection marks judgment ``not_attempted``; a
+    failed judgment never discards the collected bundle.  Rows are re-ordered
+    by seed ordinal.
+    """
+
+    workers = _check_worker_count(worker_count)
+    candidate_refs = _seed_refs(seeds)
+    if approval is None:
+        raise PermissionError("luna_approval_receipt_required")
+    checked_approval = validate_approval_receipt(approval, candidate_refs=candidate_refs)
+    prompt = load_prompt()
+
+    def work(ordinal: int) -> dict[str, Any]:
+        row: dict[str, Any] = {"candidate_ref": candidate_refs[ordinal], "seed_ordinal": ordinal}
+        try:
+            seed = validate_seed_input(seeds[ordinal])
+            bundle, grok_receipt = collect_candidate_bundle(
+                seed,
+                transport=grok_transport,
+                timeout_ms=grok_timeout_ms,
+                grok_binary=grok_binary,
+                target_direction=target_direction,
+                wall_clock=wall_clock,
+                monotonic=monotonic,
+            )
+        except Exception as exc:  # noqa: BLE001 - failure isolation
+            code = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "grok_collection_failed"
+            row["grok"] = {
+                "status": "failed",
+                "error_code": code,
+                "bundle": None,
+                "operator_receipt": {
+                    "schema_version": GROK_OPERATOR_RECEIPT_SCHEMA_VERSION,
+                    "candidate_ref": candidate_refs[ordinal],
+                    "session_id": None,
+                    "prompt_sha256": None,
+                    "argv_sha256": None,
+                    "timeout_ms": grok_timeout_ms,
+                    "started_at": None,
+                    "completed_at": None,
+                    "elapsed_ms": None,
+                    "cost_usd": None,
+                    "outcome": "failed",
+                    "error_code": code,
+                },
+            }
+            row["luna"] = {
+                "status": "not_attempted",
+                "error_code": None,
+                "review": None,
+                "execution_receipt": None,
+            }
+            return row
+        row["grok"] = {"status": "completed", "error_code": None, "bundle": bundle, "operator_receipt": grok_receipt}
+        try:
+            review, luna_receipt = review_one_candidate(
+                seed,
+                bundle,
+                transport=luna_transport,
+                prompt=prompt,
+                timeout_ms=luna_timeout_ms,
+                reasoning_effort=reasoning_effort,
+                wall_clock=wall_clock,
+                monotonic=monotonic,
+            )
+        except Exception as exc:  # noqa: BLE001 - failure isolation: judgment loss never discards the bundle
+            code = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "luna_review_failed"
+            row["luna"] = {
+                "status": "failed",
+                "error_code": code,
+                "review": None,
+                "execution_receipt": _failed_execution_receipt(
+                    candidate_ref=candidate_refs[ordinal],
+                    request_payload_sha256=None,
+                    started_at=None,
+                    completed_at=None,
+                    elapsed_ms=None,
+                    error_code=code,
+                ),
+            }
+            return row
+        row["luna"] = {"status": "completed", "error_code": None, "review": review, "execution_receipt": luna_receipt}
+        return row
+
+    results = _run_indexed_pool(list(range(len(candidate_refs))), work, worker_count=workers)
+    grok_completed = sum(1 for row in results if row["grok"]["status"] == "completed")
+    luna_completed = sum(1 for row in results if row["luna"]["status"] == "completed")
+    return {
+        "schema_version": PIPELINE_RESULT_SCHEMA_VERSION,
+        "approval_receipt": checked_approval,
+        "prompt_version": PROMPT_VERSION,
+        "prompt_sha256": CANONICAL_PROMPT_SHA256,
+        "worker_count": workers,
+        "candidate_count": len(results),
+        "grok_completed_count": grok_completed,
+        "luna_completed_count": luna_completed,
         "results": results,
     }
 
