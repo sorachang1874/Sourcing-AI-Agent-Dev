@@ -42,6 +42,7 @@ import {
   getCandidateDetailsBatch,
   getDashboardCandidatePage,
   getProjectionCandidatePage,
+  strictNonNegativeInteger,
   triggerJobCandidateProfileCompletion,
   type DashboardCandidatePage,
   type DashboardCandidatePageFilter,
@@ -281,7 +282,14 @@ function hasCanonicalFacetSummaryForServedPopulation(
   ]);
   const canonicalScope =
     facetSummaryScope === "global_full_population" || facetSummaryScope === "exact_projection";
-  const summaryCandidateCount = Math.max(0, Number(summary?.candidateCount || 0));
+  // Type-strict exact-N validation (rerun5 finding 4 + rerun6 finding 4):
+  // summary and board counts are compared only after strict
+  // non-negative-integer parsing — a coerced string, fraction, or negative
+  // disables the summary instead of normalizing into agreement.
+  const summaryCandidateCount = strictNonNegativeInteger(summary?.candidateCount);
+  const boardFacetCandidateCount = strictNonNegativeInteger(
+    dashboard.boardRuntimeState?.facetSummaryCandidateCount,
+  );
   const layerZeroCount = Math.max(
     0,
     Number((summary?.layers || []).find((option) => option.id === "layer_0")?.count || 0),
@@ -292,6 +300,7 @@ function hasCanonicalFacetSummaryForServedPopulation(
       // membership N (rerun5 review finding 4): an oversized summary (3
       // candidates over a 2-member projection) is contradictory evidence,
       // not an exact canonical summary.
+      summaryCandidateCount !== null &&
       summaryCandidateCount === expectedCandidateCount &&
       (
         facetSummaryScope === "exact_projection" ||
@@ -307,7 +316,8 @@ function hasCanonicalFacetSummaryForServedPopulation(
         dashboard.boardRuntimeState.facetSummaryScope === "global_full_population" ||
         dashboard.boardRuntimeState.facetSummaryScope === "exact_projection"
       ) &&
-      dashboard.boardRuntimeState.facetSummaryCandidateCount === expectedCandidateCount
+      boardFacetCandidateCount !== null &&
+      boardFacetCandidateCount === expectedCandidateCount
     );
   }
   if (

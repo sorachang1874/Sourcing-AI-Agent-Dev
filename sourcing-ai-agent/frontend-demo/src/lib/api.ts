@@ -4463,7 +4463,9 @@ function mapCandidateFacetOptions(source: unknown): DashboardData["layers"] {
     .map((item) => ({
       id: pickFirstString(item, ["id"]),
       label: pickFirstString(item, ["label"]),
-      count: Number(item.count || 0) || 0,
+      // Strict wire counts (rerun6 finding 4): a string/fractional/negative
+      // count is invalid evidence (0), never coerced into agreement.
+      count: strictNonNegativeInteger(item.count) ?? 0,
     }))
     .filter((item) => item.id && item.label);
 }
@@ -4475,7 +4477,10 @@ function mapCandidateFacetSummary(source: unknown): CandidateFacetSummary | unde
   }
   return {
     schemaVersion: Number(record.schema_version || record.schemaVersion || 0) || undefined,
-    candidateCount: Number(record.candidate_count || record.candidateCount || 0) || undefined,
+    // Strict wire count (rerun6 finding 4): a string/fractional/negative
+    // candidate_count makes the whole summary invalid evidence.
+    candidateCount:
+      strictNonNegativeInteger(record.candidate_count ?? record.candidateCount) ?? undefined,
     layers: mapCandidateFacetOptions(record.layers),
     recall: mapCandidateFacetOptions(record.recall),
     employment: mapCandidateFacetOptions(record.employment),
@@ -4635,13 +4640,16 @@ function candidateFacetSummaryMatchesCanonicalBoard(
   if (!summary || !isCanonicalFacetSummaryScope(normalizedScope)) {
     return false;
   }
+  // Type-strict exact equality to the canonical membership N (rerun5
+  // finding 4 + rerun6 finding 4): counts are compared only after strict
+  // non-negative-integer parsing — coerced strings, fractions, or negatives
+  // disable the summary instead of normalizing into agreement.
   const expectedCount = Math.max(0, Number(boardRuntimeState?.expectedCandidateCount || 0) || 0);
+  const summaryCount = strictNonNegativeInteger(summary.candidateCount);
   if (expectedCount <= 0) {
-    return Math.max(0, Number(summary.candidateCount || 0) || 0) > 0;
+    return summaryCount !== null && summaryCount > 0;
   }
-  // Exact equality to the canonical membership N (rerun5 review finding 4):
-  // an oversized summary is contradictory evidence, not an exact summary.
-  if (Math.max(0, Number(summary.candidateCount || 0) || 0) !== expectedCount) {
+  if (summaryCount === null || summaryCount !== expectedCount) {
     return false;
   }
   if (
@@ -4652,10 +4660,11 @@ function candidateFacetSummaryMatchesCanonicalBoard(
     return false;
   }
   if (boardRuntimeState) {
-    const boardFacetCount = Math.max(0, Number(boardRuntimeState.facetSummaryCandidateCount || 0) || 0);
+    const boardFacetCount = strictNonNegativeInteger(boardRuntimeState.facetSummaryCandidateCount);
     if (
       boardRuntimeState.facetSummaryStatus === "complete" &&
       isCanonicalFacetSummaryScope(boardRuntimeState.facetSummaryScope) &&
+      boardFacetCount !== null &&
       boardFacetCount > 0 &&
       boardFacetCount !== expectedCount
     ) {
@@ -6824,7 +6833,12 @@ function mapBoardRuntimeState(source: Record<string, unknown>): BoardRuntimeStat
     resultMode,
     phase: pickFirstString(source, ["phase"]),
     publicationStatus: pickFirstString(source, ["publication_status"]),
-    expectedCandidateCount: Number(source.expected_candidate_count || 0) || 0,
+    // Canonical membership + facet counts are strict wire integers (rerun6
+    // finding 4): strings, fractions, and negatives map to the -1 poison
+    // (never equal to a valid count), never coerced into agreement. A
+    // missing key keeps the legacy 0 downstream (positiveInteger clamps -1
+    // to 0, same as the old coercion).
+    expectedCandidateCount: strictNonNegativeInteger(source.expected_candidate_count) ?? -1,
     servedCandidateCount: Number(source.served_candidate_count || 0) || 0,
     publishedCandidateCount: Number(source.published_candidate_count || 0) || 0,
     displayReadyCandidateCount: Number(source.display_ready_candidate_count || 0) || 0,
@@ -6851,7 +6865,7 @@ function mapBoardRuntimeState(source: Record<string, unknown>): BoardRuntimeStat
     rowPublicationUpdatedAt: pickFirstString(source, ["row_publication_updated_at"]),
     facetSummaryStatus: pickFirstString(source, ["facet_summary_status"]),
     facetSummaryScope: pickFirstString(source, ["facet_summary_scope"]),
-    facetSummaryCandidateCount: Number(source.facet_summary_candidate_count || 0) || 0,
+    facetSummaryCandidateCount: strictNonNegativeInteger(source.facet_summary_candidate_count) ?? -1,
     layeringStatus: pickFirstString(source, ["layering_status"]),
     filterContract: Object.keys(filterContractSource).length
       ? {
@@ -7844,12 +7858,24 @@ function publicProjectionMemberToCandidateRecord(member: Record<string, unknown>
   };
 }
 
+/**
+ * Strict non-negative-integer parsing for canonical membership, summary,
+ * board, and page-envelope counts (FT2 fixed-forward r7, rerun6 review
+ * finding 4): only genuine JSON numbers that are integers >= 0 are
+ * accepted. Strings, fractions, negatives, and other types are INVALID —
+ * never coerced into agreement. Missing keys (undefined) stay "absent".
+ */
+export function strictNonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
 function nonNegativeInteger(value: unknown): number | null {
   if (value === undefined || value === null || value === "") {
     return null;
   }
-  const count = Number(value);
-  return Number.isInteger(count) && count >= 0 ? count : null;
+  // Strict (non-coercive) integer wire type (rerun6 finding 4): strings,
+  // fractions, and negatives are invalid, never normalized into agreement.
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function projectionVisibleMemberCount(
@@ -8153,35 +8179,202 @@ export function storeProjectionDashboardCache(projectionId: string, dashboard: D
 }
 
 /**
- * Validate a server candidate-page envelope BEFORE admitting it (FT2
- * fixed-forward r6, rerun5 review findings 1-2):
- * - PAGE STATUS: `status` must be exactly `"ready"`. A `not_ready` page
- *   (e.g. `projection_person_search_index_unavailable`) is rejected with
- *   its server reason — it must never be converted into a successful empty
- *   result ("zero matches" while the filter index is down).
- * - SERVER FILTER IDENTITY: the top-level `filter_signature` and the filter
- *   contract's `filter_signature` are two REQUIRED mirrors of the
- *   server-computed applied-filter identity. Both keys must be present
- *   (the backend emits `""` for an inactive filter — a present empty
- *   string is valid) and byte-equal; a missing key or a mismatch fails
- *   closed. The frontend NEVER substitutes its own client-computed
- *   signature for a missing server one.
- * - REQUEST TUPLE: the response `offset` must exactly equal the requested
- *   offset; the response `limit` (the returned row count, per both page
- *   owners) must be an integer within `[0, requestedLimit]` and equal the
- *   raw row count — the truthy `payload.limit || limit` fallback that
- *   rewrote the fail-closed 0 is gone.
+ * Candidate-page envelope validation BEFORE a page is admitted (FT2
+ * fixed-forward r6, rerun5 findings 1-2; r7 overhaul per rerun6 findings
+ * 1-3). The two backend page owners emit different success envelopes, so
+ * the validator is endpoint-specific where they genuinely differ:
+ * - PROJECTION page (`serving_projection_reader`): `status` is REQUIRED
+ *   and must be exactly `"ready"` (a `not_ready` page throws with its
+ *   server reason); `limit` is the returned row count.
+ * - JOB page (`orchestrator.get_job_candidate_page`): success envelopes
+ *   OMIT `status` (a `not_ready` is served as HTTP 409 upstream); a
+ *   present `status` must still be exactly `"ready"`. `limit` is the
+ *   REQUESTED page cap and `returned_count` is the row count.
+ *
+ * Shared gates (both owners):
+ * - SERVER FILTER IDENTITY: top-level `filter_signature` and
+ *   `filter_contract.filter_signature` are required present and byte-equal
+ *   (empty string is valid for an inactive filter). The client never
+ *   substitutes its own signature.
+ * - ECHOED REQUEST IDENTITY: `applied_filter` is the server-echoed
+ *   normalized request filter and must byte-equal the client's expected
+ *   normalization of the requested filter (mirroring
+ *   `public_candidate_facets.normalize_candidate_page_filter`), and
+ *   `filter_contract.filter_active` must equal the client's narrowing
+ *   semantics — a response declaring an empty/no-op filter for a narrowed
+ *   request is a contradiction, not a page.
+ * - COMPLETE READY FILTER-CONTRACT STATE: `source`, `facet_count_scope`,
+ *   `row_filter_scope`, `backend_filtered_paging_supported === true`, and
+ *   boolean `filter_active` are all required — a signature-only contract
+ *   is not a ready contract.
+ * - STRICT WIRE INTEGERS + PAGINATION EQUATIONS: `offset` exactly equals
+ *   the requested offset; `filtered_candidate_count` and
+ *   `total_candidates` are strict non-negative integers with
+ *   `filtered <= total`; `has_more` is exactly
+ *   `offset + returnedCount < filtered_candidate_count`; `next_offset` is
+ *   `offset + returnedCount` when `has_more`, else `null`.
+ * - ROW SHAPE: `candidates` must be an actual array and every row a
+ *   non-array object with at least one key — malformed rows are rejected,
+ *   never silently filtered out.
  */
+
+const CANDIDATE_PAGE_AUDIT_STATUS_IDS = [
+  "no_review_needed",
+  "needs_review",
+  "needs_profile_completion",
+  "low_profile_richness",
+  "verified_keep",
+  "verified_exclude",
+] as const;
+const EXCEL_INTAKE_CURRENT_JOB_MARKER_ID = "excel_intake:current_job";
+const EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL = "本次Excel导入";
+const EXCEL_INTAKE_CURRENT_JOB_MARKER_VALUE = `job_scoped_marker:${EXCEL_INTAKE_CURRENT_JOB_MARKER_ID}`;
+
+function normalizeCandidatePageFilterListValues(values: string[]): string[] {
+  // Shared trivial normalization with the backend
+  // (`normalize_candidate_page_filter_values`): comma-split, trim,
+  // lowercase, dedupe order-preserved. The backend additionally drops ids
+  // outside its registry vocabulary — the frontend sends canonical ids
+  // only, so any such drop shows up as an applied_filter MISMATCH and
+  // fails closed rather than being pre-computed here.
+  const normalized: string[] = [];
+  for (const value of values) {
+    for (const item of String(value || "").split(",")) {
+      const normalizedItem = item.trim().toLowerCase();
+      if (normalizedItem && !normalized.includes(normalizedItem)) {
+        normalized.push(normalizedItem);
+      }
+    }
+  }
+  return normalized;
+}
+
+function normalizeCandidatePageRecallValues(values: string[]): string[] {
+  // Mirror of the backend `normalize_candidate_page_recall_filter_values`.
+  const normalized: string[] = [];
+  for (const value of normalizeCandidatePageFilterListValues(values)) {
+    const lowered = value.toLowerCase();
+    let item: string | null = null;
+    if (lowered === "all") {
+      item = "all";
+    } else if (
+      lowered === EXCEL_INTAKE_CURRENT_JOB_MARKER_VALUE ||
+      value === EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL
+    ) {
+      item = EXCEL_INTAKE_CURRENT_JOB_MARKER_VALUE;
+    } else if (lowered.startsWith("keyword:")) {
+      const keyword = value.slice("keyword:".length).trim().toLowerCase();
+      item = keyword ? `keyword:${keyword}` : null;
+    } else {
+      item = `keyword:${lowered}`;
+    }
+    if (item && !normalized.includes(item)) {
+      normalized.push(item);
+    }
+  }
+  return normalized;
+}
+
+function expectedAppliedCandidatePageFilter(
+  filter: DashboardCandidatePageFilter | undefined,
+): Record<string, unknown> {
+  const normalized = JSON.parse(
+    dashboardCandidatePageFilterSignature(filter),
+  ) as Required<DashboardCandidatePageFilter>;
+  return {
+    search_keyword: normalized.searchKeyword.trim().slice(0, 200),
+    recall_buckets: normalizeCandidatePageRecallValues(normalized.recallBuckets),
+    employment_statuses: normalizeCandidatePageFilterListValues(normalized.employmentStatuses),
+    locations: normalizeCandidatePageFilterListValues(normalized.locations),
+    function_buckets: normalizeCandidatePageFilterListValues(normalized.functionBuckets),
+    layer_includes: normalizeCandidatePageFilterListValues(normalized.layerIncludes),
+    layer_excludes: normalizeCandidatePageFilterListValues(normalized.layerExcludes),
+    audit_statuses: normalizeCandidatePageFilterListValues(normalized.auditStatuses).filter((id) =>
+      (CANDIDATE_PAGE_AUDIT_STATUS_IDS as readonly string[]).includes(id),
+    ),
+  };
+}
+
+function candidatePageFilterIsActiveClientSide(
+  expected: Record<string, unknown>,
+): boolean {
+  // Mirror of the backend `candidate_page_filter_active` over the expected
+  // (already normalized) applied filter.
+  if (String(expected.search_keyword || "").trim()) {
+    return true;
+  }
+  const employment = expected.employment_statuses as string[];
+  if (
+    employment.length > 0 &&
+    !(employment.length === 2 && employment.includes("current") && employment.includes("former"))
+  ) {
+    return true;
+  }
+  const locations = expected.locations as string[];
+  if (
+    locations.length > 0 &&
+    !(
+      locations.length === 3 &&
+      locations.includes("us") &&
+      locations.includes("other") &&
+      locations.includes("unknown")
+    )
+  ) {
+    return true;
+  }
+  const functionBuckets = (expected.function_buckets as string[]).filter(
+    (id) => id !== "other" && id !== "unknown",
+  );
+  if (functionBuckets.length > 0) {
+    return true;
+  }
+  const layerIncludes = expected.layer_includes as string[];
+  const layerExcludes = expected.layer_excludes as string[];
+  if (layerIncludes.some((id) => id && id !== "layer_0") || layerExcludes.length > 0) {
+    return true;
+  }
+  const recall = expected.recall_buckets as string[];
+  if (recall.some((id) => id && id !== "all")) {
+    return true;
+  }
+  const audit = expected.audit_statuses as string[];
+  if (
+    audit.length > 0 &&
+    !(
+      audit.length === CANDIDATE_PAGE_AUDIT_STATUS_IDS.length &&
+      CANDIDATE_PAGE_AUDIT_STATUS_IDS.every((id) => audit.includes(id))
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function requireStrictWireInteger(value: unknown, field: string, endpoint: string): number {
+  const parsed = strictNonNegativeInteger(value);
+  if (parsed === null) {
+    throw new Error(`${endpoint} has an invalid ${field}.`);
+  }
+  return parsed;
+}
+
 function requireReadyServerCandidatePage(
   payload: any,
   endpoint: string,
-  requested: { offset: number; limit: number },
-): { serverFilterSignature: string } {
-  const status = typeof payload?.status === "string" ? payload.status : "";
-  if (status !== "ready") {
+  requested: { offset: number; limit: number; filter?: DashboardCandidatePageFilter },
+  owner: "projection" | "job",
+): { serverFilterSignature: string; responseLimit: number; returnedCount: number } {
+  // Page status: required-"ready" on the projection owner; present-must-be-
+  // "ready" on the job owner (whose success envelopes omit the key).
+  const hasStatus = Object.prototype.hasOwnProperty.call(payload, "status");
+  if (owner === "projection" && !hasStatus) {
+    throw new Error(`${endpoint} is not ready: missing page status.`);
+  }
+  if (hasStatus && payload.status !== "ready") {
     const reason = pickFirstString(payload, ["reason"]) || "unknown";
     throw new Error(`${endpoint} is not ready: ${reason}.`);
   }
+  // Server filter identity: both mirrors required and byte-equal.
   const hasTopSignature = Object.prototype.hasOwnProperty.call(payload, "filter_signature");
   const topSignature = payload.filter_signature;
   const contractRecord =
@@ -8201,20 +8394,86 @@ function requireReadyServerCandidatePage(
   ) {
     throw new Error(`${endpoint} has missing or conflicting server filter signatures.`);
   }
-  const rawRowCount = asArray(payload.candidates).length;
-  const responseOffset = Number(payload.offset);
-  const responseLimit = Number(payload.limit);
+  // Complete ready filter-contract state.
   if (
-    !Number.isInteger(responseOffset) ||
-    responseOffset !== requested.offset ||
-    !Number.isInteger(responseLimit) ||
-    responseLimit < 0 ||
-    responseLimit > requested.limit ||
-    responseLimit !== rawRowCount
+    !contractRecord ||
+    !pickFirstString(contractRecord, ["source"]) ||
+    !pickFirstString(contractRecord, ["facet_count_scope"]) ||
+    !pickFirstString(contractRecord, ["row_filter_scope"]) ||
+    contractRecord.backend_filtered_paging_supported !== true ||
+    typeof contractRecord.filter_active !== "boolean"
   ) {
+    throw new Error(`${endpoint} has an incomplete filter contract.`);
+  }
+  // Echoed request identity: applied_filter must byte-equal the expected
+  // normalization of the requested filter, and filter_active must match
+  // the client's narrowing semantics.
+  const expectedApplied = expectedAppliedCandidatePageFilter(requested.filter);
+  const appliedFilter =
+    payload.applied_filter && typeof payload.applied_filter === "object" && !Array.isArray(payload.applied_filter)
+      ? (payload.applied_filter as Record<string, unknown>)
+      : null;
+  if (!appliedFilter || JSON.stringify(appliedFilter) !== JSON.stringify(expectedApplied)) {
+    throw new Error(`${endpoint} does not match the requested filter.`);
+  }
+  if (contractRecord.filter_active !== candidatePageFilterIsActiveClientSide(expectedApplied)) {
+    throw new Error(`${endpoint} has a contradictory filter_active state.`);
+  }
+  // Row shape: an actual array of valid records (never silently filtered).
+  if (!Array.isArray(payload.candidates)) {
+    throw new Error(`${endpoint} has a malformed candidates container.`);
+  }
+  const rawRows = payload.candidates as unknown[];
+  if (
+    rawRows.some(
+      (item) =>
+        !item || typeof item !== "object" || Array.isArray(item) || Object.keys(item).length === 0,
+    )
+  ) {
+    throw new Error(`${endpoint} has malformed candidate rows.`);
+  }
+  // Strict wire integers + pagination equations.
+  const responseOffset = requireStrictWireInteger(payload.offset, "offset", endpoint);
+  const responseLimit = requireStrictWireInteger(payload.limit, "limit", endpoint);
+  const filteredCount = requireStrictWireInteger(
+    payload.filtered_candidate_count,
+    "filtered_candidate_count",
+    endpoint,
+  );
+  const totalCount = requireStrictWireInteger(payload.total_candidates, "total_candidates", endpoint);
+  if (responseOffset !== requested.offset) {
     throw new Error(`${endpoint} does not match the requested page tuple.`);
   }
-  return { serverFilterSignature: topSignature };
+  const returnedCount =
+    owner === "job"
+      ? requireStrictWireInteger(payload.returned_count, "returned_count", endpoint)
+      : rawRows.length;
+  if (owner === "job" && responseLimit !== requested.limit) {
+    throw new Error(`${endpoint} does not match the requested page tuple.`);
+  }
+  // The PROJECTION owner defines `limit` as the returned row count; the JOB
+  // owner defines it as the requested page cap with `returned_count` rows.
+  if (owner === "projection" && responseLimit !== rawRows.length) {
+    throw new Error(`${endpoint} has inconsistent row counts.`);
+  }
+  if (owner === "projection" && responseLimit > requested.limit) {
+    throw new Error(`${endpoint} does not match the requested page tuple.`);
+  }
+  if (returnedCount !== rawRows.length || returnedCount > responseLimit) {
+    throw new Error(`${endpoint} has inconsistent row counts.`);
+  }
+  if (returnedCount > filteredCount || filteredCount > totalCount) {
+    throw new Error(`${endpoint} has inconsistent pagination counts.`);
+  }
+  if (typeof payload.has_more !== "boolean") {
+    throw new Error(`${endpoint} has an invalid has_more.`);
+  }
+  const expectedHasMore = responseOffset + returnedCount < filteredCount;
+  const expectedNextOffset = expectedHasMore ? responseOffset + returnedCount : null;
+  if (payload.has_more !== expectedHasMore || payload.next_offset !== expectedNextOffset) {
+    throw new Error(`${endpoint} has contradictory pagination state.`);
+  }
+  return { serverFilterSignature: topSignature, responseLimit, returnedCount };
 }
 
 export async function getProjectionCandidatePage(
@@ -8246,10 +8505,11 @@ export async function getProjectionCandidatePage(
       RESULTS_API_TIMEOUT_MS,
     )
       .then((payload): DashboardCandidatePage => {
-        const { serverFilterSignature } = requireReadyServerCandidatePage(
+        const { serverFilterSignature, responseLimit, returnedCount } = requireReadyServerCandidatePage(
           payload,
           "Projection candidate page",
-          { offset, limit },
+          { offset, limit, filter: options?.filter },
+          "projection",
         );
         const candidates = asArray(payload.candidates)
           .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
@@ -8270,8 +8530,8 @@ export async function getProjectionCandidatePage(
           jobId: pickFirstString(payload.projection || {}, ["source_run_id"]) || projectionId,
           resultMode: "asset_population",
           offset: offset,
-          limit: Number(payload.limit),
-          returnedCount: candidates.length,
+          limit: responseLimit,
+          returnedCount,
           totalCandidates: Number(payload.total_candidates || payload.candidate_count || 0) || 0,
           filteredCandidateCount:
             Number(payload.filtered_candidate_count ?? payload.total_candidates ?? payload.candidate_count ?? 0) || 0,
@@ -8358,10 +8618,11 @@ export async function getDashboardCandidatePage(
       RESULTS_API_TIMEOUT_MS,
     )
       .then((payload): DashboardCandidatePage => {
-        const { serverFilterSignature } = requireReadyServerCandidatePage(
+        const { serverFilterSignature, responseLimit, returnedCount } = requireReadyServerCandidatePage(
           payload,
           "Job candidate page",
-          { offset, limit },
+          { offset, limit, filter: options?.filter },
+          "job",
         );
         const resultMode: DashboardData["resultMode"] =
           asString(payload.result_mode) === "asset_population" ? "asset_population" : "ranked_results";
@@ -8369,8 +8630,8 @@ export async function getDashboardCandidatePage(
           jobId: asString(payload.job_id) || jobId,
           resultMode,
           offset: offset,
-          limit: Number(payload.limit),
-          returnedCount: Number(payload.returned_count ?? payload.limit) || 0,
+          limit: responseLimit,
+          returnedCount,
           totalCandidates: Number(payload.total_candidates || 0) || 0,
           filteredCandidateCount:
             Number(payload.filtered_candidate_count ?? payload.total_candidates ?? 0) || 0,

@@ -2132,21 +2132,25 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               status: "ready",
               job_id: "job-1",
               offset: 24,
-              // `limit` is the returned ROW COUNT per the backend page
-              // owners (1 row below), never the requested page size.
-              limit: 1,
-              returned_count: 1,
+              // JOB owner semantics: `limit` is the REQUESTED page cap (24
+              // here), `returned_count` the row count (0 rows).
+              limit: 24,
+              returned_count: 0,
               total_candidates: 25,
               filtered_candidate_count: 0,
               has_more: false,
               next_offset: null,
-              candidates: [
-                {
-                  id: "cand-1",
-                  name: "Candidate One",
-                  team: "Research",
-                },
-              ],
+              candidates: [],
+              applied_filter: {
+                search_keyword: "candidate",
+                recall_buckets: [],
+                employment_statuses: [],
+                locations: [],
+                function_buckets: [],
+                layer_includes: [],
+                layer_excludes: [],
+                audit_statuses: [],
+              },
               filter_signature: "srv-filter-sig-1",
               filter_contract: {
                 source: "dashboard",
@@ -2154,6 +2158,7 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                 row_filter_scope: "global",
                 backend_filtered_paging_supported: true,
                 filter_signature: "srv-filter-sig-1",
+                filter_active: true,
               },
               board_runtime_state: {
                 job_id: "job-1",
@@ -2198,6 +2203,9 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
             };
             const projectionCandidatePagePayload = {
               ...candidatePagePayload,
+              // PROJECTION owner semantics: `limit` is the returned ROW
+              // COUNT (0 rows here).
+              limit: 0,
               projection: {
                 projection_id: "projection-1",
                 projection_type: "run_scope_projection",
@@ -2272,11 +2280,28 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                   membership_revision: "projection-summary-revision",
                 },
               };
+            // The dashboard flow fetches its page at offset 0 with NO
+            // filter — its echo must be the empty applied filter.
+            const emptyAppliedFilter = {
+              search_keyword: "",
+              recall_buckets: [],
+              employment_statuses: [],
+              locations: [],
+              function_buckets: [],
+              layer_includes: [],
+              layer_excludes: [],
+              audit_statuses: [],
+            };
               const mismatchedPagePayload = {
                 ...projectionCandidatePagePayload,
                 // The dashboard flow fetches its page at offset 0 — the
                 // tuple validator requires the response offset to match.
                 offset: 0,
+                applied_filter: emptyAppliedFilter,
+                filter_contract: {
+                  ...projectionCandidatePagePayload.filter_contract,
+                  filter_active: false,
+                },
                 projection: {
                   ...projectionCandidatePagePayload.projection,
                   membership_revision: "projection-page-revision",
@@ -2303,6 +2328,11 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
                     ? {
                         ...projectionCandidatePagePayload,
                         offset: 0,
+                        applied_filter: emptyAppliedFilter,
+                        filter_contract: {
+                          ...projectionCandidatePagePayload.filter_contract,
+                          filter_active: false,
+                        },
                         projection: {
                           ...projectionCandidatePagePayload.projection,
                           membership_revision: "",

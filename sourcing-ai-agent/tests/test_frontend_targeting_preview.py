@@ -791,6 +791,54 @@ const makePlan = (overrides = {}) => ({
   },
   ...overrides,
 });
+// Backend-shaped applied_filter echo for candidate-page routes (mirrors
+// public_candidate_facets.normalize_candidate_page_filter +
+// candidate_page_filter_active for the canonical ids used in these
+// fixtures; the targeting harness ids are already lowercase).
+const appliedFilterEchoFromUrl = (url) => {
+  const params = new URL(url, "http://stub.local").searchParams;
+  const list = (name) => {
+    const raw = params.get(name);
+    if (!raw) return [];
+    const out = [];
+    for (const item of raw.split(",")) {
+      const normalized = item.trim().toLowerCase();
+      if (normalized && !out.includes(normalized)) out.push(normalized);
+    }
+    return out;
+  };
+  const recall = list("recall_buckets").map((id) =>
+    id === "all" ? "all" : id.startsWith("keyword:") ? `keyword:${id.slice("keyword:".length)}` : `keyword:${id}`,
+  );
+  const appliedFilter = {
+    search_keyword: (params.get("search") || "").trim().slice(0, 200),
+    recall_buckets: recall,
+    employment_statuses: list("employment_statuses"),
+    locations: list("locations"),
+    function_buckets: list("function_buckets"),
+    layer_includes: list("layer_includes"),
+    layer_excludes: list("layer_excludes"),
+    audit_statuses: list("audit_statuses"),
+  };
+  const filterActive = Boolean(
+    appliedFilter.search_keyword ||
+    (appliedFilter.employment_statuses.length > 0 &&
+      !(appliedFilter.employment_statuses.length === 2 &&
+        appliedFilter.employment_statuses.includes("current") &&
+        appliedFilter.employment_statuses.includes("former"))) ||
+    (appliedFilter.locations.length > 0 &&
+      !(appliedFilter.locations.length === 3 &&
+        appliedFilter.locations.includes("us") &&
+        appliedFilter.locations.includes("other") &&
+        appliedFilter.locations.includes("unknown"))) ||
+    appliedFilter.function_buckets.filter((id) => id !== "other" && id !== "unknown").length > 0 ||
+    appliedFilter.layer_includes.some((id) => id !== "layer_0") ||
+    appliedFilter.layer_excludes.length > 0 ||
+    appliedFilter.recall_buckets.some((id) => id !== "all") ||
+    (appliedFilter.audit_statuses.length > 0 && appliedFilter.audit_statuses.length !== 6),
+  );
+  return { appliedFilter, filterActive };
+};
 const makeDecision = (overrides = {}) => ({
   confirmedCompanyScope: [],
   extraSourceFamilies: [],
@@ -3894,6 +3942,33 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             const rawPartialMarkup = render(
               el(resultsBoard.ResultsBoardPanel, boardProps(rawPartialDashboard)),
             );
+            // Rerun6 finding 4: exact-N validation is TYPE-STRICT — string
+            // or fractional counts are invalid evidence, never coerced into
+            // equality.
+            const stringCountDashboard = {
+              ...oversizedDashboard,
+              candidateFacetSummary: {
+                ...oversizedDashboard.candidateFacetSummary,
+                candidateCount: "2",
+              },
+              boardRuntimeState: {
+                ...oversizedDashboard.boardRuntimeState,
+                facetSummaryCandidateCount: "2",
+              },
+            };
+            const stringCountMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(stringCountDashboard)),
+            );
+            const fractionalCountDashboard = {
+              ...oversizedDashboard,
+              candidateFacetSummary: {
+                ...oversizedDashboard.candidateFacetSummary,
+                candidateCount: 2.5,
+              },
+            };
+            const fractionalCountMarkup = render(
+              el(resultsBoard.ResultsBoardPanel, boardProps(fractionalCountDashboard)),
+            );
             const functionSection = (markup) => {
               // The exact function-facet label (the canonicalFacetUnavailable
               // notice also mentions 职能筛选, so a bare 职能 match is wrong).
@@ -3909,6 +3984,8 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               paddedMirrorFunctionSection: functionSection(paddedMirrorMarkup),
               oversizedFunctionSection: functionSection(oversizedMarkup),
               rawPartialFunctionSection: functionSection(rawPartialMarkup),
+              stringCountFunctionSection: functionSection(stringCountMarkup),
+              fractionalCountFunctionSection: functionSection(fractionalCountMarkup),
             }));
             """
         )
@@ -3945,6 +4022,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         raw_partial_section = payload["rawPartialFunctionSection"]
         self.assertIn("facet-empty-message", raw_partial_section)
         self.assertNotIn('class="facet-option"', raw_partial_section)
+
+        # Rerun6 finding 4: string or fractional counts are invalid evidence
+        # — never coerced into exact-N equality; the facet stays disabled.
+        for key in ("stringCountFunctionSection", "fractionalCountFunctionSection"):
+            section = payload[key]
+            self.assertIn("facet-empty-message", section, key)
+            self.assertNotIn('class="facet-option"', section, key)
 
     def test_facet_scope_contracts_consumed_independently(self) -> None:
         """Rerun3 finding 2 + rerun4 finding 2: summary scope and
@@ -4080,11 +4164,14 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               job_id: "job-scope",
               result_mode: "asset_population",
               offset: 0,
-              limit: 0,
+              // JOB owner semantics: `limit` is the REQUESTED page cap
+              // (default 96 here), `returned_count` the row count.
+              limit: 96,
               returned_count: 0,
               total_candidates: 2,
-              filtered_candidate_count: 2,
+              filtered_candidate_count: 0,
               has_more: false,
+              next_offset: null,
               candidates: [],
               board_runtime_state: {
                 expected_candidate_count: 2,
@@ -4106,6 +4193,16 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 candidate_count: 2,
               },
               facet_summary_scope: "exact_projection",
+              applied_filter: {
+                search_keyword: "",
+                recall_buckets: [],
+                employment_statuses: [],
+                locations: [],
+                function_buckets: [],
+                layer_includes: [],
+                layer_excludes: [],
+                audit_statuses: [],
+              },
               filter_signature: "srv-job-sig-1",
               filter_contract: {
                 source: "serving_projection_reader",
@@ -4113,6 +4210,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 row_filter_scope: "projection_membership",
                 backend_filtered_paging_supported: true,
                 filter_signature: "srv-job-sig-1",
+                filter_active: false,
               },
             });
             addRoute("GET", "/api/jobs/job-scope/candidates", () => jobScopePayload());
@@ -4339,7 +4437,14 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   filter_signature: "srv-filter-sig-1",
                 },
               };
-              addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayload);
+              addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) => {
+                const echo = appliedFilterEchoFromUrl(String(url));
+                return {
+                  ...pagePayload,
+                  applied_filter: echo.appliedFilter,
+                  filter_contract: { ...pagePayload.filter_contract, filter_active: echo.filterActive },
+                };
+              });
 
               const container = miniWindow.document.createElement("div");
               miniWindow.document.body.appendChild(container);
@@ -4554,7 +4659,14 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   filter_signature: "srv-filter-sig-1",
                 },
               };
-              addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayload);
+              addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) => {
+                const echo = appliedFilterEchoFromUrl(String(url));
+                return {
+                  ...pagePayload,
+                  applied_filter: echo.appliedFilter,
+                  filter_contract: { ...pagePayload.filter_contract, filter_active: echo.filterActive },
+                };
+              });
 
               const container = miniWindow.document.createElement("div");
               miniWindow.document.body.appendChild(container);
@@ -4880,11 +4992,20 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               const narrowedGate = new Promise((resolve) => {
                 resolveNarrowed = resolve;
               });
-              addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) =>
-                String(url).includes("function_buckets")
-                  ? narrowedGate.then(() => pagePayloadFor(2, 0))
-                  : pagePayloadFor(2, 0),
-              );
+              addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) => {
+                const echo = appliedFilterEchoFromUrl(String(url));
+                const page = () => ({
+                  ...pagePayloadFor(2, 0),
+                  applied_filter: echo.appliedFilter,
+                  filter_contract: {
+                    ...pagePayloadFor(2, 0).filter_contract,
+                    filter_active: echo.filterActive,
+                  },
+                });
+                return String(url).includes("function_buckets")
+                  ? narrowedGate.then(page)
+                  : page();
+              });
               const mountA = mountBoard();
               await renderBoard(mountA.root, dashboardFor(true, 2));
               // Narrow the function facet to research-only; the narrowed
@@ -4911,9 +5032,15 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               // never the mismatched page — and no new request fires. A
               // DISTINCT projection id keeps this mount's facet-session
               // context clean (mount A's preserved session must not leak in).
-              addRoute("GET", "/api/projections/proj-2/candidates", (body, pathname, url) =>
-                pagePayloadFor(48, requestOffset(String(url)), "proj-2"),
-              );
+              addRoute("GET", "/api/projections/proj-2/candidates", (body, pathname, url) => {
+                const echo = appliedFilterEchoFromUrl(String(url));
+                const page = pagePayloadFor(48, requestOffset(String(url)), "proj-2");
+                return {
+                  ...page,
+                  applied_filter: echo.appliedFilter,
+                  filter_contract: { ...page.filter_contract, filter_active: echo.filterActive },
+                };
+              });
               const mountB = mountBoard();
               await renderBoard(mountB.root, dashboardFor(true, 48, "proj-2"), "proj-2");
               setCheckbox(findFacetOptionInput("Engineer", mountB.container), false);
@@ -5032,9 +5159,20 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               addRoute("GET", "/api/projections/proj-1/candidates", (body, pathname, url) => {
                 // The scenario tag rides the real filter channel
                 // (searchKeyword -> `search` query param).
-                const mode = new URL(url, "http://stub.local").searchParams.get("search") || "happy";
+                const echo = appliedFilterEchoFromUrl(String(url));
+                const mode = echo.appliedFilter.search_keyword || "happy";
+                const page = (mutate) => {
+                  const base = pagePayloadFor();
+                  const payload = {
+                    ...base,
+                    applied_filter: echo.appliedFilter,
+                    filter_contract: { ...base.filter_contract, filter_active: echo.filterActive },
+                  };
+                  if (mutate) mutate(payload);
+                  return payload;
+                };
                 if (mode === "not_ready") {
-                  return pagePayloadFor((payload) => {
+                  return page((payload) => {
                     payload.status = "not_ready";
                     payload.reason = "projection_person_search_index_unavailable";
                     payload.filtered_candidate_count = 0;
@@ -5045,34 +5183,95 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   });
                 }
                 if (mode === "missing_top_sig") {
-                  return pagePayloadFor((payload) => {
+                  return page((payload) => {
                     delete payload.filter_signature;
                   });
                 }
                 if (mode === "missing_contract_sig") {
-                  return pagePayloadFor((payload) => {
+                  return page((payload) => {
                     delete payload.filter_contract.filter_signature;
                   });
                 }
                 if (mode === "conflicting_sig") {
-                  return pagePayloadFor((payload) => {
+                  return page((payload) => {
                     payload.filter_contract.filter_signature = "srv-filter-sig-OTHER";
                   });
                 }
                 if (mode === "offset_mismatch") {
-                  return pagePayloadFor((payload) => {
+                  return page((payload) => {
                     payload.offset = 24;
                   });
                 }
                 if (mode === "limit_fabricated") {
-                  return pagePayloadFor((payload) => {
-                    // The rerun5 truthy-fallback probe: a nonzero limit with
-                    // zero returned rows is not a valid page tuple.
+                  return page((payload) => {
+                    // A nonzero limit that is not the returned row count is
+                    // not a valid projection page.
                     payload.limit = 24;
                     payload.candidates = [];
                   });
                 }
-                return pagePayloadFor();
+                if (mode === "applied_mismatch") {
+                  return page((payload) => {
+                    // Empty applied filter for a NARROWED request (rerun6
+                    // finding 2 probe).
+                    payload.applied_filter = {
+                      search_keyword: "",
+                      recall_buckets: [],
+                      employment_statuses: [],
+                      locations: [],
+                      function_buckets: [],
+                      layer_includes: [],
+                      layer_excludes: [],
+                      audit_statuses: [],
+                    };
+                    payload.filter_contract.filter_active = false;
+                  });
+                }
+                if (mode === "active_contradiction") {
+                  return page((payload) => {
+                    // applied_filter echoes the narrowed request, but the
+                    // contract claims the no-op state.
+                    payload.filter_contract.filter_active = false;
+                  });
+                }
+                if (mode === "candidates_null") {
+                  return page((payload) => {
+                    payload.candidates = null;
+                    payload.limit = 0;
+                    payload.filtered_candidate_count = 0;
+                    payload.has_more = false;
+                    payload.next_offset = null;
+                  });
+                }
+                if (mode === "malformed_row") {
+                  return page((payload) => {
+                    payload.candidates = [{}];
+                  });
+                }
+                if (mode === "incomplete_contract") {
+                  return page((payload) => {
+                    payload.filter_contract = { filter_signature: "srv-filter-sig-1" };
+                  });
+                }
+                if (mode === "pagination_contradiction") {
+                  return page((payload) => {
+                    payload.has_more = false;
+                    payload.next_offset = 1;
+                  });
+                }
+                if (mode === "filtered_over_total") {
+                  return page((payload) => {
+                    payload.filtered_candidate_count = 5;
+                  });
+                }
+                if (mode === "returned_over_filtered") {
+                  return page((payload) => {
+                    payload.filtered_candidate_count = 0;
+                    payload.has_more = false;
+                    payload.next_offset = null;
+                  });
+                }
+                return page();
               });
               const fetchPage = (mode, offset = 0) =>
                 api.getProjectionCandidatePage("proj-1", {
@@ -5081,6 +5280,52 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   forceRefresh: true,
                   filter: { searchKeyword: mode },
                 });
+              // Rerun6 finding 1: the JOB owner's success envelope OMITS
+              // `status`, sets `limit` to the requested cap, and
+              // `returned_count` to the row count. Full page and partial
+              // last page are BOTH admitted.
+              addRoute("GET", "/api/jobs/job-env/candidates", (body, pathname, url) => {
+                const params = new URL(url, "http://stub.local").searchParams;
+                const offset = Number(params.get("offset") || 0);
+                const returned = offset === 0 ? 24 : 1;
+                const filtered = 25;
+                const row = (id) => ({
+                  candidate_id: id,
+                  employment_status: "lead",
+                  display_name: `Row ${id}`,
+                });
+                return {
+                  job_id: "job-env",
+                  result_mode: "ranked_results",
+                  offset,
+                  limit: Number(params.get("limit") || 24),
+                  returned_count: returned,
+                  total_candidates: 25,
+                  filtered_candidate_count: filtered,
+                  has_more: offset + returned < filtered,
+                  next_offset: offset + returned < filtered ? offset + returned : null,
+                  candidates: Array.from({ length: returned }, (_, index) => row(`r-${offset + index}`)),
+                  applied_filter: {
+                    search_keyword: "",
+                    recall_buckets: [],
+                    employment_statuses: [],
+                    locations: [],
+                    function_buckets: [],
+                    layer_includes: [],
+                    layer_excludes: [],
+                    audit_statuses: [],
+                  },
+                  filter_signature: "srv-job-env-sig",
+                  filter_contract: {
+                    source: "dashboard",
+                    facet_count_scope: "global_full_population",
+                    row_filter_scope: "backend_filtered_served_population",
+                    backend_filtered_paging_supported: true,
+                    filter_signature: "srv-job-env-sig",
+                    filter_active: false,
+                  },
+                };
+              });
               const captureAsyncError = async (callback) => {
                 try {
                   await callback();
@@ -5095,7 +5340,25 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               const conflictingSigError = await captureAsyncError(() => fetchPage("conflicting_sig"));
               const offsetMismatchError = await captureAsyncError(() => fetchPage("offset_mismatch"));
               const limitFabricatedError = await captureAsyncError(() => fetchPage("limit_fabricated"));
+              const appliedMismatchError = await captureAsyncError(() => fetchPage("applied_mismatch"));
+              const activeContradictionError = await captureAsyncError(() => fetchPage("active_contradiction"));
+              const candidatesNullError = await captureAsyncError(() => fetchPage("candidates_null"));
+              const malformedRowError = await captureAsyncError(() => fetchPage("malformed_row"));
+              const incompleteContractError = await captureAsyncError(() => fetchPage("incomplete_contract"));
+              const paginationContradictionError = await captureAsyncError(() => fetchPage("pagination_contradiction"));
+              const filteredOverTotalError = await captureAsyncError(() => fetchPage("filtered_over_total"));
+              const returnedOverFilteredError = await captureAsyncError(() => fetchPage("returned_over_filtered"));
               const happy = await fetchPage("happy");
+              const jobFullPage = await api.getDashboardCandidatePage("job-env", {
+                offset: 0,
+                limit: 24,
+                forceRefresh: true,
+              });
+              const jobPartialLastPage = await api.getDashboardCandidatePage("job-env", {
+                offset: 24,
+                limit: 24,
+                forceRefresh: true,
+              });
               console.log(JSON.stringify({
                 notReadyError,
                 missingTopSigError,
@@ -5103,10 +5366,32 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 conflictingSigError,
                 offsetMismatchError,
                 limitFabricatedError,
+                appliedMismatchError,
+                activeContradictionError,
+                candidatesNullError,
+                malformedRowError,
+                incompleteContractError,
+                paginationContradictionError,
+                filteredOverTotalError,
+                returnedOverFilteredError,
                 happyFilterSignature: happy.filterSignature,
                 happyOffset: happy.offset,
                 happyLimit: happy.limit,
                 happyReturnedCount: happy.returnedCount,
+                jobFull: {
+                  offset: jobFullPage.offset,
+                  limit: jobFullPage.limit,
+                  returnedCount: jobFullPage.returnedCount,
+                  hasMore: jobFullPage.hasMore,
+                  nextOffset: jobFullPage.nextOffset,
+                },
+                jobPartial: {
+                  offset: jobPartialLastPage.offset,
+                  limit: jobPartialLastPage.limit,
+                  returnedCount: jobPartialLastPage.returnedCount,
+                  hasMore: jobPartialLastPage.hasMore,
+                  nextOffset: jobPartialLastPage.nextOffset,
+                },
               }));
             })().catch((error) => {
               console.error(error);
@@ -5127,9 +5412,24 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             self.assertIn("missing or conflicting server filter signatures", payload[key], key)
 
         # The exact requested tuple: offset mismatch and a fabricated limit
-        # (truthy fallback rewriting the row count) are both rejected.
+        # (a nonzero limit that is not the returned row count) are rejected.
         self.assertIn("does not match the requested page tuple", payload["offsetMismatchError"])
-        self.assertIn("does not match the requested page tuple", payload["limitFabricatedError"])
+        self.assertIn("inconsistent row counts", payload["limitFabricatedError"])
+
+        # Rerun6 finding 2: the admitted page is bound to the REQUESTED
+        # filter — an empty/no-op echo for a narrowed request and a
+        # contradictory filter_active are both rejected.
+        self.assertIn("does not match the requested filter", payload["appliedMismatchError"])
+        self.assertIn("contradictory filter_active state", payload["activeContradictionError"])
+
+        # Rerun6 finding 3: malformed rows/containers, a signature-only
+        # filter contract, and contradictory pagination state are rejected.
+        self.assertIn("malformed candidates container", payload["candidatesNullError"])
+        self.assertIn("malformed candidate rows", payload["malformedRowError"])
+        self.assertIn("incomplete filter contract", payload["incompleteContractError"])
+        self.assertIn("contradictory pagination state", payload["paginationContradictionError"])
+        self.assertIn("inconsistent pagination counts", payload["filteredOverTotalError"])
+        self.assertIn("inconsistent pagination counts", payload["returnedOverFilteredError"])
 
         # Happy path: the admitted page carries the SERVER-owned signature
         # (never the client JSON signature) and the validated tuple.
@@ -5137,6 +5437,18 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertEqual(payload["happyOffset"], 0)
         self.assertEqual(payload["happyLimit"], 1)
         self.assertEqual(payload["happyReturnedCount"], 1)
+
+        # Rerun6 finding 1: the JOB success envelope (no `status`, `limit` =
+        # requested cap, `returned_count` = rows) is admitted for BOTH the
+        # full page and the partial last page.
+        self.assertEqual(
+            payload["jobFull"],
+            {"offset": 0, "limit": 24, "returnedCount": 24, "hasMore": True, "nextOffset": 24},
+        )
+        self.assertEqual(
+            payload["jobPartial"],
+            {"offset": 24, "limit": 24, "returnedCount": 1, "hasMore": False, "nextOffset": None},
+        )
 
     def test_summary_gap_signature_does_not_leak_across_projections(self) -> None:
         """Rerun5 finding 3: the last resolved filter signature is keyed to
