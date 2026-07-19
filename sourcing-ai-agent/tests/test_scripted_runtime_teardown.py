@@ -241,6 +241,38 @@ class ScriptedRuntimeSchemaTeardownPGTest(unittest.TestCase):
                 self._cleanup_schemas.append(schema)
                 self.assertTrue(runtime.seed_result)
 
+    def test_cli_build_runtime_store_bootstraps_fresh_schema(self) -> None:
+        from sourcing_agent import cli as cli_module
+
+        schema = f"sourcing_test_cli_bootstrap_{uuid.uuid4().hex[:12]}"
+        self._cleanup_schemas.append(schema)
+        with tempfile.TemporaryDirectory(prefix="cli-store-") as tmp:
+            with mock.patch.dict(
+                os.environ,
+                {"SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": schema},
+                clear=False,
+            ):
+                settings = type("FakeSettings", (), {"db_path": Path(tmp) / "test.db"})()
+                store = cli_module.build_runtime_store(settings)
+                try:
+                    connect_dsn = normalize_control_plane_postgres_connect_dsn(self.dsn)
+                    with psycopg.connect(connect_dsn, autocommit=True, connect_timeout=5, client_encoding="utf8") as connection:
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                f"SELECT count(*) FROM {quote_control_plane_postgres_identifier(schema)}.schema_migrations"
+                            )
+                            row = cursor.fetchone()
+                            self.assertIsNotNone(row)
+                            self.assertGreaterEqual(int(row[0]), 14)
+                            cursor.execute(
+                                "SELECT 1 FROM information_schema.tables "
+                                "WHERE table_schema = %s AND table_name = %s",
+                                (schema, "jobs"),
+                            )
+                            self.assertIsNotNone(cursor.fetchone())
+                finally:
+                    store.close()
+
     def test_isolated_hosted_test_runtime_drops_schema_and_writes_marker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="teardown-drop-") as tmp:
             with isolated_hosted_test_runtime(runtime_dir=tmp) as runtime:

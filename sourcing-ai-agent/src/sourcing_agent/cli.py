@@ -130,7 +130,13 @@ def launch_detached_command(
 
 
 def build_runtime_store(settings) -> ControlPlaneStore:
-    return ControlPlaneStore(settings.db_path)
+    store = ControlPlaneStore(settings.db_path)
+    # CLI/serve entry points must not expose a fresh, unmigrated schema to
+    # daemon readers that run before any lazy bootstrap: apply the versioned
+    # migration ledger at construction (idempotent), mirroring the
+    # isolated-test-runtime prepare path.
+    store._control_plane_postgres.ensure_bootstrapped()  # noqa: SLF001
+    return store
 
 
 def build_control_plane_runtime_summary() -> dict[str, Any]:
