@@ -244,6 +244,21 @@ class PlanReviewLocationApplyTest(unittest.TestCase):
                 "plan_review_location_invalid_operation",
                 "target_locations",
             ),
+            (
+                {"target_locations": {"op": " clear "}},
+                "plan_review_location_invalid_operation",
+                "target_locations",
+            ),
+            (
+                {"target_locations": {"op": "Clear"}},
+                "plan_review_location_invalid_operation",
+                "target_locations",
+            ),
+            (
+                {"target_locations": {"op": 1}},
+                "plan_review_location_invalid_operation",
+                "target_locations",
+            ),
             ({"target_locations": {}}, "plan_review_location_invalid_operation", "target_locations"),
             ({"target_locations": ["ok", None]}, "request_location_invalid_item", "target_locations"),
             ({"target_locations": ["x"] * 17}, "request_location_too_many_items", "target_locations"),

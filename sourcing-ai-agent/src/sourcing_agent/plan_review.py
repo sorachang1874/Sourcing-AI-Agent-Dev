@@ -472,7 +472,11 @@ def _normalize_location_review_operation(value: Any, *, field_name: str) -> list
     """Return the normalized replacement list, or None for the tagged clear."""
 
     if isinstance(value, dict):
-        if set(value) == {"op"} and str(value.get("op") or "").strip() == LOCATION_REVIEW_CLEAR_OPERATION:
+        if (
+            set(value) == {"op"}
+            and type(value.get("op")) is str
+            and value["op"] == LOCATION_REVIEW_CLEAR_OPERATION
+        ):
             return None
         raise CohortSelectionValidationError(
             "plan_review_location_invalid_operation",
