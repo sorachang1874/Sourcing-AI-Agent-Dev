@@ -30,10 +30,19 @@ export interface CohortSelection {
  * `exclude_target_locations` ride ALONGSIDE the closed cohort_selection.v1
  * object at request top level; they are never part of the cohort object.
  * Free-text provider location names; no client-side enum (backend-validated).
+ *
+ * Presence-aware tri-state mirroring the backend contract
+ * (`domain._normalize_location_list`, FT0 §7.2):
+ * - `undefined` (absent): the server default applies (`["United States"]` for
+ *   explicit-Cohort target locations; no exclusions otherwise).
+ * - `[]` (explicit empty): opt-out — the request suppresses location
+ *   filtering and every location default.
+ * - present values: the user's explicit ordered list.
+ * A present `null` is invalid on the wire and rejected by the parser.
  */
 export interface CohortLocationSelection {
-  targetLocations: string[];
-  excludeTargetLocations: string[];
+  targetLocations?: string[];
+  excludeTargetLocations?: string[];
 }
 
 export type CandidateConfidence = "high" | "medium" | "lead_only";
@@ -66,7 +75,9 @@ export type PlanReviewEditableField =
   | "large_org_keyword_probe_mode"
   | "force_fresh_run"
   | "reuse_existing_roster"
-  | "run_former_search_seed";
+  | "run_former_search_seed"
+  | "target_locations"
+  | "exclude_target_locations";
 
 export interface PlanReviewGate {
   status: string;
@@ -224,6 +235,13 @@ export interface Candidate {
   functionBucketIds?: string[];
   /** Provenance of `functionBucketIds`, pinned by FT0 §5.2. */
   functionBucketSource?: "lane_membership" | "registry_evidence" | "legacy_inference";
+  /**
+   * Server-owned employment membership truth (FT0 §6): the verbatim
+   * `metadata.cohort_employment_statuses` set for Cohort-produced candidates.
+   * A dual-status candidate carries BOTH values here while the top-level
+   * `employmentStatus` stays a display-only convenience projection.
+   */
+  cohortEmploymentStatuses?: ("current" | "former")[];
   linkedinUrl?: string;
   sourceDataset?: string;
   notesSnippet?: string;

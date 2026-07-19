@@ -186,49 +186,85 @@ export function summarizeCohortSelection(
  * `exclude_target_locations` request fields are siblings of the closed
  * cohort_selection.v1 object, never members of it. The v1 parser above stays
  * byte-compatible; everything location-related lives below this line.
+ *
+ * Presence-aware tri-state, mirroring `domain._normalize_location_list`
+ * exactly (FT0 §7.2 / COHORT_SELECTION_CONTRACT.md "Location sibling
+ * fields"): absent (`undefined`) selects the server default for explicit
+ * Cohort requests, an explicit `[]` opts out of location filtering, and a
+ * present `null` is invalid and rejected.
  */
 
-/** Server-side default injected for explicit-Cohort requests without the field. */
-export const DEFAULT_TARGET_LOCATIONS = ["United States"];
-
-export function createDefaultCohortLocationSelection(): CohortLocationSelection {
-  return {
-    targetLocations: [...DEFAULT_TARGET_LOCATIONS],
-    excludeTargetLocations: [],
-  };
-}
+/** Bounded-list convention shared with the backend request normalization. */
+export const REQUEST_LOCATION_MAX_ITEMS = 16;
+export const REQUEST_LOCATION_ITEM_MAX_LENGTH = 240;
 
 /**
- * Trim, collapse inner whitespace, dedupe, and preserve order (FT0 §7.2).
- * Absent (null/undefined) normalizes to the empty list; wrong shapes fail
- * closed, mirroring the backend ingress posture.
+ * Display-only mirror of the backend `acquisition_strategy.DEFAULT_PRIMARY_LOCATION`
+ * used to render the absent (server-default) state truthfully. It is NEVER
+ * serialized into a payload by default: an absent field stays absent so the
+ * server remains the sole writer of the default. A server-owned default
+ * metadata channel does not exist on the options endpoint yet; when one
+ * lands, this display constant must be replaced by it.
  */
-export function normalizeLocationList(value: unknown, field: string): string[] {
-  if (value === undefined || value === null) {
-    return [];
+export const SERVER_DEFAULT_TARGET_LOCATION_DISPLAY = "United States";
+
+/**
+ * Trim, dedupe (first occurrence wins, case-insensitive), preserve order,
+ * and enforce the bounded-list convention — byte-parity with the backend
+ * `domain._normalize_location_list` (FT0 §7.2). Absent (`undefined`)
+ * normalizes to `undefined`; a present `null`, wrong container, non-string
+ * or out-of-bounds items, and over-bound lists fail closed.
+ */
+export function normalizeLocationList(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
   }
-  if (!Array.isArray(value)) {
+  if (value === null || !Array.isArray(value)) {
     throw new Error(`Location field ${field} must be a list of names.`);
+  }
+  if (value.length > REQUEST_LOCATION_MAX_ITEMS) {
+    throw new Error(
+      `Location field ${field} accepts at most ${REQUEST_LOCATION_MAX_ITEMS} items.`,
+    );
   }
   const normalized: string[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    if (typeof item !== "string" || !item.trim()) {
+    if (typeof item !== "string") {
       throw new Error(`Location field ${field} must contain non-empty names.`);
     }
-    const name = item.trim().replace(/\s+/g, " ");
-    if (!seen.has(name)) {
-      seen.add(name);
+    const name = item.trim();
+    if (!name || name.length > REQUEST_LOCATION_ITEM_MAX_LENGTH) {
+      throw new Error(
+        `Location field ${field} items must be 1-${REQUEST_LOCATION_ITEM_MAX_LENGTH} characters.`,
+      );
+    }
+    const key = name.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
       normalized.push(name);
     }
   }
   return normalized;
 }
 
+export function createDefaultCohortLocationSelection(): CohortLocationSelection {
+  // Absent on both axes: the server default (["United States"] for explicit
+  // Cohort requests) applies and the picker renders it as a display seed.
+  return {
+    targetLocations: undefined,
+    excludeTargetLocations: undefined,
+  };
+}
+
 export function cloneCohortLocationSelection(value: CohortLocationSelection): CohortLocationSelection {
   return {
-    targetLocations: [...value.targetLocations],
-    excludeTargetLocations: [...value.excludeTargetLocations],
+    ...(value.targetLocations !== undefined
+      ? { targetLocations: [...value.targetLocations] }
+      : {}),
+    ...(value.excludeTargetLocations !== undefined
+      ? { excludeTargetLocations: [...value.excludeTargetLocations] }
+      : {}),
   };
 }
 
@@ -236,13 +272,16 @@ export function equalCohortLocationSelection(
   left: CohortLocationSelection,
   right: CohortLocationSelection,
 ): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return (
+    JSON.stringify(left.targetLocations ?? null) === JSON.stringify(right.targetLocations ?? null) &&
+    JSON.stringify(left.excludeTargetLocations ?? null) === JSON.stringify(right.excludeTargetLocations ?? null)
+  );
 }
 
 /**
  * Read the sibling location fields from one request mirror record. Returns
- * null when the record carries neither key (legacy requests); invalid shapes
- * fail closed.
+ * null when the record carries neither key (legacy requests); a key present
+ * with a `null` value or any invalid shape fails closed.
  */
 export function parseCohortLocationMirror(record: Record<string, unknown>): CohortLocationSelection | null {
   const hasTarget = Object.prototype.hasOwnProperty.call(record, "target_locations");
@@ -257,28 +296,96 @@ export function parseCohortLocationMirror(record: Record<string, unknown>): Coho
 }
 
 /**
- * Build the request-payload fragment for the location fields. Empty lists are
- * omitted: an absent `target_locations` means the server default
- * (["United States"] for explicit-Cohort requests) applies.
+ * Build the request-payload fragment for the location fields, preserving the
+ * contract tri-state: `undefined` omits the key (server default applies for
+ * explicit Cohort requests), an explicit `[]` serializes as `[]` (opt-out of
+ * location filtering), and present values serialize normalized. A present
+ * `null` or any invalid shape fails closed.
  */
 export function buildCohortLocationApiPayload(
-  targetLocations?: string[],
-  excludeTargetLocations?: string[],
+  targetLocations?: string[] | null,
+  excludeTargetLocations?: string[] | null,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   const target = normalizeLocationList(targetLocations, "target_locations");
   const exclude = normalizeLocationList(excludeTargetLocations, "exclude_target_locations");
-  if (target.length > 0) {
+  if (target !== undefined) {
     payload.target_locations = target;
   }
-  if (exclude.length > 0) {
+  if (exclude !== undefined) {
     payload.exclude_target_locations = exclude;
   }
   return payload;
 }
 
+/**
+ * Explicit draft registry for the sibling location fields (FT2 fixed-forward,
+ * review finding 1).
+ *
+ * Owner: the active uncontrolled-location CohortSelectionPicker (the search
+ * composer). It publishes the user's effective location selection on every
+ * picker action — enable seeds the absent/server-default state, edits and
+ * the opt-out/restore affordances update it, and disabling the cohort clears
+ * it atomically with the cohort object.
+ *
+ * Reader: the pinned request payload builders in `api.ts`
+ * (`buildPlanSubmitPayload` / `getWorkflowExplain`), consulted ONLY when the
+ * caller supplies no explicit location arguments, so explicitly wired paths
+ * always win. The draft is bound to the canonical key of the cohort object
+ * it was published for: a stale draft left behind by a previous flow can
+ * never attach its locations to a different cohort — mismatch reads as
+ * absent and the server default applies (fail-safe).
+ */
+interface CohortLocationDraft {
+  cohortKey: string;
+  selection: CohortLocationSelection;
+}
+
+let pendingCohortLocationDraft: CohortLocationDraft | null = null;
+
+/** Canonical identity of one cohort selection for draft binding. */
+export function canonicalCohortSelectionKey(value: CohortSelection): string {
+  return JSON.stringify([
+    value.schema_version,
+    value.role_bucket_ids,
+    value.employment_statuses,
+    value.role_match,
+    value.source,
+  ]);
+}
+
+export function publishCohortLocationDraft(
+  selection: CohortLocationSelection | null,
+  cohort: CohortSelection | null,
+): void {
+  if (!selection || !cohort) {
+    pendingCohortLocationDraft = null;
+    return;
+  }
+  pendingCohortLocationDraft = {
+    cohortKey: canonicalCohortSelectionKey(cohort),
+    selection: cloneCohortLocationSelection(selection),
+  };
+}
+
+/**
+ * Read the published draft for exactly this cohort object. Returns undefined
+ * when no draft exists or the draft belongs to a different cohort (stale).
+ */
+export function readCohortLocationDraft(
+  cohort: CohortSelection | undefined,
+): CohortLocationSelection | undefined {
+  if (!cohort || !pendingCohortLocationDraft) {
+    return undefined;
+  }
+  if (pendingCohortLocationDraft.cohortKey !== canonicalCohortSelectionKey(cohort)) {
+    return undefined;
+  }
+  return cloneCohortLocationSelection(pendingCohortLocationDraft.selection);
+}
+
 export function appendLocationValue(list: string[], value: string): string[] {
-  const name = value.trim().replace(/\s+/g, " ");
+  const name = value.trim();
   if (!name || list.includes(name)) {
     return list;
   }
@@ -289,14 +396,21 @@ export function removeLocationValue(list: string[], value: string): string[] {
   return list.filter((item) => item !== value);
 }
 
+/**
+ * Render the effective location state. The absent state renders the
+ * server-owned default distinctly from an explicit opt-out, so a stored
+ * `[]` never collapses into the default display and vice versa.
+ */
 export function summarizeCohortLocations(
   targetLocations: string[] | undefined,
   excludeTargetLocations: string[] | undefined,
 ): string {
   const targetLabel =
-    targetLocations && targetLocations.length > 0
-      ? targetLocations.join("、")
-      : `${DEFAULT_TARGET_LOCATIONS[0]}（默认）`;
+    targetLocations === undefined
+      ? `${SERVER_DEFAULT_TARGET_LOCATION_DISPLAY}（服务端默认）`
+      : targetLocations.length === 0
+        ? "不限地区（已显式退出地区筛选）"
+        : targetLocations.join("、");
   const excludeLabel =
     excludeTargetLocations && excludeTargetLocations.length > 0
       ? ` · 排除: ${excludeTargetLocations.join("、")}`
@@ -313,32 +427,67 @@ export interface CohortShardPreviewItem {
 }
 
 export interface CohortShardPreview {
-  /** Planned shard count: S * max(1, R) (FT0 §8.1). */
+  /** Planned shard count over the validated selection: S * max(1, R) (FT0 §8.1). */
   shardCount: number;
   shards: CohortShardPreviewItem[];
   /** Roles empty + every server-provided status selected => full-population recall. */
   isFullRecall: boolean;
+  /**
+   * Selected ids missing from the current server options (registry drift,
+   * stale plan, incomplete options response). Surfaced explicitly — never
+   * silently dropped — and they invalidate the preview for confirmation.
+   */
+  unavailableRoleIds: string[];
+  unavailableStatusIds: string[];
+  /** The selection's role_match is not selectable under the current options. */
+  roleMatchUnavailable: boolean;
+  /** True whenever any selected value is unavailable; confirmation must block. */
+  hasUnavailableSelections: boolean;
+  /** Registry pin of the options this preview was computed against. */
+  registryVersion: string;
+  registryDigest: string;
 }
 
 /**
  * Client-side preview of the compiler's shard expansion. The
  * CohortProviderCompiler remains the SOLE expansion layer; this projection
  * only explains the pending selection before confirmation.
+ *
+ * Membership is validated exactly (FT2 fixed-forward, review finding 5): a
+ * selected status/role/role-match missing from the current server options is
+ * surfaced as unavailable instead of being silently intersected away, and a
+ * nonempty role selection can never collapse into a false "All roles" (or a
+ * false full-recall) preview.
  */
 export function buildCohortShardPreview(
   selection: CohortSelection,
   options: CohortSelectionOptions,
 ): CohortShardPreview {
+  const unavailableRoleIds = selection.role_bucket_ids.filter(
+    (id) => !options.roleBuckets.some((option) => option.id === id),
+  );
+  const unavailableStatusIds = selection.employment_statuses.filter(
+    (id) => !options.employmentStatuses.some((option) => option.id === id),
+  );
+  const roleMatchUnavailable = !options.roleMatchOptions.some(
+    (option) => option.id === selection.role_match,
+  );
+  const hasUnavailableSelections =
+    unavailableRoleIds.length > 0 || unavailableStatusIds.length > 0 || roleMatchUnavailable;
+
   const selectedStatuses = options.employmentStatuses.filter((option) =>
     selection.employment_statuses.includes(option.id),
   );
   const selectedRoles = options.roleBuckets.filter((option) =>
     selection.role_bucket_ids.includes(option.id),
   );
+  // "All roles" is the display for a GENUINELY empty role selection only; a
+  // nonempty selection with no available roles yields no shards rather than a
+  // fabricated all-roles expansion.
   const effectiveRoles: Array<{ id: string | null; label: string }> =
-    selectedRoles.length > 0
-      ? selectedRoles.map((option) => ({ id: option.id, label: option.label }))
-      : [{ id: null, label: "All roles" }];
+    selection.role_bucket_ids.length === 0
+      ? [{ id: null, label: "All roles" }]
+      : selectedRoles.map((option) => ({ id: option.id, label: option.label }));
   const shards: CohortShardPreviewItem[] = [];
   for (const status of selectedStatuses) {
     for (const role of effectiveRoles) {
@@ -357,6 +506,13 @@ export function buildCohortShardPreview(
   return {
     shardCount: shards.length,
     shards,
-    isFullRecall: selection.role_bucket_ids.length === 0 && allStatusesSelected,
+    isFullRecall:
+      selection.role_bucket_ids.length === 0 && allStatusesSelected && !hasUnavailableSelections,
+    unavailableRoleIds,
+    unavailableStatusIds,
+    roleMatchUnavailable,
+    hasUnavailableSelections,
+    registryVersion: options.registryVersion,
+    registryDigest: options.registryDigest,
   };
 }

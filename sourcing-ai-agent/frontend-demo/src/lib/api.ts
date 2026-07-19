@@ -11,9 +11,11 @@ import {
   cloneCohortSelection,
   equalCohortLocationSelection,
   equalCohortSelection,
+  normalizeLocationList,
   parseCohortLocationMirror,
   parseCohortSelectionOptionsPayload,
   parseCohortSelectionPayload,
+  readCohortLocationDraft,
 } from "./cohortSelection";
 import { normalizeWorkflowStatus, resolveWorkflowStatus } from "./workflowStatus";
 import {
@@ -5149,8 +5151,12 @@ function mapPlanReviewDecisionDefaults(
       asOptionalBoolean(fallbackPolicy.run_former_search_seed) ??
       asOptionalBoolean(recommendedPatch.run_former_search_seed),
     cohortSelection: cohortSelection ? cloneCohortSelection(cohortSelection) : undefined,
-    targetLocations: cohortLocations ? [...cohortLocations.targetLocations] : undefined,
-    excludeTargetLocations: cohortLocations ? [...cohortLocations.excludeTargetLocations] : undefined,
+    targetLocations: cohortLocations?.targetLocations
+      ? [...cohortLocations.targetLocations]
+      : undefined,
+    excludeTargetLocations: cohortLocations?.excludeTargetLocations
+      ? [...cohortLocations.excludeTargetLocations]
+      : undefined,
   };
 }
 
@@ -5212,12 +5218,26 @@ export function planReviewDecisionToApiPayload(
   if (decision.cohortSelection) {
     payload.cohort_selection = cloneCohortSelection(decision.cohortSelection);
   }
-  // Location fields ride alongside (never inside) the cohort object; empty
-  // lists are omitted so the server default applies (FT0 §7.2).
-  Object.assign(
-    payload,
-    buildCohortLocationApiPayload(decision.targetLocations, decision.excludeTargetLocations),
-  );
+  // Location fields ride alongside (never inside) the cohort object. They are
+  // serialized ONLY through the authorized editable-field channel: when the
+  // backend review gate does not list a location field as editable, the
+  // review decision must not silently record a value the backend has no
+  // authorized application path for (FT2 fixed-forward, review finding 2).
+  // Presence is preserved: an explicit `[]` (opt-out) serializes as `[]`,
+  // an absent field is omitted, and a present null/invalid shape fails
+  // closed via normalizeLocationList.
+  if (allowed.has("target_locations") && decision.targetLocations !== undefined) {
+    payload.target_locations = normalizeLocationList(decision.targetLocations, "target_locations");
+  }
+  if (
+    allowed.has("exclude_target_locations")
+    && decision.excludeTargetLocations !== undefined
+  ) {
+    payload.exclude_target_locations = normalizeLocationList(
+      decision.excludeTargetLocations,
+      "exclude_target_locations",
+    );
+  }
   return payload;
 }
 
@@ -5357,9 +5377,42 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
       cohortLocations,
     ),
     cohortSelection,
-    targetLocations: cohortLocations ? [...cohortLocations.targetLocations] : undefined,
-    excludeTargetLocations: cohortLocations ? [...cohortLocations.excludeTargetLocations] : undefined,
+    targetLocations: cohortLocations?.targetLocations
+      ? [...cohortLocations.targetLocations]
+      : undefined,
+    excludeTargetLocations: cohortLocations?.excludeTargetLocations
+      ? [...cohortLocations.excludeTargetLocations]
+      : undefined,
   };
+}
+
+/**
+ * Resolve the location payload fragment for a plan submit/revision/explain
+ * request (FT2 fixed-forward, review finding 1).
+ *
+ * Explicit caller arguments always win. When the caller passes no location
+ * arguments, the picker-owned draft registry is consulted so the composer's
+ * location edits enter the REAL initial and revision request state even
+ * though the (unleased) parent components only transport the cohort object.
+ * The draft is bound to the exact cohort object being submitted; a stale or
+ * foreign draft reads as absent and the server default applies (fail-safe).
+ * Location fields never materialize on non-Cohort requests.
+ */
+function resolveRequestLocationPayload(
+  cohortSelection: CohortSelection | undefined,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Record<string, unknown> {
+  if (targetLocations !== undefined || excludeTargetLocations !== undefined) {
+    return buildCohortLocationApiPayload(targetLocations, excludeTargetLocations);
+  }
+  if (cohortSelection) {
+    const draft = readCohortLocationDraft(cohortSelection);
+    if (draft) {
+      return buildCohortLocationApiPayload(draft.targetLocations, draft.excludeTargetLocations);
+    }
+  }
+  return {};
 }
 
 export async function getWorkflowExplain(
@@ -5374,7 +5427,7 @@ export async function getWorkflowExplain(
       raw_user_request: queryText,
       planning_mode: "model_assisted",
       ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
-      ...buildCohortLocationApiPayload(targetLocations, excludeTargetLocations),
+      ...resolveRequestLocationPayload(cohortSelection, targetLocations, excludeTargetLocations),
       ...DEFAULT_RECALL_LIMITS,
     }),
   }, PLAN_API_TIMEOUT_MS);
@@ -5470,7 +5523,7 @@ function buildPlanSubmitPayload(
     raw_user_request: queryText,
     ...(normalizedHistoryId ? { history_id: normalizedHistoryId } : {}),
     ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
-    ...buildCohortLocationApiPayload(targetLocations, excludeTargetLocations),
+    ...resolveRequestLocationPayload(cohortSelection, targetLocations, excludeTargetLocations),
     planning_mode: "model_assisted",
     ...DEFAULT_RECALL_LIMITS,
   };
@@ -9735,33 +9788,119 @@ function pickFunctionIds(sourceShardFilters: unknown, ...sources: unknown[]): st
 }
 
 /**
- * First non-empty normalized string list across sources, or undefined.
- * Used for the server-computed per-candidate function bucket ids
- * (`function_bucket_ids`, FT0 §5.2), which the frontend transports verbatim
- * and never re-derives locally.
+ * Server-computed per-candidate function facet contract (FT0 §5.2):
+ * `{function_bucket_ids, function_bucket_source}` is ONE atomic pair owned
+ * by the backend projection build. The frontend consumes it verbatim from a
+ * single authoritative layer and never re-derives, repairs, or mixes it
+ * (FT2 fixed-forward, review findings 7/8): ids and provenance may not be
+ * selected through independent fallback ladders, a partial pair fails
+ * closed, and conflicting mirrors fail closed.
  */
-function pickNonEmptyStringList(...sources: unknown[]): string[] | undefined {
-  for (const source of sources) {
-    const values = asArray(source).map((item) => asString(item)).filter(Boolean);
-    if (values.length > 0) {
-      return Array.from(new Set(values));
-    }
-  }
-  return undefined;
+const FUNCTION_BUCKET_SOURCES = new Set(["lane_membership", "registry_evidence", "legacy_inference"]);
+
+interface FunctionBucketFacetPair {
+  ids: string[];
+  source: NonNullable<Candidate["functionBucketSource"]>;
 }
 
-function pickFunctionBucketSource(...sources: unknown[]): Candidate["functionBucketSource"] {
-  for (const source of sources) {
-    const value = asString(source);
-    if (
-      value === "lane_membership" ||
-      value === "registry_evidence" ||
-      value === "legacy_inference"
-    ) {
-      return value;
+function parseFunctionBucketFacetLayer(
+  idsValue: unknown,
+  sourceValue: unknown,
+  layerLabel: string,
+): FunctionBucketFacetPair | undefined {
+  const hasIds = idsValue !== undefined && idsValue !== null;
+  const hasSource = sourceValue !== undefined && sourceValue !== null && sourceValue !== "";
+  if (!hasIds && !hasSource) {
+    return undefined;
+  }
+  if (!Array.isArray(idsValue) || idsValue.length === 0) {
+    throw new Error(
+      `Served candidate has an incomplete function_bucket pair (${layerLabel}: ids missing or empty).`,
+    );
+  }
+  const ids: string[] = [];
+  for (const item of idsValue) {
+    if (typeof item !== "string" || !item.trim()) {
+      throw new Error(
+        `Served candidate has malformed function_bucket_ids (${layerLabel}: items must be non-empty strings).`,
+      );
+    }
+    const id = item.trim();
+    if (!ids.includes(id)) {
+      ids.push(id);
     }
   }
-  return undefined;
+  const source = typeof sourceValue === "string" ? sourceValue.trim() : "";
+  if (!FUNCTION_BUCKET_SOURCES.has(source)) {
+    throw new Error(
+      `Served candidate has an invalid function_bucket_source (${layerLabel}: ${source || "missing"}).`,
+    );
+  }
+  return { ids, source: source as FunctionBucketFacetPair["source"] };
+}
+
+function equalFunctionBucketFacetPair(
+  left: FunctionBucketFacetPair,
+  right: FunctionBucketFacetPair,
+): boolean {
+  return left.source === right.source && JSON.stringify(left.ids) === JSON.stringify(right.ids);
+}
+
+/**
+ * Resolve the atomic pair from the authoritative top-level served layer,
+ * requiring complete-pair equality with the metadata mirror when both are
+ * present. Returns undefined when neither layer carries the pair (legacy
+ * records); partial or conflicting data fails closed.
+ */
+function deriveFunctionBucketFacet(record: Record<string, unknown>): FunctionBucketFacetPair | undefined {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const topLevel = parseFunctionBucketFacetLayer(
+    record.function_bucket_ids,
+    record.function_bucket_source,
+    "top-level record",
+  );
+  const mirror = parseFunctionBucketFacetLayer(
+    metadata.function_bucket_ids,
+    metadata.function_bucket_source,
+    "metadata mirror",
+  );
+  if (topLevel && mirror && !equalFunctionBucketFacetPair(topLevel, mirror)) {
+    throw new Error("Served candidate has conflicting function_bucket mirrors.");
+  }
+  return topLevel || mirror;
+}
+
+/**
+ * Server-owned employment membership truth (FT0 §6): the verbatim
+ * `metadata.cohort_employment_statuses` set. Absent on legacy records;
+ * present-but-malformed values fail closed rather than being repaired into
+ * client-side membership.
+ */
+function parseCohortEmploymentStatuses(
+  record: Record<string, unknown>,
+): Candidate["cohortEmploymentStatuses"] {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const value = metadata.cohort_employment_statuses;
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("Served candidate has a malformed cohort_employment_statuses membership.");
+  }
+  const statuses: Array<"current" | "former"> = [];
+  for (const item of value) {
+    const status = typeof item === "string" ? item.trim().toLowerCase() : "";
+    if (status !== "current" && status !== "former") {
+      throw new Error("Served candidate has an invalid cohort_employment_statuses value.");
+    }
+    if (!statuses.includes(status)) {
+      statuses.push(status);
+    }
+  }
+  if (statuses.length === 0) {
+    throw new Error("Served candidate has an empty cohort_employment_statuses membership.");
+  }
+  return statuses;
 }
 
 function deriveCandidate(record: Record<string, unknown>): Candidate {
@@ -9854,6 +9993,8 @@ function deriveCandidate(record: Record<string, unknown>): Candidate {
     record.function_ids,
     metadata.function_ids,
   );
+  const functionBucketFacet = deriveFunctionBucketFacet(record);
+  const cohortEmploymentStatuses = parseCohortEmploymentStatuses(record);
 
   return normalizeCandidateProfileStatus({
     id:
@@ -9899,8 +10040,9 @@ function deriveCandidate(record: Record<string, unknown>): Candidate {
       pickFirstString(record, ["role_bucket"]) ||
       pickFirstString(metadata, ["role_bucket"]),
     functionIds,
-    functionBucketIds: pickNonEmptyStringList(record.function_bucket_ids, metadata.function_bucket_ids),
-    functionBucketSource: pickFunctionBucketSource(record.function_bucket_source, metadata.function_bucket_source),
+    functionBucketIds: functionBucketFacet?.ids,
+    functionBucketSource: functionBucketFacet?.source,
+    cohortEmploymentStatuses,
     linkedinUrl:
       pickFirstString(record, ["linkedin_url"]) ||
       pickFirstString(metadata, ["linkedin_url", "profile_url"]),
@@ -9978,6 +10120,11 @@ function deriveCandidateFromNormalizedRecord(
         "",
       base.name,
     );
+  // The function-facet pair overlays as ONE atomic unit: a complete
+  // materialized pair replaces the base pair wholesale; ids and provenance
+  // are never mixed across layers (FT2 fixed-forward, review finding 8).
+  const materializedFunctionBucketFacet = deriveFunctionBucketFacet(materialized);
+  const materializedCohortEmploymentStatuses = parseCohortEmploymentStatuses(materialized);
 
   const enriched = {
     ...base,
@@ -10013,9 +10160,9 @@ function deriveCandidateFromNormalizedRecord(
       materialized.function_ids,
       base.functionIds,
     ),
-    functionBucketIds: pickNonEmptyStringList(materialized.function_bucket_ids, base.functionBucketIds),
-    functionBucketSource:
-      pickFunctionBucketSource(materialized.function_bucket_source) || base.functionBucketSource,
+    functionBucketIds: materializedFunctionBucketFacet?.ids ?? base.functionBucketIds,
+    functionBucketSource: materializedFunctionBucketFacet?.source ?? base.functionBucketSource,
+    cohortEmploymentStatuses: materializedCohortEmploymentStatuses ?? base.cohortEmploymentStatuses,
     linkedinUrl,
     sourceDataset:
       normalizeDatasetLabel(pickFirstString(materialized, ["source_dataset"])) ||
@@ -10125,6 +10272,8 @@ function deriveCandidateFromDocument(
   ]);
   const rawPrimaryEmailMetadata = pickEmailMetadata(record.primary_email_metadata, metadata.primary_email_metadata);
   const sanitizedEmail = scrubCandidateEmail(rawPrimaryEmail, rawPrimaryEmailMetadata);
+  const documentFunctionBucketFacet = deriveFunctionBucketFacet(record);
+  const documentCohortEmploymentStatuses = parseCohortEmploymentStatuses(record);
 
   const candidate: Candidate = {
     id: pickFirstString(record, ["candidate_id", "id"]) || crypto.randomUUID(),
@@ -10158,8 +10307,9 @@ function deriveCandidateFromDocument(
     location: pickFirstString(record, ["profile_location", "location"]),
     roleBucket: pickFirstString(record, ["role_bucket"]),
     functionIds: pickFunctionIds(metadata.source_shard_filters, record.function_ids, metadata.function_ids),
-    functionBucketIds: pickNonEmptyStringList(record.function_bucket_ids, metadata.function_bucket_ids),
-    functionBucketSource: pickFunctionBucketSource(record.function_bucket_source, metadata.function_bucket_source),
+    functionBucketIds: documentFunctionBucketFacet?.ids,
+    functionBucketSource: documentFunctionBucketFacet?.source,
+    cohortEmploymentStatuses: documentCohortEmploymentStatuses,
     linkedinUrl: resolveLinkedinUrl(pickFirstString(record, ["linkedin_url"]), pickFirstString(record, ["display_name", "name_en", "full_name", "name"])),
     sourceDataset: normalizeDatasetLabel(pickFirstString(record, ["source_dataset"])),
     notesSnippet: firstLine(pickFirstString(record, ["notes"])),
@@ -10197,6 +10347,24 @@ function deriveCandidateFromDocument(
   return normalizeCandidateProfileStatus(
     mergeExternalLinks(candidate, contactLinkMap, pickFirstString(record, ["candidate_id", "id"])),
   );
+}
+
+/**
+ * Test hook over the production candidate projection path (same derivation
+ * used by dashboard/document mapping), so contract tests can exercise the
+ * atomic function-facet pair and employment-membership transport without
+ * re-implementing mirror logic.
+ */
+export function __testDeriveCandidate(record: Record<string, unknown>): Candidate {
+  return deriveCandidate(record);
+}
+
+/** Test hook over the materialized-enrichment overlay (atomic pair overlay). */
+export function __testDeriveCandidateFromNormalizedRecord(
+  record: Record<string, unknown>,
+  materializedRecord: Record<string, unknown> | null,
+): Candidate {
+  return deriveCandidateFromNormalizedRecord(record, materializedRecord);
 }
 
 function deriveCandidateDetail(

@@ -323,8 +323,21 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               },
               {
                 ...baseCandidate,
-                id: "no-server-buckets",
+                id: "server-unknown",
+                headline: "Operations Generalist",
+                // `unknown` is honored ONLY because the backend explicitly
+                // emitted it with valid provenance.
+                functionBucketIds: ["unknown"],
+                functionBucketSource: "legacy_inference",
+              },
+              {
+                ...baseCandidate,
+                id: "facet-unavailable",
                 headline: "Research Scientist",
+                // Missing server pair: the facet is unavailable for this row
+                // and must NOT be repaired into a synthesized `unknown`
+                // membership (its functionIds ["24"] would be projected as
+                // research by the backend).
                 functionIds: ["24"],
               },
             ];
@@ -348,6 +361,8 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
               unknownHits: filterCandidatesByFacets(candidates, filterSelection(["unknown"]), [])
                 .map((candidate) => candidate.id),
               researchHits: filterCandidatesByFacets(candidates, filterSelection(["research"]), [])
+                .map((candidate) => candidate.id),
+              unfilteredHits: filterCandidatesByFacets(candidates, filterSelection([]), [])
                 .map((candidate) => candidate.id),
               defaultSelection: defaultFunctionSelection(options),
             }));
@@ -374,11 +389,132 @@ class FrontendCandidateFiltersTest(unittest.TestCase):
         self.assertEqual(payload["engineeringHits"], ["dual-bucket-member"])
         self.assertEqual(payload["infraHits"], ["dual-bucket-member"])
         self.assertEqual(payload["foundingHits"], ["founder-member"])
-        self.assertEqual(payload["unknownHits"], ["no-server-buckets"])
+        # Explicit server-emitted `unknown` only; the missing-pair row claims
+        # no membership in any bucket but stays visible unfiltered.
+        self.assertEqual(payload["unknownHits"], ["server-unknown"])
         self.assertEqual(payload["researchHits"], ["server-says-research"])
+        self.assertEqual(
+            sorted(payload["unfilteredHits"]),
+            [
+                "dual-bucket-member",
+                "facet-unavailable",
+                "founder-member",
+                "server-says-research",
+                "server-unknown",
+            ],
+        )
         self.assertEqual(
             payload["defaultSelection"],
             ["engineering", "founding", "infra_systems", "research", "unknown"],
+        )
+
+    def test_employment_facets_use_server_membership_truth(self) -> None:
+        if shutil.which("node") is None:
+            self.skipTest("node is required for frontend TypeScript helper checks")
+        script = textwrap.dedent(
+            """
+            const fs = require("fs");
+            const path = require("path");
+            const vm = require("vm");
+            const ts = require("./frontend-demo/node_modules/typescript");
+            const source = fs.readFileSync(
+              path.join(process.cwd(), "frontend-demo/src/lib/candidateFilters.ts"),
+              "utf8",
+            );
+            const compiled = ts.transpileModule(source, {
+              compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            const module = { exports: {} };
+            vm.runInNewContext(compiled, { module, exports: module.exports, require, console }, {
+              filename: "candidateFilters.js",
+            });
+            const { buildEmploymentOptions, filterCandidatesByFacets } = module.exports;
+            const baseCandidate = {
+              name: "",
+              headline: "",
+              summary: "",
+              currentCompany: "",
+              notesSnippet: "",
+              team: "Unknown",
+              focusAreas: [],
+              matchReasons: [],
+              education: [],
+              experience: [],
+              matchedKeywords: [],
+              sourceMatches: [],
+              outreachLayer: null,
+            };
+            const candidates = [
+              {
+                ...baseCandidate,
+                id: "dual-display-current",
+                // Server membership truth: BOTH statuses; the top-level
+                // display status stays single and lossy (FT0 §6).
+                employmentStatus: "current",
+                cohortEmploymentStatuses: ["current", "former"],
+              },
+              {
+                ...baseCandidate,
+                id: "single-former",
+                employmentStatus: "former",
+                cohortEmploymentStatuses: ["former"],
+              },
+              {
+                ...baseCandidate,
+                id: "legacy-display-current",
+                employmentStatus: "current",
+              },
+              {
+                ...baseCandidate,
+                id: "legacy-lead",
+                employmentStatus: "lead",
+              },
+            ];
+            const selection = (employmentStatuses) => ({
+              layers: [],
+              recallBuckets: [],
+              employmentStatuses,
+              locations: [],
+              functionBuckets: [],
+              searchKeyword: "",
+            });
+            const hits = (statuses) =>
+              filterCandidatesByFacets(candidates, selection(statuses), []).map((c) => c.id);
+            console.log(JSON.stringify({
+              options: buildEmploymentOptions(candidates),
+              currentOnly: hits(["current"]),
+              formerOnly: hits(["former"]),
+              both: hits(["current", "former"]),
+            }));
+            """
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        payload = json.loads(completed.stdout)
+        # Dual-status candidate counts in BOTH buckets (membership truth), not
+        # merely under its single display status.
+        self.assertEqual(
+            payload["options"],
+            [
+                {"id": "current", "label": "在职", "count": 2},
+                {"id": "former", "label": "已离职", "count": 2},
+            ],
+        )
+        self.assertEqual(
+            sorted(payload["currentOnly"]),
+            ["dual-display-current", "legacy-display-current"],
+        )
+        self.assertEqual(sorted(payload["formerOnly"]), ["dual-display-current", "single-former"])
+        # `lead` compatibility semantic unchanged: matches only when both
+        # statuses are selected.
+        self.assertEqual(
+            sorted(payload["both"]),
+            ["dual-display-current", "legacy-display-current", "legacy-lead", "single-former"],
         )
 
     def test_results_board_uses_canonical_facet_summary_for_global_filters(self) -> None:

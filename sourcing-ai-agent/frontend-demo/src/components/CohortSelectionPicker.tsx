@@ -2,10 +2,13 @@ import { useState } from "react";
 import {
   appendLocationValue,
   buildCohortShardPreview,
+  canonicalCohortSelectionKey,
   cloneCohortSelection,
   createDefaultCohortLocationSelection,
   createDefaultCohortSelection,
+  publishCohortLocationDraft,
   removeLocationValue,
+  SERVER_DEFAULT_TARGET_LOCATION_DISPLAY,
   summarizeCohortSelection,
   toggleOrderedOption,
 } from "../lib/cohortSelection";
@@ -26,11 +29,21 @@ interface CohortSelectionPickerProps {
   compact?: boolean;
   /**
    * Controlled location selection (sibling of the cohort object, never part
-   * of it). When omitted, the picker keeps a local copy seeded with the
-   * server default so unwired parents still render the default truthfully.
+   * of it). When omitted, the picker owns the location state locally AND
+   * publishes it into the explicit draft registry consumed by the pinned
+   * request payload builders, so unleased parents that only transport the
+   * cohort object still submit the user's real locations (FT2 fixed-forward,
+   * review finding 1).
    */
   locationValue?: CohortLocationSelection | null;
   onLocationChange?: (value: CohortLocationSelection) => void;
+  /**
+   * Disable ONLY the location controls (review finding 2): location editing
+   * is exposed exclusively when the backend review gate authorizes the
+   * location editable fields; otherwise the effective values render
+   * read-only.
+   */
+  locationDisabled?: boolean;
   /** Set false when the embedding surface renders its own shard preview. */
   showShardPreview?: boolean;
   onChange: (value: CohortSelection | null) => void;
@@ -121,16 +134,30 @@ export function CohortSelectionPicker({
   compact = false,
   locationValue = null,
   onLocationChange,
+  locationDisabled = false,
   showShardPreview = true,
   onChange,
   onRetryOptions,
 }: CohortSelectionPickerProps) {
   const controlsDisabled = disabled || locked || !options;
   const canEnable = Boolean(options) && !disabled && !locked;
-  const [localLocations, setLocalLocations] = useState<CohortLocationSelection>(() =>
-    createDefaultCohortLocationSelection(),
-  );
-  const locations = locationValue || localLocations;
+  const locationsReadOnly = controlsDisabled || locationDisabled;
+  // Local location state is bound to the exact cohort object it belongs to:
+  // when the controlled cohort identity changes (new search, recovered
+  // flow), the local copy resets to the absent/server-default seed instead
+  // of leaking a previous flow's locations into display or submission.
+  const cohortKey = value ? canonicalCohortSelectionKey(value) : "";
+  const [localLocations, setLocalLocations] = useState<{
+    cohortKey: string;
+    selection: CohortLocationSelection;
+  }>(() => ({
+    cohortKey,
+    selection: createDefaultCohortLocationSelection(),
+  }));
+  if (!locationValue && localLocations.cohortKey !== cohortKey) {
+    setLocalLocations({ cohortKey, selection: createDefaultCohortLocationSelection() });
+  }
+  const locations = locationValue || localLocations.selection;
 
   const updateSelection = (patch: Partial<CohortSelection>) => {
     if (!value || controlsDisabled) {
@@ -144,12 +171,25 @@ export function CohortSelectionPicker({
 
   const updateLocations = (next: CohortLocationSelection) => {
     if (!locationValue) {
-      setLocalLocations(next);
+      setLocalLocations({ cohortKey, selection: next });
+      if (value) {
+        publishCohortLocationDraft(next, value);
+      }
     }
     onLocationChange?.(next);
   };
 
   const shardPreview = value && options ? buildCohortShardPreview(value, options) : null;
+  const unavailableSelections: string[] = shardPreview
+    ? [
+        ...shardPreview.unavailableRoleIds.map((id) => `角色 ${id}`),
+        ...shardPreview.unavailableStatusIds.map((id) => `在职状态 ${id}`),
+        ...(shardPreview.roleMatchUnavailable ? [`匹配方式 ${value?.role_match || "role_match"}`] : []),
+      ]
+    : [];
+
+  const targetOptedOut =
+    locations.targetLocations !== undefined && locations.targetLocations.length === 0;
 
   return (
     <section
@@ -166,12 +206,31 @@ export function CohortSelectionPicker({
             disabled={value ? disabled || locked : !canEnable}
             onChange={(event) => {
               if (event.target.checked && options) {
-                onChange(createDefaultCohortSelection(options));
-                // Location is a sibling request field: seed the server
-                // default (["United States"]) alongside the cohort object.
-                updateLocations(createDefaultCohortLocationSelection());
+                const nextCohort = createDefaultCohortSelection(options);
+                onChange(nextCohort);
+                // Location is a sibling request field: seed the absent
+                // (server-default) state alongside the cohort object and
+                // publish it for the request payload builders.
+                const seed = createDefaultCohortLocationSelection();
+                if (!locationValue) {
+                  setLocalLocations({
+                    cohortKey: canonicalCohortSelectionKey(nextCohort),
+                    selection: seed,
+                  });
+                  publishCohortLocationDraft(seed, nextCohort);
+                }
+                onLocationChange?.(seed);
               } else if (!event.target.checked) {
                 onChange(null);
+                // Clear the sibling location state atomically with the
+                // cohort object (local copy, draft registry, and any
+                // controlled parent alike).
+                const cleared = createDefaultCohortLocationSelection();
+                if (!locationValue) {
+                  setLocalLocations({ cohortKey: "", selection: cleared });
+                  publishCohortLocationDraft(null, null);
+                }
+                onLocationChange?.(cleared);
               }
             }}
           />
@@ -287,30 +346,92 @@ export function CohortSelectionPicker({
             </div>
           </fieldset>
 
-          <LocationTagInput
-            idPrefix={`${idPrefix}-target-locations`}
-            legend="目标地区（可多值）"
-            hint="自由文本，由后端校验；全部移除后服务端按默认 United States 执行。"
-            values={locations.targetLocations}
-            placeholder="United States"
-            disabled={controlsDisabled}
-            onChange={(targetLocations) => updateLocations({ ...locations, targetLocations })}
-          />
+          <fieldset disabled={locationsReadOnly} data-testid={`${idPrefix}-target-locations`}>
+            <legend>目标地区（可多值）</legend>
+            <p className="cohort-picker-hint">
+              自由文本，由后端校验；未选择时服务端按默认 {SERVER_DEFAULT_TARGET_LOCATION_DISPLAY} 执行。
+            </p>
+            {locations.targetLocations === undefined ? (
+              <p
+                className="cohort-location-default"
+                data-testid={`${idPrefix}-target-locations-default`}
+              >
+                服务端默认: {SERVER_DEFAULT_TARGET_LOCATION_DISPLAY}
+              </p>
+            ) : null}
+            <label className="checkbox-option cohort-location-optout">
+              <input
+                type="checkbox"
+                data-testid={`${idPrefix}-target-locations-optout`}
+                checked={targetOptedOut}
+                disabled={locationsReadOnly}
+                onChange={(event) =>
+                  updateLocations({
+                    ...locations,
+                    targetLocations: event.target.checked ? [] : undefined,
+                  })
+                }
+              />
+              <span>不限地区（显式退出地区筛选）</span>
+            </label>
+            {targetOptedOut ? (
+              <p
+                className="cohort-location-opted-out"
+                data-testid={`${idPrefix}-target-locations-opted-out`}
+              >
+                不限地区（已显式退出地区筛选）
+              </p>
+            ) : (
+              <LocationTagInput
+                idPrefix={`${idPrefix}-target-locations-input`}
+                legend="自定义目标地区"
+                hint="添加后按所选地区执行（用户选择完整覆盖服务端默认，不做合并）。"
+                values={locations.targetLocations ?? []}
+                placeholder={SERVER_DEFAULT_TARGET_LOCATION_DISPLAY}
+                disabled={locationsReadOnly}
+                onChange={(targetValues) =>
+                  updateLocations({
+                    ...locations,
+                    targetLocations: targetValues.length > 0 ? targetValues : undefined,
+                  })
+                }
+              />
+            )}
+          </fieldset>
 
           <LocationTagInput
             idPrefix={`${idPrefix}-exclude-locations`}
             legend="排除地区（可选）"
             hint="自由文本，命中排除地区的成员不纳入召回。"
-            values={locations.excludeTargetLocations}
+            values={locations.excludeTargetLocations ?? []}
             placeholder="例如：European Union"
-            disabled={controlsDisabled}
-            onChange={(excludeTargetLocations) =>
-              updateLocations({ ...locations, excludeTargetLocations })
+            disabled={locationsReadOnly}
+            onChange={(excludeValues) =>
+              updateLocations({
+                ...locations,
+                excludeTargetLocations: excludeValues.length > 0 ? excludeValues : undefined,
+              })
             }
           />
 
+          {locationDisabled ? (
+            <p className="cohort-picker-hint" data-testid={`${idPrefix}-locations-locked`}>
+              地区边界当前未获编辑授权，仅展示生效值。
+            </p>
+          ) : null}
+
           {showShardPreview && shardPreview ? (
             <div className="cohort-shard-preview" data-testid={`${idPrefix}-cohort-shard-preview`}>
+              {shardPreview.hasUnavailableSelections ? (
+                <p
+                  className="cohort-shard-stale-warning"
+                  role="alert"
+                  data-testid={`${idPrefix}-shard-stale-warning`}
+                >
+                  ⚠ 当前选项（registry {shardPreview.registryVersion}）已不包含所选值：
+                  {unavailableSelections.join("、")}。请刷新选项后重新选择；预览与确认已被阻止。
+                </p>
+              ) : null}
               <p className="cohort-picker-hint" data-testid={`${idPrefix}-cohort-shard-count`}>
                 当前选择将展开为 {shardPreview.shardCount} 个执行分片（在职状态 × 角色）：
               </p>

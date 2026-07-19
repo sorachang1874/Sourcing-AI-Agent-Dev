@@ -59,6 +59,13 @@ export function cloneReviewDecision(plan: DemoPlan | null): PlanReviewDecision {
     cohortSelection: defaults?.cohortSelection
       ? cloneCohortSelection(defaults.cohortSelection)
       : undefined,
+    // Sibling location fields must survive the clone presence-intact:
+    // dropping them would silently detach the review decision from the
+    // plan's location state (FT2 fixed-forward, review finding 2).
+    targetLocations: defaults?.targetLocations ? [...defaults.targetLocations] : undefined,
+    excludeTargetLocations: defaults?.excludeTargetLocations
+      ? [...defaults.excludeTargetLocations]
+      : undefined,
   };
 }
 

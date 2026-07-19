@@ -211,16 +211,66 @@ export function PlanCard({
       reviewGate?.editableFields.length,
   );
   // Effective (editable) cohort state: the review decision overrides the
-  // frozen plan mirror; locations are sibling request fields (FT0 §7.2).
+  // frozen plan mirror; locations are sibling request fields (FT0 §7.2) and
+  // keep their presence tri-state (absent / explicit opt-out / explicit
+  // values) instead of collapsing to an empty list.
   const effectiveCohortSelection = reviewDecision.cohortSelection || plan.cohortSelection || null;
   const effectiveLocations: CohortLocationSelection = {
-    targetLocations: reviewDecision.targetLocations ?? plan.targetLocations ?? [],
-    excludeTargetLocations: reviewDecision.excludeTargetLocations ?? plan.excludeTargetLocations ?? [],
+    targetLocations: reviewDecision.targetLocations ?? plan.targetLocations,
+    excludeTargetLocations: reviewDecision.excludeTargetLocations ?? plan.excludeTargetLocations,
   };
+  // Location review edits are exposed ONLY when the backend review gate
+  // authorizes BOTH location editable fields; otherwise the review decision
+  // has no authorized application path and the controls stay read-only
+  // (FT2 fixed-forward, review finding 2).
+  const locationEditingAuthorized =
+    supportsField(plan, "target_locations") && supportsField(plan, "exclude_target_locations");
   const planShardPreview =
     effectiveCohortSelection && cohortOptions
       ? buildCohortShardPreview(effectiveCohortSelection, cohortOptions)
       : null;
+  // Confirmation gate (review finding 4): an effective Cohort may not enter
+  // execution without a VALIDATED shard preview + bounded-budget note. The
+  // preview exists only over loaded, non-stale server options, so options
+  // loading/failure and registry drift all block here with a retryable
+  // state instead of silently enabling confirmation.
+  const cohortPreviewBlocker: { message: string; retryable: boolean } | null = (() => {
+    if (!effectiveCohortSelection) {
+      return null;
+    }
+    if (isLoadingCohortOptions && !cohortOptions) {
+      return { message: "正在加载可选人群，分片预览与预算说明尚未验证…", retryable: false };
+    }
+    if (cohortOptionsError && !cohortOptions) {
+      return {
+        message: `可选人群加载失败，无法验证分片预览与预算说明：${cohortOptionsError}`,
+        retryable: true,
+      };
+    }
+    if (!cohortOptions) {
+      return { message: "缺少服务端可选人群，无法验证分片预览与预算说明。", retryable: true };
+    }
+    if (planShardPreview?.hasUnavailableSelections) {
+      const unavailable = [
+        ...planShardPreview.unavailableRoleIds.map((id) => `角色 ${id}`),
+        ...planShardPreview.unavailableStatusIds.map((id) => `在职状态 ${id}`),
+        ...(planShardPreview.roleMatchUnavailable ? ["多角色匹配方式"] : []),
+      ];
+      return {
+        message: `当前选项（registry ${planShardPreview.registryVersion}）已不包含所选值：${unavailable.join("、")}。请刷新选项后重新选择。`,
+        retryable: true,
+      };
+    }
+    return null;
+  })();
+  // Fail closed in the handler as well as on the button: a blocked
+  // confirmation can never reach the approve/start path.
+  const handleConfirm = () => {
+    if (cohortPreviewBlocker) {
+      return;
+    }
+    onConfirm();
+  };
 
   return (
     <section
@@ -338,18 +388,22 @@ export function PlanCard({
           errorMessage={cohortOptionsError}
           locked={Boolean(plan.cohortSelection)}
           locationValue={effectiveLocations}
+          locationDisabled={!locationEditingAuthorized}
           showShardPreview={false}
           onChange={(value) => onReviewDecisionChange({ cohortSelection: value || undefined })}
-          onLocationChange={(next) =>
-            onReviewDecisionChange({
-              targetLocations: next.targetLocations,
-              excludeTargetLocations: next.excludeTargetLocations,
-            })
+          onLocationChange={
+            locationEditingAuthorized
+              ? (next) =>
+                  onReviewDecisionChange({
+                    targetLocations: next.targetLocations,
+                    excludeTargetLocations: next.excludeTargetLocations,
+                  })
+              : undefined
           }
           onRetryOptions={onRetryCohortOptions}
         />
 
-        {planShardPreview ? (
+        {planShardPreview && !cohortPreviewBlocker ? (
           <div className="plan-shard-preview" data-testid="plan-cohort-shard-preview">
             <p className="plan-shard-preview-count" data-testid="plan-cohort-shard-count">
               本次方案计划执行 {planShardPreview.shardCount} 个召回分片（在职状态 × 角色）：
@@ -374,6 +428,21 @@ export function PlanCard({
               每个分片执行全量成员召回，实际消耗受服务端分片预算上限与 provider
               限额约束（上限数值由运营方配置，确认前不展示预估值）。
             </p>
+          </div>
+        ) : null}
+
+        {cohortPreviewBlocker ? (
+          <div
+            className="plan-shard-preview-blocked"
+            role="alert"
+            data-testid="plan-cohort-preview-blocked"
+          >
+            <span>{cohortPreviewBlocker.message}</span>
+            {cohortPreviewBlocker.retryable ? (
+              <button type="button" className="link-chip" onClick={onRetryCohortOptions}>
+                重试
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -612,8 +681,8 @@ export function PlanCard({
           type="button"
           className="primary-button"
           data-testid="plan-confirm-button"
-          onClick={onConfirm}
-          disabled={isConfirming}
+          onClick={handleConfirm}
+          disabled={isConfirming || Boolean(cohortPreviewBlocker)}
         >
           {isConfirming ? "准备执行..." : "确认执行"}
         </button>

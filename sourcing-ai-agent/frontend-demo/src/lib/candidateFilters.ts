@@ -200,17 +200,40 @@ function candidateLocationBucket(candidate: Candidate): string {
 
 /**
  * Function facet membership is SERVER-computed (FT0 §5.1/§5.2): the frontend
- * consumes the per-candidate `functionBucketIds` verbatim and must not carry
- * a second local taxonomy. The deleted local maps
- * (ROLE_BUCKET_TO_FUNCTION_BUCKET / FUNCTION_BUCKET_KEYWORDS / numeric
- * function-id mapping / local option enum) may not return.
+ * consumes the per-candidate `functionBucketIds` verbatim (no case/whitespace
+ * normalization) and must not carry a second local taxonomy. The deleted
+ * local maps (ROLE_BUCKET_TO_FUNCTION_BUCKET / FUNCTION_BUCKET_KEYWORDS /
+ * numeric function-id mapping / local option enum) may not return.
+ *
+ * Fail-visible posture (FT2 fixed-forward, review finding 7): a candidate
+ * whose server pair is absent or incomplete has NO facet membership — the
+ * function facet is unavailable for that row (null), and it is never
+ * repaired into a synthesized `unknown` bucket. `unknown` membership exists
+ * only when the backend explicitly emitted it with valid provenance.
  */
-function candidateFunctionBuckets(candidate: Candidate): string[] {
-  const serverIds = (candidate.functionBucketIds || [])
-    .map((item) => normalizeToken(item))
-    .filter(Boolean);
-  const unique = Array.from(new Set(serverIds));
-  return unique.length > 0 ? unique : ["unknown"];
+function candidateFunctionBuckets(candidate: Candidate): string[] | null {
+  if (candidate.functionBucketIds === undefined || !candidate.functionBucketSource) {
+    return null;
+  }
+  return candidate.functionBucketIds;
+}
+
+/**
+ * Employment membership truth (FT0 §6): for Cohort-produced candidates the
+ * server-owned `cohortEmploymentStatuses` set is the ONLY authoritative
+ * membership — a dual-status candidate matches BOTH `current` and `former`
+ * while its top-level display status stays single-valued. Legacy records
+ * carry no membership and keep the documented display-status compatibility
+ * semantic (`lead` matches only when both statuses are selected).
+ */
+function candidateEmploymentMembership(candidate: Candidate): string[] {
+  const membership = (candidate.cohortEmploymentStatuses || []).filter(
+    (status): status is "current" | "former" => status === "current" || status === "former",
+  );
+  if (membership.length > 0) {
+    return Array.from(new Set(membership));
+  }
+  return [normalizeEmploymentStatus(candidate.employmentStatus)];
 }
 
 export function summarizeSelectedFacet(
@@ -307,8 +330,11 @@ export function defaultLayerSelection(options: CandidateFacetOption[]): string[]
 
 export function buildEmploymentOptions(candidates: Candidate[]): CandidateFacetOption[] {
   const counts = candidates.reduce<Record<string, number>>((accumulator, candidate) => {
-    const key = normalizeEmploymentStatus(candidate.employmentStatus);
-    accumulator[key] = (accumulator[key] || 0) + 1;
+    for (const status of candidateEmploymentMembership(candidate)) {
+      if (status === "current" || status === "former") {
+        accumulator[status] = (accumulator[status] || 0) + 1;
+      }
+    }
     return accumulator;
   }, {});
   const ordered: Array<{ id: string; label: string }> = [
@@ -361,7 +387,13 @@ export function defaultLocationSelection(options: CandidateFacetOption[]): strin
 
 export function buildFunctionOptions(candidates: Candidate[]): CandidateFacetOption[] {
   const counts = candidates.reduce<Record<string, number>>((accumulator, candidate) => {
-    for (const key of candidateFunctionBuckets(candidate)) {
+    const buckets = candidateFunctionBuckets(candidate);
+    if (!buckets) {
+      // Server facet unavailable for this row: it contributes no membership
+      // to any bucket (never a synthesized `unknown`).
+      return accumulator;
+    }
+    for (const key of buckets) {
       accumulator[key] = (accumulator[key] || 0) + 1;
     }
     return accumulator;
@@ -457,11 +489,13 @@ function matchesEmploymentSelection(candidate: Candidate, selectedEmploymentStat
   if (selectedEmploymentStatuses.length === 0) {
     return true;
   }
-  const normalizedStatus = normalizeEmploymentStatus(candidate.employmentStatus);
-  if (normalizedStatus === "lead") {
+  const memberships = candidateEmploymentMembership(candidate);
+  if (memberships.length === 1 && memberships[0] === "lead") {
+    // Documented `lead` compatibility semantic (FT0 §6): unknown/missing
+    // employment matches only when both statuses are selected.
     return selectedEmploymentStatuses.includes("current") && selectedEmploymentStatuses.includes("former");
   }
-  return selectedEmploymentStatuses.includes(normalizedStatus);
+  return memberships.some((status) => selectedEmploymentStatuses.includes(status));
 }
 
 function matchesLocationSelection(candidate: Candidate, selectedLocations: string[]): boolean {
@@ -475,7 +509,13 @@ function matchesFunctionSelection(candidate: Candidate, selectedFunctionBuckets:
   if (selectedFunctionBuckets.length === 0) {
     return true;
   }
-  return candidateFunctionBuckets(candidate).some((bucket) => selectedFunctionBuckets.includes(bucket));
+  const buckets = candidateFunctionBuckets(candidate);
+  if (!buckets) {
+    // Server facet unavailable for this row: it cannot claim membership in
+    // any selected bucket and is excluded from bucket-specific selections.
+    return false;
+  }
+  return buckets.some((bucket) => selectedFunctionBuckets.includes(bucket));
 }
 
 function matchesKeywordSearch(candidate: Candidate, searchKeyword: string): boolean {
