@@ -1,0 +1,44 @@
+{
+  "raw_user_request": "获取 OpenAI 全部成员（美国地区，current+former，research 与 engineering 职能分片），先做全量成员列表，再批量获取 profile。",
+  "query": "OpenAI current and former members in the United States across research and engineering functions (queried as separate function shards); build the full roster first, then retrieve profiles in batch",
+  "target_company": "OpenAI",
+  "asset_view": "canonical_merged",
+  "target_scope": "full_company_asset",
+  "categories": [
+    "employee",
+    "former_employee"
+  ],
+  "employment_statuses": [
+    "current",
+    "former"
+  ],
+  "retrieval_strategy": "structured",
+  "planning_mode": "heuristic",
+  "analysis_stage_mode": "single_stage",
+  "execution_preferences": {
+    "force_fresh_run": true,
+    "acquisition_strategy_override": "full_company_roster",
+    "use_company_employees_lane": true,
+    "provider_people_search_query_strategy": "all_queries_union",
+    "confirmed_company_scope": [
+      "OpenAI"
+    ],
+    "reuse_existing_roster": false,
+    "run_former_search_seed": true,
+    "precision_recall_bias": "recall_first"
+  },
+  "scope_disambiguation": {
+    "inferred_scope": "parent",
+    "confidence": 0.99,
+    "rationale": "The request explicitly targets the full OpenAI company roster, limited geographically to the United States, sharded by function (research and engineering queried separately), with no team or sub-organization restriction.",
+    "target_company": "OpenAI"
+  },
+  "target_locations": [
+    "United States"
+  ],
+  "top_k": 50,
+  "slug_resolution_limit": 50,
+  "profile_detail_limit": 20,
+  "publication_lead_limit": 12,
+  "exploration_limit": 6
+}
