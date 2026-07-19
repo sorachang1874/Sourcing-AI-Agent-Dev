@@ -134,9 +134,14 @@ handoff tables:
   `max_serialized_bytes=65536` (64 KiB)/`max_items=8192`/`max_depth=10` limits); the tool contract decision-locks
   the complete `AgentToolSpec.to_fingerprint_record()` equivalent (tool name/kind, request pin, route
   binder/adapter, simulate fixture, release owner, execution subject, budget/capability, approval, command
-  exposure, and control policy, with every constant owner-pin digest recomputed from its pinned contract bytes
-  under the canonical `local_agent_canary_owner_contract_v1` owner-pin identity formula)
-  and binds the exact result and serializer contract digests as constants;
+  exposure, and control policy, with every constant owner-pin digest in the tool contract recomputed from its
+  pinned contract bytes under the canonical `local_agent_canary_owner_contract_v1` owner-pin identity formula)
+  and binds the exact result and serializer contract digests as constants; the `local_agent_canary_owner_contract_v1`
+  formula applies only to tool-contract owner pins — the result pin's two owner bindings are deliberate exceptions
+  with their own pinned formulas: the serializer-owner pin uses the runtime `ActionResultSpec`
+  `serializer_contract_digest` formula (`action_result_serializer_contract_v1` preimage over
+  `{schema_version, serializer_owner, serializer_revision, contract}`), and the validator-owner pin is a
+  digest-owned binding of the exact `action_result_interpretation_contract_v3` digest (no contract copy);
   `result_v3_slot_contract.canonical_fingerprints` materializes both fingerprints exactly: real JSON nulls
   (never the string `"null"`) for request/result `query_owner`, `budget_owner`, `capability_type`,
   `capability_issuer`, and the always-present top-level `query_owner_id`/`query_owner_revision`/

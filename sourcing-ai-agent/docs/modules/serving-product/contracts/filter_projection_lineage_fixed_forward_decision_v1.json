@@ -3806,7 +3806,7 @@
                     "required": true,
                     "format": "sha256_hex",
                     "constant": "45f3fdbcb1c13982f27c9e4655b17846278a8bc1a50962cb92096aa587a28546",
-                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                    "derivation": "SHA256 over canonical_json({schema_version: action_result_serializer_contract_v1, serializer_owner: owner_id, serializer_revision: owner_revision, contract}) of this exact pin (the runtime ActionResultSpec serializer_contract_digest formula); this result-serializer pin does NOT use the local_agent_canary_owner_contract_v1 tool-pin formula"
                   }
                 ],
                 "derivation": "AgentToolResultPin.serializer_owner equivalent; owner_contract_digest equals the runtime serializer_contract_digest formula over action_result_serializer_contract_v1"
@@ -3834,7 +3834,7 @@
                     "required": true,
                     "format": "sha256_hex",
                     "constant": "769301d3451385be8408440ed631ee5fc285eeb0d6152f6a568e66e4ca5d01b8",
-                    "derivation": "exact interpretation contract digest; the result validator owner pin binds action_result_interpretation_contract_v3"
+                    "derivation": "digest-owned pin, no contract copy; the constant equals the exact action_result_interpretation_contract_v3 interpretation contract digest (a third owner-pin category beside local-canary tool pins and the runtime serializer-contract digest)"
                   }
                 ],
                 "derivation": "AgentToolResultPin.validator_owner equivalent (digest-owned pin, no contract copy)"
@@ -4533,7 +4533,7 @@
           }
         ]
       },
-      "contract_digest": "d9e9b1148a26509e70e80c24f567ed310dc1f172abebe52f131d04064e7f0edd"
+      "contract_digest": "3becef8c1d428f275c6cf3e8f0ad3996674778211d4786eaeae519a577e9345c"
     },
     {
       "literal": "acquisition.cohort.execute",

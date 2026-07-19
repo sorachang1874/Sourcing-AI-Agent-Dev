@@ -4857,6 +4857,68 @@ def _agent_tool_spec_from_record(record: dict[str, Any]) -> AgentToolSpec:
     )
 
 
+def test_s1f0c_ff_every_owner_pin_derivation_prose_matches_its_recomputed_constant() -> None:
+    """Every field-level owner-pin derivation must name the formula that actually recomputes its constant.
+
+    Regression for the rerun5 P1: the result serializer-owner pin carried a derivation
+    naming a preimage ({owner_id, owner_revision, contract}) that does not recompute the
+    stored constant, while the decision document claimed every owner pin uses the
+    local-canary formula. Both prose sources are now pinned to the executable categories:
+    local-canary tool pins, the runtime serializer-contract digest, and digest-owned
+    validator pins.
+    """
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+
+    owner_pin_descriptors: list[dict[str, Any]] = []
+
+    def _walk_fields(fields: list[dict[str, Any]]) -> None:
+        for field in fields:
+            nested = field.get("fields")
+            if isinstance(nested, list):
+                if any(isinstance(child, dict) and child.get("name") == "owner_contract_digest" for child in nested):
+                    owner_pin_descriptors.append(field)
+                _walk_fields(nested)
+
+    for row in manifest["contract_digests"]:
+        _walk_fields(row["schema"]["fields"])
+    assert len(owner_pin_descriptors) >= 10
+
+    for descriptor in owner_pin_descriptors:
+        pin_fields = {field["name"]: field for field in descriptor["fields"]}
+        derivation = pin_fields["owner_contract_digest"]["derivation"]
+        constant = pin_fields["owner_contract_digest"]["constant"]
+        label = f"{descriptor.get('owner_id', '?')} @ {descriptor.get('name', '?')}"
+        pin = _materialize_constant_object(descriptor["fields"], skip={"owner_contract_digest"})
+
+        categories: list[str] = []
+        if "contract" in pin:
+            canary = _sha256_json({"schema_version": LOCAL_CANARY_OWNER_CONTRACT_SCHEMA_VERSION, **pin})
+            if constant == canary:
+                categories.append("local_canary")
+            serializer = _sha256_json(
+                {
+                    "schema_version": "action_result_serializer_contract_v1",
+                    "serializer_owner": pin["owner_id"],
+                    "serializer_revision": pin["owner_revision"],
+                    "contract": pin["contract"],
+                }
+            )
+            if constant == serializer:
+                categories.append("result_serializer")
+        if constant == ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST:
+            categories.append("digest_owned_validator")
+
+        assert len(categories) == 1, f"{label}: owner pin matches {categories or 'no known formula'}"
+        category = categories[0]
+        if category == "local_canary":
+            assert f"canonical_json({{schema_version: {LOCAL_CANARY_OWNER_CONTRACT_SCHEMA_VERSION}" in derivation, label
+        elif category == "result_serializer":
+            assert "canonical_json({schema_version: action_result_serializer_contract_v1" in derivation, label
+        else:
+            assert "action_result_interpretation_contract_v3" in derivation, label
+            assert "no contract copy" in derivation or "digest-owned" in derivation, label
+
+
 def test_s1f0c_ff_canonical_fingerprints_are_exact_runtime_equivalents() -> None:
     manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
     digests = {row["literal"]: row for row in manifest["contract_digests"]}
