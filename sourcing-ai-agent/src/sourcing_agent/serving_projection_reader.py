@@ -1511,11 +1511,7 @@ def _candidate_filter_is_keyword_only(candidate_filter: dict[str, Any]) -> bool:
         elif key == "locations":
             values = [item for item in values if item not in {"us", "other", "unknown"}]
         elif key == "function_buckets":
-            values = [
-                item
-                for item in values
-                if item not in _PUBLIC_FUNCTION_FACET_ID_SET
-            ]
+            values = [item for item in values if item not in _PUBLIC_FUNCTION_FACET_ID_SET]
         elif key == "layer_includes":
             values = [item for item in values if item != "layer_0"]
         elif key == "audit_statuses":
