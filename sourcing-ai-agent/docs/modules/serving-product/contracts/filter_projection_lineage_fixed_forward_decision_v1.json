@@ -1556,9 +1556,10 @@
           },
           {
             "name": "membership_revision",
-            "type": "integer",
+            "type": "string",
             "required": true,
-            "minimum": 1
+            "nonempty": true,
+            "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies"
           },
           {
             "name": "route_kind",
@@ -1653,14 +1654,14 @@
             "type": "object",
             "required": true,
             "ref": "filter_projection_freshness_ref.v1",
-            "ref_digest": "80013649d3c809ebd7aee81198c4330f672bb50a10d45650f11013b36c7a4bac"
+            "ref_digest": "baecfa7d80bde58a38d33f9bc701c639a6910b3c9a4d20d1b142d2c412fa40a5"
           },
           {
             "name": "readiness_ref",
             "type": "object",
             "required": true,
             "ref": "filter_projection_readiness_ref.v1",
-            "ref_digest": "c184bb11486d0844339c0d351d9a184ad2e4d53cc6549245b9fb43249d64f63f"
+            "ref_digest": "1b555d9aea2c1f151a3488bdad12f7acad3d8daf70c6353214e1b23f6c98e961"
           },
           {
             "name": "terminal_digest",
@@ -1671,7 +1672,7 @@
           }
         ]
       },
-      "contract_digest": "b58f43046860815f60040df0a9a081ecf14f9907fa19c3448a7dfa00dfcdda99"
+      "contract_digest": "8ac63b3abac04bd39099bb15807e1c6a22347d0db1d55e19ae8d898a1780dec5"
     },
     {
       "literal": "filter_projection_freshness_ref.v1",
@@ -1747,9 +1748,10 @@
           },
           {
             "name": "membership_revision",
-            "type": "integer",
+            "type": "string",
             "required": true,
-            "minimum": 1
+            "nonempty": true,
+            "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies"
           },
           {
             "name": "candidate_set_digest",
@@ -1767,7 +1769,7 @@
           }
         ]
       },
-      "contract_digest": "80013649d3c809ebd7aee81198c4330f672bb50a10d45650f11013b36c7a4bac"
+      "contract_digest": "baecfa7d80bde58a38d33f9bc701c639a6910b3c9a4d20d1b142d2c412fa40a5"
     },
     {
       "literal": "filter_projection_readiness_ref.v1",
@@ -1837,9 +1839,10 @@
           },
           {
             "name": "membership_revision",
-            "type": "integer",
+            "type": "string",
             "required": true,
-            "minimum": 1
+            "nonempty": true,
+            "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies"
           },
           {
             "name": "candidate_set_digest",
@@ -1885,7 +1888,7 @@
           }
         ]
       },
-      "contract_digest": "c184bb11486d0844339c0d351d9a184ad2e4d53cc6549245b9fb43249d64f63f"
+      "contract_digest": "1b555d9aea2c1f151a3488bdad12f7acad3d8daf70c6353214e1b23f6c98e961"
     },
     {
       "literal": "filter_projection_product_ref.v1",
@@ -1914,9 +1917,10 @@
           },
           {
             "name": "membership_revision",
-            "type": "integer",
+            "type": "string",
             "required": true,
-            "minimum": 1
+            "nonempty": true,
+            "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies"
           },
           {
             "name": "terminal_digest",
@@ -1927,7 +1931,7 @@
           }
         ]
       },
-      "contract_digest": "ec6205440ea0cf547f3bcfc516775c8533547c30f60638b14d0df9d946219a18"
+      "contract_digest": "58a18ad0cc558ae7ff65a0638de79603b8179462617dee246d96cea93c905f8b"
     },
     {
       "literal": "filter_projection_success_owner_ref.v1",
@@ -2009,9 +2013,10 @@
           },
           {
             "name": "membership_revision",
-            "type": "integer",
+            "type": "string",
             "required": true,
-            "minimum": 1
+            "nonempty": true,
+            "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies"
           },
           {
             "name": "execution_commit_digest",
@@ -2082,7 +2087,7 @@
           }
         ]
       },
-      "contract_digest": "89ea6fd7e61bcd205cb3ada825c33f9ecf1aaef252e46eb78de90ef3e013551c"
+      "contract_digest": "9ff9da844f2d5739c6cf2b584102a2755aef88e81d217b199ae53d92e78daab6"
     },
     {
       "literal": "filter_projection_stale_owner_ref.v1",
@@ -2296,9 +2301,10 @@
           },
           {
             "name": "membership_revision",
-            "type": "integer",
+            "type": "string",
             "required": true,
-            "minimum": 1
+            "nonempty": true,
+            "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies"
           },
           {
             "name": "route_digest",
@@ -2371,7 +2377,7 @@
           }
         ]
       },
-      "contract_digest": "846185191fb41181f67d180eb07c1bbb1c44b1758495940d91904ea77b531406"
+      "contract_digest": "9c668e895e98148dbbe3df1928b07499e50dcc915bba67af306c35d9ec016d9a"
     },
     {
       "literal": "filter_projection_masked_absence_owner_ref.v1",
@@ -2584,29 +2590,94 @@
               "success"
             ],
             "provenance": "owner_state",
-            "ref_digest": "ec6205440ea0cf547f3bcfc516775c8533547c30f60638b14d0df9d946219a18"
+            "ref_digest": "58a18ad0cc558ae7ff65a0638de79603b8179462617dee246d96cea93c905f8b"
           },
           {
             "name": "cohort_selection",
-            "type": "string",
+            "type": "object",
             "required": true,
-            "nonempty": true,
+            "fields": [
+              {
+                "name": "schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "cohort_selection.v1",
+                "provenance": "user_supplied",
+                "value_role": "control"
+              },
+              {
+                "name": "role_bucket_ids",
+                "type": "array",
+                "required": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "research",
+                    "engineering",
+                    "product_management",
+                    "infra_systems",
+                    "founding"
+                  ],
+                  "provenance": "user_supplied",
+                  "value_role": "control"
+                },
+                "max_items": 5,
+                "provenance": "user_supplied"
+              },
+              {
+                "name": "employment_statuses",
+                "type": "array",
+                "required": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "current",
+                    "former"
+                  ],
+                  "provenance": "user_supplied",
+                  "value_role": "control"
+                },
+                "min_items": 1,
+                "max_items": 2,
+                "provenance": "user_supplied"
+              },
+              {
+                "name": "role_match",
+                "type": "string",
+                "required": true,
+                "enum": [
+                  "any",
+                  "all"
+                ],
+                "provenance": "user_supplied",
+                "value_role": "control"
+              },
+              {
+                "name": "source",
+                "type": "string",
+                "required": true,
+                "constant": "user_explicit",
+                "provenance": "user_supplied",
+                "value_role": "control"
+              }
+            ],
             "variants": [
               "success"
             ],
-            "provenance": "user_supplied",
-            "value_role": "identifier"
+            "derivation": "exact closed Cohort selection object retained from agent_projection_query._cohort_selection_schema (schema_version, role_bucket_ids, employment_statuses, role_match, source; additionalProperties closed); the sibling cohort_selection_digest equals cohort_selection_digest(cohort_selection), the SHA256 over canonical_json of the registry-pinned selection record, so the model-visible selection and the execution commitment can never diverge",
+            "provenance": "user_supplied"
           },
           {
             "name": "cohort_selection_registry_version",
             "type": "string",
             "required": true,
-            "nonempty": true,
+            "constant": "cohort_selection.registry.v1",
             "variants": [
               "success"
             ],
+            "derivation": "exact COHORT_SELECTION_REGISTRY_VERSION constant; at least as strict as v2",
             "provenance": "owner_state",
-            "value_role": "identifier"
+            "value_role": "control"
           },
           {
             "name": "cohort_selection_registry_digest",
@@ -2625,7 +2696,7 @@
             "type": "string",
             "required": true,
             "format": "sha256_hex",
-            "derivation": "exact pinned cohort selection",
+            "derivation": "exact pinned cohort selection: equals cohort_selection_digest(cohort_selection) computed over the sibling closed cohort_selection object; never an unbound string",
             "variants": [
               "success"
             ],
@@ -2665,7 +2736,7 @@
               "success"
             ],
             "provenance": "owner_state",
-            "ref_digest": "80013649d3c809ebd7aee81198c4330f672bb50a10d45650f11013b36c7a4bac"
+            "ref_digest": "baecfa7d80bde58a38d33f9bc701c639a6910b3c9a4d20d1b142d2c412fa40a5"
           },
           {
             "name": "readiness",
@@ -2676,7 +2747,7 @@
               "success"
             ],
             "provenance": "owner_state",
-            "ref_digest": "c184bb11486d0844339c0d351d9a184ad2e4d53cc6549245b9fb43249d64f63f"
+            "ref_digest": "1b555d9aea2c1f151a3488bdad12f7acad3d8daf70c6353214e1b23f6c98e961"
           },
           {
             "name": "provider_mode",
@@ -3074,10 +3145,12 @@
               },
               {
                 "name": "membership_revision",
-                "type": "integer",
+                "type": "string",
                 "required": true,
-                "minimum": 1,
-                "provenance": "owner_state"
+                "nonempty": true,
+                "derivation": "non-empty opaque equality token per docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md; equality/inequality only and never numerically, lexically, or chronologically ordered; no positive/numeric bound applies",
+                "provenance": "owner_state",
+                "value_role": "identifier"
               },
               {
                 "name": "requested_terminal_id",
@@ -3125,7 +3198,7 @@
           }
         ]
       },
-      "contract_digest": "7ec03353bf036075db8612cdea519b4882400ed054dce6ee3591812fd9490cdd"
+      "contract_digest": "8c8e99b14203aac525968c01716c821b8e30742b11cc8df5d32048ca2a93f26a"
     },
     {
       "literal": "filter_projection_result_serializer_v3",
@@ -3134,8 +3207,21 @@
         "owner_name",
         "revision",
         "owner",
+        "tool_name",
+        "tool_kind",
+        "owner_binding_action_type",
         "result_schema_version",
-        "result_contract_digest"
+        "result_contract_digest",
+        "serializer_contract",
+        "validator_owner",
+        "interpretation_contract_version",
+        "interpretation_contract_digest",
+        "externally_controlled_identifier_paths",
+        "max_serialized_bytes",
+        "max_items",
+        "max_depth",
+        "artifact_ref_schemes",
+        "allowed_variants"
       ],
       "schema": {
         "schema_version": "filter_projection_result_serializer_v3",
@@ -3160,6 +3246,25 @@
             "constant": "projection_search_service"
           },
           {
+            "name": "tool_name",
+            "type": "string",
+            "required": true,
+            "constant": "filter_projection"
+          },
+          {
+            "name": "tool_kind",
+            "type": "string",
+            "required": true,
+            "constant": "action"
+          },
+          {
+            "name": "owner_binding_action_type",
+            "type": "string",
+            "required": true,
+            "constant": "filter_projection",
+            "derivation": "owner_binding is exactly {tool_kind: action, action_type: filter_projection, query_owner: null}"
+          },
+          {
             "name": "result_schema_version",
             "type": "string",
             "required": true,
@@ -3170,11 +3275,153 @@
             "type": "string",
             "required": true,
             "format": "sha256_hex",
-            "derivation": "equals the filter_projection_result_v3 contract_digest"
+            "derivation": "equals the filter_projection_result_v3 contract_digest; binds the exact three closed variant schemas, the per-path provenance map, and the value-role map"
+          },
+          {
+            "name": "serializer_contract",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection_result_serializer_contract_v3"
+              },
+              {
+                "name": "owner_output",
+                "type": "string",
+                "required": true,
+                "constant": "closed_product_terminal_variant"
+              },
+              {
+                "name": "membership_source",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection_product_terminal.v1"
+              },
+              {
+                "name": "variant_selection",
+                "type": "string",
+                "required": true,
+                "constant": "exact_variant_discriminator_closed_roots"
+              },
+              {
+                "name": "canonical_json",
+                "type": "string",
+                "required": true,
+                "constant": "sorted_keys_compact_separators_utf8_allow_nan_false"
+              },
+              {
+                "name": "owner_result_ref_rule",
+                "type": "string",
+                "required": true,
+                "constant": "sha256_canonical_owner_ref_except_owner_ref_digest"
+              },
+              {
+                "name": "serialized_result_digest_rule",
+                "type": "string",
+                "required": true,
+                "constant": "sha256_over_serialized_canonical_bytes"
+              },
+              {
+                "name": "is_error_parity",
+                "type": "string",
+                "required": true,
+                "constant": "false_for_success_stale_not_ready_true_for_masked"
+              }
+            ],
+            "derivation": "complete serializer semantics: exact owner input shape, variant selection, canonical JSON bytes, owner-result-ref canonicalization/digest formula, serialized-result digest, and is_error parity"
+          },
+          {
+            "name": "validator_owner",
+            "type": "string",
+            "required": true,
+            "constant": "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input"
+          },
+          {
+            "name": "interpretation_contract_version",
+            "type": "string",
+            "required": true,
+            "constant": "action_result_interpretation_contract_v3"
+          },
+          {
+            "name": "interpretation_contract_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex",
+            "constant": "769301d3451385be8408440ed631ee5fc285eeb0d6152f6a568e66e4ca5d01b8",
+            "derivation": "exact ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST for action_result_interpretation_contract_v3"
+          },
+          {
+            "name": "externally_controlled_identifier_paths",
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "/cohort_selection/employment_statuses/*",
+                "/cohort_selection/role_bucket_ids/*",
+                "/cohort_selection/role_match",
+                "/cohort_selection/schema_version",
+                "/cohort_selection/source"
+              ]
+            },
+            "min_items": 5,
+            "max_items": 5,
+            "derivation": "exact sorted tuple (/cohort_selection/employment_statuses/*, /cohort_selection/role_bucket_ids/*, /cohort_selection/role_match, /cohort_selection/schema_version, /cohort_selection/source); the only externally controlled identifier paths"
+          },
+          {
+            "name": "max_serialized_bytes",
+            "type": "integer",
+            "required": true,
+            "constant": 65536,
+            "derivation": "exactly 64 KiB = FILTER_PROJECTION_RESULT_MAX_BYTES"
+          },
+          {
+            "name": "max_items",
+            "type": "integer",
+            "required": true,
+            "constant": 8192,
+            "derivation": "exact ActionResultSpec max_items"
+          },
+          {
+            "name": "max_depth",
+            "type": "integer",
+            "required": true,
+            "constant": 10,
+            "derivation": "exact ActionResultSpec max_depth"
+          },
+          {
+            "name": "artifact_ref_schemes",
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "string"
+            },
+            "min_items": 0,
+            "max_items": 0,
+            "derivation": "empty exactly; no artifact reference scheme is permitted in V3 results"
+          },
+          {
+            "name": "allowed_variants",
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "success",
+                "deferred",
+                "error"
+              ]
+            },
+            "min_items": 3,
+            "max_items": 3,
+            "derivation": "exact ordered tuple (success, deferred, error) = ACTION_RESULT_VARIANTS"
           }
         ]
       },
-      "contract_digest": "e9269e0d243fe0e423232ca8a89c11efcf50b5961ebd13a1fb637d6a727ee56a"
+      "contract_digest": "c0ab7e6620d05f8bf68d1c8601052e8f66b88d83d3f4263ff3b8b7b7f791c64c"
     },
     {
       "literal": "filter_projection_tool_v3",
@@ -3189,7 +3436,24 @@
         "serializer_owner_name",
         "serializer_revision",
         "serializer_contract_digest",
-        "registration_state"
+        "registration_state",
+        "fingerprint_schema_version",
+        "tool_name",
+        "model_description",
+        "tool_kind",
+        "action_type",
+        "request",
+        "result_pin",
+        "workspace_actor_binder",
+        "adapter",
+        "simulate_fixture",
+        "release_state_ref",
+        "execution_subject",
+        "budget",
+        "capability",
+        "approval",
+        "command_exposure",
+        "control_policy"
       ],
       "schema": {
         "schema_version": "filter_projection_tool_v3",
@@ -3230,7 +3494,7 @@
             "type": "string",
             "required": true,
             "format": "sha256_hex",
-            "constant": "7ec03353bf036075db8612cdea519b4882400ed054dce6ee3591812fd9490cdd",
+            "constant": "8c8e99b14203aac525968c01716c821b8e30742b11cc8df5d32048ca2a93f26a",
             "derivation": "exact copy of the filter_projection_result_v3 contract_digest; binds the tool to the exact result contract"
           },
           {
@@ -3250,7 +3514,7 @@
             "type": "string",
             "required": true,
             "format": "sha256_hex",
-            "constant": "e9269e0d243fe0e423232ca8a89c11efcf50b5961ebd13a1fb637d6a727ee56a",
+            "constant": "c0ab7e6620d05f8bf68d1c8601052e8f66b88d83d3f4263ff3b8b7b7f791c64c",
             "derivation": "exact copy of the filter_projection_result_serializer_v3 contract_digest; binds the tool to the exact serializer contract"
           },
           {
@@ -3261,10 +3525,968 @@
               "retained_history"
             ],
             "derivation": "append-only retained history; neither current nor served on registration; the current tool alias remains V2 and the public/default served population remains zero"
+          },
+          {
+            "name": "fingerprint_schema_version",
+            "type": "string",
+            "required": true,
+            "constant": "agent_tool_spec_v2"
+          },
+          {
+            "name": "tool_name",
+            "type": "string",
+            "required": true,
+            "constant": "filter_projection"
+          },
+          {
+            "name": "model_description",
+            "type": "string",
+            "required": true,
+            "constant": "Filter one exact canonical projection with the user-confirmed Cohort selection."
+          },
+          {
+            "name": "tool_kind",
+            "type": "string",
+            "required": true,
+            "constant": "action"
+          },
+          {
+            "name": "action_type",
+            "type": "string",
+            "required": true,
+            "constant": "filter_projection"
+          },
+          {
+            "name": "request",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "projection_filter_request_v3"
+              },
+              {
+                "name": "schema_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "derivation": "SHA256 over the exact closed projection_filter_request_v3 input schema; computed at registration and bound by the retained registry pin, never inferred"
+              },
+              {
+                "name": "validator_owner",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "sourcing_agent.model_tool_runtime.ToolSpec.validate_input"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "tool_spec_validator_v1"
+                  },
+                  {
+                    "name": "contract",
+                    "type": "object",
+                    "required": true,
+                    "fields": [
+                      {
+                        "name": "input",
+                        "type": "string",
+                        "required": true,
+                        "constant": "closed_json_schema"
+                      },
+                      {
+                        "name": "output",
+                        "type": "string",
+                        "required": true,
+                        "constant": "canonical_validated_json"
+                      },
+                      {
+                        "name": "additional_properties",
+                        "type": "string",
+                        "required": true,
+                        "constant": "reject"
+                      },
+                      {
+                        "name": "side_effects",
+                        "type": "string",
+                        "required": true,
+                        "constant": "none"
+                      }
+                    ],
+                    "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "dc5d2ae4ad0115bb7e98f134097cdc4b1b6ff2ee4870623d631f52cf189fd113",
+                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                  }
+                ],
+                "derivation": "AgentToolRequestPin.validator_owner equivalent"
+              },
+              {
+                "name": "tool_kind",
+                "type": "string",
+                "required": true,
+                "constant": "action"
+              },
+              {
+                "name": "action_type",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection"
+              },
+              {
+                "name": "action_contract_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "derivation": "SHA256 over the ActionRequestSpec fingerprint for projection_filter_request_v3; computed at registration from the pinned request schema, never inferred"
+              },
+              {
+                "name": "query_owner",
+                "type": "string",
+                "required": true,
+                "constant": "null",
+                "derivation": "null exactly: action tools never carry a query owner binding"
+              }
+            ],
+            "derivation": "complete AgentToolRequestPin equivalent for the V3 request"
+          },
+          {
+            "name": "result_pin",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "tool_name",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection"
+              },
+              {
+                "name": "tool_kind",
+                "type": "string",
+                "required": true,
+                "constant": "action"
+              },
+              {
+                "name": "action_type",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection"
+              },
+              {
+                "name": "schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection_result_v3"
+              },
+              {
+                "name": "schema_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "derivation": "SHA256 over the complete ActionResultSpec.to_fingerprint_record() pinned by filter_projection_result_v3 and filter_projection_result_serializer_v3; computed at registration from the pinned contracts, never inferred"
+              },
+              {
+                "name": "serializer_owner",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "projection_search_service.filter_projection_result_serializer_v3"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "filter_projection_result_serializer_v3"
+                  },
+                  {
+                    "name": "contract",
+                    "type": "object",
+                    "required": true,
+                    "fields": [
+                      {
+                        "name": "schema_version",
+                        "type": "string",
+                        "required": true,
+                        "constant": "filter_projection_result_serializer_contract_v3"
+                      },
+                      {
+                        "name": "owner_output",
+                        "type": "string",
+                        "required": true,
+                        "constant": "closed_product_terminal_variant"
+                      },
+                      {
+                        "name": "membership_source",
+                        "type": "string",
+                        "required": true,
+                        "constant": "filter_projection_product_terminal.v1"
+                      },
+                      {
+                        "name": "variant_selection",
+                        "type": "string",
+                        "required": true,
+                        "constant": "exact_variant_discriminator_closed_roots"
+                      },
+                      {
+                        "name": "canonical_json",
+                        "type": "string",
+                        "required": true,
+                        "constant": "sorted_keys_compact_separators_utf8_allow_nan_false"
+                      },
+                      {
+                        "name": "owner_result_ref_rule",
+                        "type": "string",
+                        "required": true,
+                        "constant": "sha256_canonical_owner_ref_except_owner_ref_digest"
+                      },
+                      {
+                        "name": "serialized_result_digest_rule",
+                        "type": "string",
+                        "required": true,
+                        "constant": "sha256_over_serialized_canonical_bytes"
+                      },
+                      {
+                        "name": "is_error_parity",
+                        "type": "string",
+                        "required": true,
+                        "constant": "false_for_success_stale_not_ready_true_for_masked"
+                      }
+                    ],
+                    "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "45f3fdbcb1c13982f27c9e4655b17846278a8bc1a50962cb92096aa587a28546",
+                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                  }
+                ],
+                "derivation": "AgentToolResultPin.serializer_owner equivalent; owner_contract_digest equals the runtime serializer_contract_digest formula over action_result_serializer_contract_v1"
+              },
+              {
+                "name": "validator_owner",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "internal_tool_validator_v3"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "769301d3451385be8408440ed631ee5fc285eeb0d6152f6a568e66e4ca5d01b8",
+                    "derivation": "exact interpretation contract digest; the result validator owner pin binds action_result_interpretation_contract_v3"
+                  }
+                ],
+                "derivation": "AgentToolResultPin.validator_owner equivalent (digest-owned pin, no contract copy)"
+              },
+              {
+                "name": "validation_contract_version",
+                "type": "string",
+                "required": true,
+                "constant": "action_result_interpretation_contract_v3"
+              },
+              {
+                "name": "max_serialized_bytes",
+                "type": "integer",
+                "required": true,
+                "constant": 65536,
+                "derivation": "exactly 64 KiB"
+              },
+              {
+                "name": "max_items",
+                "type": "integer",
+                "required": true,
+                "constant": 8192
+              },
+              {
+                "name": "max_depth",
+                "type": "integer",
+                "required": true,
+                "constant": 10
+              },
+              {
+                "name": "query_owner",
+                "type": "string",
+                "required": true,
+                "constant": "null",
+                "derivation": "null exactly: action tools never carry a query owner binding"
+              }
+            ],
+            "derivation": "complete AgentToolResultPin equivalent for the V3 result"
+          },
+          {
+            "name": "workspace_actor_binder",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "owner_id",
+                "type": "string",
+                "required": true,
+                "constant": "sourcing_agent.agent_projection_query.bind_filter_projection_v3_request"
+              },
+              {
+                "name": "owner_revision",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection_v3_binder_v1"
+              },
+              {
+                "name": "contract",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "caller_owned",
+                    "type": "array",
+                    "required": true,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "cohort_selection",
+                        "offset",
+                        "limit"
+                      ]
+                    },
+                    "min_items": 3,
+                    "max_items": 3,
+                    "derivation": "exact ordered tuple ('cohort_selection', 'offset', 'limit') of the pinned owner contract"
+                  },
+                  {
+                    "name": "owner_pins",
+                    "type": "array",
+                    "required": true,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "projection_id",
+                        "membership_revision",
+                        "cohort_selection_registry_version",
+                        "cohort_selection_registry_digest",
+                        "cohort_selection_digest"
+                      ]
+                    },
+                    "min_items": 5,
+                    "max_items": 5,
+                    "derivation": "exact ordered tuple ('projection_id', 'membership_revision', 'cohort_selection_registry_version', 'cohort_selection_registry_digest', 'cohort_selection_digest') of the pinned owner contract"
+                  }
+                ],
+                "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+              },
+              {
+                "name": "owner_contract_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "constant": "86b9f1ce9645e9edb051444a8463a0fe465deb608d62ccb6f76870adbb5e7a12",
+                "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+              }
+            ],
+            "derivation": "AgentActionToolRoute.workspace_actor_binder equivalent"
+          },
+          {
+            "name": "adapter",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "owner_id",
+                "type": "string",
+                "required": true,
+                "constant": "sourcing_agent.agent_projection_query.execute_filter_projection_v3"
+              },
+              {
+                "name": "owner_revision",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection_v3_adapter_v1"
+              },
+              {
+                "name": "contract",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "effects",
+                    "type": "string",
+                    "required": true,
+                    "constant": "read_only"
+                  },
+                  {
+                    "name": "raw_candidate_identity_serialized",
+                    "type": "boolean",
+                    "required": true,
+                    "constant": false
+                  }
+                ],
+                "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+              },
+              {
+                "name": "owner_contract_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "constant": "d90c38e934030c2c4b0f98d15aef029a4b25eedb91565344244ca2a485cde044",
+                "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+              }
+            ],
+            "derivation": "AgentActionToolRoute.adapter equivalent"
+          },
+          {
+            "name": "simulate_fixture",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "local_agent_simulate_fixture_v2"
+              },
+              {
+                "name": "fixture_id",
+                "type": "string",
+                "required": true,
+                "constant": "agent.local_canary.simulate.filter_projection"
+              },
+              {
+                "name": "fixture_revision",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection_fixture_v3"
+              },
+              {
+                "name": "tool_name",
+                "type": "string",
+                "required": true,
+                "constant": "filter_projection"
+              },
+              {
+                "name": "provider_mode",
+                "type": "string",
+                "required": true,
+                "constant": "simulate"
+              },
+              {
+                "name": "expected_terminal_variant",
+                "type": "string",
+                "required": true,
+                "constant": "success"
+              },
+              {
+                "name": "approval_required",
+                "type": "boolean",
+                "required": true,
+                "constant": false
+              },
+              {
+                "name": "effect_class",
+                "type": "string",
+                "required": true,
+                "constant": "read_only"
+              },
+              {
+                "name": "expected_live_provider_invocations",
+                "type": "integer",
+                "required": true,
+                "constant": 0
+              },
+              {
+                "name": "expected_live_model_invocations",
+                "type": "integer",
+                "required": true,
+                "constant": 0
+              },
+              {
+                "name": "result_link_policy",
+                "type": "string",
+                "required": true,
+                "constant": "no_command_v1"
+              },
+              {
+                "name": "fixture_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "constant": "bbb4b4edbcf952af0a98b6d024a6644ab10867fffcb845c987826c141a5afacd",
+                "derivation": "SHA256 over canonical_json of the exact fixture record pinned by the preceding fields"
+              }
+            ],
+            "derivation": "complete AgentToolSimulateFixturePin equivalent with its materialized fixture record"
+          },
+          {
+            "name": "release_state_ref",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "release_owner",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "agent.local_canary.release_owner"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "local_canary_release_owner_v1"
+                  },
+                  {
+                    "name": "contract",
+                    "type": "object",
+                    "required": true,
+                    "fields": [
+                      {
+                        "name": "scope",
+                        "type": "string",
+                        "required": true,
+                        "constant": "isolated_local_harness_only"
+                      },
+                      {
+                        "name": "registry_presence_is_release",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": false
+                      },
+                      {
+                        "name": "global_serving_authority",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": false
+                      },
+                      {
+                        "name": "hosted_activation_authority",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": false
+                      }
+                    ],
+                    "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "314eaf809d67fd880e8824b722edec33412ba850af05469af1acbdb94051ae93",
+                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                  }
+                ],
+                "derivation": "sole external release owner; never a release decision"
+              },
+              {
+                "name": "release_key",
+                "type": "string",
+                "required": true,
+                "constant": "action:filter_projection"
+              }
+            ],
+            "derivation": "complete AgentToolReleaseStateRef equivalent"
+          },
+          {
+            "name": "execution_subject",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "subject_schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "local_agent_execution_subject_v1"
+              },
+              {
+                "name": "subject_schema_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "constant": "88630e7e5868d8d7529b38466c7224acfaed3c4eed5a728cd3c81b108e26859d",
+                "derivation": "SHA256 over the exact pinned execution-subject contract"
+              },
+              {
+                "name": "subject_validator_owner",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "agent.local_canary.execution_subject_validator"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "local_canary_execution_subject_validator_v1"
+                  },
+                  {
+                    "name": "contract",
+                    "type": "object",
+                    "required": true,
+                    "fields": [
+                      {
+                        "name": "schema_version",
+                        "type": "string",
+                        "required": true,
+                        "constant": "local_agent_execution_subject_v1"
+                      },
+                      {
+                        "name": "required_fields",
+                        "type": "array",
+                        "required": true,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "runtime_namespace",
+                            "workspace_id",
+                            "actor_id",
+                            "provider_mode"
+                          ]
+                        },
+                        "min_items": 4,
+                        "max_items": 4,
+                        "derivation": "exact ordered tuple ('runtime_namespace', 'workspace_id', 'actor_id', 'provider_mode') of the pinned owner contract"
+                      },
+                      {
+                        "name": "runtime_namespace",
+                        "type": "string",
+                        "required": true,
+                        "constant": "isolated_local_canary"
+                      },
+                      {
+                        "name": "provider_modes",
+                        "type": "array",
+                        "required": true,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "simulate",
+                            "scripted",
+                            "live"
+                          ]
+                        },
+                        "min_items": 3,
+                        "max_items": 3,
+                        "derivation": "exact ordered tuple ('simulate', 'scripted', 'live') of the pinned owner contract"
+                      },
+                      {
+                        "name": "global_serving_authority",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": false
+                      }
+                    ],
+                    "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "48ba7ac13b3dc77eac14f4aa413bec44fc996f4c39119bf966c1512ce122d3c1",
+                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                  }
+                ],
+                "derivation": "execution subject validator owner pin"
+              },
+              {
+                "name": "permission_policy",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "agent.local_canary.permission_policy"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "local_canary_permission_policy_v1"
+                  },
+                  {
+                    "name": "contract",
+                    "type": "object",
+                    "required": true,
+                    "fields": [
+                      {
+                        "name": "scope",
+                        "type": "string",
+                        "required": true,
+                        "constant": "exact_workspace_actor_and_isolated_runtime"
+                      },
+                      {
+                        "name": "hosted",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": false
+                      },
+                      {
+                        "name": "provider_modes",
+                        "type": "array",
+                        "required": true,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "simulate",
+                            "scripted",
+                            "live"
+                          ]
+                        },
+                        "min_items": 3,
+                        "max_items": 3,
+                        "derivation": "exact ordered tuple ('simulate', 'scripted', 'live') of the pinned owner contract"
+                      },
+                      {
+                        "name": "live_requires_paid_canary_receipt",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": true
+                      }
+                    ],
+                    "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "41d3af618d5c7d7f1efb4b67a239cf57f49f20a28fdb08cb383ca55abaea32ac",
+                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                  }
+                ],
+                "derivation": "execution permission policy owner pin"
+              },
+              {
+                "name": "authorization_checkpoints",
+                "type": "array",
+                "required": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "catalog_projection",
+                    "invocation_acceptance"
+                  ]
+                },
+                "min_items": 2,
+                "max_items": 2,
+                "derivation": "exact ordered tuple (catalog_projection, invocation_acceptance); a read_only unapproved tool adds no approval_acceptance or dispatch_acceptance checkpoint"
+              }
+            ],
+            "derivation": "complete AgentExecutionSubjectRequirement equivalent"
+          },
+          {
+            "name": "budget",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "mode",
+                "type": "string",
+                "required": true,
+                "constant": "not_required"
+              },
+              {
+                "name": "budget_owner",
+                "type": "string",
+                "required": true,
+                "constant": "null",
+                "derivation": "null exactly: a read_only tool reserves no budget"
+              }
+            ],
+            "derivation": "complete AgentToolBudgetRequirement equivalent"
+          },
+          {
+            "name": "capability",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "mode",
+                "type": "string",
+                "required": true,
+                "constant": "not_required"
+              },
+              {
+                "name": "capability_metadata",
+                "type": "string",
+                "required": true,
+                "constant": "null",
+                "derivation": "capability_type and capability_issuer are null and required_provider_modes is the empty tuple exactly"
+              }
+            ],
+            "derivation": "complete AgentToolCapabilityRequirement equivalent"
+          },
+          {
+            "name": "approval",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "mode",
+                "type": "string",
+                "required": true,
+                "constant": "not_required"
+              },
+              {
+                "name": "approval_policy",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "owner_id",
+                    "type": "string",
+                    "required": true,
+                    "constant": "agent.approval.not_required_policy"
+                  },
+                  {
+                    "name": "owner_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "approval_not_required_v1"
+                  },
+                  {
+                    "name": "contract",
+                    "type": "object",
+                    "required": true,
+                    "fields": [
+                      {
+                        "name": "mode",
+                        "type": "string",
+                        "required": true,
+                        "constant": "not_required"
+                      },
+                      {
+                        "name": "self_approval",
+                        "type": "boolean",
+                        "required": true,
+                        "constant": false
+                      }
+                    ],
+                    "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
+                  },
+                  {
+                    "name": "owner_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "constant": "ab13bfc75482c03659398a32103de8d720e5b096a65bd46b07b31519f8d08376",
+                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                  }
+                ],
+                "derivation": "approval policy owner pin"
+              }
+            ],
+            "derivation": "complete AgentToolApprovalRequirement equivalent; read_only forbids approval"
+          },
+          {
+            "name": "command_exposure",
+            "type": "string",
+            "required": true,
+            "constant": "none"
+          },
+          {
+            "name": "control_policy",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "owner_id",
+                "type": "string",
+                "required": true,
+                "constant": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts"
+              },
+              {
+                "name": "owner_revision",
+                "type": "string",
+                "required": true,
+                "constant": "action_control_policy_v1"
+              },
+              {
+                "name": "contract",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "action_type",
+                    "type": "string",
+                    "required": true,
+                    "constant": "filter_projection"
+                  },
+                  {
+                    "name": "action_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex",
+                    "derivation": "SHA256 over the ActionRequestSpec fingerprint for projection_filter_request_v3; computed at registration from the pinned request schema, never inferred"
+                  },
+                  {
+                    "name": "command_exposure",
+                    "type": "string",
+                    "required": true,
+                    "constant": "owner_allowlist_only"
+                  },
+                  {
+                    "name": "fallback_status",
+                    "type": "string",
+                    "required": true,
+                    "constant": "fail_closed"
+                  }
+                ],
+                "derivation": "complete closed control-policy contract"
+              },
+              {
+                "name": "owner_contract_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex",
+                "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin once action_contract_digest is computed at registration, never inferred"
+              }
+            ],
+            "derivation": "AgentToolBehavior.control_policy owner pin equivalent"
           }
         ]
       },
-      "contract_digest": "70a1ff8ed8337172849fd50e90e6f5f1f7de57994b8aa394f5259760c13ec608"
+      "contract_digest": "b78fe128e498a2949462e49357b413bccdf5cbdb4e2de002396cfba8f9d332ef"
     },
     {
       "literal": "acquisition.cohort.execute",
@@ -3945,6 +5167,19 @@
                   ]
                 }
               }
+            },
+            {
+              "id": "p_op_workspace",
+              "kind": "path_eq",
+              "left": {
+                "row": "operation_runs",
+                "path": [
+                  "workspace_id"
+                ]
+              },
+              "right": {
+                "scope": "workspace_id"
+              }
             }
           ]
         },
@@ -4179,6 +5414,46 @@
                   "confirmation_receipt_ref"
                 ]
               }
+            },
+            {
+              "id": "p_act_workspace",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "workspace_id"
+                ]
+              },
+              "right": {
+                "scope": "workspace_id"
+              }
+            },
+            {
+              "id": "p_act_requester",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "bound_requester_id"
+                ]
+              },
+              "right": {
+                "scope": "requester_id"
+              }
+            },
+            {
+              "id": "p_act_ref_workspace",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "workspace_id"
+                ]
+              },
+              "right": {
+                "scope": "workspace_id"
+              }
             }
           ]
         },
@@ -4373,6 +5648,49 @@
               "workflow_run_id_field": "workflow_run_id",
               "idempotency_field": "idempotency_key",
               "formula": "command_id == \"cmd_\" + sha1(workflow_run_id + \":\" + idempotency_key)[:24] (exact command_id_for recompute)"
+            },
+            {
+              "id": "p_root_preview_valid",
+              "kind": "schema_valid",
+              "row": "root",
+              "path": [
+                "payload_json",
+                "start_snapshot",
+                "preview"
+              ],
+              "ref": "acquisition_plan_preview_record_v2"
+            },
+            {
+              "id": "p_root_preview_workspace",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "start_snapshot",
+                  "preview",
+                  "workspace_id"
+                ]
+              },
+              "right": {
+                "scope": "workspace_id"
+              }
+            },
+            {
+              "id": "p_root_preview_requester",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "start_snapshot",
+                  "preview",
+                  "requester_id"
+                ]
+              },
+              "right": {
+                "scope": "requester_id"
+              }
             }
           ]
         },
@@ -5600,6 +6918,19 @@
               "exclude": [
                 "authority_digest"
               ]
+            },
+            {
+              "id": "p_run_workspace",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "workspace_id"
+                ]
+              },
+              "right": {
+                "scope": "workspace_id"
+              }
             }
           ]
         }
@@ -5639,6 +6970,22 @@
             "default workspace",
             "request fallback",
             "another row selected by id alone"
+          ],
+          "predicate_ids": [
+            "p_op_workspace",
+            "p_act_workspace",
+            "p_run_workspace",
+            "p_root_preview_workspace",
+            "p_act_ref_workspace",
+            "p_intent_carrier_owner_ref",
+            "p_build_carrier_owner_ref",
+            "p_review_carrier_owner_ref",
+            "p_commit_carrier_owner_ref",
+            "p_intent_carrier_root_digest",
+            "p_build_carrier_root_digest",
+            "p_review_carrier_root_digest",
+            "p_commit_carrier_root_digest",
+            "p_carrier_consensus"
           ]
         },
         {
@@ -5653,6 +7000,10 @@
             "command event actor",
             "lease owner",
             "plan-review actor"
+          ],
+          "predicate_ids": [
+            "p_act_requester",
+            "p_root_preview_requester"
           ]
         },
         {
@@ -5666,6 +7017,18 @@
             "provider_mode_intent",
             "runtime execution mode",
             "a later provider result"
+          ],
+          "predicate_ids": [
+            "p_act_ref_mode",
+            "p_intent_carrier_owner_ref",
+            "p_build_carrier_owner_ref",
+            "p_review_carrier_owner_ref",
+            "p_commit_carrier_owner_ref",
+            "p_intent_carrier_root_digest",
+            "p_build_carrier_root_digest",
+            "p_review_carrier_root_digest",
+            "p_commit_carrier_root_digest",
+            "p_carrier_consensus"
           ]
         },
         {
@@ -5679,6 +7042,18 @@
             "raw path",
             "latest runtime namespace",
             "compiler fallback"
+          ],
+          "predicate_ids": [
+            "p_act_ref_namespace",
+            "p_intent_carrier_owner_ref",
+            "p_build_carrier_owner_ref",
+            "p_review_carrier_owner_ref",
+            "p_commit_carrier_owner_ref",
+            "p_intent_carrier_root_digest",
+            "p_build_carrier_root_digest",
+            "p_review_carrier_root_digest",
+            "p_commit_carrier_root_digest",
+            "p_carrier_consensus"
           ]
         }
       ],
@@ -6879,7 +8254,8 @@
         "primary key (execution_attempt_id,lane_ordinal)",
         "unique (execution_attempt_id,lane_id)",
         "immutable after insert",
-        "evidence refs are opaque server identifiers, never filesystem paths"
+        "evidence refs are opaque server identifiers, never filesystem paths",
+        "lane provider evidence equals the owning execution attempt: before any lane write the repository compares lane provider_exposure_id, provider_call_id, and provider_response_digest to the exact provider-evidence tuple of the attempt named by execution_attempt_id and rejects any mismatch"
       ],
       "descriptor": {
         "columns": [
@@ -7178,6 +8554,19 @@
           "mechanism": [
             "fk_cohort_execution_lane_results_attempt",
             "ck_cohort_execution_lane_results_execution_attempt_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "lane provider evidence equals the owning execution attempt: before any lane write the repository compares lane provider_exposure_id, provider_call_id, and provider_response_digest to the exact provider-evidence tuple of the attempt named by execution_attempt_id and rejects any mismatch",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ],
+          "covers_fields": [
+            "provider_exposure_id",
+            "provider_call_id",
+            "provider_response_digest"
           ]
         }
       ]
@@ -7885,7 +9274,8 @@
         "product_terminal_id PK",
         "unique (workspace_id,projection_id,membership_revision)",
         "unique (workspace_id,execution_commit_id,projection_id)",
-        "positive terminal generation; insert once; no UPDATE/DELETE normal path",
+        "positive terminal generation (terminal_generation > 0)",
+        "insert once; no UPDATE/DELETE normal path (append-only product terminals)",
         "only route_kind=run_scope and active result route are eligible in S1f0c; collection-authoritative remains excluded",
         "candidate_count == visible_member_count > 0, excluded count is zero, and member bytes/digest equal the exact execution commit",
         "terminal/freshness/readiness digests are recomputed from canonical nested records before insert",
@@ -7938,7 +9328,7 @@
           },
           {
             "name": "membership_revision",
-            "type": "bigint",
+            "type": "text",
             "nullable": false,
             "default": null
           },
@@ -8147,7 +9537,7 @@
           },
           {
             "name": "ck_filter_projection_product_terminals_membership_revision",
-            "expression": "membership_revision > 0"
+            "expression": "membership_revision <> ''"
           },
           {
             "name": "ck_filter_projection_product_terminals_projection_version",
@@ -8351,11 +9741,19 @@
           ]
         },
         {
-          "invariant": "positive terminal generation; insert once; no UPDATE/DELETE normal path",
+          "invariant": "positive terminal generation (terminal_generation > 0)",
           "source": "prose",
           "enforcement": "sql",
           "mechanism": [
             "ck_filter_projection_product_terminals_generation"
+          ]
+        },
+        {
+          "invariant": "insert once; no UPDATE/DELETE normal path (append-only product terminals)",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
           ]
         },
         {
@@ -8468,7 +9866,7 @@
           ]
         },
         {
-          "invariant": "filter_projection_product_terminal.v1:membership_revision:bounds",
+          "invariant": "filter_projection_product_terminal.v1:membership_revision:nonempty",
           "source": "schema",
           "enforcement": "sql",
           "mechanism": [

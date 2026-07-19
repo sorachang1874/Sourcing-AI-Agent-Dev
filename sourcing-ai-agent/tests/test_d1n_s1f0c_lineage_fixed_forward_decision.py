@@ -11,6 +11,19 @@ from typing import Any
 
 import pytest
 
+from sourcing_agent.acquisition_plan_preview import (
+    _PREVIEW_RECORD_TOOL_SPEC,
+    ACQUISITION_PLAN_PREVIEW_COVERAGE_INTENT,
+    ACQUISITION_PLAN_PREVIEW_SOURCE_PREFERENCE,
+    build_acquisition_plan_preview,
+)
+from sourcing_agent.action_result_schema import (
+    ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST,
+    ACTION_RESULT_VALIDATOR_OWNER,
+)
+from sourcing_agent.cohort_selection import COHORT_SELECTION_REGISTRY_VERSION
+from sourcing_agent.model_tool_runtime import ModelToolSchemaError
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = (
     REPO_ROOT
@@ -448,7 +461,7 @@ def _validate_schema_object(schema: object, literal: str, owner: str) -> None:
 
 def _validate_closed_manifest(value: object) -> dict[str, Any]:
     manifest = _exact_keys(value, TOP_LEVEL_KEYS, "root")
-    _exact_keys(
+    scope = _exact_keys(
         manifest["scope"],
         {
             "batch",
@@ -461,6 +474,15 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         },
         "scope",
     )
+    assert type(scope["decision_only"]) is bool, "scope.decision_only"
+    for numeric in (
+        "ddl_delta",
+        "runtime_write_delta",
+        "provider_invocation_delta",
+        "model_invocation_delta",
+        "served_population_delta",
+    ):
+        assert type(scope[numeric]) is int, f"scope.{numeric}"  # rejects bool and float aliases
     basis = _exact_keys(
         manifest["obligation_basis"],
         {
@@ -724,11 +746,22 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         "source_join.command_chain",
     )
     for index, row in enumerate(join["requester_bindings"]):
-        _exact_keys(
+        binding = _exact_keys(
             row,
-            {"field", "source_of_truth", "required_comparisons", "forbidden_substitutions"},
+            {"field", "source_of_truth", "required_comparisons", "forbidden_substitutions", "predicate_ids"},
             f"source_join.requester_bindings[{index}]",
         )
+        assert type(binding["predicate_ids"]) is list and binding["predicate_ids"], (
+            f"source_join.requester_bindings[{index}].predicate_ids"
+        )
+        assert all(type(predicate_id) is str and predicate_id for predicate_id in binding["predicate_ids"]), (
+            f"source_join.requester_bindings[{index}].predicate_ids"
+        )
+        # every declared comparison predicate is one of the encoded executed predicates
+        for predicate_id in binding["predicate_ids"]:
+            assert predicate_id in predicate_ids, (
+                f"source_join.requester_bindings[{index}]: unknown predicate id {predicate_id}"
+            )
     lock_keys = _exact_keys(
         join["lock_keys"],
         {"advisory_groups", "row_lock_order", "group_value_order", "start_idempotency_formula", "extension_rule"},
@@ -1142,12 +1175,38 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         _exact_keys(row, {"family", "mutations"}, f"hostile_mutation_oracles.families[{index}]")
     for index, row in enumerate(manifest["mechanism_invariant_matrix"]):
         _exact_keys(row, INVARIANT_COLUMNS, f"mechanism_invariant_matrix[{index}]")
+    allowed_waves = {1, 2, 3}
+    batch_packets: set[str] = set()
+    batch_waves: dict[str, int] = {}
+    batch_dependencies: dict[str, list[str]] = {}
     for index, row in enumerate(manifest["implementation_batches"]):
-        _exact_keys(
+        batch = _exact_keys(
             row,
             {"packet", "wave", "depends_on", "exclusive_write_paths", "review_edge", "promotion_requires_review"},
             f"implementation_batches[{index}]",
         )
+        label = f"implementation_batches[{index}]"
+        assert type(batch["packet"]) is str and batch["packet"], label
+        assert batch["packet"] not in batch_packets, f"{label}: duplicate packet {batch['packet']}"
+        batch_packets.add(batch["packet"])
+        # exact integer wave inside the closed allowed set: True/1.0/4 are hostile aliases
+        assert type(batch["wave"]) is int, f"{label}.wave"
+        assert batch["wave"] in allowed_waves, f"{label}.wave"
+        batch_waves[batch["packet"]] = batch["wave"]
+        assert type(batch["depends_on"]) is list, f"{label}.depends_on"
+        assert all(type(dep) is str and dep for dep in batch["depends_on"]), f"{label}.depends_on"
+        assert len(set(batch["depends_on"])) == len(batch["depends_on"]), f"{label}.depends_on"
+        assert type(batch["promotion_requires_review"]) is bool, f"{label}.promotion_requires_review"
+        batch_dependencies[batch["packet"]] = list(batch["depends_on"])
+    assert batch_packets, "implementation_batches"
+    for packet, dependencies in batch_dependencies.items():
+        for dep in dependencies:
+            if dep == "FF-DI-decision-GO":
+                continue
+            assert dep in batch_waves, f"{packet}: unknown dependency {dep}"
+            assert batch_waves[dep] <= batch_waves[packet], (
+                f"{packet}: dependency {dep} sits in a later wave than its dependent"
+            )
     _exact_keys(
         manifest["implementation_dag"],
         {"wave1_exclusions", "integration_order", "cherry_pick_rule"},
@@ -1159,7 +1218,7 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
             {"state", "current_value", "fixed_forward_can_do", "first_change_condition"},
             f"transition_states[{index}]",
         )
-    _exact_keys(
+    release = _exact_keys(
         manifest["release_boundary"],
         {
             "served_population",
@@ -1176,6 +1235,15 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         },
         "release_boundary",
     )
+    for numeric in (
+        "served_population",
+        "provider_invocations",
+        "model_invocations",
+        "live_invocations",
+        "migration_delta",
+    ):
+        assert type(release[numeric]) is int, f"release_boundary.{numeric}"  # rejects bool and float aliases
+    assert type(release["author_evidence_only"]) is bool, "release_boundary.author_evidence_only"
     _exact_keys(
         manifest["evidence"],
         {
@@ -1351,6 +1419,61 @@ def _command_id(workflow_run_id: str, idempotency_key: str) -> str:
     return "cmd_" + hashlib.sha1(f"{workflow_run_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:24]
 
 
+def _preview_fixture_record() -> dict[str, Any]:
+    """Build one canonical preview record with the exact digest-pinned owner builder.
+
+    The record is bound to the join scope (ws-1/req-1) so the positive fixture
+    exercises the same tenant/requester boundary the join predicates enforce.
+    """
+
+    registry_digest = hashlib.sha256(b"company-registry-v1").hexdigest()
+    start_request_digest = hashlib.sha256(b"acquisition-root-request-v2").hexdigest()
+    input_payload = {
+        "cohort_selection": {
+            "schema_version": "cohort_selection.v1",
+            "role_bucket_ids": ["research", "engineering"],
+            "employment_statuses": ["current", "former"],
+            "role_match": "any",
+            "source": "user_explicit",
+        },
+        "source_preferences": [ACQUISITION_PLAN_PREVIEW_SOURCE_PREFERENCE],
+        "coverage_intent": ACQUISITION_PLAN_PREVIEW_COVERAGE_INTENT,
+        "thematic_constraints": ["Pre-training"],
+        "provider_mode_intent": "simulate",
+        "budget": {
+            "max_provider_calls": 4,
+            "max_provider_items": 20,
+            "max_output_candidates": 10,
+            "max_cost_micro_usd": 2_000_000,
+            "max_elapsed_seconds": 900,
+        },
+    }
+    target_ref = {
+        "workspace_id": "ws-1",
+        "requester_id": "req-1",
+        "company_target": {
+            "canonical_company_id": "thinkingmachineslab",
+            "canonical_name": "Thinking Machines Lab",
+            "company_registry_revision": "company_registry.v1",
+            "company_registry_digest": registry_digest,
+            "provider_company_labels": ["Thinking Machines Lab", "thinkingmachinesai"],
+        },
+    }
+    preview = build_acquisition_plan_preview(
+        input_payload=input_payload,
+        target_ref=target_ref,
+        preview_id="pv-1",
+        preview_revision=1,
+        created_at="2026-07-17T00:00:00Z",
+        expires_at="2026-07-17T01:00:00Z",
+        intended_start_request_schema_version="acquisition_root_request_v2",
+        intended_start_request_schema_digest=start_request_digest,
+    )
+    record = preview.to_record()
+    assert _validate_external_retained_spec("acquisition_plan_preview_record_v2", record)
+    return record
+
+
 def _join_fixture() -> dict[str, Any]:
     """Deterministic positive fixture: every digest/idempotency/command id is recomputed."""
 
@@ -1358,7 +1481,7 @@ def _join_fixture() -> dict[str, Any]:
     occurrence = {"result_slot_id": "slot-1", "slot_generation": 3, "logical_occurrence_digest": "b" * 64}
     snapshot = {
         "schema_version": "acquisition_start_snapshot.v2",
-        "preview": {"preview_id": "pv-1", "marker": "external-preview-bytes"},
+        "preview": _preview_fixture_record(),
         "request_pins": {"schema_version": "acquisition_root_request_v2", "schema_digest": "c" * 64},
         "result_pins": {
             "schema_version": "acquisition_start_result_v2",
@@ -1568,6 +1691,56 @@ def _join_positive_rows() -> list[dict[str, Any]]:
     return _join_fixture()["rows"]
 
 
+def _rebind_preview_digest(preview: dict[str, Any]) -> None:
+    """Recompute a mutated preview's own digests under the owner's placeholder rule."""
+
+    candidate = {key: value for key, value in preview.items() if key != "preview_digest"}
+    candidate["confirmation"]["preview_digest"] = "0" * 64
+    digest = _sha256_json(candidate)
+    preview["preview_digest"] = digest
+    preview["confirmation"]["preview_digest"] = digest
+
+
+def _rebind_join_chain(rows: list[dict[str, Any]]) -> None:
+    """Recompute the dependent snapshot/payload/owner-ref/carrier/bundle digest chain in place.
+
+    The root row's payload_json is the canonical payload and the Action row's
+    result_ref_json is the canonical owner ref; every copy and digest derives
+    from them exactly as the positive fixture builds them.
+    """
+
+    by_relation: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = row.get("command_identity") or row["relation"]
+        by_relation[key] = row
+    payload = by_relation["root"]["payload_json"]
+    snapshot = payload["start_snapshot"]
+    snapshot["snapshot_digest"] = _sha256_json({key: value for key, value in snapshot.items() if key != "snapshot_digest"})
+    payload["start_snapshot_digest"] = snapshot["snapshot_digest"]
+    payload["payload_digest"] = _sha256_json({key: value for key, value in payload.items() if key != "payload_digest"})
+    owner_ref = by_relation["agent_actions"]["result_ref_json"]
+    owner_ref["start_snapshot_digest"] = snapshot["snapshot_digest"]
+    owner_ref["root_command_payload_digest"] = payload["payload_digest"]
+    owner_ref_digest = _sha256_json(owner_ref)
+    by_relation["operation_runs"]["result_ref_json"] = copy.deepcopy(owner_ref)
+    carriers: dict[str, Any] = {}
+    for identity in ("intent", "build", "review", "commit"):
+        carrier = by_relation[identity]["carrier_json"]
+        carrier["root_command_payload"] = copy.deepcopy(payload)
+        carrier["root_command_payload_digest"] = payload["payload_digest"]
+        carrier["command_acceptance_owner_ref"] = copy.deepcopy(owner_ref)
+        carrier["command_acceptance_owner_ref_digest"] = owner_ref_digest
+        carrier["carrier_digest"] = _sha256_json(
+            {key: value for key, value in carrier.items() if key != "carrier_digest"}
+        )
+        carriers[identity] = carrier
+    bundle = by_relation["acquisition_runs"]["execution_bundle_json"]
+    bundle["start_authority_carrier"] = copy.deepcopy(carriers["intent"])
+    bundle["authority_digest"] = _sha256_json(
+        {key: value for key, value in bundle.items() if key != "authority_digest"}
+    )
+
+
 def _resolve_path(row: dict[str, Any], path: list[str]) -> Any:
     current: Any = row
     for part in path:
@@ -1582,6 +1755,26 @@ class _Missing:
 
 
 _MISSING = _Missing()
+
+
+def _validate_external_retained_spec(ref: str, value: Any) -> bool:
+    """Execute the exact digest-pinned external retained validator against one value.
+
+    The executed validator is pinned by its live schema digest: if the runtime
+    schema drifts from the pinned digest this oracle fails loudly instead of
+    silently certifying against a different contract.
+    """
+
+    if ref == "acquisition_plan_preview_record_v2":
+        assert _PREVIEW_RECORD_TOOL_SPEC.input_schema_digest == EXTERNAL_RETAINED_SPEC_REFS[ref], (
+            "external preview validator drifted from the pinned schema digest"
+        )
+        try:
+            _PREVIEW_RECORD_TOOL_SPEC.validate_input(value)
+        except ModelToolSchemaError:
+            return False
+        return True
+    raise AssertionError(f"unknown external retained spec {ref}")
 
 
 def _validate_value_against_descriptor(value: Any, descriptor: dict[str, Any], schemas: dict[str, Any]) -> bool:
@@ -1619,7 +1812,7 @@ def _validate_value_against_descriptor(value: Any, descriptor: dict[str, Any], s
         if "ref" in descriptor:
             ref = descriptor["ref"]
             if ref in EXTERNAL_RETAINED_SPEC_REFS:
-                return True
+                return _validate_external_retained_spec(ref, value)
             schema = schemas.get(ref)
             if schema is None:
                 return False
@@ -1709,7 +1902,7 @@ def _execute_predicate(
             return False
         ref = predicate["ref"]
         if ref in EXTERNAL_RETAINED_SPEC_REFS:
-            return type(value) is dict
+            return _validate_external_retained_spec(ref, value)
         schema = schemas.get(ref)
         if schema is None:
             return False
@@ -1790,14 +1983,13 @@ def _evaluate_source_join(
             if not _type_strict_equal(local.get(link["local_field"]), remote.get(link["remote_field"])):
                 return "projection_not_found"
 
+    # every requester-binding comparison is an executed predicate, never evaluator prose:
+    # the manifest binds each comparison to predicate ids and the witness proves execution
     bindings = {binding["field"] for binding in spec["requester_bindings"]}
     assert bindings == {"workspace_id", "requester_id", "provider_mode", "runtime_namespace"}
-    for relation in ("operation_runs", "agent_actions", "acquisition_runs"):
-        if not _type_strict_equal(selected[relation].get("workspace_id"), scope["workspace_id"]):
-            return "projection_not_found"
-    action = selected["agent_actions"]
-    if not _type_strict_equal(action.get("bound_requester_id"), scope["requester_id"]):
-        return "projection_not_found"
+    encoded_ids = {predicate["id"] for spec_row in spec["rows"] for predicate in spec_row["predicates"]}
+    for binding in spec["requester_bindings"]:
+        assert set(binding["predicate_ids"]) <= encoded_ids, binding["field"]
 
     for spec_row in spec["rows"]:
         for predicate in spec_row["predicates"]:
@@ -2112,8 +2304,8 @@ def test_s1f0c_ff_digest_fields_match_the_section_field_manifests() -> None:
         "filter_projection_not_ready_owner_ref.v1": 19,
         "filter_projection_masked_absence_owner_ref.v1": 11,
         "filter_projection_result_v3": 26,
-        "filter_projection_result_serializer_v3": 5,
-        "filter_projection_tool_v3": 10,
+        "filter_projection_result_serializer_v3": 18,
+        "filter_projection_tool_v3": 27,
         "acquisition.cohort.execute": 5,
     }
     assert set(digest_fields) == set(expected_counts)
@@ -2926,7 +3118,7 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
 
     # every decisive clause is machine-encoded as an executed predicate, never prose
     predicate_ids = [predicate["id"] for row in rows for predicate in row["predicates"]]
-    assert len(predicate_ids) == len(set(predicate_ids)) == 92
+    assert len(predicate_ids) == len(set(predicate_ids)) == 100
     assert all(predicate["kind"] in PREDICATE_KINDS for row in rows for predicate in row["predicates"])
 
     # positive and same-owner positive; the witness proves every predicate executes
@@ -2974,6 +3166,57 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
     assert _evaluate_source_join(spec, live_scope, _join_positive_rows()) == "projection_not_found"
     empty_scope = dict(JOIN_SCOPE, workspace_id="")
     assert _evaluate_source_join(spec, empty_scope, _join_positive_rows()) == "projection_not_found"
+
+    # retained start authority: the exact digest-pinned external preview validator executes
+    assert _PREVIEW_RECORD_TOOL_SPEC.input_schema_digest == EXTERNAL_RETAINED_SPEC_REFS[
+        "acquisition_plan_preview_record_v2"
+    ]
+    positive_preview = _join_positive_rows()[2]["payload_json"]["start_snapshot"]["preview"]
+    assert _validate_external_retained_spec("acquisition_plan_preview_record_v2", positive_preview)
+    assert not _validate_external_retained_spec("acquisition_plan_preview_record_v2", {})
+    assert not _validate_external_retained_spec(
+        "acquisition_plan_preview_record_v2", {"preview_id": "pv-1", "marker": "external-preview-bytes"}
+    )
+    # malformed/empty previews fail closed even with the full dependent digest chain recomputed
+    mutated = _join_positive_rows()
+    mutated[2]["payload_json"]["start_snapshot"]["preview"] = {
+        "preview_id": "pv-1",
+        "marker": "external-preview-bytes",
+    }
+    _rebind_join_chain(mutated)
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[2]["payload_json"]["start_snapshot"]["preview"] = {}
+    _rebind_join_chain(mutated)
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # foreign preview workspace/requester: schema-valid records whose scope binding rejects
+    for field, foreign in (("workspace_id", "ws-foreign"), ("requester_id", "req-foreign")):
+        mutated = _join_positive_rows()
+        preview = mutated[2]["payload_json"]["start_snapshot"]["preview"]
+        preview[field] = foreign
+        _rebind_preview_digest(preview)
+        assert _validate_external_retained_spec("acquisition_plan_preview_record_v2", preview), field
+        _rebind_join_chain(mutated)
+        assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found", field
+    # foreign owner_ref workspace with the full chain recomputed fails closed
+    mutated = _join_positive_rows()
+    mutated[1]["result_ref_json"]["workspace_id"] = "ws-foreign"
+    _rebind_join_chain(mutated)
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # every requester-binding comparison maps to at least one executed predicate
+    binding_ids = {pid for binding in spec["requester_bindings"] for pid in binding["predicate_ids"]}
+    assert binding_ids <= set(predicate_ids)
+    assert {
+        "p_op_workspace",
+        "p_act_workspace",
+        "p_run_workspace",
+        "p_root_preview_workspace",
+        "p_root_preview_requester",
+        "p_act_requester",
+        "p_act_ref_workspace",
+        "p_act_ref_mode",
+        "p_act_ref_namespace",
+    } <= binding_ids
 
     # split identity across alternate keys fails closed
     mutated = _join_positive_rows()
@@ -3657,7 +3900,10 @@ def test_s1f0c_ff_v3_provenance_value_roles_and_closed_items() -> None:
         "route_revision_token",
     }
     assert target_fields["projection_id"]["required"] is True
-    assert target_fields["membership_revision"]["minimum"] == 1
+    assert target_fields["membership_revision"]["type"] == "string"
+    assert target_fields["membership_revision"]["nonempty"] is True
+    assert target_fields["membership_revision"]["value_role"] == "identifier"
+    assert "minimum" not in target_fields["membership_revision"]
     assert target_fields["requested_terminal_digest"]["required"] is False
     assert target_fields["requested_terminal_digest"]["format"] == "sha256_hex"
     coverage = next(field for field in v3_fields if field["name"] == "requested_lane_coverage")
@@ -3867,6 +4113,29 @@ def test_s1f0c_ff_descriptor_constants_and_numerics_reject_type_aliases() -> Non
         lambda m: m["pg_aggregate_surfaces"]["migration_reservation"].update(slot=True),
         lambda m: m["pg_aggregate_surfaces"]["migration_reservation"].update(predecessor_slot=False),
         lambda m: m["start_authority_contracts"]["source_join"]["rows"][0].update(ordinal=1.0),
+        lambda m: m["scope"].update(served_population_delta=True),
+        lambda m: m["scope"].update(ddl_delta=0.0),
+        lambda m: m["scope"].update(decision_only=1),
+        lambda m: m["release_boundary"].update(migration_delta=False),
+        lambda m: m["release_boundary"].update(served_population=0.0),
+        lambda m: m["release_boundary"].update(author_evidence_only=1),
+    ):
+        hostile = copy.deepcopy(manifest)
+        mutate(hostile)
+        with pytest.raises(AssertionError):
+            _validate_closed_manifest(hostile)
+
+    # implementation wave semantics: exact integer waves in the closed set, packet
+    # uniqueness, and dependency/wave order are all validator-enforced
+    for mutate in (
+        lambda m: m["implementation_batches"][0].update(wave=True),
+        lambda m: m["implementation_batches"][0].update(wave=1.0),
+        lambda m: m["implementation_batches"][0].update(wave=0),
+        lambda m: m["implementation_batches"][0].update(wave=4),
+        lambda m: m["implementation_batches"][8].update(wave=1),  # FF-XO deps sit in later waves
+        lambda m: m["implementation_batches"][1].update(packet="FF-SCHEMA"),  # duplicate packet
+        lambda m: m["implementation_batches"][1].update(depends_on=["FF-GHOST"]),
+        lambda m: m["implementation_batches"][4].update(depends_on=["FF-CARRIER", "FF-CARRIER"]),
     ):
         hostile = copy.deepcopy(manifest)
         mutate(hostile)
@@ -3884,3 +4153,439 @@ def test_s1f0c_ff_descriptor_constants_and_numerics_reject_type_aliases() -> Non
                 _assert_no_float(item, f"{path}[{index}]")
 
     _assert_no_float(manifest, "manifest")
+
+
+def test_s1f0c_ff_membership_revision_is_an_opaque_equality_token() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    schemas = [row["schema"] for row in manifest["contract_digests"]]
+
+    # every membership_revision descriptor in every S1f0c schema is a non-empty
+    # opaque string: never a positive integer, never ordered
+    descriptors = [
+        (path, descriptor)
+        for schema in schemas
+        for path, descriptor in _walk_descriptors(schema["fields"])
+        if descriptor.get("name") == "membership_revision"
+    ]
+    assert len(descriptors) == 7
+    for path, descriptor in descriptors:
+        assert descriptor["type"] == "string", path
+        assert descriptor["nonempty"] is True, path
+        assert "minimum" not in descriptor and "maximum" not in descriptor, path
+        assert "opaque" in descriptor["derivation"], path
+        assert "never" in descriptor["derivation"], path
+
+    # the descriptor accepts arbitrary opaque tokens and rejects the old integer shape
+    schemas_by_literal = _manifest_schemas(manifest)
+    terminal_field = descriptors[0][1]
+    for token in ("9", "mr-20260719-a", "rev-9f"):
+        assert _validate_value_against_descriptor(token, terminal_field, schemas_by_literal)
+    for hostile in (9, 1, True, "", 0):
+        assert not _validate_value_against_descriptor(hostile, terminal_field, schemas_by_literal)
+
+    # exact-token parity: identical tokens compare equal; distinct tokens never merge,
+    # including a same-timestamp-distinct-token pair that a chronological alias would
+    # wrongly collapse
+    stamp = "2026-07-19T00:00:00Z"
+    terminal_a = {"projection_id": "proj-1", "membership_revision": "mr-20260719-a", "created_at": stamp}
+    terminal_b = {"projection_id": "proj-1", "membership_revision": "mr-20260719-b", "created_at": stamp}
+    assert terminal_a["created_at"] == terminal_b["created_at"]
+    assert _type_strict_equal(terminal_a["membership_revision"], terminal_a["membership_revision"])
+    assert not _type_strict_equal(terminal_a["membership_revision"], terminal_b["membership_revision"])
+    assert not _type_strict_equal(terminal_a, terminal_b)
+    terminal_c = copy.deepcopy(terminal_a)
+    assert _type_strict_equal(terminal_a, terminal_c)
+
+    # the physical column is text with a non-empty check, never bigint/positive
+    terminals = manifest["physical_relations"]["filter_projection_product_terminals"]
+    by_name = {column["name"]: column for column in terminals["descriptor"]["columns"]}
+    assert by_name["membership_revision"]["type"] == "text"
+    checks = {check["name"]: check["expression"] for check in terminals["descriptor"]["check_constraints"]}
+    assert checks["ck_filter_projection_product_terminals_membership_revision"] == "membership_revision <> ''"
+    unique_groups = [group["columns"] for group in terminals["descriptor"]["unique_constraints"]]
+    assert ["workspace_id", "projection_id", "membership_revision"] in unique_groups
+
+    # no manifest text anywhere orders the token numerically, lexically, or chronologically
+    forbidden_substrings = (
+        "order by membership_revision",
+        "max(membership_revision",
+        "min(membership_revision",
+        "latest membership_revision",
+        "membership_revision::bigint",
+    )
+    ordering_operator = re.compile(r"membership_revision\s*(?:>=|<=|>|<(?!\>))")
+
+    def _walk_strings(value: object, path: str) -> list[str]:
+        hits: list[str] = []
+        if type(value) is str:
+            lowered = value.lower()
+            if any(pattern in lowered for pattern in forbidden_substrings) or ordering_operator.search(lowered):
+                hits.append(path)
+        elif type(value) is dict:
+            for key, item in value.items():
+                hits.extend(_walk_strings(item, f"{path}.{key}"))
+        elif type(value) is list:
+            for index, item in enumerate(value):
+                hits.extend(_walk_strings(item, f"{path}[{index}]"))
+        return hits
+
+    assert _walk_strings(manifest, "manifest") == []
+
+
+def test_s1f0c_ff_v3_cohort_selection_retains_the_closed_object() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    digests = {row["literal"]: row for row in manifest["contract_digests"]}
+    v3_fields = {field["name"]: field for field in digests["filter_projection_result_v3"]["schema"]["fields"]}
+    cohort = v3_fields["cohort_selection"]
+
+    # the exact closed Cohort selection object, never an arbitrary string
+    assert cohort["type"] == "object"
+    assert [field["name"] for field in cohort["fields"]] == [
+        "schema_version",
+        "role_bucket_ids",
+        "employment_statuses",
+        "role_match",
+        "source",
+    ]
+    sub = {field["name"]: field for field in cohort["fields"]}
+    assert sub["schema_version"]["constant"] == "cohort_selection.v1"
+    assert sub["source"]["constant"] == "user_explicit"
+    assert sub["role_match"]["enum"] == ["any", "all"]
+    assert sub["role_bucket_ids"]["items"]["enum"] == [
+        "research",
+        "engineering",
+        "product_management",
+        "infra_systems",
+        "founding",
+    ]
+    assert sub["role_bucket_ids"]["max_items"] == 5
+    assert sub["employment_statuses"]["items"]["enum"] == ["current", "former"]
+    assert sub["employment_statuses"]["min_items"] == 1
+    assert sub["employment_statuses"]["max_items"] == 2
+    assert all(field["provenance"] == "user_supplied" for field in cohort["fields"])
+
+    # the registry pin and the selection digest bind the object byte-for-byte
+    assert v3_fields["cohort_selection_registry_version"]["constant"] == COHORT_SELECTION_REGISTRY_VERSION
+    assert "cohort_selection_digest(cohort_selection)" in v3_fields["cohort_selection_digest"]["derivation"]
+    assert "cohort_selection_digest(cohort_selection)" in cohort["derivation"]
+
+    # executed validation: the canonical object passes; every hostile shape fails closed
+    schemas = _manifest_schemas(manifest)
+    canonical = {
+        "schema_version": "cohort_selection.v1",
+        "role_bucket_ids": ["research", "engineering"],
+        "employment_statuses": ["current", "former"],
+        "role_match": "any",
+        "source": "user_explicit",
+    }
+    assert _validate_value_against_descriptor(canonical, cohort, schemas)
+    for hostile in (
+        "anthropic-research",  # the reviewed unbound string shape
+        {**canonical, "tenant_hint": "ws-1"},
+        {**canonical, "source": "inferred"},
+        {key: value for key, value in canonical.items() if key != "role_match"},
+        {**canonical, "employment_statuses": []},
+        {
+            **canonical,
+            "role_bucket_ids": [
+                "research",
+                "engineering",
+                "product_management",
+                "infra_systems",
+                "founding",
+                "founding",
+            ],
+        },
+        {**canonical, "role_match": "any|all"},
+    ):
+        assert not _validate_value_against_descriptor(hostile, cohort, schemas), repr(hostile)
+
+
+def _materialize_constant_object(fields: list[dict[str, Any]], *, skip: set[str] | None = None) -> dict[str, Any]:
+    """Rebuild the pinned JSON object from fully constant field descriptors."""
+
+    skipped = skip or set()
+    record: dict[str, Any] = {}
+    for field in fields:
+        name = field["name"]
+        if name in skipped:
+            continue
+        if "constant" in field:
+            record[name] = field["constant"]
+        elif field["type"] == "object" and "fields" in field:
+            record[name] = _materialize_constant_object(field["fields"], skip=skip)
+        elif (
+            field["type"] == "array"
+            and field.get("min_items") == field.get("max_items")
+            and field.get("min_items") == len(field.get("items", {}).get("enum", []))
+        ):
+            record[name] = list(field["items"]["enum"])
+        else:
+            raise AssertionError(f"field {name} is not fully decision-locked")
+    return record
+
+
+def test_s1f0c_ff_v3_serializer_and_tool_fingerprints_are_fully_decision_locked() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    digests = {row["literal"]: row for row in manifest["contract_digests"]}
+
+    serializer = digests["filter_projection_result_serializer_v3"]
+    assert serializer["ordered_fields"] == [
+        "owner_name",
+        "revision",
+        "owner",
+        "tool_name",
+        "tool_kind",
+        "owner_binding_action_type",
+        "result_schema_version",
+        "result_contract_digest",
+        "serializer_contract",
+        "validator_owner",
+        "interpretation_contract_version",
+        "interpretation_contract_digest",
+        "externally_controlled_identifier_paths",
+        "max_serialized_bytes",
+        "max_items",
+        "max_depth",
+        "artifact_ref_schemes",
+        "allowed_variants",
+    ]
+    s_fields = {field["name"]: field for field in serializer["schema"]["fields"]}
+    # ActionResultSpec identity and validator/interpretation contract, executed against the runtime pins
+    assert s_fields["tool_name"]["constant"] == "filter_projection"
+    assert s_fields["tool_kind"]["constant"] == "action"
+    assert s_fields["owner_binding_action_type"]["constant"] == "filter_projection"
+    assert s_fields["validator_owner"]["constant"] == ACTION_RESULT_VALIDATOR_OWNER
+    assert s_fields["interpretation_contract_version"]["constant"] == "action_result_interpretation_contract_v3"
+    assert s_fields["interpretation_contract_digest"]["constant"] == ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST
+    # exact model-safety limits: 64 KiB, 8192 items, depth 10, empty artifact schemes
+    assert s_fields["max_serialized_bytes"]["constant"] == 65536
+    assert s_fields["max_items"]["constant"] == 8192
+    assert s_fields["max_depth"]["constant"] == 10
+    assert s_fields["artifact_ref_schemes"]["min_items"] == 0
+    assert s_fields["artifact_ref_schemes"]["max_items"] == 0
+    assert set(s_fields["externally_controlled_identifier_paths"]["items"]["enum"]) == {
+        "/cohort_selection/schema_version",
+        "/cohort_selection/role_bucket_ids/*",
+        "/cohort_selection/employment_statuses/*",
+        "/cohort_selection/role_match",
+        "/cohort_selection/source",
+    }
+    assert s_fields["externally_controlled_identifier_paths"]["min_items"] == 5
+    assert s_fields["externally_controlled_identifier_paths"]["max_items"] == 5
+    assert s_fields["allowed_variants"]["items"]["enum"] == ["success", "deferred", "error"]
+    # serializer semantics are a closed constant object, not prose
+    contract_fields = {field["name"]: field for field in s_fields["serializer_contract"]["fields"]}
+    assert set(contract_fields) == {
+        "schema_version",
+        "owner_output",
+        "membership_source",
+        "variant_selection",
+        "canonical_json",
+        "owner_result_ref_rule",
+        "serialized_result_digest_rule",
+        "is_error_parity",
+    }
+    assert contract_fields["schema_version"]["constant"] == "filter_projection_result_serializer_contract_v3"
+
+    tool = digests["filter_projection_tool_v3"]
+    assert tool["ordered_fields"] == [
+        "tool_spec",
+        "owner",
+        "effect_class",
+        "result_link_policy",
+        "result_schema_version",
+        "result_contract_digest",
+        "serializer_owner_name",
+        "serializer_revision",
+        "serializer_contract_digest",
+        "registration_state",
+        "fingerprint_schema_version",
+        "tool_name",
+        "model_description",
+        "tool_kind",
+        "action_type",
+        "request",
+        "result_pin",
+        "workspace_actor_binder",
+        "adapter",
+        "simulate_fixture",
+        "release_state_ref",
+        "execution_subject",
+        "budget",
+        "capability",
+        "approval",
+        "command_exposure",
+        "control_policy",
+    ]
+    t_fields = {field["name"]: field for field in tool["schema"]["fields"]}
+    assert t_fields["fingerprint_schema_version"]["constant"] == "agent_tool_spec_v2"
+    assert t_fields["tool_name"]["constant"] == "filter_projection"
+    assert t_fields["tool_kind"]["constant"] == "action"
+    assert t_fields["action_type"]["constant"] == "filter_projection"
+    assert t_fields["command_exposure"]["constant"] == "none"
+
+    request_fields = {field["name"]: field for field in t_fields["request"]["fields"]}
+    assert request_fields["schema_version"]["constant"] == "projection_filter_request_v3"
+    assert request_fields["query_owner"]["constant"] == "null"
+    result_pin_fields = {field["name"]: field for field in t_fields["result_pin"]["fields"]}
+    assert result_pin_fields["validation_contract_version"]["constant"] == "action_result_interpretation_contract_v3"
+    assert result_pin_fields["max_serialized_bytes"]["constant"] == 65536
+    assert result_pin_fields["max_items"]["constant"] == 8192
+    assert result_pin_fields["max_depth"]["constant"] == 10
+    assert result_pin_fields["query_owner"]["constant"] == "null"
+    budget_fields = {field["name"]: field for field in t_fields["budget"]["fields"]}
+    assert budget_fields["mode"]["constant"] == "not_required"
+    capability_fields = {field["name"]: field for field in t_fields["capability"]["fields"]}
+    assert capability_fields["mode"]["constant"] == "not_required"
+    approval_fields = {field["name"]: field for field in t_fields["approval"]["fields"]}
+    assert approval_fields["mode"]["constant"] == "not_required"
+
+    # every constant owner-pin digest recomputes from its own pinned contract bytes
+    def _check_owner_pin(pin_descriptor: dict[str, Any], label: str) -> None:
+        pin_fields = {field["name"]: field for field in pin_descriptor["fields"]}
+        pin = _materialize_constant_object(pin_descriptor["fields"], skip={"owner_contract_digest"})
+        recomputed = _sha256_json(pin)
+        assert pin_fields["owner_contract_digest"]["constant"] == recomputed, label
+
+    _check_owner_pin(request_fields["validator_owner"], "request.validator_owner")
+    _check_owner_pin(t_fields["workspace_actor_binder"], "workspace_actor_binder")
+    _check_owner_pin(t_fields["adapter"], "adapter")
+    release_fields = {field["name"]: field for field in t_fields["release_state_ref"]["fields"]}
+    _check_owner_pin(release_fields["release_owner"], "release_owner")
+    assert release_fields["release_key"]["constant"] == "action:filter_projection"
+    subject_fields = {field["name"]: field for field in t_fields["execution_subject"]["fields"]}
+    _check_owner_pin(subject_fields["subject_validator_owner"], "subject_validator_owner")
+    _check_owner_pin(subject_fields["permission_policy"], "permission_policy")
+    _check_owner_pin(approval_fields["approval_policy"], "approval_policy")
+    # the subject schema digest recomputes from the pinned subject contract bytes
+    subject_contract = _materialize_constant_object(subject_fields["subject_validator_owner"]["fields"], skip={"owner_contract_digest"})[
+        "contract"
+    ]
+    assert subject_fields["subject_schema_digest"]["constant"] == _sha256_json(subject_contract)
+    # the result serializer owner pin binds the runtime serializer_contract_digest formula
+    serializer_pin = _materialize_constant_object(result_pin_fields["serializer_owner"]["fields"], skip={"owner_contract_digest"})
+    serializer_contract_digest = _sha256_json(
+        {
+            "schema_version": "action_result_serializer_contract_v1",
+            "serializer_owner": serializer_pin["owner_id"],
+            "serializer_revision": serializer_pin["owner_revision"],
+            "contract": serializer_pin["contract"],
+        }
+    )
+    serializer_pin_fields = {field["name"]: field for field in result_pin_fields["serializer_owner"]["fields"]}
+    assert serializer_pin_fields["owner_contract_digest"]["constant"] == serializer_contract_digest
+    result_validator_fields = {field["name"]: field for field in result_pin_fields["validator_owner"]["fields"]}
+    assert result_validator_fields["owner_contract_digest"]["constant"] == ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST
+    # the fixture digest recomputes from the materialized fixture record
+    fixture_descriptor = t_fields["simulate_fixture"]
+    fixture_record = _materialize_constant_object(fixture_descriptor["fields"], skip={"fixture_digest"})
+    fixture_fields = {field["name"]: field for field in fixture_descriptor["fields"]}
+    assert fixture_fields["fixture_digest"]["constant"] == _sha256_json(fixture_record)
+    assert fixture_record["result_link_policy"] == "no_command_v1"
+    assert fixture_record["approval_required"] is False
+
+    # registration-computed digests stay digest-typed with an explicit derivation, never constants
+    for descriptor in (
+        request_fields["schema_digest"],
+        request_fields["action_contract_digest"],
+        result_pin_fields["schema_digest"],
+    ):
+        assert descriptor["format"] == "sha256_hex"
+        assert "constant" not in descriptor
+        assert "computed at registration" in descriptor["derivation"]
+    control_fields = {field["name"]: field for field in t_fields["control_policy"]["fields"]}
+    assert control_fields["owner_id"]["constant"] == "operation_runtime.ActionRegistry.allowed_workflow_command_contracts"
+
+    # hostile: drifting one model-safety limit moves the serializer contract digest
+    widened = copy.deepcopy(serializer["schema"])
+    next(field for field in widened["fields"] if field["name"] == "max_serialized_bytes")["constant"] = 64000
+    assert _contract_digest(widened) != serializer["contract_digest"]
+    thinned = copy.deepcopy(tool["schema"])
+    thinned["fields"] = [field for field in thinned["fields"] if field["name"] != "capability"]
+    assert _contract_digest(thinned) != tool["contract_digest"]
+
+
+def test_s1f0c_ff_lane_provider_evidence_binds_the_owning_attempt_and_terminals_are_append_only() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    relations = manifest["physical_relations"]
+
+    # lane provider evidence equals the owning attempt's exact tuple, repository-compared
+    # before any lane write
+    lanes = relations["cohort_execution_lane_results"]
+    lane_rule_rows = [
+        row
+        for row in lanes["invariant_enforcement"]
+        if row["enforcement"] == "repository"
+        and row["mechanism"] == ["uow_rule"]
+        and set(row.get("covers_fields", []))
+        == {"provider_exposure_id", "provider_call_id", "provider_response_digest"}
+    ]
+    assert len(lane_rule_rows) == 1, "exactly one repository rule binds lane provider evidence to the attempt"
+    rule = lane_rule_rows[0]["invariant"]
+    assert "before any lane write" in rule
+    for field in ("provider_exposure_id", "provider_call_id", "provider_response_digest"):
+        assert field in rule
+    assert rule in lanes["constraints"]
+
+    # hostile: without the rule the prose/enforcement bijection breaks and the coverage assert fails
+    hostile = copy.deepcopy(manifest)
+    hostile_lanes = hostile["physical_relations"]["cohort_execution_lane_results"]
+    hostile_lanes["invariant_enforcement"] = [
+        row for row in hostile_lanes["invariant_enforcement"] if row["invariant"] != rule
+    ]
+    prose = sorted(row["invariant"] for row in hostile_lanes["invariant_enforcement"] if row["source"] == "prose")
+    assert prose != sorted(hostile_lanes["constraints"]), "dropping the rule must break one-to-one coverage"
+    hostile2 = copy.deepcopy(manifest)
+    for row in hostile2["physical_relations"]["cohort_execution_lane_results"]["invariant_enforcement"]:
+        if row["invariant"] == rule:
+            row["enforcement"] = "sql"
+    assert not any(
+        row["enforcement"] == "repository"
+        and row["mechanism"] == ["uow_rule"]
+        and set(row.get("covers_fields", []))
+        == {"provider_exposure_id", "provider_call_id", "provider_response_digest"}
+        for row in hostile2["physical_relations"]["cohort_execution_lane_results"]["invariant_enforcement"]
+    ), "SQL enforcement cannot compare lane evidence to the attempt tuple"
+
+    # terminal append-only is split: SQL keeps positive generation; a repository
+    # transition_guard owns insert-once/no-UPDATE/no-DELETE
+    terminals = relations["filter_projection_product_terminals"]
+    constraints = terminals["constraints"]
+    assert not any("positive terminal generation; insert once" in rule for rule in constraints)
+    assert any("no UPDATE/DELETE normal path" in rule for rule in constraints)
+    by_invariant = {row["invariant"]: row for row in terminals["invariant_enforcement"]}
+    generation_row = next(row for invariant, row in by_invariant.items() if invariant.startswith("positive terminal generation"))
+    assert generation_row["enforcement"] == "sql"
+    assert generation_row["mechanism"] == ["ck_filter_projection_product_terminals_generation"]
+    append_only_rows = [
+        row for invariant, row in by_invariant.items() if "no UPDATE/DELETE normal path" in invariant
+    ]
+    assert len(append_only_rows) == 1
+    assert append_only_rows[0]["enforcement"] == "repository"
+    assert "transition_guard" in append_only_rows[0]["mechanism"]
+
+    # hostile: the coverage test fails when the append-only mechanism is absent or misassigned
+    hostile3 = copy.deepcopy(manifest)
+    for row in hostile3["physical_relations"]["filter_projection_product_terminals"]["invariant_enforcement"]:
+        if "no UPDATE/DELETE normal path" in row["invariant"]:
+            row["enforcement"] = "sql"
+            row["mechanism"] = ["ck_filter_projection_product_terminals_generation"]
+    assert not any(
+        row["enforcement"] == "repository"
+        and "transition_guard" in row["mechanism"]
+        and "no UPDATE/DELETE normal path" in row["invariant"]
+        for row in hostile3["physical_relations"]["filter_projection_product_terminals"]["invariant_enforcement"]
+    ), "the generation check cannot enforce append-only behavior"
+    hostile4 = copy.deepcopy(manifest)
+    hostile4["physical_relations"]["filter_projection_product_terminals"]["invariant_enforcement"] = [
+        row
+        for row in hostile4["physical_relations"]["filter_projection_product_terminals"]["invariant_enforcement"]
+        if "no UPDATE/DELETE normal path" not in row["invariant"]
+    ]
+    prose4 = sorted(
+        row["invariant"]
+        for row in hostile4["physical_relations"]["filter_projection_product_terminals"]["invariant_enforcement"]
+        if row["source"] == "prose"
+    )
+    assert prose4 != sorted(hostile4["physical_relations"]["filter_projection_product_terminals"]["constraints"])

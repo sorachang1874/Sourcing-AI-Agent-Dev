@@ -77,12 +77,16 @@ handoff tables:
 - handoff section 3: the closed six-field start carrier, the eleven-field execution authority with its normative
   plan-body digest exclusion, the six-stage writer taxonomy, and the eight-row source join as structured machine data
   (all eight rows, the five command identities with expected command types/stages/owners, structured alternate keys,
-  and 92 executed join predicates in nine closed kinds — row/path field equality, constants, idempotency formulas,
+  and 100 executed join predicates in nine closed kinds — row/path field equality, constants, idempotency formulas,
   schema validation against the retained pins and adopted contracts, digest recomputation, carrier consensus, and
   deterministic command-id recompute — covering approval state, the requested `acquisition_run_id`, owner-ref/root
   rebuilding, physical causality, source events, carrier equality, plan/review identity, and AcquisitionRun bundle
-  equality; the test evaluator executes every encoded predicate with a witness proof and one hostile mutation per
-  predicate); every miss/duplicate/foreign/malformed/split identity maps publicly to `projection_not_found`;
+  equality; the exact digest-pinned external `acquisition_plan_preview_record_v2` validator executes against every
+  root snapshot preview, and every workspace/requester/provider-mode/runtime-namespace comparison in
+  `requester_bindings` — base-row scope, nested preview scope, owner-ref scope, and every carrier copy — is bound
+  to executed predicate ids; the test evaluator executes every encoded predicate with a witness proof and one
+  hostile mutation per predicate); every miss/duplicate/foreign/malformed/split identity maps publicly to
+  `projection_not_found`;
 - the `retained_contract_pins` section: the retained nine-field `acquisition_root_command_payload.v2` root and the
   18-field `acquisition_start_command_acceptance_owner_result_ref.v1` owner ref materialized as fully closed schemas
   with recomputed pin digests; the carrier binds them as immutable exact-version-and-digest references, every adopted
@@ -102,8 +106,14 @@ handoff tables:
   commit `candidate_count` `0..1000` and terminal counts `1..1000`, nonempty identity and state-dependent attempt
   checks), tenant/mode and digest equality across references encoded as composite scoped foreign keys, predecessor
   id/digest parity as an exact check plus composite self-FK, and transition/UoW-only invariants explicitly marked
-  repository-enforced; the decision test proves one-to-one coverage between canonical schemas, prose constraints,
-  and DDL descriptors;
+  repository-enforced; `membership_revision` is a non-empty opaque equality token (PG `text`, never
+  `bigint`/positive/numeric) per `docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md` — equality/inequality only, never
+  numerically, lexically, or chronologically ordered; lane provider evidence
+  (`provider_exposure_id`/`provider_call_id`/`provider_response_digest`) equals the owning execution attempt's exact
+  tuple through an explicit repository `uow_rule` compared before any lane write; product-terminal append-only
+  behavior is split — SQL keeps `terminal_generation > 0` while insert-once/no-UPDATE/no-DELETE is owned by an
+  explicit repository `transition_guard`; the decision test proves one-to-one coverage between canonical schemas,
+  prose constraints, and DDL descriptors;
 - handoff section 6: the 27-field product terminal with the acyclic `terminal_core_digest`, the freshness/readiness
   refs carrying the core digest, the exact eight-item readiness prerequisite set bound inside the readiness schema
   derivation, the five-step deferred reason precedence, and the core/envelope terminal-digest equalities;
@@ -111,7 +121,17 @@ handoff tables:
   with exact union discrimination (the success discriminator and success/deferred `status` are exact constants/enums,
   never open unions), closed lane-summary, candidate, requested-target-ref, and requested-lane-coverage item schemas
   with exact v2 enums, display/URL policies, and paging/item bounds, per-descriptor provenance and value-role pins,
-  and the masked constants; the tool contract binds the exact result and serializer contract digests as constants;
+  and the masked constants; V3 `cohort_selection` retains the exact closed Cohort selection object
+  (`schema_version`/`role_bucket_ids`/`employment_statuses`/`role_match`/`source` per
+  `agent_projection_query._cohort_selection_schema`) bound to `cohort_selection_digest`, never an unbound string;
+  the serializer contract decision-locks the complete `ActionResultSpec.to_fingerprint_record()` equivalent
+  (validator/interpretation contract with the exact interpretation contract digest, closed serializer semantics,
+  the exact five externally controlled identifier paths, empty artifact-ref schemes, and the exact
+  `max_serialized_bytes=65536` (64 KiB)/`max_items=8192`/`max_depth=10` limits); the tool contract decision-locks
+  the complete `AgentToolSpec.to_fingerprint_record()` equivalent (tool name/kind, request pin, route
+  binder/adapter, simulate fixture, release owner, execution subject, budget/capability, approval, command
+  exposure, and control policy, with every constant owner-pin digest recomputed from its pinned contract bytes)
+  and binds the exact result and serializer contract digests as constants;
   the commandless full terminal tuple (`no_command_v1`, both-empty Action/Operation, zero attempt/generation/epoch),
   the deterministic `filter_projection_terminal_winner.v1` equation, the four closed internal owner refs with exact
   field manifests, and the replay/quarantine retention rules;
@@ -125,7 +145,9 @@ handoff tables:
 - handoff section 12: the 16 hostile-mutation oracle families plus concurrency coverage;
 - handoff section 13: the 8-mechanism x 10-invariant matrix with no deferred cells;
 - handoff section 14: the FF-SCHEMA/FF-CARRIER/FF-COMPILER/FF-SOURCE/FF-ACQ-INTEGRATE/FF-PG-SCHEMA/FF-PG-UOW/
-  FF-RESULT/FF-XO implementation DAG with exclusive write paths and review edges;
+  FF-RESULT/FF-XO implementation DAG with exclusive write paths and review edges, exact integer waves in the closed
+  set {1, 2, 3} with packet uniqueness, dependency/wave-order validation, and every manifest-level numeric field
+  covered by the hostile bool/float alias sweep;
 - handoff section 15: the seven transition states and their first permitted change conditions.
 
 ## 4. Retained history and rejected literals
