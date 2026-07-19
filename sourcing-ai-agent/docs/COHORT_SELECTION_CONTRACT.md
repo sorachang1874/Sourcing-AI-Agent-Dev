@@ -140,9 +140,9 @@ The user-selectable location dimension is a SIBLING REQUEST FIELD pair — `targ
 | Execution identity | both fields join `request_matching._normalized_request_payload` (and the effective-request mirror) only when present, so different locations never share request signatures, reuse families, or snapshot reuse while legacy requests keep byte-identical signatures; lane and manifest digests already bind location through `compiler_inputs.base_filter_hints` → lane `filter_hints` → `lane_digest`/`manifest_digest`. Location is additionally a HARD request-family boundary: `request_family_score` compares canonical presence+values of both fields before any similarity scoring, and any mismatch — including absent versus explicit `[]` — scores zero with `hard_family_mismatch=true`, so baseline/snapshot/latest-company/feedback reuse and explicit-baseline rerun selection can never cross location identity. Persisted matching bundles are trusted only when a full canonical regeneration compares equal; any normalized-payload or signature mismatch rebuilds |
 | Deletion condition | none (new field); the planner default injection is removable only if the product default changes away from US |
 
-### Plan-review location decision wire contract (dormant pending backend owner)
+### Plan-review location decision wire contract (ACTIVE since `fa435a4`)
 
-The plan-REVIEW decision payload carries the location axes through a tagged tri-state operation set, distinct from the request-ingress tri-state above. This is the contract the backend review owner (`f6-backend-plan-review` lane) implements against; the frontend serializer (`planReviewDecisionToApiPayload`) already conforms and stays DORMANT until activation.
+The plan-REVIEW decision payload carries the location axes through a tagged tri-state operation set, distinct from the request-ingress tri-state above. The backend review owner landed in `fa435a4` (`plan_review.py` gate + `apply_plan_review_decision()` application path, tests in `tests/test_plan_review_location_apply.py`); the frontend serializer (`planReviewDecisionToApiPayload`) conforms and is ACTIVE whenever the server-issued gate lists the axis.
 
 | Aspect | Locked value |
 |---|---|
