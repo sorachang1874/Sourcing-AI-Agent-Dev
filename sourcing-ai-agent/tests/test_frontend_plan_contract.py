@@ -166,7 +166,7 @@ class FrontendPlanContractTest(unittest.TestCase):
             const optionsPayload = {
               schema_version: "cohort_selection.v1",
               registry_version: "cohort_selection.registry.v1",
-              registry_digest: "registry-digest",
+              registry_digest: "9f2c1ab4d5e6478091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
               role_buckets: [
                 { id: "engineering", label: "Engineer", order: 20 },
                 { id: "research", label: "Researcher", order: 10 },
@@ -194,7 +194,14 @@ class FrontendPlanContractTest(unittest.TestCase):
             const exactCohortPlan = api.__testMapPlanPayloadToDemoPlan({
               request: { raw_user_request: "find people", cohort_selection: explicitCohort },
               request_preview: { cohort_selection: explicitCohort },
-              plan: {},
+              plan: {
+                acquisition_strategy: {
+                  provider_execution_manifest: {
+                    registry_version: "cohort_selection.registry.v1",
+                    registry_digest: "9f2c1ab4d5e6478091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
+                  },
+                },
+              },
             }, "find people");
             const exactCohortReview = api.planReviewDecisionToApiPayload({
               confirmedCompanyScope: [],
@@ -360,7 +367,14 @@ class FrontendPlanContractTest(unittest.TestCase):
                       employment_statuses: ["current"],
                     },
                   },
-                  plan: {},
+                  plan: {
+                    acquisition_strategy: {
+                      provider_execution_manifest: {
+                        registry_version: "cohort_selection.registry.v1",
+                        registry_digest: "9f2c1ab4d5e6478091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
+                      },
+                    },
+                  },
                 }, "find people"),
               ),
               duplicateOptionError: captureError(() =>

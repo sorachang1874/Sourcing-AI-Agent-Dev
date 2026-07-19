@@ -223,11 +223,24 @@ function hasCanonicalFacetSummaryForServedPopulation(
   expectedCandidateCount: number,
 ): boolean {
   const summary = dashboard.candidateFacetSummary;
+  // The summary scope is consumed ONLY from its own backend owners (the
+  // top-level mapping and the board-runtime mirror). The filter contract's
+  // `facetCountScope` is a SEPARATE contract and is never summary-scope
+  // evidence (FT2 fixed-forward r4, rerun3 review finding 2); the two
+  // summary-scope owners must agree — missing or conflicting evidence
+  // disables facet consumption instead of being promoted into a canonical
+  // summary.
+  const summaryScopeEvidence = [
+    dashboard.candidateFacetSummaryScope,
+    dashboard.boardRuntimeState?.facetSummaryScope,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter((value) => value !== "");
   const facetSummaryScope =
-    dashboard.candidateFacetSummaryScope ||
-    dashboard.boardRuntimeState?.facetSummaryScope ||
-    dashboard.boardRuntimeState?.filterContract?.facetCountScope ||
-    "";
+    summaryScopeEvidence.length > 0 &&
+    summaryScopeEvidence.every((value) => value === summaryScopeEvidence[0])
+      ? summaryScopeEvidence[0]
+      : "";
   const canonicalScope =
     facetSummaryScope === "global_full_population" || facetSummaryScope === "exact_projection";
   const summaryCandidateCount = Math.max(0, Number(summary?.candidateCount || 0));
@@ -754,6 +767,16 @@ export function ResultsBoardPanel({
     if (pendingDefaultFacetContextRef.current === resultsContextKey) {
       return;
     }
+    // Canonical-summary gap (FT2 fixed-forward r4, rerun3 review finding 4):
+    // while the canonical facet summary is transiently unavailable the
+    // options list collapses to []; reconciling now would silently wipe the
+    // user's selection and let a widened backend filter through. Selections
+    // are preserved inertly keyed to the membership revision — they
+    // reconcile only when canonical options return (a revision change
+    // reconciles visibly at that point, never during the gap).
+    if (canonicalFacetUnavailable) {
+      return;
+    }
     if (userEditedFacetRefs.current.recall) {
       setSelectedRecallBuckets((current) => {
         const preserved = preserveEditedFacetSelection(current, recallOptions);
@@ -765,10 +788,13 @@ export function ResultsBoardPanel({
       const normalized = normalizeFacetSelection(current, recallOptions, defaultRecallSelection(recallOptions));
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [recallOptions, resultsContextKey]);
+  }, [canonicalFacetUnavailable, recallOptions, resultsContextKey]);
 
   useEffect(() => {
     if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (canonicalFacetUnavailable) {
       return;
     }
     if (userEditedFacetRefs.current.employment) {
@@ -786,10 +812,13 @@ export function ResultsBoardPanel({
       );
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [employmentFacetOptions, resultsContextKey]);
+  }, [canonicalFacetUnavailable, employmentFacetOptions, resultsContextKey]);
 
   useEffect(() => {
     if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (canonicalFacetUnavailable) {
       return;
     }
     if (userEditedFacetRefs.current.locations) {
@@ -803,10 +832,13 @@ export function ResultsBoardPanel({
       const normalized = normalizeFacetSelection(current, locationOptions, defaultOpenSelection(locationOptions));
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [locationOptions, resultsContextKey]);
+  }, [canonicalFacetUnavailable, locationOptions, resultsContextKey]);
 
   useEffect(() => {
     if (pendingDefaultFacetContextRef.current === resultsContextKey) {
+      return;
+    }
+    if (canonicalFacetUnavailable) {
       return;
     }
     if (userEditedFacetRefs.current.functions) {
@@ -820,7 +852,7 @@ export function ResultsBoardPanel({
       const normalized = normalizeFacetSelection(current, functionOptions, defaultOpenSelection(functionOptions));
       return sameStringArray(current, normalized) ? current : normalized;
     });
-  }, [functionOptions, resultsContextKey]);
+  }, [canonicalFacetUnavailable, functionOptions, resultsContextKey]);
 
   useEffect(() => {
     if (pendingDefaultFacetContextRef.current === resultsContextKey) {
@@ -865,6 +897,29 @@ export function ResultsBoardPanel({
       window.removeEventListener("storage", syncTargets);
     };
   }, []);
+
+  // Canonical-summary gap with preserved narrowing intent (FT2 fixed-forward
+  // r4, rerun3 review finding 4): while the canonical facet summary is
+  // transiently unavailable, a user-narrowed selection (or keyword) stays
+  // preserved inertly. The board must NOT submit a widened backend filter
+  // and must NOT present an unfiltered population as if it were the filtered
+  // result — it keeps the last same-revision page (or a blocking unavailable
+  // state) until the summary returns and the preserved selection reconciles
+  // against the restored canonical options.
+  const preservedFacetIntentDuringGap = Boolean(
+    canonicalFacetUnavailable &&
+      (keyword.trim() !== "" ||
+        userEditedFacetRefs.current.recall ||
+        userEditedFacetRefs.current.employment ||
+        userEditedFacetRefs.current.locations ||
+        userEditedFacetRefs.current.functions),
+  );
+  const gapKeptBackendPage =
+    preservedFacetIntentDuringGap &&
+    backendCandidatePage &&
+    dashboardCandidatePageRevisionMatches(dashboard, backendCandidatePage)
+      ? backendCandidatePage
+      : null;
 
   const fallbackBaseVisibleCandidates = useMemo(
     () =>
@@ -983,24 +1038,31 @@ export function ResultsBoardPanel({
   const freshFilteredCandidateCount = backendPageReady
     ? Math.max(0, backendCandidatePage?.filteredCandidateCount || 0)
     : 0;
-  const visibleCandidateCount = backendPageReady
-    ? freshFilteredCandidateCount
-    : waitingForBackendPage
-      ? lastKnownFilteredCandidateCount > 0
-        ? lastKnownFilteredCandidateCount
-        : fallbackVisibleCandidates.length
-    : fallbackVisibleCandidates.length;
+  const visibleCandidateCount = preservedFacetIntentDuringGap
+    ? Math.max(0, gapKeptBackendPage?.filteredCandidateCount || 0)
+    : backendPageReady
+      ? freshFilteredCandidateCount
+      : waitingForBackendPage
+        ? lastKnownFilteredCandidateCount > 0
+          ? lastKnownFilteredCandidateCount
+          : fallbackVisibleCandidates.length
+      : fallbackVisibleCandidates.length;
   const totalPages = Math.max(1, Math.ceil(visibleCandidateCount / RESULTS_PAGE_SIZE));
-  const visibleCandidates = backendPageReady
-    ? backendCandidatePage?.candidates || []
-    : fallbackVisibleCandidates;
+  const visibleCandidates = preservedFacetIntentDuringGap
+    ? gapKeptBackendPage?.candidates || []
+    : backendPageReady
+      ? backendCandidatePage?.candidates || []
+      : fallbackVisibleCandidates;
   const pagedCandidates = useMemo(() => {
+    if (preservedFacetIntentDuringGap) {
+      return gapKeptBackendPage?.candidates || [];
+    }
     if (backendPageReady) {
       return backendCandidatePage?.candidates || [];
     }
     const start = Math.max(0, (currentPage - 1) * RESULTS_PAGE_SIZE);
     return fallbackVisibleCandidates.slice(start, start + RESULTS_PAGE_SIZE);
-  }, [backendCandidatePage, backendPageReady, currentPage, fallbackVisibleCandidates, waitingForBackendPage]);
+  }, [backendCandidatePage, backendPageReady, currentPage, fallbackVisibleCandidates, gapKeptBackendPage, preservedFacetIntentDuringGap, waitingForBackendPage]);
   const pagedDisplayCandidates = useMemo(
     () =>
       pagedCandidates.map((candidate) => ({
@@ -1095,6 +1157,14 @@ export function ResultsBoardPanel({
       setBackendCandidatePageLoading(false);
       return;
     }
+    if (preservedFacetIntentDuringGap) {
+      // A canonical-summary gap with preserved narrowing intent must never
+      // submit a widened backend filter (FT2 fixed-forward r4, rerun3
+      // review finding 4). Keep the last same-revision page; the next
+      // request fires only after the summary returns and the preserved
+      // selection has reconciled against the restored canonical options.
+      return;
+    }
     let cancelled = false;
     setBackendCandidatePageLoading(true);
     setBackendCandidatePageError("");
@@ -1148,6 +1218,7 @@ export function ResultsBoardPanel({
     dashboard.boardRuntimeState?.rowPublicationRevision,
     dashboard.boardRuntimeState?.rowPublicationWatermark,
     jobId,
+    preservedFacetIntentDuringGap,
     resolvedProjectionId,
   ]);
 
@@ -1435,6 +1506,18 @@ export function ResultsBoardPanel({
           <div className="asset-readiness-notice">
             <strong>筛选索引准备中</strong>
             <span>{canonicalFacetUnavailableMessage}</span>
+          </div>
+        ) : null}
+        {preservedFacetIntentDuringGap ? (
+          <div className="asset-readiness-notice" data-testid="facet-gap-preserved-notice">
+            <strong>已保留你的筛选设置</strong>
+            <span>
+              筛选索引暂时不可用；为避免展示未筛选的扩大结果，当前列表
+              {gapKeptBackendPage
+                ? "保持索引不可用前最近一次同修订的筛选结果"
+                : "暂不显示候选人"}
+              ，索引恢复后将自动重新应用你的筛选。
+            </span>
           </div>
         ) : null}
         {profileDetailsIncomplete ? (

@@ -7,11 +7,14 @@ import {
 import { lifecycleEffectiveDeltaMaterializedCount } from "./resultViewLifecycle";
 import {
   buildCohortLocationApiPayload,
+  buildLocationReviewClearPayload,
   cloneCohortLocationSelection,
   cloneCohortSelection,
   createDefaultCohortLocationSelection,
   equalCohortLocationSelection,
   equalCohortSelection,
+  isByteExactRegistryDigest,
+  isByteExactRegistryVersion,
   normalizeLocationList,
   parseCohortLocationMirror,
   parseCohortSelectionOptionsPayload,
@@ -4481,18 +4484,24 @@ function mapCandidateFacetSummary(source: unknown): CandidateFacetSummary | unde
   };
 }
 
-function mapCandidateFacetSummaryScope(source: Record<string, unknown>, fallback = ""): string {
-  const facetSummary =
-    source.facet_summary && typeof source.facet_summary === "object" && !Array.isArray(source.facet_summary)
-      ? (source.facet_summary as Record<string, unknown>)
-      : {};
-  return asString(
-    source.facet_summary_scope ||
-      facetSummary.count_scope ||
-      facetSummary.facet_count_scope ||
-      facetSummary.scope ||
-      fallback,
-  );
+/**
+ * Facet-SUMMARY scope is a backend-owned contract (FT2 fixed-forward r4,
+ * rerun3 review finding 2): the only legitimate evidence is the explicit
+ * summary-scope keys (`facet_summary_scope` at payload top level and
+ * `facet_summary.count_scope` inside the summary record). The frontend
+ * NEVER synthesizes the scope (no `exact_projection` default) and never
+ * borrows it from the SEPARATE filter contract (`facet_count_scope`) or
+ * from undocumented keys — AGENTS.md forbids deriving one contract field
+ * from another. Every present mirror must agree byte-for-byte; missing or
+ * conflicting evidence yields "" so facet consumption stays disabled.
+ */
+function mapCandidateFacetSummaryScope(...evidence: unknown[]): string {
+  const present = evidence.map((value) => asString(value)).filter((value) => value !== "");
+  if (present.length === 0) {
+    return "";
+  }
+  const first = present[0];
+  return present.every((value) => value === first) ? first : "";
 }
 
 function isCanonicalFacetSummaryScope(scope: string | undefined): boolean {
@@ -5065,43 +5074,53 @@ function extractPlanCohortSelection(
  * Location fields are siblings of cohort_selection at request top level
  * (FT0 §7.2). They NEVER enter the cohort object.
  *
- * Reconciliation is presence-intact (FT2 fixed-forward r3, review finding
- * 1). The canonical request object (`payload.request`) is the single
- * canonical request-location owner; every other record is a comparison-only
- * mirror drawn from a CLOSED set that includes ALL request_preview variants
- * (the first-truthy preview ladder used for display must not hide a stale
- * preview mirror from the comparison). Per axis, `absent` (server default),
- * an explicit `[]` opt-out, and present values are three DISTINCT states:
- * for an explicit-Cohort request an absent mirror is not legacy noise — it
- * means the server-default US boundary — so an absent canonical owner
- * against a stale present mirror (or vice versa) disagrees and fails
- * closed, exactly like a value conflict. Only when every present record is
- * absent on both axes (legacy request with no location state anywhere) does
- * the plan carry no location state.
+ * Reconciliation is presence-intact against the CANONICAL REQUEST OWNER
+ * (FT2 fixed-forward r3, review finding 1; r4 hardening per rerun3 finding
+ * 1). `payload.request` is the single canonical request-location owner and
+ * is REQUIRED for explicit-Cohort plans — when it is missing or not an
+ * object the mapping fails closed instead of borrowing another mirror as
+ * the owner.
+ *
+ * Mirror classification is projection-aware:
+ * - Documented COMPLETE request mirrors (`explainPayload.request`,
+ *   `metadata.request`) are full request records: per axis, `absent`
+ *   (server default), an explicit `[]` opt-out, and present values are
+ *   three DISTINCT states, compared presence-intact against the owner.
+ * - Partial projections (every `request_preview` variant and every
+ *   `intent_view`) are compared ONLY on the location keys they actually
+ *   project: the pinned backend `build_request_preview_payload()` does not
+ *   project either location field, so a missing key in a preview is NOT an
+ *   authoritative absent state and must never conflict with the canonical
+ *   owner. A preview that DOES project a location key must agree with the
+ *   owner byte-exactly (including the absent/`[]`/values tri-state).
  */
 function extractPlanCohortLocations(
   payload: any,
   explainPayload: any,
+  explicitCohort: boolean,
 ): CohortLocationSelection | undefined {
   const metadata = (payload?.metadata as Record<string, unknown>) || {};
-  const canonicalRequest =
-    payload?.request && typeof payload.request === "object" && !Array.isArray(payload.request)
-      ? (payload.request as Record<string, unknown>)
-      : null;
-  const mirrorRecords = [
-    explainPayload?.request,
+  const isRequestRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const canonicalRequest = isRequestRecord(payload?.request) ? payload.request : null;
+  const completeMirrors = [explainPayload?.request, metadata.request].filter(isRequestRecord);
+  const partialRecords = [
     payload?.request_preview,
     explainPayload?.request_preview,
     metadata.request_preview,
     payload?.intent_view,
     explainPayload?.intent_view,
     payload?.plan?.intent_view,
-    metadata.request,
-  ].filter(
-    (value): value is Record<string, unknown> =>
-      Boolean(value) && typeof value === "object" && !Array.isArray(value),
-  );
-  const ownerRecord = canonicalRequest || mirrorRecords[0] || null;
+  ].filter(isRequestRecord);
+  if (explicitCohort && !canonicalRequest) {
+    // The canonical request is the sole location owner for explicit-Cohort
+    // plans. Missing canonical ownership fails closed — it must never be
+    // substituted by a partial preview or a stored metadata mirror.
+    throw new Error(
+      "Plan response is missing the canonical request owner for cohort location fields.",
+    );
+  }
+  const ownerRecord = canonicalRequest || completeMirrors[0] || partialRecords[0] || null;
   if (!ownerRecord) {
     return undefined;
   }
@@ -5112,13 +5131,34 @@ function extractPlanCohortLocations(
   const parsePresenceIntact = (record: Record<string, unknown>): CohortLocationSelection =>
     parseCohortLocationMirror(record) ?? createDefaultCohortLocationSelection();
   const canonical = parsePresenceIntact(ownerRecord);
-  for (const record of mirrorRecords) {
+  for (const record of completeMirrors) {
     if (record === ownerRecord) {
       continue;
     }
     if (!equalCohortLocationSelection(canonical, parsePresenceIntact(record))) {
       throw new Error("Plan response contains conflicting target_locations mirrors.");
     }
+  }
+  // Partial projections compare only the keys they actually project.
+  const compareProjectedAxis = (
+    record: Record<string, unknown>,
+    field: "target_locations" | "exclude_target_locations",
+    canonicalValue: string[] | undefined,
+  ): void => {
+    if (!Object.prototype.hasOwnProperty.call(record, field)) {
+      return;
+    }
+    const projected = normalizeLocationList(record[field], field);
+    if (JSON.stringify(projected ?? null) !== JSON.stringify(canonicalValue ?? null)) {
+      throw new Error("Plan response contains conflicting target_locations mirrors.");
+    }
+  };
+  for (const record of partialRecords) {
+    if (record === ownerRecord) {
+      continue;
+    }
+    compareProjectedAxis(record, "target_locations", canonical.targetLocations);
+    compareProjectedAxis(record, "exclude_target_locations", canonical.excludeTargetLocations);
   }
   if (canonical.targetLocations === undefined && canonical.excludeTargetLocations === undefined) {
     return undefined;
@@ -5128,52 +5168,76 @@ function extractPlanCohortLocations(
 
 /**
  * Server-owned cohort registry pin of the plan (FT2 fixed-forward r2, review
- * finding 3; r3 hardening). The backend CohortProviderCompiler embeds
+ * finding 3; r3 + r4 hardening). The backend CohortProviderCompiler embeds
  * `{registry_version, registry_digest}` into the provider execution manifest
- * (`cohort_provider_compiler.py:628-629`); the plan response and the
+ * (`cohort_provider_compiler.py`); the plan response and the
  * frontend-history recovery metadata may mirror that same manifest.
  *
- * Pin assignment is PER-MANIFEST EXACT: the pin comes from the canonical
- * plan manifest (the first present manifest in canonical order); every other
- * present manifest is a comparison-only mirror. Every present documented
- * manifest is treated as complete-or-invalid:
+ * Pin ownership is bound to the CANONICAL PLAN MANIFEST (r4, rerun3 review
+ * finding 5): the manifest embedded in the plan record itself
+ * (`plan.acquisition_strategy.provider_execution_manifest`, falling back to
+ * `plan.provider_execution_manifest` — the same order as the backend reader
+ * `_provider_execution_manifest_from_plan_payload`). Every other manifest
+ * record (explain payload, response top level, metadata) is a
+ * comparison-only mirror that can never BECOME the canonical record:
+ * - for an explicit-Cohort plan a missing or non-object canonical plan
+ *   manifest is invalid plan evidence and fails closed — a metadata mirror
+ *   must never be promoted into the canonical slot (no borrowed identity);
  * - a manifest carrying neither pin field is UNPINNED;
- * - a manifest carrying exactly one field, empty values, or wrong types is
- *   INVALID pin evidence and fails closed;
+ * - a manifest carrying exactly one field, empty values, wrong types, or
+ *   padded/mis-shaped pin bytes (no trim repair — the dedicated byte-exact
+ *   validators) is INVALID pin evidence and fails closed;
  * - an unpinned canonical manifest yields NO pin (unconfirmable) — it never
  *   inherits a stale/other mirror's pin, and a mirror that nonetheless
  *   carries pin evidence contradicts the canonical manifest (fail closed);
  * - a pinned canonical manifest requires every present mirror to carry both
- *   exact pin fields with byte-exact equality (conflict fails closed, same
- *   posture as the cohort/location mirrors).
- * When no manifest carries pin evidence anywhere the plan pin is
- * `undefined` — confirmation of an explicit-Cohort plan must then block on
- * unavailable pin evidence.
+ *   exact pin fields with byte-exact equality (conflict fails closed).
+ * Non-Cohort plans own no registry pin at all: the pin only gates
+ * explicit-Cohort confirmation, so extraction short-circuits to `undefined`
+ * instead of manufacturing identity for a plan that cannot use it.
  */
 function extractPlanCohortRegistryPin(
   payload: any,
   explainPayload: any,
+  explicitCohort: boolean,
 ): CohortRegistryPin | undefined {
+  if (!explicitCohort) {
+    return undefined;
+  }
   const metadata = (payload?.metadata as Record<string, unknown>) || {};
   const payloadStrategy =
     (payload?.plan?.acquisition_strategy as Record<string, unknown>) || {};
   const explainStrategy =
     (explainPayload?.plan?.acquisition_strategy as Record<string, unknown>) || {};
-  const manifestRecords = [
-    payloadStrategy.provider_execution_manifest,
-    payload?.plan?.provider_execution_manifest,
+  const isManifestRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const firstCanonical = payloadStrategy.provider_execution_manifest;
+  const secondCanonical = payload?.plan?.provider_execution_manifest;
+  const canonicalValue = firstCanonical !== undefined ? firstCanonical : secondCanonical;
+  if (canonicalValue === undefined) {
+    throw new Error("Plan response is missing the canonical provider execution manifest.");
+  }
+  if (!isManifestRecord(canonicalValue)) {
+    throw new Error("Plan response has an invalid canonical provider execution manifest.");
+  }
+  const mirrorManifests = [
+    ...(firstCanonical !== undefined && secondCanonical !== undefined ? [secondCanonical] : []),
     explainStrategy.provider_execution_manifest,
     explainPayload?.plan?.provider_execution_manifest,
     payload?.provider_execution_manifest,
     explainPayload?.provider_execution_manifest,
     metadata.provider_execution_manifest,
-  ].filter(
-    (value): value is Record<string, unknown> =>
-      Boolean(value) && typeof value === "object" && !Array.isArray(value),
-  );
+  ].filter((value) => value !== undefined && value !== null);
+  for (const mirror of mirrorManifests) {
+    if (!isManifestRecord(mirror)) {
+      throw new Error("Plan response has an invalid provider execution manifest mirror.");
+    }
+  }
   // Read the pin fields of ONE manifest: `null` when it carries neither pin
   // field (unpinned), the pin when both fields carry exact non-empty
   // strings; anything in between is invalid pin evidence and fails closed.
+  // Pin bytes are validated with the dedicated byte-exact validators — no
+  // trimming, no repair of padded/mis-shaped values into a match.
   const readManifestPin = (manifest: Record<string, unknown>): CohortRegistryPin | null => {
     const hasVersion = Object.prototype.hasOwnProperty.call(manifest, "registry_version");
     const hasDigest = Object.prototype.hasOwnProperty.call(manifest, "registry_digest");
@@ -5182,16 +5246,15 @@ function extractPlanCohortRegistryPin(
     }
     const version = manifest.registry_version;
     const digest = manifest.registry_digest;
-    if (typeof version !== "string" || !version || typeof digest !== "string" || !digest) {
+    if (!isByteExactRegistryVersion(version) || !isByteExactRegistryDigest(digest)) {
       throw new Error("Plan response has an invalid cohort registry pin.");
     }
     return { registryVersion: version, registryDigest: digest };
   };
-  if (manifestRecords.length === 0) {
-    return undefined;
-  }
-  const canonicalPin = readManifestPin(manifestRecords[0]);
-  const mirrorPins = manifestRecords.slice(1).map((manifest) => readManifestPin(manifest));
+  const canonicalPin = readManifestPin(canonicalValue);
+  const mirrorPins = (mirrorManifests as Record<string, unknown>[]).map((manifest) =>
+    readManifestPin(manifest),
+  );
   if (!canonicalPin) {
     // The canonical plan manifest is unpinned: the plan owns NO pin and must
     // never borrow one from a stale/other mirror. A mirror carrying pin
@@ -5341,19 +5404,29 @@ export function planReviewDecisionToApiPayload(
   // review decision must not silently record a value the backend has no
   // authorized application path for (FT2 fixed-forward, review finding 2).
   // Presence is preserved: an explicit `[]` (opt-out) serializes as `[]`,
-  // an absent field is omitted, and a present null/invalid shape fails
-  // closed via normalizeLocationList.
-  if (allowed.has("target_locations") && decision.targetLocations !== undefined) {
-    payload.target_locations = normalizeLocationList(decision.targetLocations, "target_locations");
+  // present values serialize normalized, and a present null/invalid shape
+  // fails closed via normalizeLocationList. A RESTORED ABSENT state on an
+  // initialized, gate-authorized axis serializes as the tagged clear
+  // operation (FT2 fixed-forward r4, rerun3 review finding 6): omitting the
+  // key would give a future backend application owner no way to distinguish
+  // "restore the server-default absence" from "field not part of this
+  // decision".
+  if (allowed.has("target_locations")) {
+    if (decision.targetLocations !== undefined) {
+      payload.target_locations = normalizeLocationList(decision.targetLocations, "target_locations");
+    } else if (decision.targetLocationsInitialized === true) {
+      payload.target_locations = buildLocationReviewClearPayload();
+    }
   }
-  if (
-    allowed.has("exclude_target_locations")
-    && decision.excludeTargetLocations !== undefined
-  ) {
-    payload.exclude_target_locations = normalizeLocationList(
-      decision.excludeTargetLocations,
-      "exclude_target_locations",
-    );
+  if (allowed.has("exclude_target_locations")) {
+    if (decision.excludeTargetLocations !== undefined) {
+      payload.exclude_target_locations = normalizeLocationList(
+        decision.excludeTargetLocations,
+        "exclude_target_locations",
+      );
+    } else if (decision.excludeTargetLocationsInitialized === true) {
+      payload.exclude_target_locations = buildLocationReviewClearPayload();
+    }
   }
   return payload;
 }
@@ -5404,8 +5477,9 @@ function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayloa
     {}
   );
   const cohortSelection = extractPlanCohortSelection(payload, explain, requestPreview);
-  const cohortLocations = extractPlanCohortLocations(payload, explain);
-  const cohortRegistryPin = extractPlanCohortRegistryPin(payload, explain);
+  const explicitCohortPlan = cohortSelection !== undefined;
+  const cohortLocations = extractPlanCohortLocations(payload, explain, explicitCohortPlan);
+  const cohortRegistryPin = extractPlanCohortRegistryPin(payload, explain, explicitCohortPlan);
   const organizationExecutionProfile =
     (explain.organization_execution_profile as Record<string, unknown>) ||
     (payload.organization_execution_profile as Record<string, unknown>) ||
@@ -6484,8 +6558,9 @@ function mapJobResultsToDashboard(payload: any): DashboardData {
   );
   const rawCandidateFacetSummary = mapCandidateFacetSummary(assetPopulationPayload.facet_summary);
   const rawCandidateFacetSummaryScope = mapCandidateFacetSummaryScope(
-    assetPopulationPayload,
-    asString(payload.facet_summary_scope),
+    assetPopulationPayload.facet_summary_scope,
+    (assetPopulationPayload.facet_summary as Record<string, unknown> | undefined)?.count_scope,
+    payload.facet_summary_scope,
   );
   const canonicalBoardExpectedCount = boardRuntimeState?.expectedCandidateCount || 0;
   const canonicalAssetPopulationCount = boardRuntimeState ? canonicalBoardExpectedCount : assetPopulationCount;
@@ -7761,9 +7836,20 @@ function projectionPayloadToDashboard(
     asArray(scopeSpec.keywords).map((value) => asString(value)).filter(Boolean),
   );
   const candidateFacetSummary = mapCandidateFacetSummary(payload.facet_summary);
+  // The summary scope is consumed ONLY from its backend owners (no
+  // `exact_projection` minting): missing or conflicting evidence maps to ""
+  // and the board runtime state marks the summary unavailable (FT2
+  // fixed-forward r4, rerun3 review finding 2).
   const candidateFacetSummaryScope = candidateFacetSummary
-    ? mapCandidateFacetSummaryScope(payload, "exact_projection")
+    ? mapCandidateFacetSummaryScope(
+        payload.facet_summary_scope,
+        (payload.facet_summary as Record<string, unknown> | undefined)?.count_scope,
+      )
     : "";
+  // The filter contract is an INDEPENDENT backend-owned contract: its count
+  // scope comes from the projection's own `counts.facet_count_scope`, never
+  // from the summary scope derived above.
+  const projectionFilterCountScope = pickFirstString(counts, ["facet_count_scope"]);
   return {
     projectionId,
     title: pickFirstString(projection, ["scope_label"]) || "Projection results",
@@ -7842,7 +7928,7 @@ function projectionPayloadToDashboard(
       layeringStatus: candidateFacetSummary ? "completed" : "unavailable",
       filterContract: {
         source: "serving_projection_reader",
-        facetCountScope: candidateFacetSummaryScope || "unavailable",
+        facetCountScope: projectionFilterCountScope || "unavailable",
         rowFilterScope: "projection_membership",
         backendFilteredPagingSupported: true,
       },
@@ -7872,6 +7958,14 @@ function projectionPayloadToDashboard(
     candidateFacetSummary,
     candidateFacetSummaryScope,
   };
+}
+
+export function __testProjectionPayloadToDashboard(
+  payload: any,
+  candidates: Candidate[] = [],
+  runId = "",
+): DashboardData {
+  return projectionPayloadToDashboard(payload, candidates, runId);
 }
 
 export async function getProjectionDashboard(
@@ -7969,7 +8063,9 @@ export async function getProjectionCandidatePage(
             projection: payload.projection,
             total_candidates: payload.total_candidates,
             facet_summary: payload.facet_summary,
-            facet_summary_scope: payload.facet_summary_scope || payload.facet_summary?.count_scope,
+            // Raw pass-through (no ladder): the scope mapper compares BOTH
+            // summary-scope owners and disables on conflicting evidence.
+            facet_summary_scope: payload.facet_summary_scope,
           },
           candidates,
         );
@@ -10008,52 +10104,118 @@ function deriveFunctionBucketFacet(record: Record<string, unknown>): FunctionBuc
 }
 
 /**
- * Server-owned employment membership truth (FT0 §6): the verbatim
- * `metadata.cohort_employment_statuses` set. Absent (key missing) on legacy
- * records; present-but-invalid data fails closed and is NEVER repaired into
- * client-side membership (FT2 fixed-forward r2, review finding 4):
- * - a present `null`, non-list, empty list, duplicate entries, or any value
- *   other than the exact bytes `current` / `former` (no trim/lowercase) is
- *   invalid;
- * - when Cohort provenance is expected (`metadata.cohort_lane_membership`
- *   present) an absent membership is a contract violation, not a legacy
- *   record — the candidate must not fall back to the lossy display status.
+ * Server-owned employment membership truth (FT0 §6; FT2 fixed-forward r4,
+ * rerun3 review finding 3): the canonical served field is the TOP-LEVEL
+ * `employment_statuses` list emitted by the backend membership attacher
+ * (`candidate_artifacts.py`). `metadata.cohort_employment_statuses` is a
+ * comparison-only mirror — it must agree byte-exactly and can never BECOME
+ * the membership owner:
+ * - top-level absent + metadata mirror present is a mirror WITHOUT an owner
+ *   (invalid evidence, fail closed — no borrowed membership);
+ * - top-level absent + Cohort provenance (`metadata.cohort_lane_membership`)
+ *   is a contract violation, not a legacy record (fail closed);
+ * - top-level absent with neither mirror nor provenance is a LEGACY row:
+ *   membership is `undefined` and the lossy display status may apply
+ *   downstream (display status is never membership truth for owned rows);
+ * - present values are validated strictly: a present `null`, non-list,
+ *   empty list, duplicate entries, or any value other than the exact bytes
+ *   `current` / `former` (no trim/lowercase) is invalid;
+ * - a present metadata mirror is validated by the same strict rules and
+ *   must equal the canonical layer byte-exactly (conflict fails closed).
  */
+function parseEmploymentMembershipValue(
+  value: unknown,
+  field: string,
+): Array<"current" | "former"> {
+  if (value === null || !Array.isArray(value)) {
+    throw new Error(`Served candidate has a malformed ${field} membership.`);
+  }
+  const statuses: Array<"current" | "former"> = [];
+  for (const item of value) {
+    if (item !== "current" && item !== "former") {
+      throw new Error(`Served candidate has an invalid ${field} value.`);
+    }
+    if (statuses.includes(item)) {
+      throw new Error(`Served candidate has duplicate ${field} values.`);
+    }
+    statuses.push(item);
+  }
+  if (statuses.length === 0) {
+    throw new Error(`Served candidate has an empty ${field} membership.`);
+  }
+  return statuses;
+}
+
+function equalEmploymentMembership(
+  left: Array<"current" | "former">,
+  right: Array<"current" | "former">,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 function parseCohortEmploymentStatuses(
   record: Record<string, unknown>,
 ): Candidate["cohortEmploymentStatuses"] {
   const metadata = (record.metadata as Record<string, unknown>) || {};
-  const hasKey = Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses");
-  const value = metadata.cohort_employment_statuses;
-  if (!hasKey || value === undefined) {
+  const hasCanonical = Object.prototype.hasOwnProperty.call(record, "employment_statuses");
+  const canonicalValue = record.employment_statuses;
+  const hasMirror = Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses");
+  const mirrorValue = metadata.cohort_employment_statuses;
+  if (!hasCanonical || canonicalValue === undefined) {
+    if (hasMirror && mirrorValue !== undefined) {
+      throw new Error(
+        "Served candidate has a cohort_employment_statuses mirror without the canonical employment_statuses membership.",
+      );
+    }
     const hasCohortProvenance = Object.prototype.hasOwnProperty.call(
       metadata,
       "cohort_lane_membership",
     );
     if (hasCohortProvenance) {
       throw new Error(
-        "Served candidate has Cohort provenance without cohort_employment_statuses membership.",
+        "Served candidate has Cohort provenance without employment_statuses membership.",
       );
     }
     return undefined;
   }
-  if (value === null || !Array.isArray(value)) {
-    throw new Error("Served candidate has a malformed cohort_employment_statuses membership.");
-  }
-  const statuses: Array<"current" | "former"> = [];
-  for (const item of value) {
-    if (item !== "current" && item !== "former") {
-      throw new Error("Served candidate has an invalid cohort_employment_statuses value.");
+  const canonical = parseEmploymentMembershipValue(canonicalValue, "employment_statuses");
+  if (hasMirror && mirrorValue !== undefined) {
+    const mirror = parseEmploymentMembershipValue(mirrorValue, "cohort_employment_statuses");
+    if (!equalEmploymentMembership(canonical, mirror)) {
+      throw new Error("Served candidate has conflicting employment_statuses mirrors.");
     }
-    if (statuses.includes(item)) {
-      throw new Error("Served candidate has duplicate cohort_employment_statuses values.");
-    }
-    statuses.push(item);
   }
-  if (statuses.length === 0) {
-    throw new Error("Served candidate has an empty cohort_employment_statuses membership.");
+  return canonical;
+}
+
+/**
+ * Comparison-only membership mirror of an ENRICHMENT (materialized/profile)
+ * record: any membership evidence it carries (top-level canonical shape or
+ * metadata mirror shape) is extracted under the same strict validation, but
+ * WITHOUT ownership — it may only be compared against the canonical
+ * build-point membership, never substituted for it. Returns undefined when
+ * the enrichment record carries no membership evidence at all.
+ */
+function parseEmploymentMembershipMirror(
+  record: Record<string, unknown>,
+): Array<"current" | "former"> | undefined {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  if (
+    Object.prototype.hasOwnProperty.call(record, "employment_statuses") &&
+    record.employment_statuses !== undefined
+  ) {
+    return parseEmploymentMembershipValue(record.employment_statuses, "employment_statuses");
   }
-  return statuses;
+  if (
+    Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses") &&
+    metadata.cohort_employment_statuses !== undefined
+  ) {
+    return parseEmploymentMembershipValue(
+      metadata.cohort_employment_statuses,
+      "cohort_employment_statuses",
+    );
+  }
+  return undefined;
 }
 
 function deriveCandidate(record: Record<string, unknown>): Candidate {
@@ -10281,7 +10443,15 @@ function deriveCandidateFromNormalizedRecord(
   // build-point pair fails closed — the enriched candidate always keeps
   // `base.functionBucketIds`/`base.functionBucketSource`.
   const materializedFunctionBucketFacet = deriveFunctionBucketFacet(materialized);
-  const materializedCohortEmploymentStatuses = parseCohortEmploymentStatuses(materialized);
+  // Employment membership follows the SAME owner posture (FT2 fixed-forward
+  // r4, rerun3 review finding 3): the canonical build-point membership
+  // (top-level `employment_statuses`, already resolved inside
+  // `deriveCandidate`) is the only owner. A materialized record's membership
+  // evidence is a comparison-only mirror — it must equal the build-point
+  // membership byte-exactly, membership evidence without a build-point
+  // membership fails closed, and a stale materialized document can never
+  // replace the canonical base membership.
+  const materializedCohortEmploymentStatuses = parseEmploymentMembershipMirror(materialized);
   if (materializedFunctionBucketFacet) {
     const baseFacet: FunctionBucketFacetPair | undefined =
       base.functionBucketIds && base.functionBucketSource
@@ -10295,6 +10465,18 @@ function deriveCandidateFromNormalizedRecord(
     if (!equalFunctionBucketFacetPair(baseFacet, materializedFunctionBucketFacet)) {
       throw new Error(
         "Served candidate enrichment conflicts with the canonical function_bucket pair.",
+      );
+    }
+  }
+  if (materializedCohortEmploymentStatuses) {
+    if (!base.cohortEmploymentStatuses) {
+      throw new Error(
+        "Served candidate enrichment carries employment membership without the canonical build-point membership.",
+      );
+    }
+    if (!equalEmploymentMembership(base.cohortEmploymentStatuses, materializedCohortEmploymentStatuses)) {
+      throw new Error(
+        "Served candidate enrichment conflicts with the canonical employment_statuses membership.",
       );
     }
   }
@@ -10335,7 +10517,9 @@ function deriveCandidateFromNormalizedRecord(
     ),
     functionBucketIds: base.functionBucketIds,
     functionBucketSource: base.functionBucketSource,
-    cohortEmploymentStatuses: materializedCohortEmploymentStatuses ?? base.cohortEmploymentStatuses,
+    // The canonical base membership is retained ALWAYS; the materialized
+    // value above is a comparison-only mirror (conflict already threw).
+    cohortEmploymentStatuses: base.cohortEmploymentStatuses,
     linkedinUrl,
     sourceDataset:
       normalizeDatasetLabel(pickFirstString(materialized, ["source_dataset"])) ||

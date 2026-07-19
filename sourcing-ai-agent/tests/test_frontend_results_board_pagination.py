@@ -31,7 +31,7 @@ class FrontendResultsBoardPaginationTest(unittest.TestCase):
 
     def test_pagination_falls_back_when_no_last_known_total(self) -> None:
         source = (REPO_ROOT / "frontend-demo/src/components/ResultsBoardPanel.tsx").read_text(encoding="utf-8")
-        visible_count_block = source[source.index("const visibleCandidateCount = backendPageReady") :]
+        visible_count_block = source[source.index("const visibleCandidateCount = preservedFacetIntentDuringGap") :]
 
         self.assertIn("lastKnownFilteredCandidateCount > 0", visible_count_block)
         self.assertIn("? lastKnownFilteredCandidateCount", visible_count_block)
@@ -61,9 +61,17 @@ class FrontendResultsBoardPaginationTest(unittest.TestCase):
         self.assertIn('facetSummaryScope === "exact_projection"', panel_source)
         self.assertIn('dashboard.boardRuntimeState.facetSummaryScope === "exact_projection"', panel_source)
         self.assertIn('return normalized === "global_full_population" || normalized === "exact_projection";', api_source)
-        self.assertIn('mapCandidateFacetSummaryScope(payload, "exact_projection")', api_source)
+        # Rerun3 finding 2: the summary scope is consumed from its backend
+        # owners only (facet_summary_scope / facet_summary.count_scope) and is
+        # NEVER minted via an `exact_projection` fallback default; the filter
+        # contract's count scope comes independently from the projection's own
+        # counts.facet_count_scope.
+        self.assertNotIn('mapCandidateFacetSummaryScope(payload, "exact_projection")', api_source)
+        self.assertIn("payload.facet_summary_scope,", api_source)
+        self.assertIn(')?.count_scope,', api_source)
+        self.assertIn('pickFirstString(counts, ["facet_count_scope"])', api_source)
         self.assertIn("facet_summary: payload.facet_summary", api_source)
-        self.assertIn("facet_summary_scope: payload.facet_summary_scope || payload.facet_summary?.count_scope", api_source)
+        self.assertIn("facet_summary_scope: payload.facet_summary_scope,", api_source)
 
 
 if __name__ == "__main__":

@@ -422,7 +422,7 @@ const fakeFetch = async (url, options = {}) => {
   const urlText = String(url);
   const pathname = urlText.startsWith("http") ? new URL(urlText).pathname : urlText;
   const body = typeof options.body === "string" ? JSON.parse(options.body) : null;
-  fetchCalls.push({ method, path: pathname, body });
+  fetchCalls.push({ method, path: pathname, body, url: urlText });
   const route = fetchRoutes.find(
     (entry) => entry.method === method && pathname.startsWith(entry.pathPrefix),
   );
@@ -534,7 +534,7 @@ const moduleStubs = {
   "frontend-demo/src/lib/targetCandidatesStore.ts": {
     addTargetCandidate: () => {},
     addTargetCandidates: () => {},
-    readTargetCandidates: () => [],
+    readTargetCandidates: async () => [],
     targetCandidatesUpdatedEventName: () => "target-candidates-updated",
   },
   "frontend-demo/src/lib/workflowContext.ts": {
@@ -709,7 +709,7 @@ _FIXTURES_PREAMBLE = r"""
 // Shared fixtures (server-derived options, cohorts, plans, backend envelopes)
 // ---------------------------------------------------------------------------
 const REGISTRY_VERSION = "cohort_selection.registry.v1";
-const REGISTRY_DIGEST = "registry-digest";
+const REGISTRY_DIGEST = "9f2c1ab4d5e6478091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708";
 const optionsPayload = {
   schema_version: "cohort_selection.v1",
   registry_version: REGISTRY_VERSION,
@@ -751,6 +751,14 @@ const manifestPin = (overrides = {}) => ({
   registry_digest: REGISTRY_DIGEST,
   manifest_digest: "manifest-digest-1",
   ...overrides,
+});
+// Production-shaped cohort plan record: the backend CohortProviderCompiler
+// always embeds the provider execution manifest into the plan's
+// acquisition_strategy for explicit-Cohort plans.
+const cohortPlanRecord = (manifest) => ({
+  acquisition_strategy: {
+    provider_execution_manifest: manifest === undefined ? manifestPin() : manifest,
+  },
 });
 
 const makePlan = (overrides = {}) => ({
@@ -850,11 +858,23 @@ const planResponseForRequest = (requestBody, overrides = {}) => {
       ? { exclude_target_locations: requestBody.exclude_target_locations }
       : {}),
   };
+  // PRODUCTION SHAPE (rerun3 review findings 1/8): the real backend
+  // `build_request_preview_payload()` never projects either location field —
+  // the preview carries only the documented projection keys (incl.
+  // cohort_selection). The canonical `request` above remains the sole
+  // complete location mirror.
+  const requestPreview = {
+    request_view: "normalized_request",
+    raw_user_request: requestMirror.raw_user_request,
+    query: requestMirror.raw_user_request,
+    target_company: "ACME",
+    cohort_selection: cohort,
+  };
   return {
     status: "pending",
     history_id: overrides.historyId || "hist-server-1",
     request: requestMirror,
-    request_preview: { ...requestMirror },
+    request_preview: requestPreview,
     plan: {
       target_company: "ACME",
       acquisition_strategy: {
@@ -1081,6 +1101,46 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               selectionFor(["research"], ["current"], "bogus_match"),
               parsedOptions,
             );
+            // Rerun3 finding 7: toggling one AVAILABLE option must never
+            // silently drop unavailable selected ids. They stay preserved
+            // (original relative order, after the available ones) until the
+            // user explicitly removes them.
+            const toggleAddsAvailable = cohortSelection.toggleOrderedOption(
+              ["research", "removed_role"],
+              "engineering",
+              true,
+              parsedOptions.roleBuckets,
+            );
+            const toggleRemovesAvailable = cohortSelection.toggleOrderedOption(
+              ["research", "removed_role"],
+              "research",
+              false,
+              parsedOptions.roleBuckets,
+            );
+            // Explicit removal of the unavailable id DOES drop it (a
+            // deliberate user action, not a side effect of another edit).
+            const explicitRemoval = cohortSelection.toggleOrderedOption(
+              ["research", "removed_role"],
+              "removed_role",
+              false,
+              parsedOptions.roleBuckets,
+            );
+            const toggleStatusPreservesUnavailable = cohortSelection.toggleOrderedOption(
+              ["current", "ghost_status"],
+              "former",
+              true,
+              parsedOptions.employmentStatuses,
+            );
+            // Rendered: unavailable selections render as VISIBLE removable
+            // chips (never invisible state), one per unavailable id.
+            const chipMarkup = render(el(picker.CohortSelectionPicker, {
+              idPrefix: "chip",
+              value: selectionFor(["research", "removed_role"], ["current", "ghost_status"]),
+              options: parsedOptions,
+              locationValue: cohortSelection.createDefaultCohortLocationSelection(),
+              onChange: () => {},
+              onLocationChange: () => {},
+            }));
             console.log(JSON.stringify({
               allRolesBothStatuses,
               threeRolesTwoStatuses,
@@ -1089,6 +1149,14 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               allRolesStale,
               staleStatus,
               staleRoleMatch,
+              toggleAddsAvailable,
+              toggleRemovesAvailable,
+              explicitRemoval,
+              toggleStatusPreservesUnavailable,
+              chipRoleChips: (chipMarkup.match(/chip-unavailable-role-chip"/g) || []).length,
+              chipStatusChips: (chipMarkup.match(/chip-unavailable-status-chip"/g) || []).length,
+              chipRoleRemoveButton: chipMarkup.includes("chip-unavailable-role-remove-removed_role"),
+              chipStatusRemoveButton: chipMarkup.includes("chip-unavailable-status-remove-ghost_status"),
             }));
             """
         )
@@ -1108,7 +1176,10 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         )
         self.assertTrue(payload["allRolesBothStatuses"]["isFullRecall"])
         self.assertFalse(payload["allRolesBothStatuses"]["hasUnavailableSelections"])
-        self.assertEqual(payload["allRolesBothStatuses"]["registryDigest"], "registry-digest")
+        self.assertEqual(
+            payload["allRolesBothStatuses"]["registryDigest"],
+            "9f2c1ab4d5e6478091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
+        )
 
         # 3 roles x 2 statuses -> 6 shards with exact per-shard labels.
         self.assertEqual(payload["threeRolesTwoStatuses"]["shardCount"], 6)
@@ -1167,6 +1238,25 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         stale_role_match = payload["staleRoleMatch"]
         self.assertTrue(stale_role_match["roleMatchUnavailable"])
         self.assertTrue(stale_role_match["hasUnavailableSelections"])
+
+        # Rerun3 finding 7: edits to available options preserve unavailable
+        # selected ids inertly; only an explicit removal drops them.
+        self.assertEqual(
+            payload["toggleAddsAvailable"],
+            ["research", "engineering", "removed_role"],
+        )
+        self.assertEqual(payload["toggleRemovesAvailable"], ["removed_role"])
+        self.assertEqual(payload["explicitRemoval"], ["research"])
+        self.assertEqual(
+            payload["toggleStatusPreservesUnavailable"],
+            ["current", "former", "ghost_status"],
+        )
+
+        # Unavailable selections render as visible removable chips.
+        self.assertEqual(payload["chipRoleChips"], 1)
+        self.assertEqual(payload["chipStatusChips"], 1)
+        self.assertTrue(payload["chipRoleRemoveButton"])
+        self.assertTrue(payload["chipStatusRemoveButton"])
 
     def test_full_recall_warning_budget_and_confirmation_gate(self) -> None:
         script = textwrap.dedent(
@@ -1446,6 +1536,24 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 ["target_locations"],
               ),
             );
+            // Tagged clear wire contract (rerun3 review finding 6): an
+            // initialized, gate-authorized axis restored to the ABSENT state
+            // serializes as the explicit tagged clear operation — never an
+            // omitted key (which would read as "not part of this decision").
+            const clearedReview = api.planReviewDecisionToApiPayload(
+              makeDecision({
+                cohortSelection: explicitCohort,
+                targetLocationsInitialized: true,
+                excludeTargetLocationsInitialized: true,
+              }),
+              ["target_locations", "exclude_target_locations"],
+            );
+            // An axis the decision never initialized stays omitted (no
+            // silent write through the authorized channel).
+            const untouchedReview = api.planReviewDecisionToApiPayload(
+              makeDecision({ cohortSelection: explicitCohort }),
+              ["target_locations"],
+            );
 
             // --- cloneReviewDecision must not silently drop the fields. ---
             const clonedDecision = historyRecovery.cloneReviewDecision(
@@ -1472,7 +1580,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                   target_locations: [" 旧金山  Bay Area "],
                   exclude_target_locations: ["Europe"],
                 },
-                plan: {},
+                plan: cohortPlanRecord(),
               },
               "find people",
             );
@@ -1480,7 +1588,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               {
                 request: { cohort_selection: explicitCohort, target_locations: [] },
                 request_preview: { cohort_selection: explicitCohort, target_locations: [] },
-                plan: {},
+                plan: cohortPlanRecord(),
               },
               "find people",
             );
@@ -1488,7 +1596,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               {
                 request: { raw_user_request: "find people", cohort_selection: explicitCohort },
                 request_preview: { cohort_selection: explicitCohort },
-                plan: {},
+                plan: cohortPlanRecord(),
               },
               "find people",
             );
@@ -1497,7 +1605,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 {
                   request: { cohort_selection: explicitCohort, target_locations: ["Canada"] },
                   request_preview: { cohort_selection: explicitCohort, target_locations: ["United States"] },
-                  plan: {},
+                  plan: cohortPlanRecord(),
                 },
                 "find people",
               ),
@@ -1506,7 +1614,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               api.__testMapPlanPayloadToDemoPlan(
                 {
                   request: { cohort_selection: explicitCohort, target_locations: null },
-                  plan: {},
+                  plan: cohortPlanRecord(),
                 },
                 "find people",
               ),
@@ -1545,6 +1653,8 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               excludeOnlyReview,
               authorizedReview,
               nullReviewError,
+              clearedReview,
+              untouchedReview,
               clonedDecision: {
                 targetLocations: clonedDecision.targetLocations ?? null,
                 excludeTargetLocations: clonedDecision.excludeTargetLocations ?? null,
@@ -1625,6 +1735,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertEqual(payload["authorizedReview"]["target_locations"], ["Canada"])
         self.assertEqual(payload["authorizedReview"]["exclude_target_locations"], [])
         self.assertIn("target_locations must be a list of names", payload["nullReviewError"])
+
+        # Tagged clear (rerun3 finding 6): initialized + authorized + restored
+        # absence serializes as the explicit tagged operation; an
+        # uninitialized axis stays omitted.
+        self.assertEqual(payload["clearedReview"]["target_locations"], {"op": "clear"})
+        self.assertEqual(payload["clearedReview"]["exclude_target_locations"], {"op": "clear"})
+        self.assertNotIn("target_locations", payload["untouchedReview"])
 
         # cloneReviewDecision preserves the fields presence-intact.
         cloned = payload["clonedDecision"]
@@ -2000,33 +2117,59 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             + _HARNESS_PREAMBLE
             + _FIXTURES_PREAMBLE
             + """
-            // Real projection: server membership truth mapped verbatim while
-            // the top-level display status stays single (FT0 §6).
+            // PRODUCTION SHAPE (rerun3 findings 3/8): the backend's canonical
+            // served field is TOP-LEVEL `employment_statuses`
+            // (`candidate_artifacts.py`); `metadata.cohort_employment_statuses`
+            // is a comparison-only mirror. Display status stays single (FT0 §6).
             const dual = api.__testDeriveCandidate({
               candidate_id: "dual-member",
               employment_status: "current",
+              employment_statuses: ["current", "former"],
               metadata: { cohort_employment_statuses: ["current", "former"] },
+            });
+            // The rerun3 probe: a top-level-only row owns membership (the old
+            // frontend owner ignored the canonical layer entirely).
+            const topLevelOnly = api.__testDeriveCandidate({
+              candidate_id: "top-level-only",
+              employment_status: "former",
+              employment_statuses: ["current", "former"],
             });
             const legacy = api.__testDeriveCandidate({
               candidate_id: "legacy-lead",
               employment_status: "lead",
             });
+            // A metadata mirror WITHOUT the canonical owner is invalid
+            // evidence — membership is never borrowed from the mirror.
+            const mirrorWithoutOwnerError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "mirror-without-owner",
+                metadata: { cohort_employment_statuses: ["current", "former"] },
+              }),
+            );
+            // A mirror that disagrees with the canonical layer fails closed.
+            const conflictingMirrorError = captureError(() =>
+              api.__testDeriveCandidate({
+                candidate_id: "conflicting-mirror",
+                employment_statuses: ["current", "former"],
+                metadata: { cohort_employment_statuses: ["current"] },
+              }),
+            );
             const malformedError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "bad-membership",
-                metadata: { cohort_employment_statuses: "current" },
+                employment_statuses: "current",
               }),
             );
             const emptyMembershipError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "empty-membership",
-                metadata: { cohort_employment_statuses: [] },
+                employment_statuses: [],
               }),
             );
             const invalidMembershipError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "invalid-membership",
-                metadata: { cohort_employment_statuses: ["contractor"] },
+                employment_statuses: ["contractor"],
               }),
             );
             // Strict bytes (review finding 4): present null is invalid (not
@@ -2035,25 +2178,25 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             const nullMembershipError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "null-membership",
-                metadata: { cohort_employment_statuses: null },
+                employment_statuses: null,
               }),
             );
             const paddedMembershipError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "padded-membership",
-                metadata: { cohort_employment_statuses: [" Current "] },
+                employment_statuses: [" Current "],
               }),
             );
             const caseMembershipError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "case-membership",
-                metadata: { cohort_employment_statuses: ["CURRENT"] },
+                employment_statuses: ["CURRENT"],
               }),
             );
             const duplicateMembershipError = captureError(() =>
               api.__testDeriveCandidate({
                 candidate_id: "duplicate-membership",
-                metadata: { cohort_employment_statuses: ["current", "current"] },
+                employment_statuses: ["current", "current"],
               }),
             );
             // Cohort provenance without membership: fail closed — the lossy
@@ -2064,6 +2207,39 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 employment_status: "current",
                 metadata: { cohort_lane_membership: [{ employment_status: "current" }] },
               }),
+            );
+
+            // Enrichment overlay (rerun3 finding 3): the materialized record
+            // is a comparison-only mirror. A stale materialized membership
+            // must NEVER replace the canonical base membership.
+            const baseDual = {
+              candidate_id: "enrich-dual",
+              employment_status: "current",
+              employment_statuses: ["current", "former"],
+            };
+            const enrichedAgreeing = api.__testDeriveCandidateFromNormalizedRecord(
+              baseDual,
+              { employment_statuses: ["current", "former"], headline: "Enriched headline" },
+            );
+            const enrichmentConflictError = captureError(() =>
+              api.__testDeriveCandidateFromNormalizedRecord(
+                baseDual,
+                { employment_statuses: ["current"] },
+              ),
+            );
+            const enrichmentMetadataMirrorError = captureError(() =>
+              api.__testDeriveCandidateFromNormalizedRecord(
+                baseDual,
+                { metadata: { cohort_employment_statuses: ["former"] } },
+              ),
+            );
+            // Membership evidence in the enrichment layer WITHOUT a canonical
+            // build-point membership fails closed (no second owner).
+            const enrichmentWithoutBaseError = captureError(() =>
+              api.__testDeriveCandidateFromNormalizedRecord(
+                { candidate_id: "enrich-legacy", employment_status: "lead" },
+                { employment_statuses: ["current"] },
+              ),
             );
 
             const candidates = [
@@ -2100,7 +2276,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 employmentStatus: dual.employmentStatus,
                 cohortEmploymentStatuses: dual.cohortEmploymentStatuses,
               },
+              topLevelOnly: {
+                employmentStatus: topLevelOnly.employmentStatus,
+                cohortEmploymentStatuses: topLevelOnly.cohortEmploymentStatuses,
+              },
               legacyMembership: legacy.cohortEmploymentStatuses ?? null,
+              mirrorWithoutOwnerError,
+              conflictingMirrorError,
               malformedError,
               emptyMembershipError,
               invalidMembershipError,
@@ -2109,6 +2291,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               caseMembershipError,
               duplicateMembershipError,
               provenanceWithoutMembershipError,
+              enrichedAgreeing: {
+                cohortEmploymentStatuses: enrichedAgreeing.cohortEmploymentStatuses,
+                headline: enrichedAgreeing.headline,
+              },
+              enrichmentConflictError,
+              enrichmentMetadataMirrorError,
+              enrichmentWithoutBaseError,
               employmentOptions,
               currentOnly: hits(["current"]),
               formerOnly: hits(["former"]),
@@ -2119,25 +2308,55 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         )
         payload = _run_node(script)
 
-        # Membership truth transported verbatim; display stays single-valued.
+        # Membership truth comes from the canonical top-level layer (verbatim);
+        # the metadata mirror may only confirm it. Display stays single-valued.
         self.assertEqual(payload["dual"]["employmentStatus"], "current")
         self.assertEqual(payload["dual"]["cohortEmploymentStatuses"], ["current", "former"])
+        self.assertEqual(payload["topLevelOnly"]["employmentStatus"], "former")
+        self.assertEqual(payload["topLevelOnly"]["cohortEmploymentStatuses"], ["current", "former"])
         self.assertIsNone(payload["legacyMembership"])
-        self.assertIn("malformed cohort_employment_statuses", payload["malformedError"])
-        self.assertIn("empty cohort_employment_statuses", payload["emptyMembershipError"])
-        self.assertIn("invalid cohort_employment_statuses", payload["invalidMembershipError"])
+
+        # No borrowed/conflicting membership: mirror-without-owner and
+        # disagreeing mirrors fail closed.
+        self.assertIn("mirror without the canonical", payload["mirrorWithoutOwnerError"])
+        self.assertIn("conflicting employment_statuses mirrors", payload["conflictingMirrorError"])
+        self.assertIn("malformed employment_statuses", payload["malformedError"])
+        self.assertIn("empty employment_statuses", payload["emptyMembershipError"])
+        self.assertIn("invalid employment_statuses", payload["invalidMembershipError"])
 
         # Strict bytes: present-null / padded / case / duplicate all invalid.
-        self.assertIn("malformed cohort_employment_statuses", payload["nullMembershipError"])
-        self.assertIn("invalid cohort_employment_statuses", payload["paddedMembershipError"])
-        self.assertIn("invalid cohort_employment_statuses", payload["caseMembershipError"])
-        self.assertIn("duplicate cohort_employment_statuses", payload["duplicateMembershipError"])
+        self.assertIn("malformed employment_statuses", payload["nullMembershipError"])
+        self.assertIn("invalid employment_statuses", payload["paddedMembershipError"])
+        self.assertIn("invalid employment_statuses", payload["caseMembershipError"])
+        self.assertIn("duplicate employment_statuses", payload["duplicateMembershipError"])
 
         # Cohort provenance without membership fails closed (no display-status
         # fallback when Cohort provenance is expected).
         self.assertIn(
-            "Cohort provenance without cohort_employment_statuses",
+            "Cohort provenance without employment_statuses",
             payload["provenanceWithoutMembershipError"],
+        )
+
+        # Enrichment: an agreeing materialized mirror keeps the canonical base
+        # membership (and the enrichment still lands); a stale materialized
+        # membership — top-level or metadata-shaped — and membership evidence
+        # without a build-point owner all fail closed.
+        self.assertEqual(
+            payload["enrichedAgreeing"]["cohortEmploymentStatuses"],
+            ["current", "former"],
+        )
+        self.assertEqual(payload["enrichedAgreeing"]["headline"], "Enriched headline")
+        self.assertIn(
+            "conflicts with the canonical employment_statuses membership",
+            payload["enrichmentConflictError"],
+        )
+        self.assertIn(
+            "conflicts with the canonical employment_statuses membership",
+            payload["enrichmentMetadataMirrorError"],
+        )
+        self.assertIn(
+            "without the canonical build-point membership",
+            payload["enrichmentWithoutBaseError"],
         )
 
         # The dual-status candidate counts in BOTH buckets.
@@ -2567,54 +2786,93 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
             + """
             (async () => {
               const cohort = selectionFor(["research"], ["current", "former"]);
-              // Review finding 1 (r3): absent (server default), explicit []
-              // opt-out, and present values are THREE distinct states. An
-              // absent canonical request mirror must NOT be discarded while a
-              // stale present mirror wins — every combination below must fail
-              // closed instead of silently adopting the stale value.
+              // Review finding 1 (r4/rerun3): the canonical request
+              // (`payload.request`) is the SOLE location owner. Partial
+              // projections (every request_preview / intent_view variant)
+              // compare ONLY the location keys they actually project — the
+              // real backend preview never projects them, so its omission is
+              // NOT an authoritative absent state (the rerun3 probe). A
+              // preview that DOES project a key must agree byte-exactly.
               const mapError = (payload) =>
                 captureError(() => api.__testMapPlanPayloadToDemoPlan(payload, "find people"));
+              const mapLocations = (payload) => {
+                const plan = api.__testMapPlanPayloadToDemoPlan(payload, "find people");
+                return {
+                  targetLocations: plan.targetLocations ?? null,
+                  excludeTargetLocations: plan.excludeTargetLocations ?? null,
+                  hasTargetKey: Object.prototype.hasOwnProperty.call(plan, "targetLocations"),
+                  hasExcludeKey: Object.prototype.hasOwnProperty.call(plan, "excludeTargetLocations"),
+                };
+              };
+              // Canonical absent vs a preview PROJECTING a present value is a
+              // CONFLICT (the projected key disagrees with the owner).
               const absentVsPresentPreview = mapError({
                 request: { raw_user_request: "find people", cohort_selection: cohort },
                 request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
-                plan: {},
+                plan: cohortPlanRecord(),
               });
               const absentVsPresentMetadataPreview = mapError({
                 request: { raw_user_request: "find people", cohort_selection: cohort },
-                plan: {},
+                plan: cohortPlanRecord(),
                 metadata: { request_preview: { cohort_selection: cohort, target_locations: ["Canada"] } },
               });
-              const presentVsAbsentPreview = mapError({
+              // PRODUCTION SHAPE (rerun3 finding 1 probe): canonical request
+              // owns Canada; the real-backend preview omits both location
+              // keys — the omission is NOT evidence and the plan maps fine.
+              const productionPreviewOmission = mapLocations({
                 request: { cohort_selection: cohort, target_locations: ["Canada"] },
                 request_preview: { cohort_selection: cohort },
-                plan: {},
+                plan: cohortPlanRecord(),
               });
-              const optOutVsAbsentPreview = mapError({
+              const optOutVsPreviewOmission = mapLocations({
                 request: { cohort_selection: cohort, target_locations: [] },
                 request_preview: { cohort_selection: cohort },
-                plan: {},
+                plan: cohortPlanRecord(),
               });
-              const excludePresentVsAbsentPreview = mapError({
+              const excludeVsPreviewOmission = mapLocations({
                 request: { cohort_selection: cohort, exclude_target_locations: ["Europe"] },
                 request_preview: { cohort_selection: cohort },
-                plan: {},
+                plan: cohortPlanRecord(),
               });
-              // All preview mirrors in the ladder are compared, not just the
+              // Every projecting preview mirror is compared, not just the
               // first truthy one: payload.request_preview agrees with the
-              // canonical owner while metadata.request_preview is stale.
+              // canonical owner while metadata.request_preview projects a
+              // stale value.
               const staleSecondPreviewMirror = mapError({
                 request: { cohort_selection: cohort, target_locations: ["Canada"] },
                 request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
-                plan: {},
+                plan: cohortPlanRecord(),
                 metadata: { request_preview: { cohort_selection: cohort, target_locations: ["United States"] } },
+              });
+              // Missing canonical ownership fails CLOSED (no borrowed mirror
+              // owner): an explicit-Cohort plan without `payload.request` —
+              // or with a non-object one — never reaches the review UI.
+              const missingCanonicalRequest = mapError({
+                request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
+                plan: cohortPlanRecord(),
+              });
+              const nonObjectCanonicalRequest = mapError({
+                request: "not-an-object",
+                request_preview: { cohort_selection: cohort },
+                plan: cohortPlanRecord(),
+              });
+              // COMPLETE request mirrors compare presence-intact: a stale
+              // stored request conflicts; an agreeing one round-trips.
+              const staleCompleteMirror = mapError({
+                request: { cohort_selection: cohort, target_locations: ["Canada"] },
+                plan: cohortPlanRecord(),
+                metadata: { request: { cohort_selection: cohort, target_locations: ["United States"] } },
               });
               // Presence-intact happy paths: every present mirror agrees.
               const agreedValues = api.__testMapPlanPayloadToDemoPlan(
                 {
                   request: { cohort_selection: cohort, target_locations: ["Canada"] },
                   request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
-                  plan: {},
-                  metadata: { request_preview: { cohort_selection: cohort, target_locations: ["Canada"] } },
+                  plan: cohortPlanRecord(),
+                  metadata: {
+                    request: { cohort_selection: cohort, target_locations: ["Canada"] },
+                    request_preview: { cohort_selection: cohort, target_locations: ["Canada"] },
+                  },
                 },
                 "find people",
               );
@@ -2622,7 +2880,7 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 {
                   request: { cohort_selection: cohort, target_locations: [] },
                   request_preview: { cohort_selection: cohort, target_locations: [] },
-                  plan: {},
+                  plan: cohortPlanRecord(),
                 },
                 "find people",
               );
@@ -2630,15 +2888,15 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 {
                   request: { raw_user_request: "find people", cohort_selection: cohort },
                   request_preview: { cohort_selection: cohort },
-                  plan: {},
+                  plan: cohortPlanRecord(),
                 },
                 "find people",
               );
 
               // Rendered integration: a recovery envelope whose canonical
               // request owns the absent state while a stale request_preview
-              // carries Canada must FAIL the recovery mapping — no plan card,
-              // no approval/start calls.
+              // PROJECTS Canada must FAIL the recovery mapping — no plan
+              // card, no approval/start calls.
               const staleResponse = planResponseForRequest(
                 { raw_user_request: "find people", cohort_selection: cohort },
                 { historyId: "hist-stale-mirror", reviewId: "review-31" },
@@ -2658,10 +2916,13 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
               console.log(JSON.stringify({
                 absentVsPresentPreview,
                 absentVsPresentMetadataPreview,
-                presentVsAbsentPreview,
-                optOutVsAbsentPreview,
-                excludePresentVsAbsentPreview,
+                productionPreviewOmission,
+                optOutVsPreviewOmission,
+                excludeVsPreviewOmission,
                 staleSecondPreviewMirror,
+                missingCanonicalRequest,
+                nonObjectCanonicalRequest,
+                staleCompleteMirror,
                 agreedValues: {
                   targetLocations: agreedValues.targetLocations ?? null,
                   hasTargetKey: Object.prototype.hasOwnProperty.call(agreedValues, "targetLocations"),
@@ -2689,18 +2950,28 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         )
         payload = _run_node(script)
 
-        # Absent vs present (in either direction, on either axis, in any
-        # preview mirror) is a CONFLICT, not a silent adoption of the stale
-        # value.
+        # A preview PROJECTING a value that disagrees with the canonical owner
+        # (in either direction, on either axis, in any preview mirror) is a
+        # CONFLICT, not a silent adoption of the stale value. A stale
+        # COMPLETE request mirror conflicts presence-intact as well.
         for key in (
             "absentVsPresentPreview",
             "absentVsPresentMetadataPreview",
-            "presentVsAbsentPreview",
-            "optOutVsAbsentPreview",
-            "excludePresentVsAbsentPreview",
             "staleSecondPreviewMirror",
+            "staleCompleteMirror",
         ):
             self.assertIn("conflicting target_locations mirrors", payload[key], key)
+
+        # Missing/non-object canonical ownership fails closed (never borrowed).
+        self.assertIn("missing the canonical request owner", payload["missingCanonicalRequest"])
+        self.assertIn("missing the canonical request owner", payload["nonObjectCanonicalRequest"])
+
+        # Production-shape preview omission is NOT a conflict: the canonical
+        # request's values / opt-out / exclude round-trip exactly.
+        self.assertEqual(payload["productionPreviewOmission"]["targetLocations"], ["Canada"])
+        self.assertEqual(payload["optOutVsPreviewOmission"]["targetLocations"], [])
+        self.assertTrue(payload["optOutVsPreviewOmission"]["hasTargetKey"])
+        self.assertEqual(payload["excludeVsPreviewOmission"]["excludeTargetLocations"], ["Europe"])
 
         # Presence-intact agreement round-trips values and opt-out exactly;
         # all-absent stays absent (legacy request, server default applies).
@@ -2918,6 +3189,74 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 },
                 metadata: { provider_execution_manifest: manifestPin() },
               });
+              // Rerun3 finding 5: a MISSING canonical plan manifest fails
+              // closed — the pinned metadata mirror is never promoted into
+              // the canonical slot (before r4 this produced a borrowed,
+              // valid-looking pin).
+              const missingCanonicalPinnedMetadata = mapPin({
+                request: { cohort_selection: cohort },
+                plan: { acquisition_strategy: {} },
+                metadata: { provider_execution_manifest: manifestPin() },
+              });
+              const nonObjectCanonicalPinnedMetadata = mapPin({
+                request: { cohort_selection: cohort },
+                plan: { acquisition_strategy: { provider_execution_manifest: "not-an-object" } },
+                metadata: { provider_execution_manifest: manifestPin() },
+              });
+              // Padded/mis-shaped pin bytes are invalid pin evidence — the
+              // dedicated byte-exact validators never trim them into a match.
+              const paddedCanonicalPin = mapPin({
+                request: { cohort_selection: cohort },
+                plan: {
+                  acquisition_strategy: {
+                    provider_execution_manifest: manifestPin({
+                      registry_version: ` ${REGISTRY_VERSION} `,
+                    }),
+                  },
+                },
+                metadata: { provider_execution_manifest: manifestPin() },
+              });
+              const shortDigestCanonicalPin = mapPin({
+                request: { cohort_selection: cohort },
+                plan: {
+                  acquisition_strategy: {
+                    provider_execution_manifest: manifestPin({
+                      registry_digest: "abcd",
+                    }),
+                  },
+                },
+                metadata: { provider_execution_manifest: manifestPin() },
+              });
+              // The options parser validates pin bytes byte-exactly too:
+              // padded or mis-shaped registry pins are rejected, never
+              // repaired into a match against the plan pin.
+              const paddedOptionsVersionError = captureError(() =>
+                cohortSelection.parseCohortSelectionOptionsPayload({
+                  ...optionsPayload,
+                  registry_version: ` ${REGISTRY_VERSION} `,
+                }),
+              );
+              const paddedOptionsDigestError = captureError(() =>
+                cohortSelection.parseCohortSelectionOptionsPayload({
+                  ...optionsPayload,
+                  registry_digest: ` ${REGISTRY_DIGEST} `,
+                }),
+              );
+              const shortOptionsDigestError = captureError(() =>
+                cohortSelection.parseCohortSelectionOptionsPayload({
+                  ...optionsPayload,
+                  registry_digest: "abcd",
+                }),
+              );
+              // Non-Cohort plans own no registry pin at all.
+              const nonCohortPlan = api.__testMapPlanPayloadToDemoPlan(
+                {
+                  request: { raw_user_request: "find people" },
+                  plan: { acquisition_strategy: {} },
+                  metadata: {},
+                },
+                "find people",
+              );
               // Every manifest unpinned -> no pin evidence anywhere -> the
               // plan maps with an UNDEFINED pin (confirmation blocks).
               const allUnpinned = api.__testMapPlanPayloadToDemoPlan(
@@ -2963,6 +3302,14 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
                 unpinnedCanonicalPinnedMirror,
                 pinnedCanonicalUnpinnedMirror,
                 halfPinnedCanonical,
+                missingCanonicalPinnedMetadata,
+                nonObjectCanonicalPinnedMetadata,
+                paddedCanonicalPin,
+                shortDigestCanonicalPin,
+                paddedOptionsVersionError,
+                paddedOptionsDigestError,
+                shortOptionsDigestError,
+                nonCohortPin: nonCohortPlan.cohortRegistryPin ?? null,
                 allUnpinnedPin: allUnpinned.cohortRegistryPin ?? null,
                 agreedPinnedPin: agreedPinned.cohortRegistryPin ?? null,
                 rendered: {
@@ -2986,11 +3333,37 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertIn("conflicting cohort registry pins", payload["pinnedCanonicalUnpinnedMirror"])
         self.assertIn("invalid cohort registry pin", payload["halfPinnedCanonical"])
 
-        # All-unpinned stays unconfirmable (no pin), agreed mirrors pin.
+        # Rerun3 finding 5: a missing or non-object canonical plan manifest
+        # fails closed — the pinned metadata mirror is never promoted into
+        # the canonical slot.
+        self.assertIn(
+            "missing the canonical provider execution manifest",
+            payload["missingCanonicalPinnedMetadata"],
+        )
+        self.assertIn(
+            "invalid canonical provider execution manifest",
+            payload["nonObjectCanonicalPinnedMetadata"],
+        )
+
+        # Padded/mis-shaped pin bytes are invalid pin evidence (byte-exact
+        # validators, no trim repair) — in BOTH the manifest reader and the
+        # options parser.
+        self.assertIn("invalid cohort registry pin", payload["paddedCanonicalPin"])
+        self.assertIn("invalid cohort registry pin", payload["shortDigestCanonicalPin"])
+        self.assertIn("invalid registry_version", payload["paddedOptionsVersionError"])
+        self.assertIn("invalid registry_digest", payload["paddedOptionsDigestError"])
+        self.assertIn("invalid registry_digest", payload["shortOptionsDigestError"])
+
+        # Non-Cohort plans own no pin; all-unpinned stays unconfirmable (no
+        # pin), agreed mirrors pin.
+        self.assertIsNone(payload["nonCohortPin"])
         self.assertIsNone(payload["allUnpinnedPin"])
         self.assertEqual(
             payload["agreedPinnedPin"],
-            {"registryVersion": "cohort_selection.registry.v1", "registryDigest": "registry-digest"},
+            {
+                "registryVersion": "cohort_selection.registry.v1",
+                "registryDigest": "9f2c1ab4d5e6478091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
+            },
         )
 
         # Rendered: the stale pinned mirror cannot manufacture a confirmable
@@ -3356,6 +3729,348 @@ class FrontendTargetingPreviewTest(unittest.TestCase):
         self.assertIn("Researcher", canonical_section)
         self.assertIn("Engineer", canonical_section)
         self.assertNotIn("facet-empty-message", canonical_section)
+
+    def test_facet_scope_contracts_consumed_independently(self) -> None:
+        """Rerun3 finding 2: summary scope and filter-contract scope are
+        independent backend-owned contracts — consumed from their own owners,
+        never minted (`exact_projection` default) or copied into each other,
+        and disabled on missing or conflicting evidence."""
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            // Production-shaped projection dashboard payload (the pinned
+            // serving_projection_reader shape): membership revision + exact
+            // read contract + consistent counts.
+            const projectionPayload = (mutate) => {
+              const payload = {
+                projection: {
+                  projection_id: "proj-1",
+                  source_run_id: "run-1",
+                  scope_label: "ACME members",
+                  collection_id: "company:acme",
+                  membership_revision: "rev-1",
+                  visible_member_count: 2,
+                  read_contract: {
+                    source: "serving_projection_members",
+                    fallback_used: false,
+                    fail_closed: true,
+                  },
+                  counts: {
+                    count_scope: "exact_projection",
+                    result_count: 2,
+                    candidate_count: 2,
+                    visible_member_count: 2,
+                    facet_count_scope: "exact_projection",
+                  },
+                  readiness: {},
+                  provenance: { snapshot_id: "snap-1" },
+                  updated_at: "2026-07-19T00:00:00Z",
+                },
+                total_candidates: 2,
+                facet_summary: {
+                  status: "complete",
+                  count_scope: "exact_projection",
+                  candidate_count: 2,
+                  layers: [{ id: "layer_0", label: "Layer 0", count: 2 }],
+                  functions: [{ id: "research", label: "Researcher", count: 2 }],
+                },
+                facet_summary_scope: "exact_projection",
+              };
+              if (mutate) mutate(payload);
+              return payload;
+            };
+            const scopeTriple = (payload) => {
+              const dashboard = api.__testProjectionPayloadToDashboard(payload);
+              return {
+                topLevelSummaryScope: dashboard.candidateFacetSummaryScope,
+                boardSummaryScope: dashboard.boardRuntimeState.facetSummaryScope,
+                filterFacetCountScope: dashboard.boardRuntimeState.filterContract.facetCountScope,
+              };
+            };
+            // Independent owners: summary scope global_full_population while
+            // the filter contract stays exact_projection — each field keeps
+            // its OWN backend value (no copy between contracts).
+            const agreeingScopes = scopeTriple(
+              projectionPayload((payload) => {
+                payload.facet_summary_scope = "global_full_population";
+                payload.facet_summary.count_scope = "global_full_population";
+              }),
+            );
+            // Missing summary-scope evidence: NOT minted into
+            // exact_projection; the filter contract keeps its own owner.
+            const missingSummaryScope = scopeTriple(
+              projectionPayload((payload) => {
+                delete payload.facet_summary_scope;
+                delete payload.facet_summary.count_scope;
+              }),
+            );
+            // Conflicting summary-scope mirrors: disabled, not promoted.
+            const conflictingSummaryScope = scopeTriple(
+              projectionPayload((payload) => {
+                payload.facet_summary.count_scope = "global_full_population";
+              }),
+            );
+            // Missing filter-contract scope: NOT copied from the summary
+            // scope; the summary scope keeps its own owner.
+            const missingFilterScope = scopeTriple(
+              projectionPayload((payload) => {
+                delete payload.projection.counts.facet_count_scope;
+              }),
+            );
+            console.log(JSON.stringify({
+              agreeingScopes,
+              missingSummaryScope,
+              conflictingSummaryScope,
+              missingFilterScope,
+            }));
+            """
+        )
+        payload = _run_node(script)
+
+        # Independent contracts: each field keeps its own backend-owned value.
+        agreeing = payload["agreeingScopes"]
+        self.assertEqual(agreeing["topLevelSummaryScope"], "global_full_population")
+        self.assertEqual(agreeing["boardSummaryScope"], "global_full_population")
+        self.assertEqual(agreeing["filterFacetCountScope"], "exact_projection")
+
+        # Missing summary-scope evidence is NOT minted into exact_projection;
+        # the summary scope maps unavailable while the independent filter
+        # contract keeps its own backend-owned value.
+        missing_summary = payload["missingSummaryScope"]
+        self.assertEqual(missing_summary["topLevelSummaryScope"], "")
+        self.assertEqual(missing_summary["boardSummaryScope"], "unavailable")
+        self.assertEqual(missing_summary["filterFacetCountScope"], "exact_projection")
+
+        # Conflicting summary-scope mirrors disable the scope (not promoted).
+        conflict = payload["conflictingSummaryScope"]
+        self.assertEqual(conflict["topLevelSummaryScope"], "")
+        self.assertEqual(conflict["boardSummaryScope"], "unavailable")
+
+        # Missing filter-contract scope is NOT copied from the summary scope.
+        missing_filter = payload["missingFilterScope"]
+        self.assertEqual(missing_filter["filterFacetCountScope"], "unavailable")
+        self.assertEqual(missing_filter["boardSummaryScope"], "exact_projection")
+
+    def test_transient_summary_gap_preserves_function_filter(self) -> None:
+        """Rerun3 findings 4/8: a transient canonical-summary gap after a user
+        function-filter edit must NOT wipe the selection, must NOT submit a
+        widened backend filter, and must restore the narrowed filter when the
+        summary returns — exercising the MOUNTED board through the real
+        state/effect path (no static rendering)."""
+        script = textwrap.dedent(
+            _MINIDOM_PREAMBLE
+            + _HARNESS_PREAMBLE
+            + _FIXTURES_PREAMBLE
+            + """
+            (async () => {
+              const resultsBoard = loadTs("frontend-demo/src/components/ResultsBoardPanel.tsx");
+              const REV = "rev-1";
+              const functionSummary = {
+                candidateCount: 2,
+                layers: [],
+                recall: [],
+                employment: [],
+                locations: [],
+                functions: [
+                  { id: "research", label: "Researcher", count: 1 },
+                  { id: "engineering", label: "Engineer", count: 1 },
+                ],
+              };
+              const boardRuntimeFor = (facet) => ({
+                expectedCandidateCount: 2,
+                rowPublicationRevision: REV,
+                facetSummaryStatus: facet ? "complete" : "unavailable",
+                facetSummaryScope: facet ? "global_full_population" : "unavailable",
+                facetSummaryCandidateCount: facet ? 2 : 0,
+                filterContract: {
+                  source: "serving_projection_reader",
+                  facetCountScope: "exact_projection",
+                  rowFilterScope: "projection_membership",
+                  backendFilteredPagingSupported: true,
+                },
+              });
+              const boardCandidate = (patch) => ({
+                ...baseCandidate,
+                evidence: [],
+                confidence: "high",
+                avatarUrl: "",
+                ...patch,
+              });
+              const candidates = [
+                boardCandidate({
+                  id: "row-1",
+                  employmentStatus: "current",
+                  functionBucketIds: ["engineering"],
+                  functionBucketSource: "lane_membership",
+                }),
+                boardCandidate({
+                  id: "row-2",
+                  employmentStatus: "former",
+                  functionBucketIds: ["research"],
+                  functionBucketSource: "registry_evidence",
+                }),
+              ];
+              const dashboardFor = (withSummary) => ({
+                candidates,
+                layers: [],
+                intentKeywords: [],
+                totalCandidates: 2,
+                manualReviewCount: 0,
+                projectionId: "proj-1",
+                candidateFacetSummary: withSummary ? functionSummary : undefined,
+                candidateFacetSummaryScope: withSummary ? "global_full_population" : "",
+                boardRuntimeState: boardRuntimeFor(withSummary),
+              });
+              const boardProps = (dashboard) => ({
+                dashboard,
+                projectionId: "proj-1",
+                historyId: "",
+                jobId: "",
+                initialCandidateId: "",
+                isHydratingCandidates: false,
+                candidateHydrationError: "",
+                reviewStatusMap: {},
+                onSelectedCandidateChange: () => {},
+                onOpenManualReview: () => {},
+                onReviewStateChanged: () => {},
+              });
+              // Production-shaped projection candidate page (the pinned
+              // serving reader shape; empty rows — the assertions target the
+              // request filter, the notice, and the preserved selection).
+              const pagePayload = {
+                status: "ready",
+                projection: {
+                  projection_id: "proj-1",
+                  source_run_id: "run-1",
+                  membership_revision: REV,
+                  visible_member_count: 2,
+                  read_contract: {
+                    source: "serving_projection_members",
+                    fallback_used: false,
+                    fail_closed: true,
+                  },
+                  counts: {
+                    count_scope: "exact_projection",
+                    result_count: 2,
+                    candidate_count: 2,
+                    visible_member_count: 2,
+                    facet_count_scope: "exact_projection",
+                  },
+                  readiness: {},
+                },
+                total_candidates: 2,
+                filtered_candidate_count: 1,
+                offset: 0,
+                limit: 24,
+                has_more: false,
+                next_offset: null,
+                candidates: [],
+                facet_summary: {
+                  status: "complete",
+                  count_scope: "exact_projection",
+                  candidate_count: 2,
+                },
+                filter_contract: {
+                  source: "serving_projection_reader",
+                  facet_count_scope: "exact_projection",
+                  row_filter_scope: "projection_membership",
+                  backend_filtered_paging_supported: true,
+                },
+              };
+              addRoute("GET", "/api/projections/proj-1/candidates", () => pagePayload);
+
+              const container = miniWindow.document.createElement("div");
+              miniWindow.document.body.appendChild(container);
+              const root = ReactDOMClient.createRoot(container);
+              const renderBoard = async (dashboard) => {
+                await act(async () => {
+                  root.render(el(resultsBoard.ResultsBoardPanel, boardProps(dashboard)));
+                });
+                await settle();
+              };
+              const pageRequestUrls = () =>
+                callsTo("/api/projections/proj-1/candidates").map((call) => call.url || call.path);
+              const findFacetOptionInput = (labelText) => {
+                let found = null;
+                const visit = (node) => {
+                  if (found || !node) return;
+                  if (
+                    node.nodeType === 1 &&
+                    node.nodeName === "LABEL" &&
+                    String(node.getAttribute("class") || "").includes("facet-option") &&
+                    node.textContent.includes(labelText)
+                  ) {
+                    found = (node.childNodes || []).find((child) => child.nodeName === "INPUT") || null;
+                    return;
+                  }
+                  for (const child of node.childNodes || []) visit(child);
+                };
+                visit(container);
+                return found;
+              };
+
+              // Phase 1: canonical summary available — defaults settle, the
+              // initial (unfiltered) page request fires.
+              await renderBoard(dashboardFor(true));
+              const initialRequestCount = pageRequestUrls().length;
+
+              // Phase 2: the user narrows the function facet to research only
+              // (toggle engineering OFF the all-selected default).
+              const engineeringInput = findFacetOptionInput("Engineer");
+              setCheckbox(engineeringInput, false);
+              await settle();
+              const narrowedUrls = pageRequestUrls();
+
+              // Phase 3: TRANSIENT GAP — same membership revision, summary
+              // momentarily unavailable (polling/cross-endpoint race).
+              await renderBoard(dashboardFor(false));
+              await settle();
+              const gapUrls = pageRequestUrls();
+              const gapNotice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+
+              // Phase 4: the summary returns (same revision) — the preserved
+              // selection reconciles against the restored canonical options
+              // and the narrowed filter is resubmitted.
+              await renderBoard(dashboardFor(true));
+              await settle();
+              const restoredUrls = pageRequestUrls();
+              const restoredNotice = Boolean(findByTestId(container, "facet-gap-preserved-notice"));
+
+              console.log(JSON.stringify({
+                initialRequestCount,
+                narrowedUrls,
+                gapRequestCount: gapUrls.length,
+                gapNotice,
+                restoredUrls,
+                restoredNotice,
+              }));
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            """
+        )
+        payload = _run_node(script)
+
+        # Phase 2: the user edit submits the NARROWED backend filter.
+        narrowed = payload["narrowedUrls"]
+        self.assertGreater(len(narrowed), payload["initialRequestCount"])
+        self.assertTrue(any("function_buckets=research" in url for url in narrowed), narrowed)
+
+        # Phase 3: the transient gap fires NO new backend page request at
+        # all — in particular never a widened one without function_buckets —
+        # and the blocking preserved-intent notice is visible.
+        self.assertEqual(payload["gapRequestCount"], len(narrowed))
+        self.assertTrue(payload["gapNotice"])
+
+        # Phase 4: the summary return resubmits the PRESERVED narrowed
+        # filter (selection restored, never wiped), and the notice clears.
+        restored = payload["restoredUrls"]
+        self.assertEqual(len(restored), len(narrowed) + 1)
+        self.assertIn("function_buckets=research", restored[-1])
+        self.assertFalse(payload["restoredNotice"])
 
 
 if __name__ == "__main__":

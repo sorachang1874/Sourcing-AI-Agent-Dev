@@ -178,6 +178,63 @@ export function CohortSelectionPicker({
   const targetOptedOut =
     locations.targetLocations !== undefined && locations.targetLocations.length === 0;
 
+  // Unavailable selected ids render as VISIBLE removable chips (FT2
+  // fixed-forward r4, review finding 5/rerun3 finding 7): they are never
+  // silently dropped by edits to other options, so the user resolves them
+  // explicitly here — removal is a deliberate action, and confirmation stays
+  // blocked (via the shard preview) until every unavailable id is resolved.
+  const renderUnavailableChips = (
+    kind: "role" | "status",
+    unavailableIds: string[],
+  ) => {
+    if (!value || unavailableIds.length === 0) {
+      return null;
+    }
+    return (
+      <div className="cohort-unavailable-chips" data-testid={`${idPrefix}-unavailable-${kind}-chips`}>
+        {unavailableIds.map((id) => {
+          const isLastStatus =
+            kind === "status" && value.employment_statuses.length === 1;
+          return (
+            <span key={id} className="cohort-unavailable-chip" data-testid={`${idPrefix}-unavailable-${kind}-chip`}>
+              <span>{id}（当前选项已不包含）</span>
+              <button
+                type="button"
+                className="link-chip"
+                aria-label={`移除不可用选项 ${id}`}
+                data-testid={`${idPrefix}-unavailable-${kind}-remove-${id}`}
+                disabled={controlsDisabled || isLastStatus}
+                onClick={() =>
+                  updateSelection(
+                    kind === "role"
+                      ? {
+                          role_bucket_ids: toggleOrderedOption(
+                            value.role_bucket_ids,
+                            id,
+                            false,
+                            options?.roleBuckets || [],
+                          ),
+                        }
+                      : {
+                          employment_statuses: toggleOrderedOption(
+                            value.employment_statuses,
+                            id,
+                            false,
+                            options?.employmentStatuses || [],
+                          ),
+                        },
+                  )
+                }
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <section
       className={`cohort-picker${compact ? " compact" : ""}${locked ? " locked" : ""}`}
@@ -267,6 +324,7 @@ export function CohortSelectionPicker({
                 </label>
               ))}
             </div>
+            {renderUnavailableChips("role", shardPreview?.unavailableRoleIds || [])}
           </fieldset>
 
           <fieldset disabled={controlsDisabled}>
@@ -299,6 +357,7 @@ export function CohortSelectionPicker({
                 );
               })}
             </div>
+            {renderUnavailableChips("status", shardPreview?.unavailableStatusIds || [])}
           </fieldset>
 
           <fieldset disabled={controlsDisabled}>

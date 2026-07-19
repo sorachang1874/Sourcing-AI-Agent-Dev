@@ -26,6 +26,47 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value.trim();
 }
 
+/**
+ * Byte-exact registry pin validation (FT2 fixed-forward r4, review finding
+ * 3): registry version/digest are server identity bytes, never display text.
+ * They must NOT be trimmed or otherwise repaired into a match — a padded or
+ * mis-shaped pin is invalid pin evidence and fails closed. The documented
+ * shapes come from the backend registry owner (`cohort_selection.py`):
+ * `registry_version` is a dotted version token (e.g.
+ * `cohort_selection.registry.v1`) and `registry_digest` is the sha256 hex of
+ * the canonical registry payload.
+ */
+export const COHORT_REGISTRY_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+export const COHORT_REGISTRY_DIGEST_PATTERN = /^[0-9a-f]{64}$/;
+
+export function isByteExactRegistryVersion(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value !== "" &&
+    value === value.trim() &&
+    COHORT_REGISTRY_VERSION_PATTERN.test(value)
+  );
+}
+
+export function isByteExactRegistryDigest(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value !== "" &&
+    value === value.trim() &&
+    COHORT_REGISTRY_DIGEST_PATTERN.test(value)
+  );
+}
+
+function requiredRegistryPinValue(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  const valid =
+    key === "registry_version" ? isByteExactRegistryVersion(value) : isByteExactRegistryDigest(value);
+  if (!valid) {
+    throw new Error(`Cohort options response has an invalid ${key}.`);
+  }
+  return value as string;
+}
+
 function parseOptionList(value: unknown, field: string, allowEmpty = false): CohortSelectionOption[] {
   if (!Array.isArray(value) || (!allowEmpty && value.length === 0)) {
     throw new Error(`Cohort options response has an invalid ${field}.`);
@@ -70,8 +111,11 @@ export function parseCohortSelectionOptionsPayload(payload: unknown): CohortSele
   }
   return {
     schemaVersion,
-    registryVersion: requiredString(payload, "registry_version"),
-    registryDigest: requiredString(payload, "registry_digest"),
+    // Pin fields use the dedicated byte-exact validator (never the trimming
+    // requiredString): padded/mis-shaped pin bytes are invalid evidence, not
+    // a repairable near-match.
+    registryVersion: requiredRegistryPinValue(payload, "registry_version"),
+    registryDigest: requiredRegistryPinValue(payload, "registry_digest"),
     roleBuckets,
     employmentStatuses,
     roleMatchOptions,
@@ -156,7 +200,16 @@ export function toggleOrderedOption(
   } else {
     selected.delete(optionId);
   }
-  return options.filter((option) => selected.has(option.id)).map((option) => option.id);
+  // Unavailable selected ids are preserved inertly (FT2 fixed-forward r4,
+  // review finding 5/rerun3 finding 7): toggling one AVAILABLE option must
+  // never silently drop selected ids the current server options no longer
+  // offer. They keep their original relative order after the available ones
+  // until the user explicitly removes them (the unchecked branch above) or
+  // replaces the selection.
+  const availableOrdered = options.filter((option) => selected.has(option.id)).map((option) => option.id);
+  const availableIds = new Set(options.map((option) => option.id));
+  const preservedUnavailable = selectedIds.filter((id) => selected.has(id) && !availableIds.has(id));
+  return [...availableOrdered, ...preservedUnavailable];
 }
 
 export function equalCohortSelection(left: CohortSelection, right: CohortSelection): boolean {
@@ -316,6 +369,28 @@ export function buildCohortLocationApiPayload(
     payload.exclude_target_locations = exclude;
   }
   return payload;
+}
+
+/**
+ * Tagged plan-REVIEW wire contract for the location fields (FT2
+ * fixed-forward r4, rerun3 review finding 6). The review-decision payload
+ * must distinguish three states per authorized axis:
+ * - values / explicit `[]`  -> replace the canonical request axis
+ *   (serialized as the normalized list, unchanged);
+ * - restored ABSENCE        -> an explicit clear operation
+ *   (`{ op: "clear" }`) so a backend application owner can merge the
+ *   restore-absence decision into the canonical request instead of reading
+ *   an omitted key as "field not part of this decision";
+ * - unauthorized / uninitialized axis -> the key is omitted entirely.
+ * The backend review gate + application owner for these fields is still
+ * pending (see the r4 handoff): until the gate lists a location field as
+ * editable the frontend never serializes either operation, so the tagged
+ * contract cannot reach the wire unauthorized.
+ */
+export const LOCATION_REVIEW_CLEAR_OPERATION = "clear";
+
+export function buildLocationReviewClearPayload(): Record<string, string> {
+  return { op: LOCATION_REVIEW_CLEAR_OPERATION };
 }
 
 /**
