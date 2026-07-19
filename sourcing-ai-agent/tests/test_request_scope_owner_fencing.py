@@ -1151,8 +1151,12 @@ def test_criteria_suggestion_preflights_direct_and_feedback_sources_independentl
 def test_criteria_rerun_whitespace_job_id_does_not_mask_explicit_baseline() -> None:
     reads: list[str] = []
     orchestrator = object.__new__(SourcingOrchestrator)
+    # The owned baseline carries a matching stored request: since FT1-FF3 an
+    # explicit baseline whose target-company identity cannot be proven is
+    # rejected unconditionally, so the eligible-path assertions below require
+    # an identity-coherent fixture.
     orchestrator.store = SimpleNamespace(
-        get_job=lambda job_id: reads.append(job_id) or _owned_job(),
+        get_job=lambda job_id: reads.append(job_id) or _owned_job(request={"target_company": "OpenAI"}),
         get_job_results=lambda _job_id: [],
     )
     with patch(
@@ -1427,3 +1431,79 @@ def test_criteria_rerun_explicit_baseline_with_identical_location_proceeds(cohor
     assert result["baseline_selection"]["family_score"] == 100.0
     assert result["baseline_selection"]["exact_request_match"] is True
     assert events == ["read:job:job-owned", "read:results:job-owned"]
+
+
+@pytest.mark.parametrize("cohort", [False, True], ids=["legacy", "cohort"])
+def test_criteria_rerun_explicit_baseline_never_crosses_target_company(cohort: bool) -> None:
+    """FT1-FF3 (finding 1): an explicit baseline from a DIFFERENT target
+    company is rejected before any baseline result read or rerun policy
+    execution — target-company mismatch is an unconditional hard fence."""
+    current_request = _location_request_record(["United States"], cohort=cohort)
+    baseline_request = {
+        **_location_request_record(["United States"], cohort=cohort),
+        "target_company": "Anthropic",
+    }
+    events: list[str] = []
+    baseline_job = _owned_job(job_id="job-owned", status="completed", request=baseline_request)
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or baseline_job,
+        get_job_results=lambda job_id: events.append(f"read:results:{job_id}") or [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        side_effect=AssertionError("policy must not execute on target-company mismatch"),
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"job_id": "job-owned", "rerun_retrieval": True},
+            {"feedback_id": 1},
+            {"status": "recompiled", "request": current_request, "plan": {}},
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "baseline_request_identity_mismatch"
+    assert result["baseline_job_id"] == "job-owned"
+    assert result["baseline_selection"]["family_score"] == 0.0
+    assert result["baseline_selection"]["exact_request_match"] is False
+    assert result["baseline_selection"]["reasons"] == ["target_company_mismatch"]
+    # Zero baseline result reads and zero policy execution/writes.
+    assert events == ["read:job:job-owned"]
+
+
+def test_criteria_rerun_post_policy_company_override_is_fenced() -> None:
+    """FT1-FF3 (finding 1): the target-company fence runs AGAIN after policy
+    overrides — an override changing the effective company cannot smuggle the
+    rerun through the pre-approved baseline."""
+    current_request = _location_request_record(["United States"])
+    baseline_request = _location_request_record(["United States"])
+    events: list[str] = []
+    baseline_job = _owned_job(job_id="job-owned", status="completed", request=baseline_request)
+    orchestrator = object.__new__(SourcingOrchestrator)
+    orchestrator.store = SimpleNamespace(
+        get_job=lambda job_id: events.append(f"read:job:{job_id}") or baseline_job,
+        get_job_results=lambda job_id: events.append(f"read:results:{job_id}") or [],
+    )
+    with patch(
+        "sourcing_agent.orchestrator.decide_rerun_policy",
+        return_value={
+            "status": "approved",
+            "effective_request_overrides": {"target_company": "Anthropic"},
+        },
+    ):
+        result = orchestrator._rerun_after_recompile_if_requested(
+            {"job_id": "job-owned", "rerun_retrieval": True},
+            {"feedback_id": 1},
+            {"status": "recompiled", "request": current_request, "plan": {}},
+            expected_requester_id="alice",
+            expected_tenant_id="user-alice",
+        )
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "baseline_request_identity_mismatch"
+    assert result["baseline_job_id"] == "job-owned"
+    # Results were read for policy evaluation, but the rerun never launches
+    # past the post-override fence.
+    assert "read:results:job-owned" in events
+    assert result.get("rerun_job_id") in (None, "")

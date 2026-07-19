@@ -1999,7 +1999,9 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                         allow_candidate_documents_fallback=False,
                     )
 
-        # Control: a current-version shard carrying the canonical pair loads.
+        # Control: a current-version shard carrying its canonical pair loads.
+        # The stored projection must equal the recomputation from the shard's
+        # own aligned input (bare records derive ``unknown``/legacy_inference).
         shard_path.write_text(
             json.dumps(
                 {
@@ -2007,7 +2009,7 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
                     "materialized_candidate": {
                         **base_shard["materialized_candidate"],
-                        "function_bucket_ids": ["engineering"],
+                        "function_bucket_ids": ["unknown"],
                         "function_bucket_source": "legacy_inference",
                     },
                 },
@@ -2151,6 +2153,69 @@ class CandidateArtifactsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(rebuilt_materialized["function_bucket_ids"], ["research"])
         self.assertEqual(rebuilt_materialized["function_bucket_source"], "lane_membership")
         self.assertEqual(rebuilt_materialized["employment_statuses"], ["current", "former"])
+
+    def test_semantically_stale_shard_is_detected_and_rebuilt(self) -> None:
+        """FT1-FF3 (finding 4): a shape-valid shard whose stored projection
+        disagrees with its own provenance — wrong function pair values or a
+        dropped dual-status set — fails closed at load and is rebuilt."""
+        candidate = Candidate(
+            candidate_id="c-cohort",
+            name_en="Cohort Candidate",
+            display_name="Cohort Candidate",
+            category="employee",
+            target_company="Acme",
+            employment_status="current",
+            role="Research Scientist",
+            linkedin_url="https://www.linkedin.com/in/cohort-candidate/",
+            source_dataset="acme_roster",
+            metadata=dict(self._cohort_provenance_metadata()),
+        )
+        self._write_snapshot_candidate_documents(candidates=[candidate])
+
+        for name, tamper in (
+            (
+                "wrong_pair_values",
+                lambda materialized: materialized.update(
+                    {
+                        "function_bucket_ids": ["engineering"],
+                        "function_bucket_source": "legacy_inference",
+                    }
+                ),
+            ),
+            (
+                "missing_dual_status_set",
+                lambda materialized: materialized.pop("employment_statuses", None),
+            ),
+        ):
+            with self.subTest(name=name):
+                self._write_snapshot_candidate_documents(candidates=[candidate])
+                first_result = build_company_candidate_artifacts(
+                    runtime_dir=self.runtime_dir,
+                    store=self.store,
+                    target_company="Acme",
+                )
+                artifact_dir = self._artifact_dir()
+                first_manifest = json.loads(
+                    Path(first_result["artifact_paths"]["manifest"]).read_text(encoding="utf-8")
+                )
+                shard_path = artifact_dir / str(first_manifest["candidate_shards"][0]["path"])
+                shard = json.loads(shard_path.read_text(encoding="utf-8"))
+                materialized = dict(shard["materialized_candidate"])
+                tamper(materialized)
+                shard["materialized_candidate"] = materialized
+                shard_path.write_text(json.dumps(shard, ensure_ascii=False, indent=2), encoding="utf-8")
+
+                second_result = build_company_candidate_artifacts(
+                    runtime_dir=self.runtime_dir,
+                    store=self.store,
+                    target_company="Acme",
+                )
+                self.assertEqual(second_result["summary"]["dirty_candidate_count"], 1)
+                rebuilt_shard = json.loads(shard_path.read_text(encoding="utf-8"))
+                rebuilt_materialized = dict(rebuilt_shard["materialized_candidate"])
+                self.assertEqual(rebuilt_materialized["function_bucket_ids"], ["research"])
+                self.assertEqual(rebuilt_materialized["function_bucket_source"], "lane_membership")
+                self.assertEqual(rebuilt_materialized["employment_statuses"], ["current", "former"])
 
     def test_facet_projection_record_copies_cohort_keys_by_presence(self) -> None:
         """FT1-FF2 (finding 7): present-empty provenance values reach the
@@ -5161,51 +5226,8 @@ class CandidateArtifactServedFacetProjectionUpgradeTest(PGControlPlaneStoreTestM
         self.assertEqual(result["missing_paginated_view_count"], 1)
         self.assertEqual(result["repaired_view_count"], 1)
 
-    def test_current_artifact_is_not_marked_for_repair(self) -> None:
-        from sourcing_agent.candidate_artifacts import (
-            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            _candidate_artifact_view_missing_paginated_serving,
-        )
-
-        self._write_historical_artifact(
-            projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            page_rows=[
-                {
-                    "candidate_id": "c-cohort",
-                    "display_name": "Cohort Candidate",
-                    "function_bucket_ids": ["research"],
-                    "function_bucket_source": "lane_membership",
-                    "employment_statuses": ["current", "former"],
-                    "metadata": {
-                        "cohort_lane_membership": [
-                            {
-                                "lane_id": "cohort_current_research_d",
-                                "employment_status": "current",
-                                "role_bucket_id": "research",
-                            },
-                            {
-                                "lane_id": "cohort_former_research_d",
-                                "employment_status": "former",
-                                "role_bucket_id": "research",
-                            },
-                        ],
-                        "cohort_role_bucket_ids": ["research"],
-                        "cohort_employment_statuses": ["current", "former"],
-                    },
-                }
-            ],
-        )
-        self.assertFalse(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
-
-    def test_later_stale_page_marks_the_view_for_repair(self) -> None:
-        """FT1-FF2 (finding 6): completeness validates EVERY manifest-declared
-        page — a stale row on a later page cannot hide behind a healthy first
-        page (e.g. after partial batched writes)."""
-        from sourcing_agent.candidate_artifacts import (
-            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            _candidate_artifact_view_missing_paginated_serving,
-        )
-
+    @staticmethod
+    def _coherent_served_rows() -> tuple[dict, dict]:
         cohort_metadata = {
             "cohort_lane_membership": [
                 {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
@@ -5214,24 +5236,288 @@ class CandidateArtifactServedFacetProjectionUpgradeTest(PGControlPlaneStoreTestM
             "cohort_role_bucket_ids": ["research"],
             "cohort_employment_statuses": ["current", "former"],
         }
-        healthy_row = {
+        cohort_row = {
             "candidate_id": "c-cohort",
             "display_name": "Cohort Candidate",
+            "role": "Research Scientist",
+            "employment_status": "current",
+            "linkedin_url": "https://www.linkedin.com/in/cohort-candidate/",
             "function_bucket_ids": ["research"],
             "function_bucket_source": "lane_membership",
             "employment_statuses": ["current", "former"],
             "metadata": dict(cohort_metadata),
         }
-        self._write_historical_artifact(
-            projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            page_rows=[dict(healthy_row)],
-        )
-        # A second, manifest-declared page whose row lacks the projection pair.
+        legacy_row = {
+            "candidate_id": "c-legacy",
+            "display_name": "Legacy Candidate",
+            "role": "Software Engineer",
+            "employment_status": "current",
+            "linkedin_url": "https://www.linkedin.com/in/legacy-candidate/",
+            "function_bucket_ids": ["engineering"],
+            "function_bucket_source": "legacy_inference",
+            "metadata": {},
+        }
+        return cohort_row, legacy_row
+
+    def _write_coherent_current_artifact(self) -> dict:
+        """Write a fully coherent CURRENT artifact: two candidates with
+        current projections on pages, shards, and materialized documents, and
+        manifest/summary counts that agree — the healthy control for the
+        closed-validation completeness oracle (FT1-FF3 finding 5)."""
+        from sourcing_agent.candidate_artifacts import _CANDIDATE_ARTIFACT_PROJECTION_VERSION
+
+        cohort_row, legacy_row = self._coherent_served_rows()
+        rows = [cohort_row, legacy_row]
         self._write_json(
-            "pages/page-0002.json", {"candidates": [{"candidate_id": "c-legacy", "display_name": "Legacy"}]}
+            "materialized_candidate_documents.json",
+            {
+                "snapshot": {
+                    "company_key": "acme",
+                    "snapshot_id": "20260406T120000",
+                    "target_company": "Acme",
+                    "source_snapshots": [],
+                },
+                "candidates": [dict(row) for row in rows],
+                "evidence": [],
+            },
+        )
+        self._write_json(
+            "artifact_summary.json",
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 2,
+                "candidate_page_size": 50,
+                "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+            },
+        )
+        self._write_json(
+            "pages/page-0001.json",
+            {
+                "target_company": "Acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "page": 1,
+                "page_size": 50,
+                "candidate_count": 2,
+                "total_candidate_count": 2,
+                "candidates": [dict(row) for row in rows],
+            },
+        )
+        shard_entries = []
+        for row in rows:
+            candidate_id = row["candidate_id"]
+            shard_path = f"candidate_shards/{candidate_id}.fp1.json"
+            shard_entries.append({"candidate_id": candidate_id, "fingerprint": "fp1", "path": shard_path, "page": 1})
+            self._write_json(
+                shard_path,
+                {
+                    "candidate_id": candidate_id,
+                    "fingerprint": "fp1",
+                    "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+                    "target_company": "Acme",
+                    "snapshot_id": "20260406T120000",
+                    "asset_view": "canonical_merged",
+                    "materialized_candidate": dict(row),
+                    # Repair-era companion shape: when no normalized companion
+                    # exists, repair writes the materialized row itself as the
+                    # aligned normalized record.
+                    "normalized_candidate": dict(row),
+                    "reusable_document": dict(row),
+                    "evidence": [],
+                },
+            )
+        self._write_json(
+            "manifest.json",
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 2,
+                "pagination": {"page_size": 50, "page_count": 1},
+                "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
+                "candidate_shards": shard_entries,
+                "pages": [{"page": 1, "path": "pages/page-0001.json", "candidate_count": 2}],
+            },
+        )
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Acme",
+                "company_key": "acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "candidate_count": 2,
+                "evidence_count": 0,
+                "source_path": str(self.artifact_dir / "artifact_summary.json"),
+                "summary": {"candidate_count": 2},
+            },
+            authoritative=True,
+        )
+        return {"rows": rows, "shard_entries": shard_entries}
+
+    def test_current_artifact_is_not_marked_for_repair(self) -> None:
+        from sourcing_agent.candidate_artifacts import _candidate_artifact_view_missing_paginated_serving
+
+        self._write_coherent_current_artifact()
+        self.assertFalse(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+
+    def test_malformed_manifest_containers_mark_the_view_for_repair(self) -> None:
+        """FT1-FF3 (finding 5): closed validation — malformed containers and
+        entries never silently disappear from completeness checks."""
+        from sourcing_agent.candidate_artifacts import _candidate_artifact_view_missing_paginated_serving
+
+        for name, mutate in (
+            (
+                "page_candidates_malformed",
+                lambda m: self._write_json("pages/page-0001.json", {"candidates": "malformed"}),
+            ),
+            (
+                "page_entry_not_a_dict",
+                lambda m: self._write_json("manifest.json", {**m, "pages": ["invalid"]}),
+            ),
+            (
+                "shard_entry_not_a_dict",
+                lambda m: self._write_json("manifest.json", {**m, "candidate_shards": ["invalid"]}),
+            ),
+            (
+                "pages_not_a_list",
+                lambda m: self._write_json("manifest.json", {**m, "pages": "invalid"}),
+            ),
+            (
+                "duplicate_shard_paths",
+                lambda m: self._write_json(
+                    "manifest.json",
+                    {**m, "candidate_shards": [m["candidate_shards"][0], m["candidate_shards"][0]]},
+                ),
+            ),
+            (
+                "duplicate_shard_candidate_ids",
+                lambda m: self._write_json(
+                    "manifest.json",
+                    {
+                        **m,
+                        "candidate_shards": [
+                            m["candidate_shards"][0],
+                            {**m["candidate_shards"][1], "candidate_id": "c-cohort"},
+                        ],
+                    },
+                ),
+            ),
+            ("manifest_count_mismatch", lambda m: self._write_json("manifest.json", {**m, "candidate_count": 3})),
+            (
+                "manifest_count_missing",
+                lambda m: self._write_json(
+                    "manifest.json", {key: value for key, value in m.items() if key != "candidate_count"}
+                ),
+            ),
+            (
+                "page_payload_count_mismatch",
+                lambda m: self._write_json(
+                    "pages/page-0001.json",
+                    {
+                        **json.loads((self.artifact_dir / "pages" / "page-0001.json").read_text(encoding="utf-8")),
+                        "candidate_count": 1,
+                    },
+                ),
+            ),
+            (
+                "page_entry_count_mismatch",
+                lambda m: self._write_json(
+                    "manifest.json",
+                    {**m, "pages": [{"page": 1, "path": "pages/page-0001.json", "candidate_count": 1}]},
+                ),
+            ),
+        ):
+            with self.subTest(name=name):
+                self._write_coherent_current_artifact()
+                manifest = json.loads((self.artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+                mutate(manifest)
+                self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+
+    def test_under_declared_or_mismatched_products_mark_the_view_for_repair(self) -> None:
+        """FT1-FF3 (finding 5): page/shard/document candidate-ID coverage and
+        shard identity parity must be exact — under-declared or mismatched
+        products require repair."""
+        from sourcing_agent.candidate_artifacts import _candidate_artifact_view_missing_paginated_serving
+
+        for name, mutate in (
+            (
+                "shard_payload_id_differs_from_entry",
+                lambda: self._write_json(
+                    "candidate_shards/c-cohort.fp1.json",
+                    {
+                        **json.loads(
+                            (self.artifact_dir / "candidate_shards" / "c-cohort.fp1.json").read_text(encoding="utf-8")
+                        ),
+                        "candidate_id": "c-other",
+                    },
+                ),
+            ),
+            (
+                "shard_entry_under_declared",
+                lambda: self._write_json(
+                    "manifest.json",
+                    {
+                        **json.loads((self.artifact_dir / "manifest.json").read_text(encoding="utf-8")),
+                        "candidate_shards": [
+                            json.loads((self.artifact_dir / "manifest.json").read_text(encoding="utf-8"))[
+                                "candidate_shards"
+                            ][0]
+                        ],
+                    },
+                ),
+            ),
+            (
+                "document_population_under_declared",
+                lambda: self._write_json(
+                    "materialized_candidate_documents.json",
+                    {
+                        **json.loads(
+                            (self.artifact_dir / "materialized_candidate_documents.json").read_text(encoding="utf-8")
+                        ),
+                        "candidates": [
+                            json.loads(
+                                (self.artifact_dir / "materialized_candidate_documents.json").read_text(
+                                    encoding="utf-8"
+                                )
+                            )["candidates"][0]
+                        ],
+                    },
+                ),
+            ),
+        ):
+            with self.subTest(name=name):
+                self._write_coherent_current_artifact()
+                mutate()
+                self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
+
+    def test_later_stale_page_marks_the_view_for_repair(self) -> None:
+        """FT1-FF2 (finding 6): completeness validates EVERY manifest-declared
+        page — a stale row on a later page cannot hide behind a healthy first
+        page (e.g. after partial batched writes)."""
+        from sourcing_agent.candidate_artifacts import _candidate_artifact_view_missing_paginated_serving
+
+        self._write_coherent_current_artifact()
+        cohort_row, legacy_row = self._coherent_served_rows()
+        self._write_json(
+            "pages/page-0002.json",
+            {
+                "target_company": "Acme",
+                "snapshot_id": "20260406T120000",
+                "asset_view": "canonical_merged",
+                "page": 2,
+                "page_size": 50,
+                "candidate_count": 1,
+                "total_candidate_count": 2,
+                "candidates": [{"candidate_id": "c-extra", "display_name": "Stale Candidate"}],
+            },
         )
         manifest = json.loads((self.artifact_dir / "manifest.json").read_text(encoding="utf-8"))
         manifest["pages"].append({"page": 2, "path": "pages/page-0002.json", "candidate_count": 1})
+        manifest["candidate_count"] = 3
         self._write_json("manifest.json", manifest)
         self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
 
@@ -5239,134 +5525,79 @@ class CandidateArtifactServedFacetProjectionUpgradeTest(PGControlPlaneStoreTestM
         """FT1-FF2 (finding 6): a dual-status row whose authoritative
         employment_statuses set was dropped is stale even when the function
         pair is present."""
-        from sourcing_agent.candidate_artifacts import (
-            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            _candidate_artifact_view_missing_paginated_serving,
-        )
+        from sourcing_agent.candidate_artifacts import _candidate_artifact_view_missing_paginated_serving
 
-        self._write_historical_artifact(
-            projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            page_rows=[
-                {
-                    "candidate_id": "c-cohort",
-                    "display_name": "Cohort Candidate",
-                    "function_bucket_ids": ["research"],
-                    "function_bucket_source": "lane_membership",
-                    "metadata": {
-                        "cohort_lane_membership": [
-                            {
-                                "lane_id": "cohort_current_research_d",
-                                "employment_status": "current",
-                                "role_bucket_id": "research",
-                            },
-                            {
-                                "lane_id": "cohort_former_research_d",
-                                "employment_status": "former",
-                                "role_bucket_id": "research",
-                            },
-                        ],
-                        "cohort_role_bucket_ids": ["research"],
-                        "cohort_employment_statuses": ["current", "former"],
-                    },
-                }
-            ],
-        )
+        self._write_coherent_current_artifact()
+        page_path = self.artifact_dir / "pages" / "page-0001.json"
+        page = json.loads(page_path.read_text(encoding="utf-8"))
+        page["candidates"][0].pop("employment_statuses", None)
+        page_path.write_text(json.dumps(page, ensure_ascii=False, indent=2), encoding="utf-8")
         self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
 
     def test_stale_or_missing_shards_mark_the_view_for_repair(self) -> None:
-        """FT1-FF2 (finding 6): every manifest-declared shard must exist, stamp
-        the current projection version, and carry the recomputed projection."""
-        from sourcing_agent.candidate_artifacts import (
-            _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            _candidate_artifact_view_missing_paginated_serving,
-        )
+        """FT1-FF2/FF3 (finding 6/5): every manifest-declared shard must exist,
+        stamp the current projection version, and carry the recomputed
+        projection — shape-valid but semantically stale shards included."""
+        from sourcing_agent.candidate_artifacts import _candidate_artifact_view_missing_paginated_serving
 
-        cohort_metadata = {
-            "cohort_lane_membership": [
-                {"lane_id": "cohort_current_research_d", "employment_status": "current", "role_bucket_id": "research"},
-                {"lane_id": "cohort_former_research_d", "employment_status": "former", "role_bucket_id": "research"},
-            ],
-            "cohort_role_bucket_ids": ["research"],
-            "cohort_employment_statuses": ["current", "former"],
-        }
-        healthy_row = {
-            "candidate_id": "c-cohort",
-            "display_name": "Cohort Candidate",
-            "function_bucket_ids": ["research"],
-            "function_bucket_source": "lane_membership",
-            "employment_statuses": ["current", "former"],
-            "metadata": dict(cohort_metadata),
-        }
-        healthy_shard = {
-            "candidate_id": "c-cohort",
-            "fingerprint": "fp1",
-            "projection_version": _CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-            "materialized_candidate": dict(healthy_row),
-            "normalized_candidate": {"candidate_id": "c-cohort"},
-            "reusable_document": {"candidate_id": "c-cohort"},
-            "evidence": [],
-        }
-
-        def _declare_shard() -> None:
-            self._write_json(
-                "manifest.json",
-                {
-                    **json.loads((self.artifact_dir / "manifest.json").read_text(encoding="utf-8")),
-                    "candidate_shards": [
-                        {"candidate_id": "c-cohort", "fingerprint": "fp1", "path": "candidate_shards/c-cohort.fp1.json"}
-                    ],
-                },
-            )
-
-        for name, shard_payload in (
-            ("missing_version", {**healthy_shard, "projection_version": ""}),
-            ("old_version", {**healthy_shard, "projection_version": "candidate_artifact_projection_v20260427"}),
+        for name, mutate in (
+            (
+                "missing_version",
+                lambda shard: shard.update({"projection_version": ""}),
+            ),
+            (
+                "old_version",
+                lambda shard: shard.update({"projection_version": "candidate_artifact_projection_v20260427"}),
+            ),
             (
                 "missing_pair",
-                {
-                    **healthy_shard,
-                    "materialized_candidate": {
-                        key: value
-                        for key, value in healthy_row.items()
-                        if key not in ("function_bucket_ids", "function_bucket_source", "employment_statuses")
-                    },
-                },
+                lambda shard: shard.update(
+                    {
+                        "materialized_candidate": {
+                            key: value
+                            for key, value in dict(shard["materialized_candidate"]).items()
+                            if key not in ("function_bucket_ids", "function_bucket_source", "employment_statuses")
+                        }
+                    }
+                ),
+            ),
+            (
+                "wrong_pair_values",
+                lambda shard: shard.update(
+                    {
+                        "materialized_candidate": {
+                            **dict(shard["materialized_candidate"]),
+                            "function_bucket_ids": ["engineering"],
+                            "function_bucket_source": "legacy_inference",
+                        }
+                    }
+                ),
             ),
             (
                 "missing_status_set",
-                {
-                    **healthy_shard,
-                    "materialized_candidate": {
-                        key: value for key, value in healthy_row.items() if key != "employment_statuses"
-                    },
-                },
+                lambda shard: shard.update(
+                    {
+                        "materialized_candidate": {
+                            key: value
+                            for key, value in dict(shard["materialized_candidate"]).items()
+                            if key != "employment_statuses"
+                        }
+                    }
+                ),
             ),
         ):
             with self.subTest(name=name):
-                self._write_historical_artifact(
-                    projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-                    page_rows=[dict(healthy_row)],
-                )
-                _declare_shard()
-                self._write_json("candidate_shards/c-cohort.fp1.json", shard_payload)
+                self._write_coherent_current_artifact()
+                shard_path = self.artifact_dir / "candidate_shards" / "c-cohort.fp1.json"
+                shard = json.loads(shard_path.read_text(encoding="utf-8"))
+                mutate(shard)
+                shard_path.write_text(json.dumps(shard, ensure_ascii=False, indent=2), encoding="utf-8")
                 self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
 
         with self.subTest(name="manifest_declared_shard_file_missing"):
-            self._write_historical_artifact(
-                projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-                page_rows=[dict(healthy_row)],
-            )
-            _declare_shard()
+            self._write_coherent_current_artifact()
+            (self.artifact_dir / "candidate_shards" / "c-cohort.fp1.json").unlink()
             self.assertTrue(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
-
-        with self.subTest(name="healthy_pages_and_shards"):
-            self._write_historical_artifact(
-                projection_version=_CANDIDATE_ARTIFACT_PROJECTION_VERSION,
-                page_rows=[dict(healthy_row)],
-            )
-            _declare_shard()
-            self._write_json("candidate_shards/c-cohort.fp1.json", healthy_shard)
-            self.assertFalse(_candidate_artifact_view_missing_paginated_serving(self.artifact_dir))
 
     def test_malformed_provenance_blocks_repair(self) -> None:
         from sourcing_agent.candidate_artifacts import _CANDIDATE_ARTIFACT_PROJECTION_VERSION

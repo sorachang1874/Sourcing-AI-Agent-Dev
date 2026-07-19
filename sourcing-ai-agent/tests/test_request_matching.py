@@ -779,3 +779,136 @@ class LocationSignatureClosedValidationTest(unittest.TestCase):
                     }
                 },
             )
+
+
+class SymmetricCohortReuseGuardTest(unittest.TestCase):
+    """FT1-FF3 (finding 2): the reuse guard compares Cohort execution identity
+    SYMMETRICALLY — a legacy current request never reuses an explicit or
+    malformed Cohort source, matching request_family_score exactly."""
+
+    def test_legacy_current_never_reuses_cohort_carrying_source(self) -> None:
+        from sourcing_agent.request_matching import source_request_matches_hard_identity
+
+        legacy_request = _location_request(["United States"])
+        for name, source in (
+            ("explicit_cohort", _location_request(["United States"], cohort=True)),
+            ("malformed_cohort", {**_location_request(["United States"]), "cohort_selection": {}}),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(source_request_matches_hard_identity(legacy_request, source), False)
+                match = request_family_score(legacy_request, source)
+                self.assertTrue(match["hard_family_mismatch"])
+
+    def test_symmetric_cohort_identity_matrix(self) -> None:
+        from sourcing_agent.request_matching import source_request_matches_hard_identity
+
+        for name, request, source, expected in (
+            ("cohort_same", _location_request(cohort=True), _location_request(cohort=True), True),
+            ("cohort_vs_legacy", _location_request(cohort=True), _location_request(), False),
+            ("legacy_vs_cohort", _location_request(), _location_request(cohort=True), False),
+            ("legacy_vs_legacy", _location_request(), _location_request(), True),
+            ("cohort_vs_missing", _location_request(cohort=True), None, False),
+            ("legacy_vs_missing", _location_request(), None, True),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(source_request_matches_hard_identity(request, source), expected)
+
+
+class ScopeSpecHardIdentityTest(unittest.TestCase):
+    """FT1-FF3 (finding 2): persisted projection scope identity is used when
+    source-job evidence is absent — symmetric and presence-aware."""
+
+    def test_scope_identity_matrix(self) -> None:
+        from sourcing_agent.request_matching import scope_spec_matches_hard_identity
+
+        for name, request, scope, expected in (
+            ("legacy_vs_legacy_scope", _location_request(), {}, True),
+            ("legacy_vs_non_dict_scope", _location_request(), "invalid", True),
+            ("cohort_vs_legacy_scope", _location_request(cohort=True), {}, False),
+            ("legacy_vs_cohort_scope", _location_request(), {"cohort_selection_digest": "digest-x"}, False),
+            ("legacy_vs_located_scope", _location_request(), {"target_locations": ["germany"]}, False),
+            (
+                "located_vs_matching_scope",
+                _location_request(["Germany"], exclude=[]),
+                {"target_locations": ["germany"], "exclude_target_locations": []},
+                True,
+            ),
+            (
+                "located_vs_absent_scope",
+                _location_request(["Germany"]),
+                {},
+                False,
+            ),
+            (
+                "explicit_empty_vs_absent_scope",
+                _location_request([]),
+                {},
+                False,
+            ),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(scope_spec_matches_hard_identity(request, scope), expected)
+
+    def test_scope_identity_uses_exact_persisted_digest(self) -> None:
+        from sourcing_agent.cohort_selection import cohort_selection_digest
+        from sourcing_agent.request_matching import scope_spec_matches_hard_identity
+
+        request = _location_request(cohort=True)
+        matching_scope = {
+            "cohort_selection_digest": cohort_selection_digest(request["cohort_selection"]),
+        }
+        self.assertIs(scope_spec_matches_hard_identity(request, matching_scope), True)
+        self.assertIs(scope_spec_matches_hard_identity(request, {"cohort_selection_digest": "other"}), False)
+
+
+class CompleteCanonicalBundleTest(unittest.TestCase):
+    """FT1-FF3 (finding 7, re-raise): persisted bundles are never a truth
+    source — the complete canonical regeneration is always returned."""
+
+    def test_contradictory_effective_request_is_never_returned(self) -> None:
+        persisted = build_request_matching_bundle(_location_request(["United States"]))
+        persisted["effective_request"] = _location_request(["Germany"])
+        returned = matching_bundle_payload(
+            _location_request(["United States"]),
+            execution_bundle_payload={"request_matching": persisted},
+        )
+        self.assertEqual(
+            returned["effective_request"],
+            build_request_matching_bundle(_location_request(["United States"]))["effective_request"],
+        )
+        self.assertEqual(returned["matching_request"].get("target_locations"), ["united states"])
+
+    def test_canonical_values_regardless_of_persisted_shape(self) -> None:
+        request = _location_request(["United States"], exclude=["France"], cohort=True)
+        canonical = build_request_matching_bundle(request)
+        for name, persisted in (
+            ("fully_canonical", build_request_matching_bundle(request)),
+            (
+                "missing_effective_request",
+                {k: v for k, v in build_request_matching_bundle(request).items() if k != "effective_request"},
+            ),
+            ("tampered_signature", {**build_request_matching_bundle(request), "matching_request_signature": "0" * 16}),
+            ("empty", {}),
+            ("garbage", {"request_matching": "invalid"}),
+        ):
+            with self.subTest(name=name):
+                returned = matching_bundle_payload(
+                    request,
+                    execution_bundle_payload={"request_matching": persisted},
+                )
+                self.assertEqual(returned, canonical)
+
+    def test_family_scoring_never_trusts_passed_bundles(self) -> None:
+        left = _location_request(["United States"])
+        right_raw = _location_request(["Germany"])
+        contradictory_right = build_request_matching_bundle(_location_request(["United States"]))
+        contradictory_right["effective_request"] = _location_request(["United States"])
+        match = request_family_score(
+            left,
+            right_raw,
+            left_bundle=build_request_matching_bundle(left),
+            right_bundle=contradictory_right,
+        )
+        self.assertEqual(match["score"], 0.0)
+        self.assertTrue(match["hard_family_mismatch"])
+        self.assertEqual(match["reasons"], ["location_identity_mismatch"])

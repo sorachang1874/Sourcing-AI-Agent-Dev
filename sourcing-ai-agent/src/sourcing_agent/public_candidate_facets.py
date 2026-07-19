@@ -152,9 +152,7 @@ def effective_function_bucket_filter_values(function_buckets: Any) -> list[str]:
 # (docs/AGENT_OPERATION_CONTRACT.md): the published v1 request schema keeps
 # its exact historical five-value enum (version/digest contract forbids
 # in-place mutation), so the FT1 named roles (``infra_systems``/``founding``)
-# are NOT part of the v1 domain.  v1's selectable roles are exactly these
-# three; ``other``/``unknown`` were already result-only states in v1.
-_PROJECTION_FILTER_V1_SELECTABLE_ROLE_IDS: frozenset[str] = frozenset({"research", "engineering", "product_management"})
+# are NOT part of the v1 domain.
 PROJECTION_FILTER_V1_FUNCTION_BUCKET_ENUM: tuple[str, ...] = (
     "research",
     "engineering",
@@ -162,24 +160,28 @@ PROJECTION_FILTER_V1_FUNCTION_BUCKET_ENUM: tuple[str, ...] = (
     "other",
     "unknown",
 )
+_PROJECTION_FILTER_V1_FUNCTION_BUCKET_ENUM_SET: frozenset[str] = frozenset(PROJECTION_FILTER_V1_FUNCTION_BUCKET_ENUM)
 
 
 def effective_projection_filter_v1_function_buckets(function_buckets: Any) -> list[str]:
     """Normalize a v1 (``projection_filter_request_v1``) function selection.
 
-    Contract-version-aware dispatch normalization (FT1-FF2): v1 keeps its
-    HISTORICAL execution semantics — any selection covering every v1
-    selectable role (the complete five-value enum, or the three selectable
-    roles with any subset of the result-only ids) is the inactive select-all
-    no-op it was when the action was recorded, so replayed/retried/approved v1
-    actions never silently narrow onto newly classified (``infra_systems`` /
-    ``founding``) candidates.  Only a proper subset of the v1 selectable roles
-    narrows.  The version-blind page/projection filter keeps the canonical
-    (current-registry) predicate in ``effective_function_bucket_filter_values``.
+    Contract-version-aware dispatch normalization (FT1-FF3): v1 keeps its
+    HISTORICAL execution semantics exactly — ONLY the complete five-value
+    enum is the inactive select-all no-op it was when the action was
+    recorded.  Every proper subset — including the three named v1 roles
+    without the result-only ids — stays ACTIVE and keeps narrowing
+    (excluding ``other``/``unknown`` candidates), exactly as the pinned v1
+    implementation behaved.  Replay normalization can therefore never change
+    proper-subset semantics, and replayed/retried/approved v1 actions with
+    the complete enum never silently narrow onto newly classified
+    (``infra_systems``/``founding``) candidates.  The version-blind
+    page/projection filter keeps the canonical (current-registry) predicate
+    in ``effective_function_bucket_filter_values``.
     """
 
     selected = {str(item or "").strip() for item in list(function_buckets or []) if str(item or "").strip()}
-    if not selected or _PROJECTION_FILTER_V1_SELECTABLE_ROLE_IDS.issubset(selected):
+    if not selected or selected == _PROJECTION_FILTER_V1_FUNCTION_BUCKET_ENUM_SET:
         return []
     return _ordered_function_facet_ids(selected)
 

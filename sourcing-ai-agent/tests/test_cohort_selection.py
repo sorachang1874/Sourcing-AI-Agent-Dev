@@ -1914,6 +1914,129 @@ class HardIdentityReuseGuardIntegrationTest(unittest.TestCase):
             {},
         )
 
+    def _collection_match(
+        self,
+        request: JobRequest,
+        source_request: dict[str, Any] | None,
+        *,
+        scope_spec_override: dict[str, Any] | None = None,
+        source_job_missing: bool = False,
+    ) -> dict[str, Any]:
+        projection = {
+            "projection_id": "proj",
+            "projection_type": "run_scope_projection",
+            "state": "serving",
+            "source_run_id": "source-job",
+            "scope_spec": {
+                "target_scope": "full_company_asset",
+                "keywords": [],
+                "snapshot_id": "snap",
+                **dict(scope_spec_override or {}),
+            },
+            "counts": {"candidate_count": 2},
+            "readiness": {"row": "complete", "profile": "complete", "card": "complete"},
+            "metadata": {"source_path": "/tmp/snap/candidate_documents.json"},
+        }
+
+        class _ServingProjectionRepo:
+            @staticmethod
+            def get_authoritative_pointer(_collection_id):
+                return {"state": "active", "active_projection_id": "proj"}
+
+            @staticmethod
+            def get(_projection_id):
+                return dict(projection)
+
+            @staticmethod
+            def list(**_kwargs):
+                return []
+
+        class _Store:
+            repos = SimpleNamespace(serving_projection=_ServingProjectionRepo())
+
+            @staticmethod
+            def get_job(_job_id):
+                if source_job_missing:
+                    return {}
+                return {"job_id": "source-job", "status": "completed", "request": dict(source_request or {})}
+
+        orchestrator = object.__new__(SourcingOrchestrator)
+        orchestrator.store = _Store()
+        orchestrator._projection_collection_id_for_request = lambda _request: "company:acme"
+        orchestrator._load_snapshot_reuse_context_from_snapshot = lambda **_kwargs: {
+            "snapshot_id": "snap",
+            "snapshot_dir": "/tmp/snap",
+            "source_path": "/tmp/snap/candidate_documents.json",
+        }
+        return orchestrator._resolve_collection_authoritative_projection_reuse_match(  # noqa: SLF001
+            request,
+            {},
+        )
+
+    def test_registry_and_projection_reuse_fence_cohort_identity_symmetrically(self) -> None:
+        """FT1-FF3 (finding 2): a legacy current request never reuses a
+        Cohort-scoped authoritative source — the guard is symmetric."""
+        legacy_request = self._request({"employment_statuses": ["current"]})
+        cohort_source = self._request(
+            {
+                "employment_statuses": ["current"],
+                "cohort_selection": _cohort(roles=[], statuses=["current"]),
+            }
+        ).to_record()
+        malformed_cohort_source = {
+            "target_company": "Acme",
+            "cohort_selection": {},
+        }
+        for name, source_request, expect_match in (
+            ("explicit_cohort_source", cohort_source, False),
+            ("malformed_cohort_source", malformed_cohort_source, False),
+            ("legacy_source", {"target_company": "Acme"}, True),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(bool(self._registry_match(legacy_request, source_request)), expect_match)
+                self.assertEqual(bool(self._collection_match(legacy_request, source_request)), expect_match)
+
+    def test_projection_reuse_falls_back_to_persisted_scope_identity_when_source_job_missing(self) -> None:
+        """FT1-FF3 (finding 2): with source-job evidence absent, the persisted
+        projection scope identity (cohort digest + presence-aware locations)
+        is the symmetric identity evidence."""
+        cohort_request = self._request(
+            {
+                "cohort_selection": _cohort(roles=[], statuses=["current"]),
+                "target_locations": ["Germany"],
+            }
+        )
+        legacy_request = self._request({"employment_statuses": ["current"]})
+        matching_scope = {
+            "cohort_selection_digest": cohort_selection_digest(cohort_request.cohort_selection),
+            "target_locations": ["Germany"],
+        }
+        for name, request, scope_override, expect_match in (
+            ("cohort_vs_matching_scope", cohort_request, matching_scope, True),
+            ("cohort_vs_legacy_scope", cohort_request, {}, False),
+            ("cohort_vs_other_digest", cohort_request, {"cohort_selection_digest": "other"}, False),
+            (
+                "cohort_vs_other_location",
+                cohort_request,
+                {**matching_scope, "target_locations": ["United States"]},
+                False,
+            ),
+            ("legacy_vs_legacy_scope", legacy_request, {}, True),
+            ("legacy_vs_cohort_scope", legacy_request, matching_scope, False),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    bool(
+                        self._collection_match(
+                            request,
+                            None,
+                            scope_spec_override=scope_override,
+                            source_job_missing=True,
+                        )
+                    ),
+                    expect_match,
+                )
+
     def test_registry_and_projection_reuse_fence_location_identity_for_cohort_requests(self) -> None:
         request = self._request(
             {

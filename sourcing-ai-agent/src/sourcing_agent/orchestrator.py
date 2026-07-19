@@ -512,6 +512,7 @@ from .request_matching import (
     request_family_score,
     request_family_signature,
     request_signature,
+    scope_spec_matches_hard_identity,
     source_request_matches_hard_identity,
 )
 from .request_normalization import (
@@ -61245,10 +61246,17 @@ class SourcingOrchestrator:
         ).strip()
         matched_job = dict(self.store.get_job(source_run_id) or {}) if source_run_id else {}
         request_payload = request.to_record()
-        if not self._matched_job_matches_hard_identity(
-            request_payload=request_payload,
-            matched_job=matched_job,
-        ):
+        if dict(matched_job.get("request") or {}):
+            if not self._matched_job_matches_hard_identity(
+                request_payload=request_payload,
+                matched_job=matched_job,
+            ):
+                return {}
+        elif not scope_spec_matches_hard_identity(request_payload, source_scope):
+            # Source-job evidence is absent: the persisted projection scope
+            # (cohort_selection_digest + presence-aware location fields,
+            # written at projection build time) is the only request-identity
+            # evidence left, and it must match symmetrically (FT1-FF3).
             return {}
         strategy = (
             "reuse_completed" if str(matched_job.get("status") or "").strip() == "completed" else "reuse_snapshot"
@@ -78256,12 +78264,16 @@ class SourcingOrchestrator:
                     },
                 }
             # Request-identity hard fence: an explicit baseline NEVER proceeds
-            # across a request-identity hard mismatch (location sibling-field
-            # presence/value, Cohort identity).  The rejection happens before
-            # any baseline result read or rerun policy execution, and an
-            # explicit non-Cohort baseline is never force-marked exact across
-            # location differences.
-            if bool(baseline_match.get("hard_family_mismatch")):
+            # across a request-identity hard mismatch (target company, location
+            # sibling-field presence/value, Cohort identity).  Target-company
+            # mismatch is fenced explicitly here because request_family_score
+            # reports it without the hard_family_mismatch flag (FT1-FF3).  The
+            # rejection happens before any baseline result read or rerun policy
+            # execution, and an explicit non-Cohort baseline is never
+            # force-marked exact across company or location differences.
+            if bool(baseline_match.get("hard_family_mismatch")) or (
+                "target_company_mismatch" in set(baseline_match.get("reasons") or [])
+            ):
                 return {
                     "status": "skipped",
                     "reason": "baseline_request_identity_mismatch",
@@ -78335,6 +78347,23 @@ class SourcingOrchestrator:
                 expected_tenant_id=expected_tenant_id,
             ):
                 return {"status": "not_found", "reason": "job_not_found"}
+            # Post-override identity fence (FT1-FF3): rerun/policy overrides may
+            # have changed the effective request, so target-company and
+            # hard-identity coverage are re-proven against the baseline's
+            # stored request before any launch.
+            current_baseline_request = (current_baseline_job or {}).get("request")
+            post_override_match = request_family_score(
+                request_payload,
+                current_baseline_request if isinstance(current_baseline_request, dict) else {},
+            )
+            if "target_company_mismatch" in set(post_override_match.get("reasons") or []):
+                return {
+                    "status": "skipped",
+                    "reason": "baseline_request_identity_mismatch",
+                    "baseline_job_id": baseline_job_id,
+                    "baseline_selection": baseline_selection,
+                    "policy": policy,
+                }
             if not self._matched_job_matches_hard_identity(
                 request_payload=request_payload,
                 matched_job=current_baseline_job,

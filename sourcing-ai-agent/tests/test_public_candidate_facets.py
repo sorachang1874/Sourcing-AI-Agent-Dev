@@ -1001,7 +1001,10 @@ class ProjectionFilterV1HistoricalNoOpTest(unittest.TestCase):
         )
         self.assertNotIn("function_buckets", normalized)
 
-    def test_v1_selectable_cover_with_any_result_only_subset_is_a_no_op(self) -> None:
+    def test_only_the_complete_v1_enum_is_a_no_op(self) -> None:
+        # Historical v1 semantics (pinned at ba22dc2): ONLY the exact complete
+        # five-value enum is inactive; every proper subset — including the
+        # three named roles without the result-only ids — stays ACTIVE.
         for selection in (
             ["research", "engineering", "product_management"],
             ["research", "engineering", "product_management", "other"],
@@ -1011,7 +1014,10 @@ class ProjectionFilterV1HistoricalNoOpTest(unittest.TestCase):
                 normalized = SourcingOrchestrator._normalize_operation_projection_filter(  # noqa: SLF001
                     {"function_buckets": selection}
                 )
-                self.assertNotIn("function_buckets", normalized)
+                self.assertEqual(
+                    normalized["function_buckets"],
+                    sorted(selection, key=str.lower),
+                )
 
     def test_v1_proper_subsets_still_narrow(self) -> None:
         for selection, expected in (
@@ -1024,6 +1030,29 @@ class ProjectionFilterV1HistoricalNoOpTest(unittest.TestCase):
                     {"function_buckets": selection}
                 )
                 self.assertEqual(normalized["function_buckets"], expected)
+
+    def test_replayed_v1_three_role_subset_still_excludes_other_and_unknown(self) -> None:
+        # Execution-result replay proof (FT1-FF3 finding 3): the three named
+        # v1 roles without the result-only ids keep their historical narrowing
+        # semantics — ``other``/``unknown`` candidates stay excluded.
+        from sourcing_agent.public_candidate_facets import apply_candidate_page_filter
+
+        normalized = SourcingOrchestrator._normalize_operation_projection_filter(  # noqa: SLF001
+            {"function_buckets": ["research", "engineering", "product_management"]}
+        )
+        self.assertEqual(
+            normalized["function_buckets"],
+            ["engineering", "product_management", "research"],
+        )
+        served_rows = [
+            {"candidate_id": "c-research", "display_name": "Research Candidate", "role_bucket": "research"},
+            {"candidate_id": "c-eng", "display_name": "Eng Candidate", "role_bucket": "engineering"},
+            {"candidate_id": "c-other", "display_name": "Other Candidate", "role_bucket": "leadership"},
+            {"candidate_id": "c-unknown", "display_name": "Unknown Candidate"},
+        ]
+        self.assertTrue(candidate_page_filter_active(normalized))
+        filtered = apply_candidate_page_filter(candidates=served_rows, candidate_filter=normalized)
+        self.assertEqual({row["candidate_id"] for row in filtered}, {"c-research", "c-eng"})
 
     def test_replayed_v1_complete_enum_returns_newly_classified_candidates(self) -> None:
         # Execution-result replay (not merely schema validation): a replayed v1

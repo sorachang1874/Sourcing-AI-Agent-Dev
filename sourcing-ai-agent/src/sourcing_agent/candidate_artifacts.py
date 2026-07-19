@@ -1837,28 +1837,65 @@ def _materialized_artifact_dir_from_registry_row(
     return runtime_dir / "company_assets" / company_key / snapshot_id / "normalized_artifacts"
 
 
+def _candidate_served_projection_matches(
+    record: dict[str, Any],
+    projection_record: dict[str, Any],
+) -> bool:
+    """Whether one served row's stored projection equals the canonical attach
+    from the given aligned projection record (exact function source/values
+    AND authoritative employment-status presence/value parity)."""
+
+    if "function_bucket_ids" not in record or "function_bucket_source" not in record:
+        return False
+    try:
+        recomputed = _attach_candidate_served_facet_projection(
+            dict(record),
+            projection_record=dict(projection_record or {}),
+        )
+    except CohortFacetProvenanceError:
+        return False
+    return (
+        list(record.get("function_bucket_ids") or []) == list(recomputed.get("function_bucket_ids") or [])
+        and str(record.get("function_bucket_source") or "") == str(recomputed.get("function_bucket_source") or "")
+        and list(record.get("employment_statuses") or []) == list(recomputed.get("employment_statuses") or [])
+        and ("employment_statuses" in record) == ("employment_statuses" in recomputed)
+    )
+
+
 def _candidate_served_projection_row_is_current(row: dict[str, Any]) -> bool:
-    """Whether one served row carries the exact canonical recomputed projection.
+    """Whether one MERGED served row carries the exact canonical recomputed projection.
 
     The row's projection is recomputed from its own provenance/evidence (the
     centralized projector never trusts the persisted pair), and the stored
     function pair AND the authoritative employment status set must match it
     exactly — the status set present exactly when the recomputed membership
-    set is non-empty.  A row with malformed provenance cannot be certified
+    set is non-empty.  Merged rows (page cards) carry the full
+    normalized+materialized evidence, so the row alone is the canonical
+    projection input.  A row with malformed provenance cannot be certified
     current.
     """
 
-    if "function_bucket_ids" not in row or "function_bucket_source" not in row:
-        return False
-    try:
-        recomputed = _attach_candidate_served_facet_projection(dict(row))
-    except CohortFacetProvenanceError:
-        return False
-    return (
-        list(row.get("function_bucket_ids") or []) == list(recomputed.get("function_bucket_ids") or [])
-        and str(row.get("function_bucket_source") or "") == str(recomputed.get("function_bucket_source") or "")
-        and list(row.get("employment_statuses") or []) == list(recomputed.get("employment_statuses") or [])
-        and ("employment_statuses" in row) == ("employment_statuses" in recomputed)
+    return _candidate_served_projection_matches(row, _candidate_facet_projection_record(row, row))
+
+
+def _candidate_served_shard_projection_is_current(shard_payload: dict[str, Any]) -> bool:
+    """Whether a shard's materialized_candidate carries the canonical projection.
+
+    The recompute uses the shard's ALIGNED projection record — the normalized
+    companion record with cohort provenance re-bound from the materialized
+    record's metadata — which is the EXACT input the build and repair attach
+    points used (normalized records own business/index semantics such as
+    role_bucket/function_ids; the materialized row alone is under-evidenced
+    for the registry tier).  Shape-valid shards whose stored function
+    source/values or employment-status set disagrees with that recomputation
+    are semantically stale.
+    """
+
+    materialized_candidate = dict(shard_payload.get("materialized_candidate") or {})
+    normalized_candidate = dict(shard_payload.get("normalized_candidate") or {})
+    return _candidate_served_projection_matches(
+        materialized_candidate,
+        _candidate_facet_projection_record(normalized_candidate, materialized_candidate),
     )
 
 
@@ -1881,43 +1918,127 @@ def _candidate_artifact_view_missing_paginated_serving(artifact_dir: Path) -> bo
         projection_version = str(artifact_summary.get("projection_version") or "").strip()
         if projection_version != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
             return True
-    # Artifact completeness (FT1-FF2): certify EVERY manifest-declared page
-    # and candidate shard, not just a first-row sample.  Every page row and
-    # every shard's materialized_candidate must carry the exact canonical
-    # recomputed projection — the function pair AND the authoritative
-    # employment status set — and every shard must stamp the current
-    # projection version.  A later stale page, a dual-status row missing its
-    # status set, an old/incomplete shard, or any missing manifest-declared
-    # product (e.g. after partial batched writes) marks the view for repair
-    # instead of bypassing it.
+    # Artifact completeness (FT1-FF2/FF3): closed-validate EVERY
+    # manifest-declared product — no malformed entry may silently disappear.
+    # Every page row, every shard's materialized_candidate, and every
+    # materialized document must carry the exact canonical recomputed
+    # projection (function pair AND the authoritative employment status set);
+    # manifest containers, declared counts, unique paths/IDs, page/shard/
+    # document candidate-ID coverage, and page payload counts must all be
+    # coherent.  Any malformed, stale, missing, or under-declared product
+    # (e.g. after partial batched writes) marks the view for repair instead
+    # of bypassing it.
     manifest_payload = load_company_snapshot_json(artifact_dir / "manifest.json")
     if not isinstance(manifest_payload, dict):
         return True
-    page_entries = [dict(item) for item in list(manifest_payload.get("pages") or []) if isinstance(item, dict)]
+    raw_page_entries = manifest_payload.get("pages")
+    raw_shard_entries = manifest_payload.get("candidate_shards")
+    if not isinstance(raw_page_entries, list) or not isinstance(raw_shard_entries, list):
+        return True
+    if any(not isinstance(item, dict) for item in raw_page_entries) or any(
+        not isinstance(item, dict) for item in raw_shard_entries
+    ):
+        return True
+    page_entries = [dict(item) for item in raw_page_entries]
+    shard_entries = [dict(item) for item in raw_shard_entries]
+    if not page_entries:
+        return True
+    page_paths = [str(item.get("path") or "").strip() for item in page_entries]
+    if any(not path for path in page_paths) or len(set(page_paths)) != len(page_paths):
+        return True
+    shard_paths = [str(item.get("path") or "").strip() for item in shard_entries]
+    if any(not path for path in shard_paths) or len(set(shard_paths)) != len(shard_paths):
+        return True
+    shard_entry_ids = [str(item.get("candidate_id") or "").strip() for item in shard_entries]
+    if any(not candidate_id for candidate_id in shard_entry_ids) or len(set(shard_entry_ids)) != len(shard_entry_ids):
+        return True
+
+    total_page_rows = 0
+    page_candidate_ids: set[str] = set()
     for page_entry in page_entries:
-        page_relative_path = str(page_entry.get("path") or "").strip()
-        if not page_relative_path:
-            return True
-        page_payload = load_company_snapshot_json(artifact_dir / page_relative_path)
+        page_payload = load_company_snapshot_json(artifact_dir / str(page_entry.get("path") or "").strip())
         if not isinstance(page_payload, dict):
             return True
-        page_rows = [dict(item) for item in list(page_payload.get("candidates") or []) if isinstance(item, dict)]
-        if any(not _candidate_served_projection_row_is_current(row) for row in page_rows):
+        raw_rows = page_payload.get("candidates")
+        if not isinstance(raw_rows, list) or any(not isinstance(row, dict) for row in raw_rows):
             return True
-    shard_entries = [
-        dict(item) for item in list(manifest_payload.get("candidate_shards") or []) if isinstance(item, dict)
-    ]
+        page_rows = [dict(row) for row in raw_rows]
+        declared_page_count = page_entry.get("candidate_count")
+        if not isinstance(declared_page_count, int) or isinstance(declared_page_count, bool):
+            return True
+        if declared_page_count != len(page_rows):
+            return True
+        payload_page_count = page_payload.get("candidate_count")
+        if not isinstance(payload_page_count, int) or isinstance(payload_page_count, bool):
+            return True
+        if payload_page_count != len(page_rows):
+            return True
+        for row in page_rows:
+            row_candidate_id = _artifact_candidate_id(row)
+            if not row_candidate_id:
+                return True
+            if not _candidate_served_projection_row_is_current(row):
+                return True
+            page_candidate_ids.add(row_candidate_id)
+        total_page_rows += len(page_rows)
+
+    manifest_candidate_count = manifest_payload.get("candidate_count")
+    if not isinstance(manifest_candidate_count, int) or isinstance(manifest_candidate_count, bool):
+        return True
+    if manifest_candidate_count != total_page_rows:
+        return True
+
+    shard_candidate_ids: set[str] = set()
     for shard_entry in shard_entries:
-        shard_relative_path = str(shard_entry.get("path") or "").strip()
-        if not shard_relative_path:
-            return True
-        shard_payload = load_company_snapshot_json(artifact_dir / shard_relative_path)
+        shard_payload = load_company_snapshot_json(artifact_dir / str(shard_entry.get("path") or "").strip())
         if not isinstance(shard_payload, dict):
             return True
         if str(shard_payload.get("projection_version") or "").strip() != _CANDIDATE_ARTIFACT_PROJECTION_VERSION:
             return True
-        if not _candidate_served_projection_row_is_current(dict(shard_payload.get("materialized_candidate") or {})):
+        shard_candidate_id = str(shard_payload.get("candidate_id") or "").strip()
+        if not shard_candidate_id or shard_candidate_id != str(shard_entry.get("candidate_id") or "").strip():
             return True
+        if not _candidate_served_shard_projection_is_current(shard_payload):
+            return True
+        shard_candidate_ids.add(shard_candidate_id)
+    if shard_candidate_ids != page_candidate_ids:
+        return True
+
+    materialized_payload = load_company_snapshot_json(artifact_dir / "materialized_candidate_documents.json")
+    if not isinstance(materialized_payload, dict):
+        return True
+    raw_documents = materialized_payload.get("candidates")
+    if not isinstance(raw_documents, list) or any(not isinstance(document, dict) for document in raw_documents):
+        return True
+    # Document projections were attached from the same aligned input the
+    # build/repair used: the normalized companion (when the compatibility
+    # export exists) with cohort provenance re-bound from the document's own
+    # metadata, falling back to the document alone exactly like repair.
+    normalized_by_id: dict[str, dict[str, Any]] = {}
+    for normalized_document in _json_list_from_artifact(artifact_dir / "normalized_candidates.json"):
+        if not isinstance(normalized_document, dict):
+            continue
+        normalized_id = _artifact_candidate_id(normalized_document)
+        if normalized_id:
+            normalized_by_id[normalized_id] = dict(normalized_document)
+    document_candidate_ids: set[str] = set()
+    for document_index, document in enumerate(raw_documents):
+        # Mirror the repair path's id assignment so legitimately id-less
+        # historical documents resolve to the same fallback ids their
+        # pages/shards carry (no repair loop).
+        document = dict(document)
+        document_candidate_id = _artifact_candidate_id(document, fallback_index=document_index)
+        if not document_candidate_id:
+            return True
+        aligned_input = _candidate_facet_projection_record(
+            normalized_by_id.get(document_candidate_id) or document,
+            document,
+        )
+        if not _candidate_served_projection_matches(document, aligned_input):
+            return True
+        document_candidate_ids.add(document_candidate_id)
+    if document_candidate_ids != page_candidate_ids:
+        return True
     return False
 
 
@@ -5941,12 +6062,14 @@ def _load_candidate_shard_payload(
         return None
     if not isinstance(payload.get("reusable_document"), dict):
         return None
-    materialized_candidate = dict(payload.get("materialized_candidate") or {})
-    if "function_bucket_ids" not in materialized_candidate or "function_bucket_source" not in materialized_candidate:
-        # Stale pre-projection shard (FT1-FF2): written at the current version
-        # but before the canonical served facet projection was attached at
-        # shard persistence — rebuild instead of reusing an unprojected
-        # authoritative record.
+    if not _candidate_served_shard_projection_is_current(payload):
+        # Semantically stale shard (FT1-FF3): shape-valid at the current
+        # version but the stored projection disagrees with a recomputation
+        # from the shard's aligned projection record (normalized base +
+        # re-bound provenance) — wrong function source/values, or a
+        # missing/extra authoritative employment status set.  Rebuild instead
+        # of reusing it into shard/detail/authoritative reads or
+        # compatibility reconstruction.
         return None
     return payload
 

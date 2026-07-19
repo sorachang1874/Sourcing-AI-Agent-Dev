@@ -4,11 +4,7 @@ import json
 from hashlib import sha1
 from typing import Any
 
-from .cohort_selection import (
-    CohortSelectionValidationError,
-    cohort_execution_identity_for_signature,
-    source_request_covers_explicit_cohort,
-)
+from .cohort_selection import CohortSelectionValidationError, cohort_execution_identity_for_signature
 from .domain import _normalize_location_list, normalize_requested_facets, normalize_requested_role_buckets
 from .request_normalization import (
     build_effective_request_payload,
@@ -80,54 +76,17 @@ def matching_bundle_payload(
     *,
     execution_bundle_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    # Moved verbatim from storage._matching_bundle_payload (Track B ②.1): prefer the execution bundle's
-    # persisted request_matching (backfilling its signatures) over recomputing from the raw payload.
-    # FT1-FF: the persisted bundle is trusted only after a full canonical
-    # regeneration compares equal — any normalized-payload or signature
-    # mismatch (e.g. an older bundle missing location identity) rebuilds from
-    # the canonical request instead of erasing request identity.
-    execution_bundle_payload = dict(execution_bundle_payload or {})
-    request_matching = dict(execution_bundle_payload.get("request_matching") or {})
-    if request_matching:
-        matching_request = dict(request_matching.get("matching_request") or {})
-        matching_family_request = dict(request_matching.get("matching_family_request") or {})
-        if matching_request and matching_family_request:
-            canonical_bundle = build_request_matching_bundle(request_payload)
-            if _persisted_matching_bundle_matches_canonical(
-                request_matching,
-                matching_request=matching_request,
-                matching_family_request=matching_family_request,
-                canonical_bundle=canonical_bundle,
-            ):
-                request_matching["matching_request"] = matching_request
-                request_matching["matching_family_request"] = matching_family_request
-                request_matching["matching_request_signature"] = str(
-                    canonical_bundle.get("matching_request_signature") or ""
-                )
-                request_matching["matching_request_family_signature"] = str(
-                    canonical_bundle.get("matching_request_family_signature") or ""
-                )
-                return request_matching
-            return canonical_bundle
+    # Moved verbatim from storage._matching_bundle_payload (Track B ②.1).
+    # FT1-FF3: the returned bundle is ALWAYS the complete canonical
+    # regeneration.  A persisted bundle is never a truth source: earlier
+    # revisions trusted it after comparing only the two normalized matching
+    # payloads, so a bundle carrying a contradictory ``effective_request``
+    # (or stale normalized fields/signatures) was returned unchanged, leaving
+    # one bundle with contradictory request truth.  No auxiliary fields are
+    # documented for this bundle, so there is nothing worth preserving — the
+    # persisted payload (if any) is validated implicitly by regeneration and
+    # never returned.
     return build_request_matching_bundle(request_payload)
-
-
-def _persisted_matching_bundle_matches_canonical(
-    persisted_bundle: dict[str, Any],
-    *,
-    matching_request: dict[str, Any],
-    matching_family_request: dict[str, Any],
-    canonical_bundle: dict[str, Any],
-) -> bool:
-    if matching_request != dict(canonical_bundle.get("matching_request") or {}):
-        return False
-    if matching_family_request != dict(canonical_bundle.get("matching_family_request") or {}):
-        return False
-    for key in ("matching_request_signature", "matching_request_family_signature"):
-        persisted_signature = str(persisted_bundle.get(key) or "")
-        if persisted_signature and persisted_signature != str(canonical_bundle.get(key) or ""):
-            return False
-    return True
 
 
 def request_signature_context(
@@ -479,27 +438,71 @@ def source_request_matches_hard_identity(
     """Presence-aware hard-identity reuse guard for authoritative reuse paths.
 
     This is the ONE guard every registry/projection/baseline reuse path must
-    apply before reusing an authoritative source.  It covers BOTH hard
-    identity axes that ``request_family_score`` enforces before any scoring:
+    apply before reusing an authoritative source.  It compares BOTH hard
+    identity axes that ``request_family_score`` enforces before any scoring,
+    SYMMETRICALLY (FT1-FF3):
 
-    1. Cohort coverage — the existing
-       ``source_request_covers_explicit_cohort`` semantics (a current request
-       carrying user authority never reuses a missing, legacy, different, or
-       malformed source; legacy current requests keep their cohort behavior).
+    1. Cohort execution identity — both sides' canonical
+       ``cohort_execution_identity_for_signature`` digests must be EQUAL,
+       including both-empty.  A legacy current request therefore never reuses
+       an explicit-Cohort source (and vice versa), and a malformed Cohort on
+       either side fails closed.  (The earlier asymmetric
+       ``source_request_covers_explicit_cohort`` semantics let a legacy
+       current request reuse Cohort-scoped assets; that hole is closed.)
     2. Location identity — canonical presence+values of BOTH sibling fields
-       (``target_locations`` / ``exclude_target_locations``) must match for
-       Cohort and legacy requests alike: US vs Germany, absent versus an
-       explicit ``[]``, and differing exclusions never share an authoritative
-       reuse source.  A source request that is missing or empty carries the
-       all-absent identity, so only identity-free (fully legacy) current
-       requests match it.  Malformed location values on either side fail
-       closed (no reuse).
+       (``target_locations`` / ``exclude_target_locations``) must match:
+       US vs Germany, absent versus an explicit ``[]``, and differing
+       exclusions never share an authoritative reuse source.  A source
+       request that is missing or empty carries the all-absent identity, so
+       only identity-free (fully legacy) current requests match it.
+       Malformed location values on either side fail closed (no reuse).
     """
 
-    if not source_request_covers_explicit_cohort(request_payload, source_request_payload):
-        return False
     try:
+        requested_cohort = cohort_execution_identity_for_signature(
+            request_payload if isinstance(request_payload, dict) else {}
+        )
+        source_cohort = cohort_execution_identity_for_signature(
+            source_request_payload if isinstance(source_request_payload, dict) else {}
+        )
+        if requested_cohort != source_cohort:
+            return False
         return _location_payload_identity(request_payload) == _location_payload_identity(source_request_payload)
+    except CohortSelectionValidationError:
+        return False
+
+
+def scope_spec_matches_hard_identity(
+    request_payload: dict[str, Any] | None,
+    scope_spec: Any,
+) -> bool:
+    """Hard-identity comparison against persisted projection scope metadata.
+
+    When source-job evidence is absent, the projection's persisted
+    ``scope_spec`` (``cohort_selection_digest`` plus presence-aware location
+    fields, written at projection build time) is the only request-identity
+    evidence left.  Comparison is symmetric and presence-aware, exactly like
+    ``source_request_matches_hard_identity``: legacy scopes without the
+    fields carry the all-absent identity, so identity-free (fully legacy)
+    requests still match them while any pinned request identity fails closed.
+    """
+
+    scope = dict(scope_spec or {}) if isinstance(scope_spec, dict) else {}
+    try:
+        requested_cohort = cohort_execution_identity_for_signature(
+            request_payload if isinstance(request_payload, dict) else {}
+        )
+        scope_cohort = str(scope.get("cohort_selection_digest") or "").strip()
+        if requested_cohort != scope_cohort:
+            return False
+        scope_location = tuple(
+            (
+                field_name in scope,
+                tuple(_normalize_list(scope.get(field_name)) if field_name in scope else ()),
+            )
+            for field_name in ("target_locations", "exclude_target_locations")
+        )
+        return _location_payload_identity(request_payload) == scope_location
     except CohortSelectionValidationError:
         return False
 
@@ -619,33 +622,11 @@ def _normalized_effective_request_payload(
 
 
 def _coerce_matching_bundle(payload: dict[str, Any], bundle: dict[str, Any] | None) -> dict[str, Any]:
-    if bundle:
-        normalized_bundle = dict(bundle)
-        matching_request = dict(normalized_bundle.get("matching_request") or {})
-        matching_family_request = dict(normalized_bundle.get("matching_family_request") or {})
-        if matching_request and matching_family_request:
-            # FT1-FF: trust a persisted/passed bundle only when the complete
-            # canonical regeneration compares equal; rebuild on ANY normalized
-            # payload or signature mismatch (Cohort-digest drift, location
-            # drift, absent-versus-empty, stale exclusions), never just on
-            # Cohort-digest drift.
-            canonical_bundle = build_request_matching_bundle(payload)
-            if _persisted_matching_bundle_matches_canonical(
-                normalized_bundle,
-                matching_request=matching_request,
-                matching_family_request=matching_family_request,
-                canonical_bundle=canonical_bundle,
-            ):
-                normalized_bundle["matching_request"] = matching_request
-                normalized_bundle["matching_family_request"] = matching_family_request
-                normalized_bundle["matching_request_signature"] = str(
-                    canonical_bundle.get("matching_request_signature") or ""
-                )
-                normalized_bundle["matching_request_family_signature"] = str(
-                    canonical_bundle.get("matching_request_family_signature") or ""
-                )
-                return normalized_bundle
-            return canonical_bundle
+    # FT1-FF3: a persisted/passed bundle is NEVER trusted as a truth source —
+    # the complete canonical regeneration is returned in every case, so no
+    # contradictory effective_request, stale normalized payload, or tampered
+    # signature can survive into scoring.  (Earlier revisions returned the
+    # persisted bundle after a partial comparison.)
     return build_request_matching_bundle(payload)
 
 

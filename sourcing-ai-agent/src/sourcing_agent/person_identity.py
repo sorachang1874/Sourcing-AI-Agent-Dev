@@ -133,7 +133,10 @@ def build_person_summary_view(
     authoritative ``employment_statuses`` membership set when non-empty):
     owned values are preserved and closed-validated when the source has them,
     otherwise they are derived from source evidence with marked
-    ``legacy_inference`` only for genuinely legacy rows.
+    ``legacy_inference`` only for genuinely legacy rows.  The server-owned
+    Cohort provenance keys are copied by presence into summary metadata so
+    the claimed projection source stays auditable after migration and
+    consolidation.
     """
 
     source = dict(payload or {})
@@ -228,4 +231,19 @@ def build_person_summary_view(
     authoritative_statuses = candidate_employment_statuses_for_public_facets(source)
     if authoritative_statuses:
         summary["employment_statuses"] = list(authoritative_statuses)
+    # Audit trail for the claimed source (FT1-FF3): after the closed
+    # validation above, copy the three server-owned Cohort provenance keys BY
+    # PRESENCE into the summary metadata — including the legitimate
+    # present-empty role mirror of an all-roles lane — so a migrated or
+    # consolidated member whose pair claims ``lane_membership`` (or whose
+    # status set is non-empty) remains auditable end-to-end.  Absent keys
+    # keep legacy summaries byte-identical.
+    source_metadata = dict(source.get("metadata") or {})
+    cohort_metadata = {
+        key: source_metadata[key]
+        for key in ("cohort_lane_membership", "cohort_role_bucket_ids", "cohort_employment_statuses")
+        if key in source_metadata
+    }
+    if cohort_metadata:
+        summary["metadata"] = cohort_metadata
     return {key: value for key, value in summary.items() if value not in ("", None, [], {})}

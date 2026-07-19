@@ -1765,3 +1765,121 @@ class CanonicalPublicSummaryAdapterTest(unittest.TestCase):
         self.assertEqual(filter_record["function_bucket_ids"], ["infra_systems"])
         self.assertEqual(filter_record["function_bucket_source"], "lane_membership")
         self.assertEqual(filter_record["employment_statuses"], ["current", "former"])
+
+
+class AdapterCohortProvenancePreservationTest(unittest.TestCase):
+    """FT1-FF3 (finding 6): the canonical adapter copies the three
+    server-owned Cohort provenance keys BY PRESENCE into summary metadata —
+    including the legitimate present-empty role mirror — so a claimed
+    lane_membership source stays auditable after migration/consolidation."""
+
+    @staticmethod
+    def _dual_status_metadata() -> dict:
+        return {
+            "cohort_lane_membership": [
+                {
+                    "lane_id": "cohort_current_infra_d",
+                    "employment_status": "current",
+                    "role_bucket_id": "infra_systems",
+                },
+                {"lane_id": "cohort_former_infra_d", "employment_status": "former", "role_bucket_id": "infra_systems"},
+            ],
+            "cohort_role_bucket_ids": ["infra_systems"],
+            "cohort_employment_statuses": ["current", "former"],
+        }
+
+    def test_adapter_preserves_provenance_by_presence(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        source_metadata = self._dual_status_metadata()
+        summary = build_person_summary_view({"candidate_id": "c1", "display_name": "Dual", "metadata": source_metadata})
+        metadata = dict(summary.get("metadata") or {})
+        self.assertEqual(metadata.get("cohort_lane_membership"), source_metadata["cohort_lane_membership"])
+        self.assertEqual(metadata.get("cohort_role_bucket_ids"), ["infra_systems"])
+        self.assertEqual(metadata.get("cohort_employment_statuses"), ["current", "former"])
+        self.assertEqual(summary["function_bucket_source"], "lane_membership")
+
+    def test_adapter_preserves_legitimate_present_empty_role_mirror(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        all_roles_metadata = {
+            "cohort_lane_membership": [
+                {"lane_id": "cohort_current_all_d", "employment_status": "current", "role_bucket_id": ""},
+            ],
+            "cohort_role_bucket_ids": [],
+            "cohort_employment_statuses": ["current"],
+        }
+        summary = build_person_summary_view(
+            {"candidate_id": "c1", "display_name": "All Roles", "metadata": all_roles_metadata}
+        )
+        metadata = dict(summary.get("metadata") or {})
+        self.assertIn("cohort_role_bucket_ids", metadata)
+        self.assertEqual(metadata["cohort_role_bucket_ids"], [])
+        self.assertEqual(metadata["cohort_employment_statuses"], ["current"])
+
+    def test_legacy_source_stays_byte_identical_without_provenance(self) -> None:
+        from sourcing_agent.person_identity import build_person_summary_view
+
+        summary = build_person_summary_view({"candidate_id": "c1", "display_name": "Legacy"})
+        self.assertNotIn("metadata", summary)
+
+    def test_migration_and_consolidation_members_carry_provenance(self) -> None:
+        from sourcing_agent.asset_consolidation_repair_apply import _projection_members_from_payload
+        from sourcing_agent.serving_projection_migration import _projection_member_from_candidate
+
+        member = _projection_member_from_candidate(  # noqa: SLF001
+            {
+                "candidate_id": "c1",
+                "display_name": "Migrated",
+                "employment_status": "current",
+                "metadata": self._dual_status_metadata(),
+            },
+            run_id="run-1",
+            rank_index=1,
+        )
+        migrated_metadata = dict(dict(member.get("public_summary") or {}).get("metadata") or {})
+        self.assertEqual(len(migrated_metadata.get("cohort_lane_membership") or []), 2)
+        self.assertEqual(migrated_metadata.get("cohort_employment_statuses"), ["current", "former"])
+
+        members = _projection_members_from_payload(  # noqa: SLF001
+            payload={
+                "candidates": [
+                    {
+                        "candidate_id": "c1",
+                        "display_name": "Consolidated",
+                        "employment_status": "current",
+                        "metadata": self._dual_status_metadata(),
+                    }
+                ]
+            },
+            source_snapshot_id="snap-1",
+            target_company="Acme",
+            collection_id="company:acme",
+        )
+        consolidated_metadata = dict(dict(members[0].get("public_summary") or {}).get("metadata") or {})
+        self.assertEqual(len(consolidated_metadata.get("cohort_lane_membership") or []), 2)
+        self.assertEqual(consolidated_metadata.get("cohort_role_bucket_ids"), ["infra_systems"])
+
+    def test_index_filter_record_metadata_carries_provenance(self) -> None:
+        from sourcing_agent.person_asset_writer import _projection_filter_record
+        from sourcing_agent.serving_projection_migration import _projection_member_from_candidate
+
+        member = _projection_member_from_candidate(  # noqa: SLF001
+            {
+                "candidate_id": "c1",
+                "display_name": "Indexed",
+                "employment_status": "current",
+                "metadata": self._dual_status_metadata(),
+            },
+            run_id="run-1",
+            rank_index=1,
+        )
+        filter_record = _projection_filter_record(  # noqa: SLF001
+            member=member,
+            public_summary=dict(member.get("public_summary") or {}),
+            projection_metrics=dict(member.get("projection_metrics") or {}),
+            member_metadata={},
+        )
+        record_metadata = dict(filter_record.get("metadata") or {})
+        self.assertEqual(len(record_metadata.get("cohort_lane_membership") or []), 2)
+        self.assertEqual(record_metadata.get("cohort_employment_statuses"), ["current", "former"])
