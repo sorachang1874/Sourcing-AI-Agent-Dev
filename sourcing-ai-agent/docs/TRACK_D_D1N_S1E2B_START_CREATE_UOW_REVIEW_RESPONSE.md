@@ -1,12 +1,13 @@
 # Track D D1n S1e2b — formal review response
 
 Status: fixed-forward implementation response to the latest formal S1e2b `NO-GO` artifact
+`runtime/reviews/20260719T211500Z_Track_D_D1n_S1e2b_fixed-forward_A-I_integrated_closure_rerun3.md` (5 substantive P1
++ 1 P2, `4f246b3..7183714`), closed by the FF-I round-2 batch recorded below. Finding 1 of that artifact was a review
+scope-pinning defect (the scope omitted `acquisition_command_owner.py` and `json_contract.py`); the next review must
+include both plus every file changed by this batch (`orchestrator.py` included). The immediately prior artifact
 `runtime/reviews/20260719T154500Z_Track_D_D1n_S1e2b_fixed-forward_A-H_integrated_closure_rerun2.md` (4 P1,
-`4f246b3..a546c4d`), closed by the FF-I batch recorded below. The immediately prior artifact
-`runtime/reviews/20260719T111300Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_rerun.md` (4 P1 + 2 P2,
-`4f246b3..a98e3df`) was closed by `8807784` (FF-H); `runtime/reviews/20260719T074000Z_Track_D_D1n_S1e2b_fixed-forward_A-F_integrated_closure_retry2.md` (4 P1) was closed
-by `a98e3df` (FF-G); `runtime/reviews/20260718T095734Z_Track_D_D1n_S1e2b_closed_acceptance_and_total_held-command_fence.md`
-and earlier S1e2b artifacts remain historical evidence, not a substitute for a fresh pinned review.
+`4f246b3..a546c4d`) was closed by `7183714` (FF-I); earlier artifacts remain historical evidence, not a substitute
+for a fresh pinned review.
 
 This batch remains non-live and non-served: served Agent tool population, provider calls, model calls, and live calls all
 remain zero. It does not close `R-019`, `R-029`, Plan §6#6, `OB-2.2`, `OB-10.3`, `OB-10.4`, hosted serving, or
@@ -81,7 +82,7 @@ provider/model invocation gates.
 Residuals `R-019`/`R-029` stay open. Author evidence is not a formal review; this batch requires a fresh pinned
 independent review before any live/W6/manual signoff.
 
-### FF-I (this batch) — the four rerun2 findings
+### FF-I (`7183714`) — the four rerun2 findings
 
 1. **Versioned progressed-child contract** (`workflow_progressed_child_contract.py`, new;
    `agent_operation_query_postgres.py`, `control_plane_live_postgres.py`, `acquisition_command_owner.py`): the
@@ -129,6 +130,61 @@ independent review before any live/W6/manual signoff.
    grows from 12 to 18 cases (bool/int alias, int/float alias, top-level and nested duplicate keys, `NaN`, and
    `-Infinity`), each run under both erased and legacy-coherent pins; all six new families classified as `decoded`
    (→ `non_v2`) before the fix and now force `partial_or_mixed_v2`.
+
+Residuals `R-019`/`R-029` stay open. Author evidence is not a formal review; this batch requires a fresh pinned
+independent review before any live/W6/manual signoff.
+
+### FF-I2 (this batch) — the five rerun3 P1 findings plus one P2
+
+1. **Durable version-bound progressed-child contract** (`workflow_progressed_child_contract.py`): the contract is
+   now `PROGRESSED_CHILD_CONTRACT_VERSION = progressed_workflow_child_contract_v2`. Every committed child causality
+   payload and child plan-event payload carries an immutable contract pin (name/version/SHA-256 digest over the
+   registered contract entry); a missing, unknown, or drifted pin fails identity computation instead of being
+   silently reinterpreted. The registered pure builders (`build_acquisition_root_intent_plan`,
+   `build_company_public_web_phase_plan`) moved into the shared module — `acquisition_command_owner` and
+   `orchestrator` keep only thin delegations — and every verifier (UoW, succeeded replay, inspection, Company
+   Public Web bundle replay) reconstructs the complete expected child/event from the parent and exact-compares:
+   full child payload, causality mirror, pin, plan-event idempotency/id/actor/source/sequence, and the complete
+   plan payload (foreign workflow types, substituted stage keys, missing/extra keys fail). Comparisons are exact
+   (no trimming): padded immutable strings fail. Regressions: self-consistent target-company drift,
+   missing/extra payload fields, foreign workflow type, pin digest/version/removal, padded actor/source/run,
+   and mirror-consistent foreign stage/group unit probes.
+2. **First-time completion applies the shared contract before and after insert**
+   (`control_plane_live_postgres.py`): the UoW now reconstructs the complete expected plan from the locked root
+   through the registered pure builder for `acquisition_root` and requires the caller spec (plan event, child,
+   causality, terminal result) to equal it exactly; for both contracts it validates the constructed event and
+   child against the shared contract before either insert and validates every returned inserted row before the
+   parent terminal update. Six first-call adversarial drift cases (event payload, child payload, retry policy,
+   artifact refs, causality stage, root result) abort with `acquisition_root_plan_reconstruction_mismatch` and
+   zero writes.
+3. **Probe session lifecycle** (`control_plane_live_postgres.py`): public read-only probes now run on a fresh
+   disposable connection per probe, inside `SET TRANSACTION READ ONLY`, and are rolled back — never committed —
+   and closed — never returned to the pool. Hidden side effects a read-only transaction cannot see
+   (`set_config` GUC poisoning, session advisory locks, `pg_notify` delivery, temporary state) die with the
+   connection. Real-PG regressions: poisoned `search_path` overload (subsequent probes unaffected), hidden
+   advisory lock (released; a private-interface control proves it is otherwise held), hidden notification
+   (undelivered; a private-interface control proves it is otherwise committed), and hidden temporary-state DDL
+   (rejected with `25006`).
+4. **Profile-scheduler and model-envelope owner aggregates excluded** (`control_plane_postgres.py`): the complete
+   `linkedin_profile_registry` family (registry, aliases, events, backfill runs — scheduler retry waits,
+   coalescing timers, terminal state, dispatch identity) joins the nonportable coordination category, and
+   `model_invocation_envelopes` (immutable causal/cost references, non-revivable purge tombstones) joins the
+   durable-runtime causal aggregate category of the canonical registry. Real-PG tests prove scheduler dispatch
+   identity and live/tombstone envelope rows are neither observed nor mutated by generic export/import, that
+   tombstones are not revived, and that explicit export and snapshot→PG sync boundaries reject both tables.
+5. **Company Public Web completion replay unified** (`orchestrator.py`):
+   `_validate_company_public_web_source_completion_bundle` now routes through the shared versioned contract
+   (expected child identity plus plan-event violation) and requires the locked parent source-event sequence; no
+   second hand-maintained child verifier remains (the phase-command builder is a thin delegation to the shared
+   pure builder; the remaining envelope helper mints the same contract pin for registered child types). A
+   reordered plan event (deterministic id recomputed and child source references updated consistently) now fails
+   replay with `event_sequence_invalid`, and pin digest/version/removal drift fails the child identity.
+6. **Strict JSON completeness** (`json_contract.py`): `json_contract_equal` is now a recursive type-strict
+   comparison (string-only object keys, finite numbers, `bool`/`int`/`float` distinct) instead of a
+   `json.dumps` comparison — `{1: "x"}` never equals `{"1": "x"}` and `(1, 2)` never equals `[1, 2]`.
+   `loads_json_contract_strict` additionally rejects float overflow (`1e9999`), and `decode_json_contract` parses
+   through the same strict loader. The corrupt-carrier matrix grows to 21 cases (overflow exponent, tuple/list
+   alias, non-string-key alias) plus direct helper unit tests.
 
 Residuals `R-019`/`R-029` stay open. Author evidence is not a formal review; this batch requires a fresh pinned
 independent review before any live/W6/manual signoff.
@@ -216,6 +272,28 @@ independent review before any live/W6/manual signoff.
 
 ## New regression evidence
 
+- `tests/test_d1n_s1e2b_inspect_acceptance_closure.py` (FF-I2) adds the version-bound progressed-child negatives:
+  self-consistent semantic drift (target company), missing/extra payload fields, foreign plan-event workflow type,
+  contract-pin digest/version/removal drift (historical versions fail closed), six first-call adversarial spec drifts
+  (`acquisition_root_plan_reconstruction_mismatch` with zero writes), and a pure unit class proving exact
+  no-trimming comparison (padded actor/source/run/schema, foreign workflow type, missing/extra plan-payload keys,
+  mirror-consistent foreign stage/group) against the registered pure builder.
+- `tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py` (FF-I2) adds the probe session-lifecycle regressions:
+  a hidden `set_config('search_path', ...)` overload (probe succeeds, later probes unaffected; persistent-session
+  control proves the poisoning is live), a hidden session advisory lock (released by the disposable connection;
+  private-interface control proves it is otherwise held), a hidden `pg_notify` (never delivered; private-interface
+  control proves it is otherwise committed), and hidden temporary-state DDL (rejected with sqlstate `25006`).
+- `tests/test_control_plane_postgres.py` (FF-I2) extends the real-PG portability proofs to the complete
+  profile-scheduler owner aggregate (registry dispatch identity, aliases, events, backfill runs) and
+  `model_invocation_envelopes` (live envelope plus purge tombstone: not observed, not mutated, tombstone not
+  revived, explicit export and snapshot→PG boundaries rejected).
+- `tests/test_d1m_company_public_web_atomic_owner.py` (FF-I2) adds the Company Public Web completion-replay
+  regressions: a reordered plan event with recomputed deterministic id and consistently updated child source
+  references fails with `event_sequence_invalid` (locked parent source-event sequence required), and contract-pin
+  digest/version/removal drift fails the materialize-child identity.
+- `tests/test_d1n_s1e2b_start_v2_provenance.py` (FF-I2) grows the corrupt-carrier matrix to 21 cases under both
+  erased and legacy-coherent pins (overflow exponent `1e9999`, tuple/list decoded/raw alias, non-string-key
+  decoded/raw alias) and adds direct strict-loader/equality unit tests.
 - `tests/test_d1n_s1e2b_inspect_acceptance_closure.py` (FF-I) adds the versioned progressed-child negatives: six
   causality-column drift cases (stage, causal group, causality schema, readiness effect, input artifact refs, produced
   counts), the fully self-consistent foreign `foreign.command`/`foreign_owner` child probes, and five plan-event
@@ -266,8 +344,42 @@ independent review before any live/W6/manual signoff.
 
 ## Fixed-forward validation evidence
 
-Exact-head FF-I evidence (this batch; commands and counts are recorded for the pinned head commit, whose SHA is
+Exact-head FF-I2 evidence (this batch; commands and counts are recorded for the pinned head commit, whose SHA is
 recorded in `.coord/handoffs/s1e2b-ff-i-v1.md`):
+
+- `python -m pytest tests/test_d1n_s1e2b_acceptance_contract.py tests/test_d1n_s1e2b_inspect_acceptance_closure.py
+  tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py tests/test_d1n_s1e2b_start_v2_provenance.py
+  tests/test_control_plane_postgres.py tests/test_pre_agent_contract_review.py
+  tests/test_d1n_start_acquisition_v2_create_pg.py tests/test_d1m_company_public_web_atomic_owner.py
+  tests/test_d1i_acquisition_root_action_activation.py -q` (with `SOURCING_REQUIRE_PG_STORE_TESTS=1` and
+  `SOURCING_TEST_ESBUILD_MODULE_PATH` pointed at the main tree's module): `344 passed, 696 subtests passed in
+  350.98s`, zero failures/errors.
+- Per-suite counts inside that battery: inspect acceptance closure `22 passed + 52 subtests`; raw-SQL fence
+  `16 passed + 277 subtests`; start-v2 provenance `110 passed`; control-plane postgres `37 passed + 201 subtests`;
+  company-public-web atomic owner `22 passed + 16 subtests`; acquisition root activation `26 passed + 56 subtests`;
+  pre-agent contract review `62 passed`.
+- Company Public Web orchestrator adjacency: `tests/test_operation_runtime.py -k company_public_web`:
+  `52 passed + 61 subtests`, covering the acknowledgement-loss bundle replay against the unified shared contract.
+- Touched-suite adjacency: `tests/test_cloud_asset_import.py`, `tests/test_control_plane_pool.py`,
+  `tests/test_d0f_model_invocation_envelope_postgres.py`, `tests/test_recovery_drain_registry.py`,
+  `tests/test_recovery_takeover_intent.py`, `tests/test_request_scope_owner_fencing_pg.py`,
+  `tests/test_export_async_task.py`: all green (the two pool tests that asserted pool reuse through the public
+  probe now measure it through the pooled read path, because the public probe is disposable by design).
+- Ruff check and ruff format on every changed file: clean (the repo-wide ruff baseline carries pre-existing
+  findings in untouched files). Scoped mypy (`make typecheck` file set): `81 errors / 4 files`, exactly the allowed
+  global baseline; this batch adds zero new mypy errors. `git diff --check`: clean.
+- Pre-existing non-regressions observed and re-confirmed against the stashed base: the
+  `test_d3c1_public_mapper_is_closed_and_preserves_only_safe_diagnostics` mapper-cardinality assertion (`85`
+  expected, `86` current, introduced by the base-commit Luna batch runner, identical with this batch stashed) and
+  the `test_first_party_markdown_files_have_status_banner` missing-banner list (identical with this batch stashed).
+- Stash-verified pre-fix behavior: the hidden advisory lock is held by the pooled session and the hidden
+  notification is delivered on commit under the round-1 probe path (both F4 regressions fail with round-1 code);
+  `1e9999` parses as `inf`, and `{1: "x"}`/`(1, 2)` alias under the round-1 equality (both F7 helper tests fail
+  with round-1 code). The F2/F3/F6 pins, builders, disposable-connection probes, and registry reclassifications are
+  new version-bound behavior with no round-1 equivalent; the reviewer artifact's exact-head probes (semantic drift,
+  foreign workflow type, padded strings, reordered event, first-call insert bypass) record the pre-fix acceptance.
+
+Exact-head FF-I evidence (`7183714`; retained from the prior batch):
 
 - `python -m pytest tests/test_d1n_s1e2b_acceptance_contract.py tests/test_d1n_s1e2b_inspect_acceptance_closure.py
   tests/test_d1n_s1e2b_raw_sql_workflow_command_fence.py tests/test_d1n_s1e2b_start_v2_provenance.py

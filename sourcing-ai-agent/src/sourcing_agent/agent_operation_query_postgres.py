@@ -52,7 +52,9 @@ from .operation_runtime import (
     operation_run_control_state_fail_closed,
 )
 from .workflow_progressed_child_contract import (
+    build_acquisition_root_intent_plan,
     canonical_progressed_child_identity,
+    expected_progressed_child_row,
     progressed_child_completion_contract_for,
     progressed_child_plan_event_violation,
 )
@@ -475,17 +477,16 @@ def _verify_progressed_workflow_command_children(
     Inspect must therefore re-verify that exact physical lineage for every
     referenced identifier instead of trusting the edge list, and it must do so
     against the same versioned progressed-child contract the owner path commits
-    (``workflow_progressed_child_contract``): the child row must exist (locked
-    ``FOR UPDATE`` by the base-owner loader), belong to the same workflow run
-    and operation, point back at the root through ``parent_command_id``, carry
-    the registered child command type/owner for the root's completion contract,
-    hold payload causality equal to every one of its own causality columns
-    (stage, causal group, source-event identity, artifact refs, produced
-    counts, no-op/readiness fields, causality schema), and reference exactly
-    one same-run ``CommandPlanRequested`` event whose full immutable identity
-    (registered ``<child>:plan`` idempotency, deterministic event id, pinned
-    actor/source, ordering after the root's own source event, and complete plan
-    payload) matches the child it planned.
+    (``workflow_progressed_child_contract``): the complete expected child and
+    plan event are reconstructed from the locked root through the registered
+    pure builder, and every immutable child/event/causality field — including
+    the full child payload, the payload causality mirror of every causality
+    column, the immutable contract pin, the registered child command
+    type/owner, the registered ``<child>:plan`` idempotency, the deterministic
+    event id, the pinned actor/source, the sequence ordered after the root's
+    own source event, empty artifact refs, and the complete plan payload — must
+    equal that reconstruction exactly.  Only the explicitly mutable child
+    lifecycle fields may differ.
     """
 
     root_contract = _canonical_workflow_command_contract(workflow_command)
@@ -499,7 +500,9 @@ def _verify_progressed_workflow_command_children(
     )
     if resolved_contract is None:
         raise ValueError("agent tool inspect result workflow command link mismatch")
-    _completion_name, completion_contract = resolved_contract
+    completion_name, completion_contract = resolved_contract
+    if completion_name != "acquisition_root":
+        raise ValueError("agent tool inspect result workflow command link mismatch")
     root_source_events = [
         event
         for event in workflow_events
@@ -509,6 +512,15 @@ def _verify_progressed_workflow_command_children(
         raise ValueError("agent tool inspect result workflow command link mismatch")
     root_source_sequence = root_source_events[0].get("sequence_number")
     if type(root_source_sequence) is not int or root_source_sequence <= 0:
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    expected_plan = build_acquisition_root_intent_plan(
+        {**workflow_command, "payload": root_contract["payload"]},
+        claim_attempt=max(1, int(workflow_command.get("attempt") or 0)),
+    )
+    expected_child_spec = dict(expected_plan.get("child_command") or {})
+    expected_causality_template = dict(expected_plan.get("child_causality") or {})
+    expected_event_spec = dict(expected_plan.get("plan_event") or {})
+    if not expected_child_spec or not expected_causality_template or not expected_event_spec:
         raise ValueError("agent tool inspect result workflow command link mismatch")
     children_by_id: dict[str, dict[str, Any]] = {}
     for child in child_commands:
@@ -522,7 +534,7 @@ def _verify_progressed_workflow_command_children(
     for child_id in downstream_ids:
         child_contract = children_by_id[child_id]
         child_identity = canonical_progressed_child_identity(child_contract)
-        if child_identity is None:
+        if child_identity is None or child_identity["contract_name"] != completion_name:
             raise ValueError("agent tool inspect result workflow command link mismatch")
         if (
             child_identity["command_type"] != str(completion_contract["child_command_type"] or "")
@@ -533,6 +545,22 @@ def _verify_progressed_workflow_command_children(
             or not child_identity["source_event_id"]
             or child_identity["source_event_type"] != "CommandPlanRequested"
         ):
+            raise ValueError("agent tool inspect result workflow command link mismatch")
+        expected_child_identity = canonical_progressed_child_identity(
+            expected_progressed_child_row(
+                contract=completion_contract,
+                parent_command_id=root_command_id,
+                workflow_run_id=root_workflow_run_id,
+                operation_id=root_operation_id,
+                child_command=expected_child_spec,
+                child_causality={
+                    **expected_causality_template,
+                    "source_event_id": child_identity["source_event_id"],
+                    "source_event_type": "CommandPlanRequested",
+                },
+            )
+        )
+        if expected_child_identity is None or not json_contract_equal(child_identity, expected_child_identity):
             raise ValueError("agent tool inspect result workflow command link mismatch")
         source_events = [
             event for event in workflow_events if str(event.get("event_id") or "") == child_identity["source_event_id"]
@@ -557,6 +585,7 @@ def _verify_progressed_workflow_command_children(
             parent_source_sequence=root_source_sequence,
             child_identity=child_identity,
             event=decoded_event,
+            expected_payload=dict(expected_event_spec.get("payload") or {}),
         ):
             raise ValueError("agent tool inspect result workflow command link mismatch")
 

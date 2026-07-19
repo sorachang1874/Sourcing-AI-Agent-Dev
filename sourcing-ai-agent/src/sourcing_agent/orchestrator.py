@@ -661,6 +661,15 @@ from .workflow_event_response import (
     remote_event_lane_for_known_provider_worker,
     remote_event_lane_for_worker,
 )
+from .workflow_progressed_child_contract import (
+    build_company_public_web_phase_plan,
+    canonical_progressed_child_identity,
+    expected_progressed_child_row,
+    progressed_child_completion_contract,
+    progressed_child_completion_contract_for_child,
+    progressed_child_contract_pin,
+    progressed_child_plan_event_violation,
+)
 from .workflow_refresh import (
     extract_progress_metrics as _extract_progress_metrics,
 )
@@ -54942,98 +54951,16 @@ class SourcingOrchestrator:
         idempotency_suffix: str,
         source: str = "company_public_web_refresh_owner",
     ) -> dict[str, Any]:
-        normalized_type = str(command_type or "").strip()
-        if normalized_type not in {
-            COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
-            COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
-        }:
-            return {}
-        parent_payload = dict(parent_command or {})
-        parent_command_id = str(parent_payload.get("command_id") or "").strip()
-        workflow_run_id = str(parent_payload.get("workflow_run_id") or "").strip()
-        operation_id = (
-            str(parent_payload.get("operation_id") or "").strip()
-            or str(dict(parent_payload.get("payload") or {}).get("operation_id") or "").strip()
+        # Canonical implementation lives in the shared progressed-child
+        # contract so planning, UoW completion, and replay all reconstruct the
+        # same expected child/event through the registered pure builder.
+        return build_company_public_web_phase_plan(
+            parent_command=parent_command,
+            command_type=command_type,
+            command_payload=command_payload,
+            idempotency_suffix=idempotency_suffix,
+            source=source,
         )
-        if not workflow_run_id or not operation_id or not parent_command_id:
-            return {}
-        phase_payload = {key: value for key, value in dict(command_payload or {}).items() if key != "causality"}
-        payload = {
-            **phase_payload,
-            "operation_id": operation_id,
-            "parent_command_id": parent_command_id,
-            "causal_group_id": parent_command_id
-            or str(parent_payload.get("idempotency_key") or "").strip()
-            or str(idempotency_suffix or "").strip(),
-            "source": str(source or "company_public_web_refresh_owner").strip(),
-            "migration_phase": "W11_company_public_web_phase_command",
-        }
-        idempotency_key = (
-            f"{normalized_type}:{parent_command_id or workflow_run_id}:"
-            f"{hashlib.sha1(str(idempotency_suffix or payload).encode('utf-8')).hexdigest()[:24]}"
-        )
-        stage_id = default_stage_id_for_command_type(normalized_type)
-        child_owner = DEFAULT_COMMAND_OWNER_REGISTRY.owner_for(normalized_type)
-        retry_policy = {"kind": "company_public_web_phase", "retry_delay_seconds": 30}
-        plan_event_payload = {
-            "workflow_type": "company_public_web_refresh",
-            "stage_key": stage_id,
-            "command_type": normalized_type,
-            "idempotency_key": idempotency_key,
-            "parent_command_id": parent_command_id,
-            "causal_group_id": payload["causal_group_id"],
-            "payload": payload,
-            "max_attempts": 3,
-            "retry_policy": retry_policy,
-        }
-        source_event_template = {
-            "event_id": "",
-            "workflow_run_id": workflow_run_id,
-            "operation_id": operation_id,
-            "command_id": parent_command_id,
-            "event_type": "CommandPlanRequested",
-            "payload": plan_event_payload,
-        }
-        child_causality = command_causality_for(
-            workflow_run_id=workflow_run_id,
-            operation_id=operation_id,
-            stage_id=stage_id,
-            command_type=normalized_type,
-            owner=child_owner,
-            idempotency_key=idempotency_key,
-            source_event=source_event_template,
-            command_payload=payload,
-            artifact_refs=(),
-        ).to_payload()
-        return {
-            "plan_event": {
-                "workflow_run_id": workflow_run_id,
-                "operation_id": operation_id,
-                "command_id": parent_command_id,
-                "event_family": "workflow_event",
-                "event_type": "CommandPlanRequested",
-                "idempotency_key": f"{idempotency_key}:plan",
-                "actor": "company_public_web_phase_planner",
-                "source": str(source or "company_public_web_refresh_owner").strip(),
-                "payload": plan_event_payload,
-                "artifact_refs": [],
-            },
-            "child_command": {
-                "workflow_run_id": workflow_run_id,
-                "operation_id": operation_id,
-                "command_id": command_id_for(workflow_run_id, idempotency_key),
-                "command_type": normalized_type,
-                "owner": child_owner,
-                "idempotency_key": idempotency_key,
-                "parent_command_id": parent_command_id,
-                "payload": payload,
-                "artifact_refs": [],
-                "not_before_at": "",
-                "max_attempts": 3,
-                "retry_policy": retry_policy,
-            },
-            "child_causality": child_causality,
-        }
 
     def _plan_company_public_web_phase_command(
         self,
@@ -55128,6 +55055,19 @@ class SourcingOrchestrator:
         if parent_command_id:
             expected_event_payload["parent_command_id"] = str(parent_command_id).strip()
             expected_event_payload["causal_group_id"] = str(causal_group_id).strip()
+        # Registered progressed-child pairs carry the immutable contract pin
+        # minted by the shared builder; expected values must include it.
+        expected_contract_pin: dict[str, str] = {}
+        if parent_command_id:
+            resolved_child_contract = progressed_child_completion_contract_for_child(command_type)
+            if resolved_child_contract is not None:
+                _child_contract_name, child_contract = resolved_child_contract
+                if str(actor or "").strip() == str(child_contract.get("child_plan_event_actor") or "") and str(
+                    source or ""
+                ).strip() == str(child_contract.get("child_plan_event_source") or ""):
+                    expected_contract_pin = progressed_child_contract_pin(_child_contract_name)
+        if expected_contract_pin:
+            expected_event_payload["progressed_child_contract"] = expected_contract_pin
         source_events = [
             dict(event or {})
             for event in self.store.repos.workflow_runtime.list_workflow_events(workflow_run_id, limit=0)
@@ -55174,6 +55114,8 @@ class SourcingOrchestrator:
             command_payload=event_command_payload,
             artifact_refs=(),
         ).to_payload()
+        if expected_contract_pin:
+            expected_causality["progressed_child_contract"] = expected_contract_pin
         expected_stored_payload = {**event_command_payload, "causality": expected_causality}
         physical_text_fields = {
             "schema_version": "workflow_command_v1",
@@ -55300,6 +55242,28 @@ class SourcingOrchestrator:
         expected_child_id = str(child_spec.get("command_id") or "").strip()
         if list(current.get("downstream_command_ids") or []) != [expected_child_id]:
             return {"status": "invalid", "reason": "company_public_web_source_terminal_edge_mismatch"}
+        # The shared versioned progressed-child contract also owns Company
+        # Public Web completion replay: the plan event must follow the locked
+        # parent source event in sequence, carry the deterministic id and
+        # registered idempotency/actor/source pins, and equal the complete
+        # expected payload; the child must equal the reconstructed expected
+        # identity exactly.  No second hand-maintained verifier remains.
+        parent_source_event_id = str(current.get("source_event_id") or "").strip()
+        parent_source_event = (
+            self.store.repos.workflow_runtime.get_persisted_workflow_event_contract(parent_source_event_id)
+            if parent_source_event_id
+            else {}
+        )
+        parent_source_sequence = max(0, int(dict(parent_source_event or {}).get("sequence_number") or 0))
+        if (
+            not parent_source_event
+            or not bool(dict(parent_source_event or {}).get("persisted_json_contract_valid"))
+            or parent_source_sequence <= 0
+        ):
+            return {"status": "invalid", "reason": "company_public_web_source_parent_source_event_invalid"}
+        completion = progressed_child_completion_contract("company_public_web_source")
+        if completion is None:
+            return {"status": "invalid", "reason": "company_public_web_source_completion_contract_unregistered"}
         candidate_events = [
             dict(item or {})
             for item in self.store.repos.workflow_runtime.list_workflow_events(
@@ -55313,42 +55277,54 @@ class SourcingOrchestrator:
         event = self.store.repos.workflow_runtime.get_persisted_workflow_event_contract(
             str(candidate_events[0].get("event_id") or "").strip()
         )
-        if (
-            not event
-            or not bool(event.get("persisted_json_contract_valid"))
-            or str(event.get("workflow_run_id") or "").strip()
-            != str(plan_event_spec.get("workflow_run_id") or "").strip()
-            or str(event.get("operation_id") or "").strip() != str(plan_event_spec.get("operation_id") or "").strip()
-            or str(event.get("command_id") or "").strip() != str(plan_event_spec.get("command_id") or "").strip()
-            or str(event.get("event_family") or "").strip() != str(plan_event_spec.get("event_family") or "").strip()
-            or str(event.get("event_type") or "").strip() != str(plan_event_spec.get("event_type") or "").strip()
-            or str(event.get("actor") or "").strip() != str(plan_event_spec.get("actor") or "").strip()
-            or str(event.get("source") or "").strip() != str(plan_event_spec.get("source") or "").strip()
-            or not json_contract_equal(dict(event.get("payload") or {}), dict(plan_event_spec.get("payload") or {}))
-            or not json_contract_equal(
-                list(event.get("artifact_refs") or []), list(plan_event_spec.get("artifact_refs") or [])
+        expected_child_identity = (
+            canonical_progressed_child_identity(
+                expected_progressed_child_row(
+                    contract=completion,
+                    parent_command_id=command_id,
+                    workflow_run_id=str(current.get("workflow_run_id") or "").strip(),
+                    operation_id=str(current.get("operation_id") or "").strip(),
+                    child_command=child_spec,
+                    child_causality={
+                        **dict(completion_contract.get("child_causality") or {}),
+                        "source_event_id": str(event.get("event_id") or "").strip(),
+                        "source_event_type": "CommandPlanRequested",
+                    },
+                )
             )
-        ):
+            if event and bool(event.get("persisted_json_contract_valid"))
+            else None
+        )
+        event_violation = (
+            progressed_child_plan_event_violation(
+                contract=completion,
+                parent_command_id=command_id,
+                parent_source_sequence=parent_source_sequence,
+                child_identity=expected_child_identity,
+                event={
+                    **event,
+                    "payload": dict(event.get("payload") or {}),
+                    "artifact_refs": list(event.get("artifact_refs") or []),
+                },
+                expected_payload=dict(plan_event_spec.get("payload") or {}),
+            )
+            if expected_child_identity is not None
+            else "child_identity_invalid"
+        )
+        if event_violation:
             return {"status": "invalid", "reason": "company_public_web_source_plan_event_mismatch"}
         child = self.store.repos.workflow_runtime.get_persisted_workflow_command_contract(expected_child_id)
-        child_payload = dict(child_spec.get("payload") or {})
+        persisted_child_identity = (
+            canonical_progressed_child_identity(child)
+            if child and bool(child.get("persisted_json_contract_valid"))
+            else None
+        )
         if (
             not child
             or not bool(child.get("persisted_json_contract_valid"))
             or str(child.get("command_id") or "").strip() != expected_child_id
-            or not self._company_public_web_command_causality_matches(
-                command_record=child,
-                command_payload=child_payload,
-                workflow_type="company_public_web_refresh",
-                actor=str(plan_event_spec.get("actor") or "").strip(),
-                source=str(plan_event_spec.get("source") or "").strip(),
-                source_command_id=command_id,
-                expected_idempotency_key=str(child_spec.get("idempotency_key") or "").strip(),
-                max_attempts=int(child_spec.get("max_attempts") or 0),
-                retry_policy=dict(child_spec.get("retry_policy") or {}),
-                parent_command_id=command_id,
-                causal_group_id=command_id,
-            )
+            or persisted_child_identity is None
+            or not json_contract_equal(persisted_child_identity, expected_child_identity)
         ):
             return {"status": "invalid", "reason": "company_public_web_source_materialize_child_mismatch"}
         expected_delta_ids = [str(item.get("delta_id") or "").strip() for item in entity_delta_specs]

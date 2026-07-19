@@ -67,20 +67,21 @@ from .durable_runtime import (
     PROJECTION_PROFILE_ADMISSION_APPLY_COMMAND_TYPE,
     PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
     SNAPSHOT_COMPACTION_RUN_COMMAND_TYPE,
-    command_causality_for,
-    command_id_for,
     default_stage_id_for_command_type,
 )
 from .json_contract import json_contract_equal
 from .workflow_progressed_child_contract import (
+    ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION,
+    build_acquisition_root_intent_plan,
     canonical_progressed_child_identity,
     expected_progressed_child_row,
     progressed_child_completion_contract,
     progressed_child_plan_event_id,
     progressed_child_plan_event_violation,
+    start_v2_root_workflow_payload,
 )
 
-_ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION = "acquisition_root_command_payload.v2"
+_ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION = ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION
 
 # NOTE: the helpers below duplicate small module-level helpers in
 # ``orchestrator.py`` (which imports this module — importing them back from
@@ -220,49 +221,9 @@ class AcquisitionCommandOwner:
 
     @staticmethod
     def _start_v2_root_workflow_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-        root = dict(payload or {})
-        if str(root.get("schema_version") or "").strip() != _ACQUISITION_START_V2_ROOT_COMMAND_PAYLOAD_SCHEMA_VERSION:
-            return {}
-        snapshot = dict(root.get("start_snapshot") or {})
-        preview = dict(snapshot.get("preview") or {})
-        company = dict(preview.get("company_target") or {})
-        effective = dict(preview.get("effective_request") or {})
-        manifest = dict(preview.get("provider_planning_manifest") or {})
-        target_company = str(company.get("canonical_name") or company.get("canonical_company_id") or "").strip()
-        if not target_company:
-            return {}
-        lane_queries: list[str] = []
-        for lane in list(manifest.get("lanes") or []):
-            provider_payload = dict(dict(lane or {}).get("provider_payload") or {})
-            query_text = str(provider_payload.get("query_text") or "").strip()
-            if query_text and query_text not in lane_queries:
-                lane_queries.append(query_text)
-        return {
-            "schema_version": "acquisition_start_v2_root_owner_compat_payload.v1",
-            "target_company": target_company,
-            "canonical_company_id": str(company.get("canonical_company_id") or "").strip(),
-            "provider_company_labels": list(company.get("provider_company_labels") or []),
-            "query": " | ".join(lane_queries),
-            "cohort_selection": dict(effective.get("cohort_selection") or {}),
-            "source_preferences": list(effective.get("source_preferences") or []),
-            "coverage_intent": str(effective.get("coverage_intent") or "").strip(),
-            "thematic_constraints": list(effective.get("thematic_constraints") or []),
-            "provider_mode_intent": str(effective.get("provider_mode_intent") or "").strip(),
-            "budget": dict(effective.get("budget") or {}),
-            "provider_planning_manifest_ref": {
-                "schema_version": str(manifest.get("schema_version") or "").strip(),
-                "manifest_digest": str(manifest.get("manifest_digest") or "").strip(),
-                "physical_query_digest": str(manifest.get("physical_query_digest") or "").strip(),
-            },
-            "preview_ref": {
-                "preview_id": str(preview.get("preview_id") or "").strip(),
-                "preview_revision": int(preview.get("preview_revision") or 0),
-                "preview_digest": str(preview.get("preview_digest") or "").strip(),
-            },
-            "start_snapshot_digest": str(root.get("start_snapshot_digest") or "").strip(),
-            "confirmation_receipt_ref": dict(root.get("confirmation_receipt_ref") or {}),
-            "start_action_id": str(root.get("action_id") or "").strip(),
-        }
+        # Canonical implementation lives in the shared progressed-child
+        # contract so every verifier normalizes through the same pure builder.
+        return start_v2_root_workflow_payload(payload)
 
     def _acquisition_root_preflight_failure(
         self,
@@ -314,147 +275,10 @@ class AcquisitionCommandOwner:
         *,
         claim_attempt: int,
     ) -> dict[str, Any]:
-        root = dict(command or {})
-        payload = dict(root.get("payload") or {})
-        workflow_payload = dict(payload.get("workflow_payload") or {})
-        if not workflow_payload:
-            workflow_payload = self._start_v2_root_workflow_payload(payload)
-        workflow_run_id = str(root.get("workflow_run_id") or "").strip()
-        operation_id = str(root.get("operation_id") or "").strip()
-        root_command_id = str(root.get("command_id") or "").strip()
-        target_company = str(payload.get("target_company") or workflow_payload.get("target_company") or "").strip()
-        query_text = str(
-            payload.get("query") or workflow_payload.get("query") or workflow_payload.get("raw_user_request") or ""
-        ).strip()
-        plan_review_id = str(payload.get("plan_review_id") or workflow_payload.get("plan_review_id") or "").strip()
-        normalized_attempt = max(0, int(claim_attempt or 0))
-        if (
-            not workflow_run_id
-            or not operation_id
-            or not root_command_id
-            or normalized_attempt <= 0
-            or (not plan_review_id and not target_company and not query_text)
-        ):
-            return {}
-        child_idempotency_key = f"{ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE}:parent:{root_command_id}"
-        child_command_id = command_id_for(workflow_run_id, child_idempotency_key)
-        root_causality = dict(payload.get("causality") or {})
-        causal_group_id = (
-            str(root_causality.get("causal_group_id") or "").strip()
-            or str(root.get("causal_group_id") or "").strip()
-            or root_command_id
-        )
-        child_payload = {
-            "workflow_payload": workflow_payload,
-            "target_company": target_company,
-            "query": query_text,
-            "plan_review_id": plan_review_id,
-            "intent_count": 1,
-            "query_count": 1 if query_text else 0,
-            "parent_command_id": root_command_id,
-            "causal_group_id": causal_group_id,
-            "operation_run_id": operation_id,
-            "action_id": str(payload.get("action_id") or "").strip(),
-            "source": "acquisition_run_create.command_owner",
-            "migration_phase": "W11b_acquisition_intent_resolve",
-            "normal_path_executes_queue_workflow_inline": False,
-        }
-        stage_id = default_stage_id_for_command_type(ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE)
-        child_owner = DEFAULT_COMMAND_OWNER_REGISTRY.owner_for(ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE)
-        plan_event_payload = {
-            "workflow_type": "agent_callable_acquisition",
-            "stage_key": stage_id,
-            "stage_id": stage_id,
-            "command_type": ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
-            "idempotency_key": child_idempotency_key,
-            "parent_command_id": root_command_id,
-            "causal_group_id": causal_group_id,
-            "payload": child_payload,
-            "max_attempts": 3,
-            "retry_policy": {
-                "kind": "acquisition_intent_resolve",
-                "retry_delay_seconds": 10,
-            },
-        }
-        source_event_template = {
-            "event_id": "",
-            "workflow_run_id": workflow_run_id,
-            "operation_id": operation_id,
-            "command_id": root_command_id,
-            "event_type": "CommandPlanRequested",
-            "payload": plan_event_payload,
-        }
-        child_causality = command_causality_for(
-            workflow_run_id=workflow_run_id,
-            operation_id=operation_id,
-            stage_id=stage_id,
-            command_type=ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
-            owner=child_owner,
-            idempotency_key=child_idempotency_key,
-            source_event=source_event_template,
-            command_payload=child_payload,
-            artifact_refs=(),
-        ).to_payload()
-        child_ref = {
-            "workflow_run_id": workflow_run_id,
-            "operation_id": operation_id,
-            "command_id": child_command_id,
-            "command_type": ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE,
-            "owner": child_owner,
-            "idempotency_key": child_idempotency_key,
-            "parent_command_id": root_command_id,
-        }
-        root_result = {
-            "status": "ready_for_downstream_commands",
-            "reason": "acquisition_run_root_recorded",
-            "operation_completion_deferred": True,
-            "module_state_mutated": False,
-            "normal_path_executes_queue_workflow_inline": False,
-            "queue_workflow_called": False,
-            "target_company": target_company,
-            "query": query_text,
-            "plan_review_id": plan_review_id,
-            "workflow_payload": workflow_payload,
-            "downstream_command_required": True,
-            "downstream_command_count": 1,
-            "downstream_command_ids": [child_command_id],
-            "downstream_command_ref": child_ref,
-            "downstream_command_types": [ACQUISITION_INTENT_RESOLVE_COMMAND_TYPE],
-            "next_phase": "W11b_acquisition_intent_plan_commands",
-            "created_or_reused_job_id": "",
-            "legacy_job_shell_created": False,
-            "completed_claim_attempt": normalized_attempt,
-            "migration_phase": "W11a_acquisition_run_create_root",
-            "terminal_result_schema_version": "acquisition_root_terminal_result_v1",
-            "contract": "w11a_acquisition_run_create_root_owner_v2",
-        }
-        return {
-            "plan_event": {
-                "workflow_run_id": workflow_run_id,
-                "operation_id": operation_id,
-                "command_id": root_command_id,
-                "event_family": "workflow_event",
-                "event_type": "CommandPlanRequested",
-                "idempotency_key": f"{child_idempotency_key}:plan",
-                "actor": "acquisition_run_create_owner",
-                "source": "acquisition_run_create.command_owner",
-                "payload": plan_event_payload,
-                "artifact_refs": [],
-            },
-            "child_command": {
-                **child_ref,
-                "payload": child_payload,
-                "artifact_refs": [],
-                "not_before_at": "",
-                "max_attempts": 3,
-                "retry_policy": {
-                    "kind": "acquisition_intent_resolve",
-                    "retry_delay_seconds": 10,
-                },
-            },
-            "child_causality": child_causality,
-            "root_result": root_result,
-        }
+        # Canonical implementation lives in the shared progressed-child
+        # contract so the owner path, replay validation, UoW, and inspection
+        # all reconstruct the same expected child/event from the parent.
+        return build_acquisition_root_intent_plan(command, claim_attempt=claim_attempt)
 
     def _validate_acquisition_root_succeeded_replay(
         self,
@@ -538,6 +362,7 @@ class AcquisitionCommandOwner:
                     "payload": dict(event.get("payload") or {}),
                     "artifact_refs": list(event.get("artifact_refs") or []),
                 },
+                expected_payload=dict(event_spec.get("payload") or {}),
             )
             if expected_child_identity is not None
             else "child_identity_invalid"

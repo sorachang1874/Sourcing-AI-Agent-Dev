@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import threading
 import unittest
@@ -8,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+from sourcing_agent.acquisition import AcquisitionEngine
+from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.company_public_web_assets import refresh_company_public_web_assets
 from sourcing_agent.durable_runtime import (
     COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
@@ -15,6 +18,20 @@ from sourcing_agent.durable_runtime import (
     COMPANY_PUBLIC_WEB_SOURCE_COLLECT_COMMAND_TYPE,
     command_causality_for,
     command_id_for,
+)
+from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.orchestrator import SourcingOrchestrator
+from sourcing_agent.semantic_provider import LocalSemanticProvider
+from sourcing_agent.settings import (
+    AppSettings,
+    HarvestActorSettings,
+    HarvestSettings,
+    QwenSettings,
+    SemanticProviderSettings,
+)
+from sourcing_agent.workflow_progressed_child_contract import (
+    progressed_child_contract_pin,
+    progressed_child_plan_event_id,
 )
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
@@ -269,6 +286,7 @@ class CompanyPublicWebAtomicOwnerTest(PGControlPlaneStoreTestMixin, unittest.Tes
             "payload": child_payload,
             "max_attempts": 3,
             "retry_policy": {"kind": "company_public_web_phase", "retry_delay_seconds": 30},
+            "progressed_child_contract": progressed_child_contract_pin("company_public_web_source"),
         }
         plan_event = {
             "workflow_run_id": workflow_run_id,
@@ -282,22 +300,25 @@ class CompanyPublicWebAtomicOwnerTest(PGControlPlaneStoreTestMixin, unittest.Tes
             "payload": plan_event_payload,
             "artifact_refs": [],
         }
-        child_causality = command_causality_for(
-            workflow_run_id=workflow_run_id,
-            operation_id=operation_id,
-            command_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
-            owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
-            idempotency_key=child_idempotency_key,
-            source_event={
-                "event_id": "",
-                "workflow_run_id": workflow_run_id,
-                "operation_id": operation_id,
-                "command_id": source_command_id,
-                "event_type": "CommandPlanRequested",
-                "payload": plan_event_payload,
-            },
-            command_payload=child_payload,
-        ).to_payload()
+        child_causality = {
+            **command_causality_for(
+                workflow_run_id=workflow_run_id,
+                operation_id=operation_id,
+                command_type=COMPANY_PUBLIC_WEB_ASSETS_MATERIALIZE_COMMAND_TYPE,
+                owner=COMPANY_PUBLIC_WEB_REFRESH_OWNER,
+                idempotency_key=child_idempotency_key,
+                source_event={
+                    "event_id": "",
+                    "workflow_run_id": workflow_run_id,
+                    "operation_id": operation_id,
+                    "command_id": source_command_id,
+                    "event_type": "CommandPlanRequested",
+                    "payload": plan_event_payload,
+                },
+                command_payload=child_payload,
+            ).to_payload(),
+            "progressed_child_contract": progressed_child_contract_pin("company_public_web_source"),
+        }
         child_command = {
             "workflow_run_id": workflow_run_id,
             "operation_id": operation_id,
@@ -571,6 +592,150 @@ class CompanyPublicWebAtomicOwnerTest(PGControlPlaneStoreTestMixin, unittest.Tes
         rows = first_store.list_company_public_web_asset_runs(company_key="openai")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["run_id"], payload["run_id"])
+
+    def _orchestrator(self, store: Any) -> SourcingOrchestrator:
+        runtime_dir = Path(self._tempdir.name) / f"orchestrator-runtime-{id(store)}"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        settings = AppSettings(
+            project_root=runtime_dir,
+            runtime_dir=runtime_dir,
+            secrets_file=runtime_dir / "secrets.toml",
+            db_path=runtime_dir / "control-plane.db",
+            jobs_dir=runtime_dir / "jobs",
+            company_assets_dir=runtime_dir / "company_assets",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        catalog = AssetCatalog.discover()
+        model_client = DeterministicModelClient()
+        return SourcingOrchestrator(
+            catalog=catalog,
+            store=store,
+            jobs_dir=settings.jobs_dir,
+            model_client=model_client,
+            semantic_provider=LocalSemanticProvider(),
+            acquisition_engine=AcquisitionEngine(catalog, settings, store, model_client),
+        )
+
+    def _validate_bundle(self, store: Any, contract: dict[str, Any]) -> dict[str, Any]:
+        root = dict(contract["root"])
+        persisted_root = store.repos.workflow_runtime.get_persisted_workflow_command_contract(root["command_id"])
+        return self._orchestrator(store)._validate_company_public_web_source_completion_bundle(  # noqa: SLF001
+            source_command=persisted_root,
+            completion_contract={
+                "plan_event": dict(contract["plan_event"]),
+                "child_command": dict(contract["child_command"]),
+                "child_causality": dict(contract["child_causality"]),
+            },
+            entity_delta_specs=[dict(contract["entity_delta"])],
+            terminal_result=dict(contract["root_result"]),
+        )
+
+    def _rewrite_child_causality(self, store: Any, child_command_id: str, mutate: Any) -> None:
+        adapter = store._control_plane_postgres  # noqa: SLF001
+        child = store.repos.workflow_runtime.get_persisted_workflow_command_contract(child_command_id)
+        payload = dict(child.get("payload") or {})
+        mutate(payload.setdefault("causality", {}), payload)
+        adapter._execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_commands SET payload_json = %s WHERE command_id = %s",
+            (json.dumps(payload, ensure_ascii=False), child_command_id),
+        )
+
+    def test_source_completion_replay_rejects_reordered_plan_event(self) -> None:
+        # A reordered plan event (sequence moved ahead of the parent source
+        # event, deterministic id recomputed, child source references updated
+        # consistently) must fail the shared completion replay.
+        store = self._store("source-completion-replay-reordered")
+        contract = self._source_completion_uow_contract(store, suffix="replay-reordered")
+        root = dict(contract["root"])
+        child_spec = dict(contract["child_command"])
+        completed = self._complete_source_uow(store, contract)
+        self.assertEqual(completed.get("outcome"), "applied", completed)
+
+        validated = self._validate_bundle(store, contract)
+        self.assertEqual(validated.get("status"), "ready", validated)
+
+        adapter = store._control_plane_postgres  # noqa: SLF001
+        child = store.get_workflow_command(child_spec["command_id"])
+        plan_event_id = str(child.get("source_event_id") or "")
+        self.assertTrue(plan_event_id)
+        parent_source_event_id = str(root.get("source_event_id") or "")
+        self.assertTrue(parent_source_event_id)
+        # Swap sequences: child plan event ahead of / at the parent source
+        # event, with its deterministic id recomputed and the child's source
+        # references updated consistently (the reviewer probe).
+        reordered_id = progressed_child_plan_event_id(
+            str(root["workflow_run_id"]),
+            1,
+            f"{child_spec['idempotency_key']}:plan",
+        )
+        adapter._execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_events SET sequence_number = 99 WHERE event_id = %s",
+            (plan_event_id,),
+        )
+        adapter._execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_events SET sequence_number = 2 WHERE event_id = %s",
+            (parent_source_event_id,),
+        )
+        adapter._execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_events SET sequence_number = 1, event_id = %s WHERE event_id = %s",
+            (reordered_id, plan_event_id),
+        )
+        adapter._execute_non_query(  # noqa: SLF001
+            "UPDATE workflow_commands SET source_event_id = %s WHERE command_id = %s",
+            (reordered_id, child_spec["command_id"]),
+        )
+        self._rewrite_child_causality(
+            store,
+            child_spec["command_id"],
+            lambda causality, _payload: causality.update(source_event_id=reordered_id),
+        )
+
+        rejected = self._validate_bundle(store, contract)
+        self.assertEqual(rejected.get("status"), "invalid", rejected)
+        self.assertEqual(
+            rejected.get("reason"),
+            "company_public_web_source_plan_event_mismatch",
+            rejected,
+        )
+
+    def test_source_completion_replay_rejects_contract_pin_drift(self) -> None:
+        # A committed child whose immutable contract pin is missing or drifted
+        # (historical version) fails closed instead of being reinterpreted.
+        for label, mutate in (
+            (
+                "digest_drift",
+                lambda causality, _payload: causality["progressed_child_contract"].update(digest="0" * 64),
+            ),
+            (
+                "version_drift",
+                lambda causality, _payload: causality["progressed_child_contract"].update(
+                    version="progressed_workflow_child_contract_v1"
+                ),
+            ),
+            (
+                "pin_removed",
+                lambda causality, _payload: causality.pop("progressed_child_contract", None),
+            ),
+        ):
+            with self.subTest(drift=label):
+                store = self._store(f"source-completion-replay-pin-{label}")
+                contract = self._source_completion_uow_contract(store, suffix=f"replay-pin-{label}")
+                child_spec = dict(contract["child_command"])
+                completed = self._complete_source_uow(store, contract)
+                self.assertEqual(completed.get("outcome"), "applied", completed)
+                validated = self._validate_bundle(store, contract)
+                self.assertEqual(validated.get("status"), "ready", validated)
+
+                self._rewrite_child_causality(store, child_spec["command_id"], mutate)
+                rejected = self._validate_bundle(store, contract)
+                self.assertEqual(rejected.get("status"), "invalid", rejected)
+                self.assertEqual(
+                    rejected.get("reason"),
+                    "company_public_web_source_materialize_child_mismatch",
+                    rejected,
+                )
 
     def test_run_id_and_idempotency_split_collisions_fail_closed_without_writes(self) -> None:
         store = self._store("collisions")

@@ -84,6 +84,19 @@ _PROFILE_REGISTRY_LEASES_REASON = (
     "and a generic restore could resurrect stale leases, block current owners, or permit duplicate provider "
     "dispatch, so the table is excluded at export and every restore boundary."
 )
+_PROFILE_SCHEDULER_AGGREGATE_REASON = (
+    "Profile-scheduler owner aggregate: the registry is the scheduler source of truth for retry waits, "
+    "coalescing timers, terminal state, and dispatch identity, and its alias/event/backfill rows are the "
+    "same owner's identity and history. Generic truncate/upsert while active lease rows are retained can "
+    "duplicate provider dispatch or resurrect scheduler state, so the complete aggregate is excluded at "
+    "export and every restore boundary."
+)
+_MODEL_INVOCATION_ENVELOPES_REASON = (
+    "PG-only durable owner of model invocation envelopes with immutable causal/cost references and "
+    "non-revivable purge tombstones. Generic upsert can overwrite tombstones (reviving purged payloads) "
+    "or import envelopes without the excluded Operation/Activity aggregate, so the table is excluded at "
+    "export and every restore boundary."
+)
 _GENERATION_INDEX_ENTRIES_REASON = (
     "File-backed generation index carried through the snapshot as a pseudo-table; portable because it has "
     "no durable-runtime causality or live fencing coupling."
@@ -159,18 +172,30 @@ CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY: dict[str, tuple[str, str]] = {
     "run_projection_links": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
     "collection_authoritative_pointers": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
     "generation_index_entries": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _GENERATION_INDEX_ENTRIES_REASON),
-    "linkedin_profile_registry": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
-    "linkedin_profile_registry_aliases": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "linkedin_profile_registry": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _PROFILE_SCHEDULER_AGGREGATE_REASON,
+    ),
+    "linkedin_profile_registry_aliases": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _PROFILE_SCHEDULER_AGGREGATE_REASON,
+    ),
     "linkedin_profile_registry_leases": (
         CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
         _PROFILE_REGISTRY_LEASES_REASON,
     ),
-    "linkedin_profile_registry_events": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
-    "linkedin_profile_registry_backfill_runs": (
-        CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE,
-        _PORTABLE_PROJECTION_DOMAIN_REASON,
+    "linkedin_profile_registry_events": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _PROFILE_SCHEDULER_AGGREGATE_REASON,
     ),
-    "model_invocation_envelopes": (CONTROL_PLANE_TABLE_PORTABILITY_PORTABLE, _PORTABLE_PROJECTION_DOMAIN_REASON),
+    "linkedin_profile_registry_backfill_runs": (
+        CONTROL_PLANE_TABLE_PORTABILITY_NONPORTABLE_COORDINATION,
+        _PROFILE_SCHEDULER_AGGREGATE_REASON,
+    ),
+    "model_invocation_envelopes": (
+        CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE,
+        _MODEL_INVOCATION_ENVELOPES_REASON,
+    ),
     "workflow_commands": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
     "workflow_events": (CONTROL_PLANE_TABLE_PORTABILITY_DURABLE_RUNTIME_AGGREGATE, _DURABLE_RUNTIME_AGGREGATE_REASON),
     "workflow_current_state": (

@@ -49,6 +49,7 @@ _PG_ONLY_CAUSAL_AGGREGATE_TABLES = (
     "operation_events",
     "acquisition_runs",
     "acquisition_discovery_lanes",
+    "model_invocation_envelopes",
 )
 _NONPORTABLE_COORDINATION_TABLES = (
     "workflow_job_leases",
@@ -56,6 +57,10 @@ _NONPORTABLE_COORDINATION_TABLES = (
     "runtime_provider_limiter_leases",
     "agent_worker_runs",
     "linkedin_profile_registry_leases",
+    "linkedin_profile_registry",
+    "linkedin_profile_registry_aliases",
+    "linkedin_profile_registry_events",
+    "linkedin_profile_registry_backfill_runs",
 )
 _EXPECTED_EXCLUSION_GAP = sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)
 
@@ -1701,6 +1706,73 @@ class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unitte
                 "2026-07-19T00:00:00Z",
             ),
         )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO linkedin_profile_registry (profile_url_key, profile_url, status, retry_count, "
+            "source_shards_json, source_jobs_json, refill_not_before_at, refill_plan_batch_size, "
+            "refill_plan_batch_count, refill_plan_window_url_count, last_refill_attempt_count, "
+            "refill_owner_worker_id, refill_terminal_status, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "profile-url-key-active-lease",
+                "https://www.linkedin.com/in/active-lease",
+                "retry_wait",
+                2,
+                "[]",
+                "[]",
+                "2099-01-01 00:00:00",
+                5,
+                2,
+                10,
+                1,
+                7,
+                "",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO linkedin_profile_registry_aliases (alias_url_key, profile_url_key, alias_url, alias_kind, "
+            "created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                "alias-url-key-active-lease",
+                "profile-url-key-active-lease",
+                "https://www.linkedin.com/in/active-lease-alternate",
+                "alternate",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO linkedin_profile_registry_events (event_id, profile_url_key, event_type, event_status, "
+            "detail, run_id, dataset_id, metadata_json, duration_ms, created_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                900001,
+                "profile-url-key-active-lease",
+                "fetch_retry_wait",
+                "retry_wait",
+                "{}",
+                "run-active-lease",
+                "dataset-active-lease",
+                "{}",
+                0,
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO linkedin_profile_registry_backfill_runs (run_key, scope_company, scope_snapshot_id, "
+            "checkpoint_json, summary_json, status, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "backfill-run-active-lease",
+                "Acme",
+                "",
+                "{}",
+                "{}",
+                "running",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
         coordination_baseline = {
             table_name: self._coordination_rows(table_name) for table_name in _NONPORTABLE_COORDINATION_TABLES
         }
@@ -1723,6 +1795,9 @@ class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unitte
         self.assertNotIn("job-active-lease", snapshot_text)
         self.assertNotIn("worker-key-active-lease", snapshot_text)
         self.assertNotIn("profile-url-key-active-lease", snapshot_text)
+        self.assertNotIn("alias-url-key-active-lease", snapshot_text)
+        self.assertNotIn("run-active-lease", snapshot_text)
+        self.assertNotIn("backfill-run-active-lease", snapshot_text)
 
         synced = sync_control_plane_snapshot_to_postgres(
             snapshot_path=output_path,
@@ -1865,6 +1940,142 @@ class ControlPlanePostgresPortabilityPGTest(PGControlPlaneStoreTestMixin, unitte
                         tables=[table_name],
                     )
             self.assertEqual(self._coordination_rows(table_name), runtime_baseline[table_name])
+
+    def test_generic_export_import_ignores_scheduler_dispatch_identity_and_envelope_tombstones(self) -> None:
+        # linkedin_profile_registry carries scheduler dispatch identity (retry
+        # waits, coalescing timers, refill owner/terminal state); importing a
+        # stale copy while active leases are retained could duplicate provider
+        # dispatch.  model_invocation_envelopes carries non-revivable purge
+        # tombstones; a generic upsert could overwrite a tombstone and revive
+        # a purged payload.  Generic export/import must never observe or
+        # mutate either owner aggregate.
+        owner_tables = ("linkedin_profile_registry", "model_invocation_envelopes")
+        self.adapter._execute_non_query(  # noqa: SLF001
+            "INSERT INTO linkedin_profile_registry (profile_url_key, profile_url, status, retry_count, "
+            "source_shards_json, source_jobs_json, refill_not_before_at, refill_plan_batch_size, "
+            "refill_plan_batch_count, refill_plan_window_url_count, last_refill_attempt_count, "
+            "refill_owner_worker_id, refill_terminal_status, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "profile-url-key-dispatch-identity",
+                "https://www.linkedin.com/in/dispatch-identity",
+                "retry_wait",
+                3,
+                "[]",
+                "[]",
+                "2099-01-01 00:00:00",
+                10,
+                3,
+                30,
+                2,
+                11,
+                "",
+                "2026-07-19T00:00:00Z",
+                "2026-07-19T00:00:00Z",
+            ),
+        )
+        envelope_base = (
+            "runtime_namespace, provider_mode, workspace_id, scope_digest, coordination_plan_review_id, "
+            "model_invocation_envelope_ref, envelope_schema_version, envelope_digest, envelope_record_json, "
+            "retention_policy_version, retention_state, retained_until, created_at, purged_at, state_version"
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"INSERT INTO model_invocation_envelopes ({envelope_base}) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "isolated_local_canary",
+                "simulate",
+                "workspace-1",
+                "a" * 64,
+                7,
+                "mie:v1:" + "e" * 64 + ":" + "f" * 64,
+                "model_invocation_envelope_v1",
+                "b" * 64,
+                "{}",
+                "model_invocation_retention_30d_v1",
+                "retained",
+                "2026-08-18 00:00:00",
+                "2026-07-19 00:00:00",
+                None,
+                0,
+            ),
+        )
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"INSERT INTO model_invocation_envelopes ({envelope_base}) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "isolated_local_canary",
+                "simulate",
+                "workspace-1",
+                "c" * 64,
+                8,
+                "mie:v1:" + "0" * 64 + ":" + "1" * 64,
+                "model_invocation_envelope_v1",
+                "d" * 64,
+                None,
+                "model_invocation_retention_30d_v1",
+                "purged_tombstone",
+                "2026-08-18 00:00:00",
+                "2026-07-19 00:00:00",
+                "2026-08-19 00:00:00",
+                1,
+            ),
+        )
+        owner_baseline = {table_name: self._coordination_rows(table_name) for table_name in owner_tables}
+        self.assertTrue(all(owner_baseline.values()))
+
+        output_path = Path(self.tempdir.name) / "snapshot-owner-aggregates.json"
+        exported = export_control_plane_snapshot(
+            runtime_dir=self.runtime_dir,
+            output_path=output_path,
+            source_backend="postgres",
+        )
+
+        self.assertEqual(exported["status"], "exported")
+        self.assertEqual(exported["excluded_pg_only_durable_runtime_tables"], _EXPECTED_EXCLUSION_GAP)
+        snapshot_payload = json.loads(output_path.read_text(encoding="utf-8"))
+        for table_name in owner_tables:
+            self.assertNotIn(table_name, snapshot_payload["tables"])
+        snapshot_text = output_path.read_text(encoding="utf-8")
+        self.assertNotIn("profile-url-key-dispatch-identity", snapshot_text)
+        self.assertNotIn("mie:v1:" + "e" * 64, snapshot_text)
+        self.assertNotIn("mie:v1:" + "0" * 64, snapshot_text)
+
+        synced = sync_control_plane_snapshot_to_postgres(
+            snapshot_path=output_path,
+            truncate_first=True,
+        )
+        self.assertEqual(synced["status"], "synced")
+        for table_name in owner_tables:
+            self.assertEqual(self._coordination_rows(table_name), owner_baseline[table_name])
+        tombstones = self._coordination_rows("model_invocation_envelopes")
+        self.assertEqual(
+            {str(row.get("retention_state") or "") for row in tombstones},
+            {"retained", "purged_tombstone"},
+        )
+
+        for table_name in owner_tables:
+            with self.subTest(boundary="export", table_name=table_name):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"cannot restore PG-only durable runtime tables: {table_name}",
+                ):
+                    export_control_plane_snapshot(
+                        runtime_dir=self.runtime_dir,
+                        output_path=Path(self.tempdir.name) / f"snapshot-{table_name}.json",
+                        source_backend="postgres",
+                        tables=[table_name],
+                    )
+            with self.subTest(boundary="sync", table_name=table_name):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"cannot restore PG-only durable runtime tables: {table_name}",
+                ):
+                    sync_control_plane_snapshot_to_postgres(
+                        snapshot_path=output_path,
+                        tables=[table_name],
+                    )
+            self.assertEqual(self._coordination_rows(table_name), owner_baseline[table_name])
 
 
 if __name__ == "__main__":

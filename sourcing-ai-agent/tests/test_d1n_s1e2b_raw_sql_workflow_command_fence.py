@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
@@ -642,6 +643,129 @@ class D1nS1e2bRawSqlWorkflowCommandFencePGTest(PGControlPlaneStoreTestMixin, uni
             with self.subTest(public_method=public_method):
                 with self.assertRaisesRegex(ValueError, _READ_ONLY_TRANSACTION_MESSAGE):
                     getattr(self.adapter, public_method)(probe_sql, ())
+                self.assertEqual(self._workflow_command_snapshot(), baseline)
+
+    def _install_lower_overload(self, body: str, *, name: str = "lower") -> str:
+        quoted_schema = self._quoted_schema()
+        quoted_function = quote_control_plane_postgres_identifier(name)
+        self.adapter._execute_non_query(  # noqa: SLF001
+            f"CREATE FUNCTION {quoted_schema}.{quoted_function}(integer) RETURNS integer "
+            f"LANGUAGE plpgsql AS $$ BEGIN {body} RETURN 1; END $$",
+            (),
+        )
+        self.addCleanup(
+            lambda: self.adapter._execute_non_query(  # noqa: SLF001
+                f"DROP FUNCTION IF EXISTS {quoted_schema}.{quoted_function}(integer)",
+                (),
+            )
+        )
+        return quoted_function
+
+    def _direct_connection(self, *, autocommit: bool = False) -> Any:
+        fixture = self._pg_store_fixture
+        self.assertIsNotNone(fixture)
+        self.assertIsNotNone(psycopg)
+        assert fixture is not None and psycopg is not None
+        connection = psycopg.connect(fixture.dsn, client_encoding="utf8", autocommit=autocommit)
+        self.addCleanup(connection.close)
+        return connection
+
+    def test_public_probe_hidden_set_config_dies_with_disposable_connection(self) -> None:
+        # ``set_config(..., false)`` is not a table write, so no sqlstate 25006
+        # fires: only the disposable connection keeps the poisoned GUC from
+        # reaching later pool users.
+        fixture = self._pg_store_fixture
+        self.assertIsNotNone(fixture)
+        assert fixture is not None
+        self._install_lower_overload("PERFORM set_config('search_path', 'pg_catalog', false);")
+
+        # Control: on one persistent session the overload really poisons
+        # search_path — the hidden side effect is live, not hypothetical.
+        control = self._direct_connection()
+        quoted_schema = self._quoted_schema()
+        with control.cursor() as cursor:
+            cursor.execute(f"SET search_path TO {quoted_schema}")
+            cursor.execute("SELECT lower(1)")
+            self.assertEqual(cursor.fetchone()[0], 1)
+            cursor.execute("SHOW search_path")
+            self.assertNotIn(fixture.schema, str(cursor.fetchone()[0]))
+
+        baseline = self._workflow_command_snapshot()
+        invoked = self.adapter.execute_returning_one("SELECT lower(1)", ())
+        self.assertIsNotNone(invoked)
+        # Later probes get fresh, correctly configured sessions.
+        self.assertEqual(self._held_not_before_at(), "9999-12-31 23:59:59")
+        search_path = self.adapter.execute_returning_one("SHOW search_path", ())
+        self.assertIsNotNone(search_path)
+        assert search_path is not None
+        self.assertIn(fixture.schema, str(search_path["search_path"]))
+        self.assertEqual(self._workflow_command_snapshot(), baseline)
+
+    def test_public_probe_hidden_advisory_lock_dies_with_disposable_connection(self) -> None:
+        # A session advisory lock taken inside an allowlisted overload must not
+        # survive the probe: the disposable connection closes and releases it.
+        fixture = self._pg_store_fixture
+        self.assertIsNotNone(fixture)
+        assert fixture is not None
+        lock_key = f"{fixture.schema}:s1e2b_hidden_probe_lock"
+        self._install_lower_overload(
+            "PERFORM pg_advisory_lock(hashtext(current_schema() || ':s1e2b_hidden_probe_lock'));"
+        )
+
+        invoked = self.adapter.execute_returning_one("SELECT lower(1)", ())
+        self.assertIsNotNone(invoked)
+        direct = self._direct_connection()
+        with direct.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (lock_key,))
+            self.assertTrue(cursor.fetchone()[0], "probe advisory lock leaked past the disposable connection")
+            cursor.execute("SELECT pg_advisory_unlock(hashtext(%s))", (lock_key,))
+
+        # Control: run through the private interface, which keeps a persistent
+        # session — the same hidden lock then really is held against others.
+        held = self.adapter._execute_returning_one("SELECT lower(1) AS probe", ())  # noqa: SLF001
+        self.assertIsNotNone(held)
+        with direct.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (lock_key,))
+            self.assertFalse(cursor.fetchone()[0], "control lock was not held by the persistent session")
+
+    def test_public_probe_hidden_notification_is_never_delivered(self) -> None:
+        # Notifications are delivered at COMMIT; the probe rolls back, so a
+        # hidden ``pg_notify`` inside an allowlisted overload never fires.
+        self._install_lower_overload("PERFORM pg_notify('s1e2b_probe_notify', 'x');")
+        listener = self._direct_connection(autocommit=True)
+        with listener.cursor() as cursor:
+            cursor.execute("LISTEN s1e2b_probe_notify")
+
+            # Control: the private interface commits, so the same hidden
+            # notification really is deliverable.
+            held = self.adapter._execute_returning_one("SELECT lower(1) AS probe", ())  # noqa: SLF001
+            self.assertIsNotNone(held)
+            control_notifies = list(listener.notifies(timeout=5.0, stop_after=1))
+            self.assertEqual(len(control_notifies), 1, "control notification was not delivered on commit")
+
+            invoked = self.adapter.execute_returning_one("SELECT lower(1)", ())
+            self.assertIsNotNone(invoked)
+            self.assertEqual(
+                list(listener.notifies(timeout=0.5)),
+                [],
+                "probe notification escaped the rollback",
+            )
+
+    def test_public_probe_rejects_hidden_temporary_state_on_real_pg(self) -> None:
+        # Temporary DDL inside an allowlisted overload is still DDL: the
+        # read-only transaction rejects it and nothing persists.
+        qualified_table = self._qualified_command_table()
+        self._install_lower_overload(
+            "CREATE TEMP TABLE s1e2b_probe_poison (marker int); "
+            f"INSERT INTO s1e2b_probe_poison VALUES (1); "
+            f"UPDATE {qualified_table} SET not_before_at = '2000-01-01 00:00:00' "
+            f"WHERE command_id = '{self.command_id}';"
+        )
+        baseline = self._workflow_command_snapshot()
+        for public_method in ("execute_returning_one", "execute_non_query"):
+            with self.subTest(public_method=public_method):
+                with self.assertRaisesRegex(ValueError, _READ_ONLY_TRANSACTION_MESSAGE):
+                    getattr(self.adapter, public_method)("SELECT lower(1)", ())
                 self.assertEqual(self._workflow_command_snapshot(), baseline)
 
 

@@ -480,6 +480,9 @@ _CORRUPT_CARRIER_CASES = (
     "action_metadata_nested_duplicate_key_raw_json",
     "action_metadata_non_finite_raw_json",
     "action_result_ref_non_finite_raw_json",
+    "action_metadata_overflow_exponent_raw_json",
+    "action_metadata_decoded_raw_tuple_list_alias",
+    "action_result_ref_decoded_raw_non_string_key_alias",
 )
 
 
@@ -533,6 +536,17 @@ def _corrupt_carrier(records: tuple[dict[str, Any], dict[str, Any]], case: str) 
         action["metadata_json"] = '{"marker": NaN}'
     elif case == "action_result_ref_non_finite_raw_json":
         action["result_ref_json"] = '{"schema_version": "unrelated_ref.v1", "marker": -Infinity}'
+    elif case == "action_metadata_overflow_exponent_raw_json":
+        # Float overflow must not coerce to inf: the carrier is malformed.
+        action["metadata_json"] = '{"marker": 1e9999}'
+    elif case == "action_metadata_decoded_raw_tuple_list_alias":
+        # json.dumps aliases tuples to arrays; contract equality must not.
+        action["metadata"] = {"marker": (1, 2)}
+        action["metadata_json"] = '{"marker": [1, 2]}'
+    elif case == "action_result_ref_decoded_raw_non_string_key_alias":
+        # json.dumps coerces int keys to strings; contract equality must not.
+        action["result_ref"] = {"schema_version": "unrelated_ref.v1", 7: "seven"}
+        action["result_ref_json"] = '{"schema_version": "unrelated_ref.v1", "7": "seven"}'
     else:  # pragma: no cover - parametrization guard
         raise AssertionError(f"unknown corrupt carrier case {case}")
 
@@ -591,3 +605,42 @@ def test_malformed_json_carriers_on_non_start_action_remain_ignored() -> None:
         )
         == "non_v2"
     )
+
+
+def test_strict_json_loader_rejects_non_canonical_forms() -> None:
+    from sourcing_agent.json_contract import JsonContractShapeError, loads_json_contract_strict
+
+    for text in (
+        '{"x": 1e9999}',
+        '{"x": -1e9999}',
+        '{"x": NaN}',
+        '{"x": Infinity}',
+        '{"x": -Infinity}',
+        '{"a": 1, "a": 2}',
+        '{"outer": {"a": 1, "a": 2}}',
+        '[{"a": 1, "a": 2}]',
+        "{not-json",
+        '["not", "a", "mapping", 1e9999]',
+    ):
+        with pytest.raises(JsonContractShapeError):
+            loads_json_contract_strict(text)
+    assert loads_json_contract_strict('{"x": 1.5, "y": [1, "a", true, null]}') == {
+        "x": 1.5,
+        "y": [1, "a", True, None],
+    }
+
+
+def test_json_contract_equal_is_type_strict_and_never_aliases_non_json_shapes() -> None:
+    from sourcing_agent.json_contract import json_contract_equal
+
+    assert json_contract_equal({"a": [1, {"b": None}]}, {"a": [1, {"b": None}]})
+    assert json_contract_equal({"x": 2.0}, {"x": 2.0})
+    assert not json_contract_equal({"x": True}, {"x": 1})
+    assert not json_contract_equal({"x": 2}, {"x": 2.0})
+    assert not json_contract_equal({"x": (1, 2)}, {"x": [1, 2]})
+    assert not json_contract_equal({1: "x"}, {"1": "x"})
+    assert not json_contract_equal({"x": {1, 2}}, {"x": [1, 2]})
+    assert not json_contract_equal(float("nan"), float("nan"))
+    assert not json_contract_equal({"x": float("inf")}, {"x": float("inf")})
+    assert not json_contract_equal({"a": 1}, {"a": 1, "b": 2})
+    assert not json_contract_equal({"a": 1}, {"a": 1, "b": None})

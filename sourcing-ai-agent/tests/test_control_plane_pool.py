@@ -143,7 +143,10 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
                     "ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value",
                     (index % 5, f"value-{index}"),
                 )
-                row = adapter.execute_returning_one("SELECT pg_backend_pid() AS backend_pid", ())
+                # The public read probe is disposable by design (rolled back
+                # and closed per call); pool reuse is measured through the
+                # pooled read path.
+                row = adapter._execute_returning_one("SELECT pg_backend_pid() AS backend_pid", ())  # noqa: SLF001
                 self.assertIsNotNone(row)
                 backend_pids.add(int(row["backend_pid"]))
         # 80 statements should ride at most max_size pooled connections, not
@@ -357,7 +360,9 @@ class ControlPlanePostgresPoolTest(unittest.TestCase):
             return real_getconn(*args, **kwargs)
 
         with mock.patch.object(pool, "getconn", side_effect=flaky_getconn):
-            row = adapter.execute_returning_one("SELECT 1 AS one", ())
+            # Exercise the pooled read path: the public read probe is
+            # disposable by design and no longer rides the pool.
+            row = adapter._execute_returning_one("SELECT 1 AS one", ())  # noqa: SLF001
         self.assertIsNotNone(row)
         self.assertEqual(int(row["one"]), 1)
         self.assertGreaterEqual(calls["count"], 2)

@@ -58,9 +58,11 @@ from .projection_search_index_contract import (
 )
 from .runtime_lease_utils import worker_lease_owner_is_dead_local_process
 from .workflow_progressed_child_contract import (
+    build_acquisition_root_intent_plan,
     canonical_progressed_child_identity,
     expected_progressed_child_row,
     progressed_child_completion_contract,
+    progressed_child_contract_pin,
     progressed_child_plan_event_id,
     progressed_child_plan_event_idempotency_key,
     progressed_child_plan_event_violation,
@@ -11816,6 +11818,7 @@ class LiveControlPlanePostgresAdapter:
             or len(delta_specs) != expected_entity_delta_count
         ):
             return None
+        expected_contract_pin = progressed_child_contract_pin(contract_name)
         if (
             str(event_spec.get("command_id") or "").strip() != normalized_command_id
             or str(event_spec.get("event_family") or "").strip() != "workflow_event"
@@ -11823,6 +11826,14 @@ class LiveControlPlanePostgresAdapter:
             or event_idempotency_key != progressed_child_plan_event_idempotency_key(child_idempotency_key)
             or str(event_spec.get("actor") or "").strip() != str(contract["child_plan_event_actor"]).strip()
             or str(event_spec.get("source") or "").strip() != str(contract["child_plan_event_source"]).strip()
+            or not json_contract_equal(
+                dict(event_spec.get("payload") or {}).get("progressed_child_contract"),
+                expected_contract_pin,
+            )
+            or not json_contract_equal(
+                causality_template.get("progressed_child_contract"),
+                expected_contract_pin,
+            )
             or str(child_spec.get("workflow_run_id") or "").strip() != workflow_run_id
             or str(child_spec.get("operation_id") or "").strip() != operation_id
             or str(child_spec.get("command_type") or "").strip() != child_command_type
@@ -12006,6 +12017,43 @@ class LiveControlPlanePostgresAdapter:
                                 command=root,
                             )
 
+                        if contract_name == "acquisition_root":
+                            # Reconstruct the complete expected plan from the
+                            # locked root through the registered pure builder:
+                            # the caller spec (plan event, child, causality,
+                            # terminal result) must equal that reconstruction
+                            # exactly, so a drifted caller cannot commit a
+                            # self-consistent but semantically foreign bundle on
+                            # the first call.
+                            reconstructed_plan = build_acquisition_root_intent_plan(
+                                {**root, "payload": root_payload},
+                                claim_attempt=normalized_attempt,
+                            )
+                            if not reconstructed_plan or not (
+                                json_contract_equal(
+                                    dict(reconstructed_plan.get("plan_event") or {}),
+                                    dict(event_spec),
+                                )
+                                and json_contract_equal(
+                                    dict(reconstructed_plan.get("child_command") or {}),
+                                    dict(child_spec),
+                                )
+                                and json_contract_equal(
+                                    dict(reconstructed_plan.get("child_causality") or {}),
+                                    causality_template,
+                                )
+                                and json_contract_equal(
+                                    dict(reconstructed_plan.get("root_result") or {}),
+                                    terminal_result,
+                                )
+                            ):
+                                connection.commit()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{reason_prefix}_plan_reconstruction_mismatch",
+                                    command=root,
+                                )
+
                         self._acquire_transaction_lock(cursor, f"workflow_events:{workflow_run_id}")
                         cursor.execute(
                             """
@@ -12059,6 +12107,40 @@ class LiveControlPlanePostgresAdapter:
                         event = candidate_events[0] if candidate_events else None
                         event_payload = dict(event_spec.get("payload") or {})
                         event_artifact_refs = list(event_spec.get("artifact_refs") or [])
+
+                        def _expected_child_identity_for(source_event_id: str) -> dict[str, Any] | None:
+                            return canonical_progressed_child_identity(
+                                expected_progressed_child_row(
+                                    contract=contract,
+                                    parent_command_id=normalized_command_id,
+                                    workflow_run_id=workflow_run_id,
+                                    operation_id=operation_id,
+                                    child_command=child_spec,
+                                    child_causality={
+                                        **causality_template,
+                                        "source_event_id": source_event_id,
+                                        "source_event_type": "CommandPlanRequested",
+                                    },
+                                )
+                            )
+
+                        def _plan_event_violation(
+                            event_row: dict[str, Any],
+                            payload: dict[str, Any],
+                            artifact_refs: list[Any],
+                            expected_child_identity: dict[str, Any] | None,
+                        ) -> str:
+                            if expected_child_identity is None:
+                                return "child_identity_invalid"
+                            return progressed_child_plan_event_violation(
+                                contract=contract,
+                                parent_command_id=normalized_command_id,
+                                parent_source_sequence=root_source_sequence,
+                                child_identity=expected_child_identity,
+                                event={**event_row, "payload": payload, "artifact_refs": artifact_refs},
+                                expected_payload=event_payload,
+                            )
+
                         if event is None:
                             cursor.execute(
                                 "SELECT COALESCE(MAX(sequence_number), 0) FROM workflow_events WHERE workflow_run_id = %s",
@@ -12093,6 +12175,25 @@ class LiveControlPlanePostgresAdapter:
                                 "schema_version": "workflow_event_v1",
                                 "created_at": repository_now,
                             }
+                            # First-time completion must satisfy the same shared
+                            # contract as replay: validate the constructed event
+                            # (and its expected child) before any insert, then
+                            # validate the returned row before the parent
+                            # terminal update.
+                            expected_child_identity = _expected_child_identity_for(event_id)
+                            constructed_violation = _plan_event_violation(
+                                event_row,
+                                event_payload,
+                                event_artifact_refs,
+                                expected_child_identity,
+                            )
+                            if constructed_violation:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{reason_prefix}_plan_event_contract_invalid",
+                                    command=root,
+                                )
                             columns = list(event_row)
                             cursor.execute(
                                 f"INSERT INTO workflow_events "
@@ -12101,6 +12202,47 @@ class LiveControlPlanePostgresAdapter:
                                 tuple(event_row[column] for column in columns),
                             )
                             event = _fetch_one_dict_row(cursor, cursor.fetchone())
+                            if event is None:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{reason_prefix}_plan_event_insert_failed",
+                                    command=root,
+                                )
+                            try:
+                                inserted_event_payload = decode_json_contract(
+                                    event.get("payload_json"),
+                                    expected_type=dict,
+                                )
+                                inserted_event_artifact_refs = decode_json_contract(
+                                    event.get("artifact_refs_json"),
+                                    expected_type=list,
+                                )
+                            except JsonContractShapeError:
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{reason_prefix}_plan_event_json_invalid",
+                                    command=root,
+                                    event=event,
+                                )
+                            inserted_violation = _plan_event_violation(
+                                event,
+                                inserted_event_payload,
+                                inserted_event_artifact_refs,
+                                expected_child_identity,
+                            )
+                            if inserted_violation or not (
+                                json_contract_equal(inserted_event_payload, event_payload)
+                                and json_contract_equal(inserted_event_artifact_refs, event_artifact_refs)
+                            ):
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{reason_prefix}_plan_event_identity_conflict",
+                                    command=root,
+                                    event=event,
+                                )
                         else:
                             sequence_number = int(event.get("sequence_number") or 0)
                             try:
@@ -12120,34 +12262,14 @@ class LiveControlPlanePostgresAdapter:
                                     command=root,
                                     event=event,
                                 )
-                            expected_child_identity = canonical_progressed_child_identity(
-                                expected_progressed_child_row(
-                                    contract=contract,
-                                    parent_command_id=normalized_command_id,
-                                    workflow_run_id=workflow_run_id,
-                                    operation_id=operation_id,
-                                    child_command=child_spec,
-                                    child_causality={
-                                        **causality_template,
-                                        "source_event_id": str(event.get("event_id") or "").strip(),
-                                        "source_event_type": "CommandPlanRequested",
-                                    },
-                                )
+                            expected_child_identity = _expected_child_identity_for(
+                                str(event.get("event_id") or "").strip()
                             )
-                            event_violation = (
-                                progressed_child_plan_event_violation(
-                                    contract=contract,
-                                    parent_command_id=normalized_command_id,
-                                    parent_source_sequence=root_source_sequence,
-                                    child_identity=expected_child_identity,
-                                    event={
-                                        **event,
-                                        "payload": persisted_event_payload,
-                                        "artifact_refs": persisted_event_artifact_refs,
-                                    },
-                                )
-                                if expected_child_identity is not None
-                                else "child_identity_invalid"
+                            event_violation = _plan_event_violation(
+                                event,
+                                persisted_event_payload,
+                                persisted_event_artifact_refs,
+                                expected_child_identity,
                             )
                             event_matches = bool(
                                 not event_violation
@@ -12232,6 +12354,59 @@ class LiveControlPlanePostgresAdapter:
                         child = candidate_children[0] if candidate_children else None
                         child_requires_validation = child is not None
                         if child is None:
+                            # First-time completion must satisfy the same
+                            # shared contract as replay: validate the
+                            # constructed child against the expected identity
+                            # before any insert, and validate the returned row
+                            # below like any persisted row.
+                            constructed_child_identity = canonical_progressed_child_identity(
+                                {
+                                    **{
+                                        field: child_row.get(field)
+                                        for field in (
+                                            "command_id",
+                                            "workflow_run_id",
+                                            "operation_id",
+                                            "command_type",
+                                            "owner",
+                                            "stage_id",
+                                            "causal_group_id",
+                                            "parent_command_id",
+                                            "source_event_id",
+                                            "source_event_type",
+                                            "no_op_reason",
+                                            "readiness_effect",
+                                            "causality_schema_version",
+                                            "idempotency_key",
+                                            "schema_version",
+                                            "max_attempts",
+                                        )
+                                    },
+                                    "input_artifact_refs": list(
+                                        child_causality_payload.get("input_artifact_refs") or []
+                                    ),
+                                    "output_artifact_refs": list(
+                                        child_causality_payload.get("output_artifact_refs") or []
+                                    ),
+                                    "produced_entity_counts": dict(
+                                        child_causality_payload.get("produced_entity_counts") or {}
+                                    ),
+                                    "payload": child_payload,
+                                    "artifact_refs": list(child_spec.get("artifact_refs") or []),
+                                    "retry_policy": dict(child_spec.get("retry_policy") or {}),
+                                }
+                            )
+                            if constructed_child_identity is None or not json_contract_equal(
+                                constructed_child_identity,
+                                expected_child_identity,
+                            ):
+                                connection.rollback()
+                                return response(
+                                    outcome="conflict",
+                                    reason_code=f"{child_reason_prefix}_contract_invalid",
+                                    command=root,
+                                    event=event,
+                                )
                             columns = list(child_row)
                             cursor.execute(
                                 f"INSERT INTO workflow_commands "
@@ -12274,7 +12449,7 @@ class LiveControlPlanePostgresAdapter:
                                         event=event,
                                     )
                                 child = raced_children[0]
-                                child_requires_validation = True
+                            child_requires_validation = True
                         if child_requires_validation:
                             assert child is not None
                             try:
@@ -12349,17 +12524,9 @@ class LiveControlPlanePostgresAdapter:
                             # the expected committed row exactly; only the
                             # explicitly mutable lifecycle fields (status,
                             # attempt, lease, result, not_before_at,
-                            # downstream ids) may differ.
-                            expected_child_identity = canonical_progressed_child_identity(
-                                expected_progressed_child_row(
-                                    contract=contract,
-                                    parent_command_id=normalized_command_id,
-                                    workflow_run_id=workflow_run_id,
-                                    operation_id=operation_id,
-                                    child_command=child_spec,
-                                    child_causality=child_causality_payload,
-                                )
-                            )
+                            # downstream ids) may differ.  The expected identity
+                            # is the one anchored by the validated plan event
+                            # above.
                             child_matches = bool(
                                 persisted_child_identity is not None
                                 and expected_child_identity is not None
@@ -15905,6 +16072,24 @@ class LiveControlPlanePostgresAdapter:
         _require_public_read_only_sql(sql, method="execute_non_query")
         return self._execute_public_probe(sql, params, fetch_one=False, method="execute_non_query")
 
+    def _disposable_probe_connect(self) -> Any:
+        """Open one disposable connection for a public read-only probe.
+
+        Public probes never run on a pooled connection: any session-level side
+        effect a probe could hide behind an allowlisted shape — ``set_config``
+        GUC poisoning, session advisory locks, notifications, or temporary
+        state — must die with the connection instead of leaking into later
+        pool users.  The session configuration (``client_encoding``,
+        ``search_path``) is committed first so the probe transaction then
+        starts cleanly with ``SET TRANSACTION READ ONLY`` as its first
+        statement.
+        """
+
+        psycopg_module = self._psycopg or _import_psycopg()
+        connection = self._direct_connect(psycopg_module)
+        connection.commit()
+        return connection
+
     def _execute_public_probe(
         self,
         sql: str,
@@ -15913,41 +16098,45 @@ class LiveControlPlanePostgresAdapter:
         fetch_one: bool,
         method: str,
     ) -> Any:
-        """Run one lexically admitted public probe inside a database-enforced read-only transaction.
+        """Run one lexically admitted public probe on a disposable read-only connection.
 
-        The lexical allowlist (``_require_public_read_only_sql``) is defense in
-        depth, not the mutation boundary: a plainly shaped ``SELECT`` can still
-        reach writes through database-resolved objects the lexer never sees —
-        a view whose definition calls a volatile mutating function, RLS
-        policies, user-defined operators/casts, or function overloads that
-        shadow an allowlisted builtin.  ``SET TRANSACTION READ ONLY`` runs as
-        the first statement of the probe transaction (psycopg opens the
-        transaction with that first statement), so PostgreSQL itself rejects
-        every such write with sqlstate ``25006``; the violation is re-raised as
-        the public contract error and never committed.  The private
-        migration/test interface (``_execute_returning_one`` /
-        ``_execute_non_query``) is deliberately unchanged and keeps executing
-        legitimate DDL/DML.  A dedicated SELECT-only probe role remains an
-        optional deployment-level hardening on top of this boundary; the
-        read-only transaction already covers every catalog-level indirection
-        because any mutation it reaches executes as DML inside the probe
-        transaction.
+        Two layers, neither sufficient alone:
+
+        - The lexical allowlist (``_require_public_read_only_sql``) is defense
+          in depth: it cannot inspect database-resolved objects (view
+          definitions, RLS policies, user operators/casts, allowlist-shadowing
+          function overloads).
+        - The database boundary: the probe executes inside
+          ``SET TRANSACTION READ ONLY`` on a fresh disposable connection, so
+          PostgreSQL rejects any catalog-hidden write with sqlstate ``25006``.
+          The probe is then rolled back — never committed — so notifications
+          are never delivered and no accidental commit is possible, and the
+          connection is closed — never returned to the pool — so session-level
+          side effects the read-only transaction cannot see (``set_config``
+          GUC changes, session advisory locks, temporary state) die with it.
+
+        A dedicated SELECT-only probe role with TEMP and unsafe-function
+        execution revoked remains optional deployment-level hardening on top
+        of this boundary.  The private migration/test interface
+        (``_execute_returning_one`` / ``_execute_non_query``) is deliberately
+        unchanged and keeps executing legitimate DDL/DML.
         """
 
         self.ensure_bootstrapped()
         normalized_params = tuple(_normalize_postgres_payload(item) for item in params)
         attempt = 0
         while True:
+            connection = None
             try:
-                with self._connect() as connection:
-                    with connection.cursor() as cursor:
-                        cursor.execute("SET TRANSACTION READ ONLY")
-                        cursor.execute(sql, normalized_params)
-                        if fetch_one:
-                            result: Any = _fetch_one_dict_row(cursor, cursor.fetchone())
-                        else:
-                            result = int(cursor.rowcount or 0)
-                    connection.commit()
+                connection = self._disposable_probe_connect()
+                with connection.cursor() as cursor:
+                    cursor.execute("SET TRANSACTION READ ONLY")
+                    cursor.execute(sql, normalized_params)
+                    if fetch_one:
+                        result: Any = _fetch_one_dict_row(cursor, cursor.fetchone())
+                    else:
+                        result = int(cursor.rowcount or 0)
+                connection.rollback()
                 return result
             except Exception as exc:
                 sqlstate = str(getattr(exc, "sqlstate", "") or "").strip().upper()
@@ -15961,6 +16150,16 @@ class LiveControlPlanePostgresAdapter:
                 if not _is_retryable_postgres_exception(exc) or attempt >= _CONTROL_PLANE_POSTGRES_MAX_RETRIES:
                     raise
                 time.sleep(_control_plane_postgres_retry_delay_seconds(attempt))
+            finally:
+                if connection is not None:
+                    try:
+                        connection.rollback()
+                    except Exception:
+                        pass
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
 
     def _advisory_lock_key(self, lock_key: str) -> str:
         # Advisory locks are database-global, not schema-scoped; prefixing the
@@ -16250,9 +16449,11 @@ def _require_public_read_only_sql(sql: str, *, method: str) -> None:
     boundary: it cannot inspect database-resolved objects (view definitions,
     RLS policies, user operators/casts, allowlist-shadowing function
     overloads).  Admitted probes therefore execute inside a database-enforced
-    read-only transaction (``_execute_public_probe``), where PostgreSQL
-    rejects any write the catalog hides behind an apparently read-only
-    statement.
+    read-only transaction on a disposable connection that is rolled back and
+    closed afterwards (``_execute_public_probe``): PostgreSQL rejects any
+    catalog-hidden write, notifications are never delivered, and session-level
+    side effects (``set_config``, session advisory locks, temporary state) die
+    with the connection instead of reaching the pool.
     """
 
     if not _postgres_public_sql_is_read_only(sql):

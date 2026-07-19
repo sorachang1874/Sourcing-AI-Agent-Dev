@@ -35,6 +35,14 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
+from sourcing_agent.workflow_progressed_child_contract import (
+    build_acquisition_root_intent_plan,
+    canonical_progressed_child_identity,
+    expected_progressed_child_row,
+    progressed_child_completion_contract,
+    progressed_child_plan_event_id,
+    progressed_child_plan_event_violation,
+)
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, psycopg
 from tests.test_d1n_acquisition_plan_preview_uow import _uow_kwargs
 
@@ -836,6 +844,13 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
                     (json.dumps(["artifact://drifted"]), event_id),
                 ),
             ),
+            (
+                "event_workflow_type",
+                lambda event_id: self._rewrite_event_payload(
+                    event_id,
+                    lambda payload: payload.update(workflow_type="foreign.workflow"),
+                ),
+            ),
         )
         for ordinal, (label, mutate) in enumerate(event_cases, start=1):
             with self.subTest(drift=label):
@@ -850,6 +865,160 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
                     start_occurrence=start_occurrence,
                     owner_ref=owner_ref,
                     suffix=f"child_event_{ordinal}",
+                )
+
+    def test_inspect_rejects_progressed_child_semantic_and_version_drift(self) -> None:
+        # Self-consistent semantic drift, missing/extra payload fields, and
+        # historical contract-pin versions must all fail the builder-rebuilt
+        # exact identity instead of passing as valid progression.
+        payload_cases = (
+            (
+                "self_consistent_target_company",
+                lambda payload: payload.update(target_company="Drifted Corp"),
+            ),
+            (
+                "missing_field",
+                lambda payload: payload.pop("intent_count", None),
+            ),
+            (
+                "extra_field",
+                lambda payload: payload.update(unexpected_extra=1),
+            ),
+            (
+                "pin_digest_drift",
+                lambda payload: payload["causality"]["progressed_child_contract"].update(digest="0" * 64),
+            ),
+            (
+                "pin_version_drift",
+                lambda payload: payload["causality"]["progressed_child_contract"].update(
+                    version="progressed_workflow_child_contract_v1"
+                ),
+            ),
+            (
+                "pin_removed",
+                lambda payload: payload["causality"].pop("progressed_child_contract", None),
+            ),
+        )
+        for ordinal, (label, mutate) in enumerate(payload_cases, start=1):
+            with self.subTest(drift=label):
+                start_occurrence, owner_ref = self._arrange_created(suffix=f"child_semantic_{ordinal}")
+                self._release_start_hold(start_occurrence=start_occurrence, suffix=f"child_semantic_{ordinal}")
+                progressed = self._complete_root_with_real_child(
+                    owner_ref=owner_ref,
+                    suffix=f"child_semantic_{ordinal}",
+                )
+                self._rewrite_command_payload(str(progressed["child"]["command_id"]), mutate)
+                self._assert_inspect_rejects_without_effects(
+                    start_occurrence=start_occurrence,
+                    owner_ref=owner_ref,
+                    suffix=f"child_semantic_{ordinal}",
+                )
+
+    def _complete_root_with_drifted_spec(
+        self,
+        *,
+        owner_ref: dict[str, Any],
+        suffix: str,
+        mutate: Any,
+    ) -> dict[str, Any]:
+        command_id = str(owner_ref["workflow_command_id"])
+        lease_owner = f"s1e2b_first_call_lease_{suffix}"
+        lease_expires_at = "2099-01-01 00:00:00"
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET status = %s, lease_owner = %s, lease_expires_at = %s, "
+            "attempt = %s WHERE command_id = %s",
+            ("running", lease_owner, lease_expires_at, 1, command_id),
+        )
+        root = dict(self.store.get_workflow_command(command_id) or {})
+        owner = self._orchestrator()._acquisition_command_owner  # noqa: SLF001
+        contract = owner._acquisition_root_intent_plan_contract(root, claim_attempt=1)  # noqa: SLF001
+        self.assertTrue(contract)
+        plan_event = dict(contract.get("plan_event") or {})
+        child_command = dict(contract.get("child_command") or {})
+        child_causality = dict(contract.get("child_causality") or {})
+        root_result = dict(contract.get("root_result") or {})
+        mutate(plan_event, child_command, child_causality, root_result)
+        return self.repository.complete_acquisition_root_command(
+            command_id,
+            expected_lease_owner=lease_owner,
+            expected_lease_expires_at=lease_expires_at,
+            expected_attempt=1,
+            expected_root_command=owner._acquisition_root_locked_identity(root),  # noqa: SLF001
+            plan_event=plan_event,
+            child_command=child_command,
+            child_causality=child_causality,
+            root_result=root_result,
+        )
+
+    def test_first_call_completion_rejects_drifted_spec_without_writes(self) -> None:
+        # A first-time completion with a caller-drifted spec must abort before
+        # any insert: no plan event, no child, no parent terminal update.
+        drift_cases = (
+            (
+                "event_payload_extra_key",
+                lambda event, _child, _causality, _result: event["payload"].update(unexpected_extra=1),
+            ),
+            (
+                "child_payload_drift",
+                lambda _event, child, _causality, _result: child["payload"].update(target_company="Drifted Corp"),
+            ),
+            (
+                "retry_policy_drift",
+                lambda _event, child, _causality, _result: child["retry_policy"].update(retry_delay_seconds=99),
+            ),
+            (
+                "artifact_refs_drift",
+                lambda _event, child, _causality, _result: child.update(artifact_refs=["artifact://drifted"]),
+            ),
+            (
+                "causality_stage_drift",
+                lambda _event, _child, causality, _result: causality.update(stage_id="drifted_stage"),
+            ),
+            (
+                "root_result_drift",
+                lambda _event, _child, _causality, result: result.update(reason="drifted_reason"),
+            ),
+        )
+        for ordinal, (label, mutate) in enumerate(drift_cases, start=1):
+            with self.subTest(drift=label):
+                start_occurrence, owner_ref = self._arrange_created(suffix=f"first_call_{ordinal}")
+                self._release_start_hold(start_occurrence=start_occurrence, suffix=f"first_call_{ordinal}")
+                command_id = str(owner_ref["workflow_command_id"])
+                baseline_command_count = len(self._rows("workflow_commands"))
+                completed = self._complete_root_with_drifted_spec(
+                    owner_ref=owner_ref,
+                    suffix=f"first_call_{ordinal}",
+                    mutate=mutate,
+                )
+                self.assertEqual(completed.get("outcome"), "conflict", completed)
+                self.assertEqual(
+                    completed.get("reason"),
+                    "acquisition_root_plan_reconstruction_mismatch",
+                    completed,
+                )
+                self.assertEqual(len(self._rows("workflow_commands")), baseline_command_count)
+                self.assertEqual(
+                    self._rows("workflow_commands", where="parent_command_id = %s", params=(command_id,)),
+                    [],
+                )
+                self.assertEqual(
+                    self._rows(
+                        "workflow_events",
+                        where="idempotency_key = %s",
+                        params=(f"acquisition.intent.resolve:parent:{command_id}:plan",),
+                    ),
+                    [],
+                )
+                root_row = self._command_row(command_id)
+                self.assertEqual(root_row["status"], "running")
+                self.assertEqual(json.loads(root_row["downstream_command_ids_json"]), [])
+                self.assertEqual(
+                    self._rows(
+                        "workflow_entity_deltas",
+                        where="command_id = %s",
+                        params=(command_id,),
+                    ),
+                    [],
                 )
 
     def test_inspect_rejects_command_lifecycle_states_outside_the_explicit_contract(self) -> None:
@@ -923,3 +1092,166 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
     def test_owner_ref_digest_helper_is_type_sensitive(self) -> None:
         self.assertNotEqual(_digest({"sequence": True}), _digest({"sequence": 1}))
         self.assertNotEqual(_digest({"sequence": 2.0}), _digest({"sequence": 2}))
+
+
+class ProgressedChildContractUnitTest(unittest.TestCase):
+    """Pure contract-level probes: exact shape, no trimming, durable pin."""
+
+    @staticmethod
+    def _synthetic_root() -> dict[str, Any]:
+        return {
+            "command_id": "cmd_unit_root",
+            "workflow_run_id": "wf_unit_root",
+            "operation_id": "op_unit_root",
+            "command_type": "acquisition.run.create",
+            "owner": "acquisition_run_writer",
+            "causal_group_id": "",
+            "payload": {
+                "workflow_payload": {"target_company": "Acme", "query": "find people"},
+                "target_company": "Acme",
+                "query": "find people",
+                "plan_review_id": "plan-review-1",
+                "action_id": "action-1",
+            },
+        }
+
+    def _expected_bundle(self) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]:
+        plan = build_acquisition_root_intent_plan(self._synthetic_root(), claim_attempt=1)
+        self.assertTrue(plan)
+        contract = progressed_child_completion_contract("acquisition_root")
+        assert contract is not None
+        event_id = progressed_child_plan_event_id("wf_unit_root", 2, plan["plan_event"]["idempotency_key"])
+        identity = canonical_progressed_child_identity(
+            expected_progressed_child_row(
+                contract=contract,
+                parent_command_id="cmd_unit_root",
+                workflow_run_id="wf_unit_root",
+                operation_id="op_unit_root",
+                child_command=plan["child_command"],
+                child_causality={
+                    **plan["child_causality"],
+                    "source_event_id": event_id,
+                    "source_event_type": "CommandPlanRequested",
+                },
+            )
+        )
+        self.assertIsNotNone(identity)
+        assert identity is not None
+        return plan, contract, identity, event_id
+
+    def _event_row(self, plan: dict[str, Any], event_id: str, **overrides: Any) -> dict[str, Any]:
+        row = {
+            "event_id": event_id,
+            "workflow_run_id": "wf_unit_root",
+            "operation_id": "op_unit_root",
+            "command_id": "cmd_unit_root",
+            "activity_attempt_id": "",
+            "event_family": "workflow_event",
+            "event_type": "CommandPlanRequested",
+            "sequence_number": 2,
+            "idempotency_key": plan["plan_event"]["idempotency_key"],
+            "actor": "acquisition_run_create_owner",
+            "source": "acquisition_run_create.command_owner",
+            "payload": dict(plan["plan_event"]["payload"]),
+            "artifact_refs": [],
+            "schema_version": "workflow_event_v1",
+        }
+        row.update(overrides)
+        return row
+
+    def _violation(
+        self, plan: dict[str, Any], contract: dict[str, Any], identity: dict[str, Any], event: dict[str, Any]
+    ) -> str:
+        return progressed_child_plan_event_violation(
+            contract=contract,
+            parent_command_id="cmd_unit_root",
+            parent_source_sequence=1,
+            child_identity=identity,
+            event=event,
+            expected_payload=dict(plan["plan_event"]["payload"]),
+        )
+
+    def test_valid_constructed_bundle_passes(self) -> None:
+        plan, contract, identity, event_id = self._expected_bundle()
+        self.assertEqual(self._violation(plan, contract, identity, self._event_row(plan, event_id)), "")
+
+    def test_padded_and_drifted_event_fields_fail_exact_comparison(self) -> None:
+        plan, contract, identity, event_id = self._expected_bundle()
+        cases = (
+            ("padded_actor", {"actor": " acquisition_run_create_owner "}),
+            ("padded_source", {"source": "acquisition_run_create.command_owner "}),
+            ("padded_workflow_run", {"workflow_run_id": " wf_unit_root "}),
+            ("padded_schema_version", {"schema_version": " workflow_event_v1 "}),
+            ("foreign_workflow_type", None),
+            ("extra_payload_key", "extra"),
+            ("missing_payload_key", "missing"),
+        )
+        for label, overrides in cases:
+            with self.subTest(case=label):
+                event = self._event_row(plan, event_id)
+                if overrides is None:
+                    event["payload"] = {**event["payload"], "workflow_type": "foreign.workflow"}
+                elif overrides == "extra":
+                    event["payload"] = {**event["payload"], "unexpected_extra": 1}
+                elif overrides == "missing":
+                    event["payload"] = {
+                        key: value for key, value in dict(event["payload"]).items() if key != "stage_key"
+                    }
+                else:
+                    event.update(overrides)
+                self.assertNotEqual(self._violation(plan, contract, identity, event), "", label)
+
+    def test_mirror_consistent_drift_is_not_the_expected_identity(self) -> None:
+        plan, contract, identity, event_id = self._expected_bundle()
+        row = expected_progressed_child_row(
+            contract=contract,
+            parent_command_id="cmd_unit_root",
+            workflow_run_id="wf_unit_root",
+            operation_id="op_unit_root",
+            child_command=plan["child_command"],
+            child_causality={
+                **plan["child_causality"],
+                "source_event_id": event_id,
+                "source_event_type": "CommandPlanRequested",
+            },
+        )
+
+        def _drifted(row_mutate: Any) -> dict[str, Any]:
+            drifted = {**row, "payload": {**row["payload"], "causality": dict(row["payload"]["causality"])}}
+            row_mutate(drifted)
+            return drifted
+
+        # Padded stage, mirror-consistent (column and causality padded alike):
+        # identity is computable but must not equal the builder's exact row.
+        padded = _drifted(
+            lambda r: (
+                r.update(stage_id=f" {r['stage_id']} "),
+                r["payload"]["causality"].update(stage_id=r["stage_id"]),
+            )
+        )
+        padded_identity = canonical_progressed_child_identity(padded)
+        self.assertIsNotNone(padded_identity)
+        self.assertNotEqual(padded_identity, identity)
+
+        # Self-consistent foreign values are likewise not the expected row.
+        foreign = _drifted(
+            lambda r: (
+                r.update(stage_id="foreign_stage", causal_group_id="foreign_group"),
+                r["payload"]["causality"].update(stage_id="foreign_stage", causal_group_id="foreign_group"),
+            )
+        )
+        foreign_identity = canonical_progressed_child_identity(foreign)
+        self.assertIsNotNone(foreign_identity)
+        self.assertNotEqual(foreign_identity, identity)
+
+        # A missing or drifted contract pin fails identity computation itself.
+        unpinned = _drifted(lambda r: r["payload"]["causality"].pop("progressed_child_contract", None))
+        self.assertIsNone(canonical_progressed_child_identity(unpinned))
+        foreign_pinned = _drifted(
+            lambda r: r["payload"]["causality"]["progressed_child_contract"].update(digest="0" * 64)
+        )
+        self.assertIsNone(canonical_progressed_child_identity(foreign_pinned))
+
+
+if __name__ == "__main__":
+    unittest.main()

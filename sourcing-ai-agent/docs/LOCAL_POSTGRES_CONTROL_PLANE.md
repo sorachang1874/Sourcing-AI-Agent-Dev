@@ -245,10 +245,14 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
   `operation_runs`、`agent_tool_result_slots` / `agent_tool_result_attempts` / `agent_tool_result_journal`、
   `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas`、`operation_events`，
   以及其 Action/Operation/command/event owner 同属该聚合的 acquisition 运行时行
-  `acquisition_runs`、`acquisition_discovery_lanes`）
+  `acquisition_runs`、`acquisition_discovery_lanes`，以及携带不可变 causal/cost 引用与不可复活 purge
+  tombstone 的 `model_invocation_envelopes`）
   以及不可移植的 live execution/recovery/lease/cost-control 协调表
   （`workflow_job_leases`、`workflow_recovery_intents`、`runtime_provider_limiter_leases`、
-  活跃 worker 行 `agent_worker_runs`、profile-URL 调度租约 `linkedin_profile_registry_leases`）
+  活跃 worker 行 `agent_worker_runs`、profile-URL 调度租约 `linkedin_profile_registry_leases`，
+  以及完整的 profile-scheduler owner 聚合 `linkedin_profile_registry` /
+  `linkedin_profile_registry_aliases` / `linkedin_profile_registry_events` /
+  `linkedin_profile_registry_backfill_runs`（retry 等待、coalescing 计时、终态与 dispatch 身份））
   一律不进入 generic export；可移植性分类的唯一权威是 canonical per-table registry
   `CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY`（`DEFAULT_CONTROL_PLANE_TABLES`、
   `PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES`、`NONPORTABLE_RUNTIME_COORDINATION_TABLES`、
