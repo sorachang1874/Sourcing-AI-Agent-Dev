@@ -52,23 +52,30 @@ mutable current alias, and auto-upgrade are forbidden.
 Beyond closed shape and checksum validation, the terminal parser exact-compares
 every field shared between the enclosing terminal and its nested
 freshness/readiness refs (terminal id, route identity, membership revision,
-candidate-set digest, counts, and the acyclic core digest), and requires
-``row_ready_count == visible_member_count == candidate_count`` for ready
-records.  The V3 result parser enforces the model-visible equations: the
-canonical ``cohort_selection_digest(cohort_selection)`` of the sibling closed
-selection object (computed by the owning ``cohort_selection`` module, never
-retyped), the exact registry pin, the manifest ``v3_page_equations``
+candidate-set digest, counts, and the acyclic core digest), binds the complete
+nested runtime namespace ref to the terminal's workspace and provider mode,
+and requires ``row_ready_count == visible_member_count == candidate_count``
+for ready records (enforced inside the readiness parser itself, so the
+invariant is canonical for every consumer).  The V3 result parser enforces
+the model-visible equations: the canonical
+``cohort_selection_digest(cohort_selection)`` of the sibling closed selection
+object (computed by the owning ``cohort_selection`` module, never retyped),
+the exact registry pin, the manifest ``v3_page_equations``
 (``returned_count == len(candidates) == min(limit, max(0, total_count -
-offset))`` and ``truncated == (offset + returned_count < total_count)``),
-freshness/readiness parity with the root candidate-set digest and shared
-terminal core, and the status-dependent requested-target shape (stale-only
-terminal fields present exactly when ``status == "stale"``).
+offset))`` and ``truncated == (offset + returned_count < total_count)``) with
+unique ``candidate_ref`` values within the returned page (the page is a
+window of the unique member set M), freshness/readiness parity with the root
+candidate-set digest and shared terminal core, the status-dependent
+requested-target shape (stale-only terminal fields present exactly when
+``status == "stale"``), and the exact lane-coverage derivation table:
+``requested == completed + missing`` with ``complete <=> missing == 0``,
+``partial <=> completed > 0 and missing > 0``, and
+``unavailable <=> completed == 0 and missing == requested``.
 
-Decode boundary: all parsers require the decoder-typed
-``CanonicalJsonObject`` produced solely by the shared strict decoder in
-``agent_runtime_namespace_ref`` (``strict_json_loads`` /
-``canonical_json_object``); duplicate keys are rejected at decode, never
-collapsed.
+Decode boundary: public parsers accept raw JSON text/bytes (strictly decoded
+by the shared decoder in ``agent_runtime_namespace_ref`` with duplicate-key
+and non-finite rejection) or the decoder-produced ``CanonicalJsonObject`` —
+never a plain dictionary.
 """
 
 from __future__ import annotations
@@ -82,9 +89,11 @@ from typing import Any
 from .agent_runtime_namespace_ref import (
     AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST,
     AGENT_RUNTIME_NAMESPACE_REF_SCHEMA_VERSION,
+    AgentRuntimeNamespaceRefError,
     CanonicalJsonObject,
-    canonical_json_object,
+    _canonical_json_object,
     parse_agent_runtime_namespace_ref,
+    strict_json_loads,
 )
 from .cohort_selection import cohort_selection_digest, cohort_selection_registry_digest
 
@@ -1527,11 +1536,18 @@ def compute_filter_projection_readiness_prerequisite_set_digest() -> str:
     return hashlib.sha256(canonical_json(list(FILTER_PROJECTION_READINESS_PREREQUISITE_SET)).encode("utf-8")).hexdigest()
 
 
-def _require_decoder_typed(value: Any, label: str) -> CanonicalJsonObject:
+def _coerce_boundary(value: Any, label: str) -> CanonicalJsonObject:
+    if isinstance(value, (str, bytes, bytearray)):
+        try:
+            value = strict_json_loads(value)
+        except AgentRuntimeNamespaceRefError as exc:
+            raise FilterProjectionTerminalContractError(
+                f"filter projection terminal contract {label} invalid: {exc}"
+            ) from exc
     if not isinstance(value, CanonicalJsonObject):
         _fail(
             label,
-            "record must be produced by strict_json_loads or canonical_json_object;"
+            "record must be JSON text/bytes (strictly decoded) or a decoder-produced canonical JSON object;"
             " plain dictionaries are not a decode boundary",
         )
     return value
@@ -1540,12 +1556,12 @@ def _require_decoder_typed(value: Any, label: str) -> CanonicalJsonObject:
 def parse_filter_projection_freshness_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_freshness_ref.v1`` record and return it in manifest field order."""
 
-    record = _require_decoder_typed(value, "filter_projection_freshness_ref")
+    record = _coerce_boundary(value, "filter_projection_freshness_ref")
     _validate_object(record, FILTER_PROJECTION_FRESHNESS_REF_V1_SCHEMA["fields"], "filter_projection_freshness_ref")
     ordered = {field: record[field] for field in FILTER_PROJECTION_FRESHNESS_REF_V1_ORDERED_FIELDS}
     if ordered["freshness_ref_digest"] != compute_filter_projection_freshness_ref_digest(ordered):
         _fail("freshness_ref_digest", "does not recompute over all preceding fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_filter_projection_freshness_ref(value: Any) -> None:
@@ -1558,17 +1574,23 @@ def parse_filter_projection_readiness_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_readiness_ref.v1`` record and return it in manifest field order.
 
     ``prerequisite_set_digest`` must bind the exact eight-item prerequisite
-    set; ``readiness_ref_digest`` must recompute over all preceding fields.
+    set; ``readiness_ref_digest`` must recompute over all preceding fields;
+    and for the constant ``status=ready`` the counts are canonical for every
+    consumer: ``row_ready_count == visible_member_count == candidate_count``.
     """
 
-    record = _require_decoder_typed(value, "filter_projection_readiness_ref")
+    record = _coerce_boundary(value, "filter_projection_readiness_ref")
     _validate_object(record, FILTER_PROJECTION_READINESS_REF_V1_SCHEMA["fields"], "filter_projection_readiness_ref")
     ordered = {field: record[field] for field in FILTER_PROJECTION_READINESS_REF_V1_ORDERED_FIELDS}
     if ordered["prerequisite_set_digest"] != compute_filter_projection_readiness_prerequisite_set_digest():
         _fail("prerequisite_set_digest", "must bind the exact eight-item prerequisite set")
+    if ordered["visible_member_count"] != ordered["candidate_count"]:
+        _fail("visible_member_count", "must equal candidate_count for status=ready")
+    if ordered["row_ready_count"] != ordered["visible_member_count"]:
+        _fail("row_ready_count", "must equal visible_member_count for status=ready")
     if ordered["readiness_ref_digest"] != compute_filter_projection_readiness_ref_digest(ordered):
         _fail("readiness_ref_digest", "does not recompute over all preceding fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_filter_projection_readiness_ref(value: Any) -> None:
@@ -1590,11 +1612,18 @@ def parse_filter_projection_product_terminal(value: Any) -> CanonicalJsonObject:
     over every preceding field.
     """
 
-    record = _require_decoder_typed(value, "filter_projection_product_terminal")
+    record = _coerce_boundary(value, "filter_projection_product_terminal")
     _validate_object(record, FILTER_PROJECTION_PRODUCT_TERMINAL_V1_SCHEMA["fields"], "filter_projection_product_terminal")
     ordered = {
         field: record[field] for field in FILTER_PROJECTION_PRODUCT_TERMINAL_V1_ORDERED_FIELDS if field in record
     }
+    # The complete nested namespace ref is tenant/mode-bound to the terminal:
+    # a terminal can never carry a ref for another workspace or provider mode.
+    namespace_ref = parse_agent_runtime_namespace_ref(ordered["runtime_namespace_ref"])
+    if ordered["workspace_id"] != namespace_ref["workspace_id"]:
+        _fail("workspace_id", "must equal the nested runtime namespace ref workspace_id")
+    if ordered["provider_mode"] != namespace_ref["provider_mode"]:
+        _fail("provider_mode", "must equal the nested runtime namespace ref provider_mode")
     core_digest = compute_filter_projection_product_terminal_core_digest(ordered)
     if ordered["terminal_core_digest"] != core_digest:
         _fail("terminal_core_digest", "does not recompute over canonical fields 1-23")
@@ -1626,7 +1655,7 @@ def parse_filter_projection_product_terminal(value: Any) -> CanonicalJsonObject:
         _fail("readiness_ref.row_ready_count", "must equal visible_member_count for status=ready")
     if ordered["terminal_digest"] != compute_filter_projection_product_terminal_digest(ordered):
         _fail("terminal_digest", "does not recompute over every preceding field")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_filter_projection_product_terminal(value: Any) -> None:
@@ -1638,10 +1667,10 @@ def validate_filter_projection_product_terminal(value: Any) -> None:
 def parse_filter_projection_product_ref(value: Any) -> CanonicalJsonObject:
     """Validate one referenced ``filter_projection_product_ref.v1`` record and return it in manifest field order."""
 
-    record = _require_decoder_typed(value, "filter_projection_product_ref")
+    record = _coerce_boundary(value, "filter_projection_product_ref")
     _validate_object(record, FILTER_PROJECTION_PRODUCT_REF_V1_SCHEMA["fields"], "filter_projection_product_ref")
     ordered = {field: record[field] for field in FILTER_PROJECTION_PRODUCT_REF_V1_ORDERED_FIELDS}
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_filter_projection_product_ref(value: Any) -> None:
@@ -1651,7 +1680,7 @@ def validate_filter_projection_product_ref(value: Any) -> None:
 
 
 def _parse_owner_ref(value: Any, schema: dict[str, Any], ordered_fields: tuple[str, ...], label: str) -> CanonicalJsonObject:
-    record = _require_decoder_typed(value, label)
+    record = _coerce_boundary(value, label)
     _validate_object(record, schema["fields"], label)
     ordered = {field: record[field] for field in ordered_fields}
     if ordered["result_contract_digest"] != FILTER_PROJECTION_RESULT_V3_CONTRACT_DIGEST:
@@ -1663,7 +1692,7 @@ def _parse_owner_ref(value: Any, schema: dict[str, Any], ordered_fields: tuple[s
         )
     if ordered["owner_ref_digest"] != compute_filter_projection_owner_ref_digest(ordered):
         _fail(f"{label}.owner_ref_digest", "does not recompute over the complete owner ref except itself")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def parse_filter_projection_success_owner_ref(value: Any) -> CanonicalJsonObject:
@@ -1763,7 +1792,7 @@ def parse_filter_projection_result_v3(value: Any, *, variant: str | None = None)
     present exactly when ``status == "stale"``).
     """
 
-    record = _require_decoder_typed(value, "filter_projection_result_v3")
+    record = _coerce_boundary(value, "filter_projection_result_v3")
     if variant is None:
         if record.get("variant") not in FILTER_PROJECTION_RESULT_V3_VARIANTS:
             _fail("variant", "missing or unknown result variant discriminator")
@@ -1775,7 +1804,7 @@ def parse_filter_projection_result_v3(value: Any, *, variant: str | None = None)
         _enforce_success_equations(ordered)
     elif variant == "deferred":
         _enforce_deferred_target_shape(ordered)
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def _enforce_success_equations(record: dict[str, Any]) -> None:
@@ -1801,6 +1830,30 @@ def _enforce_success_equations(record: dict[str, Any]) -> None:
         _fail("returned_count", "must equal min(limit, max(0, total_count - offset))")
     if record["truncated"] != (record["offset"] + record["returned_count"] < record["total_count"]):
         _fail("truncated", "must equal (offset + returned_count < total_count)")
+    # The page is a window of the unique member set M: candidate refs are
+    # unique within the returned page.
+    candidate_refs = [candidate["candidate_ref"] for candidate in record["candidates"]]
+    if len(set(candidate_refs)) != len(candidate_refs):
+        _fail("candidates", "candidate_ref values must be unique within the returned page (M is unique)")
+    # Lane-coverage derivation table (exact, closed): counts satisfy
+    # requested = completed + missing, and the status discriminator is exact
+    # per row — a result can never report completion and missing coverage
+    # simultaneously:
+    #   complete    <=> missing_lane_count == 0
+    #   partial     <=> completed_lane_count > 0 and missing_lane_count > 0
+    #   unavailable <=> completed_lane_count == 0 and missing_lane_count == requested_lane_count
+    coverage = record["requested_lane_coverage"]
+    if coverage["requested_lane_count"] != coverage["completed_lane_count"] + coverage["missing_lane_count"]:
+        _fail("requested_lane_coverage", "requested_lane_count must equal completed + missing")
+    status = coverage["status"]
+    if status == "complete":
+        consistent = coverage["missing_lane_count"] == 0
+    elif status == "partial":
+        consistent = coverage["completed_lane_count"] > 0 and coverage["missing_lane_count"] > 0
+    else:  # unavailable
+        consistent = coverage["completed_lane_count"] == 0 and coverage["missing_lane_count"] == coverage["requested_lane_count"]
+    if not consistent:
+        _fail("requested_lane_coverage", f"status/count contradiction for status={status}")
     # Freshness/readiness parity with the root and with each other.
     freshness = parse_filter_projection_freshness_ref(record["freshness"])
     readiness = parse_filter_projection_readiness_ref(record["readiness"])

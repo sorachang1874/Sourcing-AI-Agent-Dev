@@ -22,7 +22,6 @@ from sourcing_agent.agent_runtime_namespace_ref import (
     AgentRuntimeNamespaceRefError,
     agent_runtime_namespace_ref_public_record,
     canonical_json,
-    canonical_json_object,
     mint_agent_runtime_namespace_ref,
     strict_json_loads,
 )
@@ -279,7 +278,7 @@ def _freshness_ref(core: dict[str, Any], core_digest: str) -> dict[str, Any]:
         "candidate_set_digest": core["candidate_set_digest"],
     }
     record["freshness_ref_digest"] = compute_filter_projection_freshness_ref_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _readiness_ref(core: dict[str, Any], core_digest: str) -> dict[str, Any]:
@@ -299,7 +298,7 @@ def _readiness_ref(core: dict[str, Any], core_digest: str) -> dict[str, Any]:
         "prerequisite_set_digest": compute_filter_projection_readiness_prerequisite_set_digest(),
     }
     record["readiness_ref_digest"] = compute_filter_projection_readiness_ref_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _terminal() -> dict[str, Any]:
@@ -312,7 +311,7 @@ def _terminal() -> dict[str, Any]:
         "readiness_ref": _readiness_ref(core, core_digest),
     }
     record["terminal_digest"] = compute_filter_projection_product_terminal_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _owner_ref_pins() -> dict[str, Any]:
@@ -344,7 +343,7 @@ def _success_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _stale_owner_ref() -> dict[str, Any]:
@@ -362,7 +361,7 @@ def _stale_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _not_ready_owner_ref() -> dict[str, Any]:
@@ -383,7 +382,7 @@ def _not_ready_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _masked_absence_owner_ref() -> dict[str, Any]:
@@ -396,19 +395,17 @@ def _masked_absence_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def _product_ref() -> dict[str, Any]:
     terminal = _terminal()
-    return canonical_json_object(
-        {
+    return {
             "schema_version": "filter_projection_product_ref.v1",
             "projection_id": terminal["projection_id"],
             "membership_revision": terminal["membership_revision"],
             "terminal_digest": terminal["terminal_digest"],
         }
-    )
 
 
 def _cohort_selection() -> dict[str, Any]:
@@ -435,8 +432,7 @@ def _candidate_item(index: int) -> dict[str, Any]:
 def _success_root() -> dict[str, Any]:
     terminal = _terminal()
     selection = _cohort_selection()
-    return canonical_json_object(
-        {
+    return {
             "variant": "success",
             "status": "ready",
             "projection_ref": _product_ref(),
@@ -472,12 +468,10 @@ def _success_root() -> dict[str, Any]:
             "truncated": False,
             "candidates": [_candidate_item(1), _candidate_item(2)],
         }
-    )
 
 
 def _deferred_root() -> dict[str, Any]:
-    return canonical_json_object(
-        {
+    return {
             "variant": "deferred",
             "status": "not_ready",
             "reason": "projection_candidate_set_empty",
@@ -489,12 +483,10 @@ def _deferred_root() -> dict[str, Any]:
             },
             "decision_ref": _digest("decision"),
         }
-    )
 
 
 def _stale_deferred_root() -> dict[str, Any]:
-    return canonical_json_object(
-        {
+    return {
             "variant": "deferred",
             "status": "stale",
             "reason": "projection_state_not_serving",
@@ -509,24 +501,24 @@ def _stale_deferred_root() -> dict[str, Any]:
             },
             "decision_ref": _digest("decision"),
         }
-    )
 
 
 def _masked_root() -> dict[str, Any]:
-    return canonical_json_object(
-        {
+    return {
             "variant": "error",
             "status": "failed",
             "reason": "projection_not_found",
             "retryable": False,
             "decision_ref": _digest("decision"),
         }
-    )
 
 
 def _expect_invalid(parser: Any, record: Any, **kwargs: Any) -> None:
+    # Plain dicts are not a decode boundary; hostile record shapes go through
+    # the text path so validation (not the boundary) is what rejects them.
+    payload = canonical_json(record) if type(record) is dict else record
     with pytest.raises(FilterProjectionTerminalContractError):
-        parser(record, **kwargs)
+        parser(payload, **kwargs)
 
 
 def test_constants_match_manifest_exactly() -> None:
@@ -639,9 +631,10 @@ def test_parse_round_trips() -> None:
         (parse_filter_projection_result_v3, _masked_root(), {"variant": "error"}),
     ]
     for parser, record, kwargs in fixtures:
-        parsed = parser(record, **kwargs)
+        parsed = parser(canonical_json(record), **kwargs)  # text boundary
         assert parsed == record
-        assert parser(canonical_json_object(parsed), **kwargs) == record
+        assert parser(parsed, **kwargs) == record  # decoder-provenance round trip
+        assert parser(canonical_json(parsed), **kwargs) == record
 
 
 def test_terminal_digest_chain_matches_manifest_equalities() -> None:
@@ -684,7 +677,7 @@ def _reteminal(terminal: dict[str, Any], **overrides: Any) -> dict[str, Any]:
 
     record = {**terminal, **overrides}
     record["terminal_digest"] = compute_filter_projection_product_terminal_digest(record)
-    return canonical_json_object(record)
+    return record
 
 
 def test_product_terminal_fail_closed() -> None:
@@ -710,7 +703,7 @@ def test_product_terminal_fail_closed() -> None:
         {**terminal, "readiness_ref": {**terminal["readiness_ref"], "status": "not_ready"}},
     ]
     for record in hostile:
-        _expect_invalid(parse_filter_projection_product_terminal, canonical_json_object(record))
+        _expect_invalid(parse_filter_projection_product_terminal, canonical_json(record))
     # a successor terminal binds the exact predecessor digest.
     successor = {**_terminal_core(), "predecessor_terminal_digest": terminal["terminal_digest"], "terminal_generation": 2}
     core_digest = compute_filter_projection_product_terminal_core_digest(successor)
@@ -721,7 +714,7 @@ def test_product_terminal_fail_closed() -> None:
         "readiness_ref": _readiness_ref(successor, core_digest),
     }
     successor["terminal_digest"] = compute_filter_projection_product_terminal_digest(successor)
-    assert parse_filter_projection_product_terminal(canonical_json_object(successor)) == successor
+    assert parse_filter_projection_product_terminal(canonical_json(successor)) == successor
 
 
 def test_terminal_nested_ref_field_binding() -> None:
@@ -767,8 +760,8 @@ def test_terminal_nested_ref_field_binding() -> None:
         "readiness_ref": _readiness_ref(drifted_core, core_digest),
     }
     drifted["terminal_digest"] = compute_filter_projection_product_terminal_digest(drifted)
-    assert parse_filter_projection_product_terminal(canonical_json_object(drifted)) == drifted
-    assert parse_filter_projection_product_terminal(_terminal()) == _terminal()
+    assert parse_filter_projection_product_terminal(canonical_json(drifted)) == drifted
+    assert parse_filter_projection_product_terminal(canonical_json(_terminal())) == _terminal()
 
 
 def test_freshness_and_readiness_refs_fail_closed() -> None:
@@ -790,7 +783,7 @@ def test_freshness_and_readiness_refs_fail_closed() -> None:
         ({**readiness, "prerequisite_set_digest": "0" * 64}, parse_filter_projection_readiness_ref),
         ({**readiness, "readiness_ref_digest": "0" * 64}, parse_filter_projection_readiness_ref),
     ):
-        _expect_invalid(parser, canonical_json_object(record))
+        _expect_invalid(parser, canonical_json(record))
 
 
 def test_owner_refs_fail_closed() -> None:
@@ -820,7 +813,7 @@ def test_owner_refs_fail_closed() -> None:
         (parse_filter_projection_masked_absence_owner_ref, {**masked, "reason": "projection_members_not_ready"}),
         (parse_filter_projection_masked_absence_owner_ref, {**masked, "owner_ref_digest": "0" * 64}),
     ):
-        _expect_invalid(parser, canonical_json_object(record))
+        _expect_invalid(parser, canonical_json(record))
 
 
 def test_result_v3_variant_discrimination_fail_closed() -> None:
@@ -828,10 +821,10 @@ def test_result_v3_variant_discrimination_fail_closed() -> None:
     deferred = _deferred_root()
     masked = _masked_root()
     # each root validates exactly under its own variant.
-    assert parse_filter_projection_result_v3(success, variant="success") == success
-    assert parse_filter_projection_result_v3(deferred, variant="deferred") == deferred
-    assert parse_filter_projection_result_v3(_stale_deferred_root(), variant="deferred") == _stale_deferred_root()
-    assert parse_filter_projection_result_v3(masked, variant="error") == masked
+    assert parse_filter_projection_result_v3(canonical_json(success), variant="success") == success
+    assert parse_filter_projection_result_v3(canonical_json(deferred), variant="deferred") == deferred
+    assert parse_filter_projection_result_v3(canonical_json(_stale_deferred_root()), variant="deferred") == _stale_deferred_root()
+    assert parse_filter_projection_result_v3(canonical_json(masked), variant="error") == masked
     hostile = [
         ({**success, "reason": "projection_not_found"}, {}),  # success root is closed: no deferred field
         ({**success, "status": "stale"}, {}),
@@ -858,7 +851,7 @@ def test_result_v3_variant_discrimination_fail_closed() -> None:
         (success, {"variant": "deferred"}),  # explicit variant must match the record
     ]
     for record, kwargs in hostile:
-        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(record), **kwargs)
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json(record), **kwargs)
     _expect_invalid(parse_filter_projection_result_v3, "success")
     with pytest.raises(FilterProjectionTerminalContractError):
         filter_projection_result_v3_variant_fields("unknown")
@@ -895,11 +888,11 @@ def test_result_v3_nested_objects_fail_closed() -> None:
         },
     ]
     for record in hostile:
-        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(record))
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json(record))
     # candidate public_profile_url is optional; absence is the closed variant.
     without_url = _success_root()
     del without_url["candidates"][0]["public_profile_url"]
-    assert parse_filter_projection_result_v3(without_url) == without_url
+    assert parse_filter_projection_result_v3(canonical_json(without_url)) == without_url
 
 
 def test_result_v3_page_and_selection_equations() -> None:
@@ -915,21 +908,21 @@ def test_result_v3_page_and_selection_equations() -> None:
         ("truncated", True),  # 0 + 2 < 2 is False
         ("limit", 1),  # min(1, 2) = 1 != returned 2
     ):
-        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object({**success, drifted: wrong}))
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json({**success, drifted: wrong}))
     # the sibling cohort_selection_digest equals cohort_selection_digest(cohort_selection)
     mutated_selection = {**success["cohort_selection"], "role_match": "all"}
     _expect_invalid(
         parse_filter_projection_result_v3,
-        canonical_json_object({**success, "cohort_selection": mutated_selection}),
+        canonical_json({**success, "cohort_selection": mutated_selection}),
     )
     other_digest = _sha256_canonical(success["cohort_selection"])
     _expect_invalid(
         parse_filter_projection_result_v3,
-        canonical_json_object({**success, "cohort_selection_digest": other_digest}),
+        canonical_json({**success, "cohort_selection_digest": other_digest}),
     )
     _expect_invalid(
         parse_filter_projection_result_v3,
-        canonical_json_object({**success, "cohort_selection_registry_digest": "0" * 64}),
+        canonical_json({**success, "cohort_selection_registry_digest": "0" * 64}),
     )
     # freshness/readiness parity with the root and with each other
     freshness = success["freshness"]
@@ -949,11 +942,11 @@ def test_result_v3_page_and_selection_equations() -> None:
             else compute_filter_projection_readiness_ref_digest
         )
         mutated_ref[digest_field] = compute(mutated_ref)
-        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object({**success, key: mutated_ref}))
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json({**success, key: mutated_ref}))
     # the corrected positive fixture is itself equation-exact
     assert success["returned_count"] == len(success["candidates"]) == 2
     assert success["cohort_selection_digest"] == cohort_selection_digest(success["cohort_selection"])
-    assert parse_filter_projection_result_v3(success) == success
+    assert parse_filter_projection_result_v3(canonical_json(success)) == success
 
 
 def test_deferred_requested_target_shape() -> None:
@@ -966,7 +959,7 @@ def test_deferred_requested_target_shape() -> None:
             **stale,
             "requested_target_ref": {key: value for key, value in target.items() if key != missing},
         }
-        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(hostile))
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json(hostile))
     not_ready = _deferred_root()
     for extra, wrong in (
         ("requested_terminal_id", "terminal-0"),
@@ -977,9 +970,9 @@ def test_deferred_requested_target_shape() -> None:
             **not_ready,
             "requested_target_ref": {**not_ready["requested_target_ref"], extra: wrong},
         }
-        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(hostile))
-    assert parse_filter_projection_result_v3(stale) == stale
-    assert parse_filter_projection_result_v3(not_ready) == not_ready
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json(hostile))
+    assert parse_filter_projection_result_v3(canonical_json(stale)) == stale
+    assert parse_filter_projection_result_v3(canonical_json(not_ready)) == not_ready
 
 
 def test_decode_boundary_duplicate_keys_and_plain_dicts() -> None:
@@ -991,11 +984,21 @@ def test_decode_boundary_duplicate_keys_and_plain_dicts() -> None:
     assert duplicated != canonical
     with pytest.raises(AgentRuntimeNamespaceRefError):
         strict_json_loads(duplicated)
+    # the parse text boundary rejects the same duplicates with the family error
+    with pytest.raises(FilterProjectionTerminalContractError):
+        parse_filter_projection_product_terminal(duplicated)
+    # a collapsed duplicate decode can never be laundered through a plain dict
+    collapsed = json.loads(duplicated)
+    assert collapsed["candidate_count"] == 3
+    with pytest.raises(FilterProjectionTerminalContractError):
+        parse_filter_projection_product_terminal(collapsed)
     nested = canonical_json(_success_root()).replace(
         '"role_match":"any"', '"role_match":"any","role_match":"all"', 1
     )
     with pytest.raises(AgentRuntimeNamespaceRefError):
         strict_json_loads(nested)
+    with pytest.raises(FilterProjectionTerminalContractError):
+        parse_filter_projection_result_v3(nested)
     assert parse_filter_projection_product_terminal(strict_json_loads(canonical)) == terminal
     for parser, record in (
         (parse_filter_projection_freshness_ref, _terminal()["freshness_ref"]),
@@ -1013,6 +1016,99 @@ def test_decode_boundary_duplicate_keys_and_plain_dicts() -> None:
         parse_filter_projection_result_v3(dict(_success_root()))
     with pytest.raises(FilterProjectionTerminalContractError):
         parse_filter_projection_result_v3(json.loads(canonical_json(_masked_root())))
+
+
+def test_terminal_namespace_ref_tenant_mode_binding() -> None:
+    """F2r3: a product terminal never carries a runtime namespace ref for another workspace or mode."""
+
+    terminal = _terminal()
+    for foreign_kwargs in (
+        {"workspace_id": "ws-foreign", "provider_mode": "simulate"},
+        {"workspace_id": "ws-1", "provider_mode": "scripted"},
+        {"workspace_id": "ws-foreign", "provider_mode": "scripted"},
+    ):
+        foreign_ref = mint_agent_runtime_namespace_ref(
+            namespace_ref_id="ns-foreign",
+            policy_revision="policy-rev-1",
+            generation=1,
+            **foreign_kwargs,
+        )
+        drifted_core = {**_terminal_core(), "runtime_namespace_ref": foreign_ref}
+        core_digest = compute_filter_projection_product_terminal_core_digest(drifted_core)
+        drifted = {
+            **drifted_core,
+            "terminal_core_digest": core_digest,
+            "freshness_ref": _freshness_ref(drifted_core, core_digest),
+            "readiness_ref": _readiness_ref(drifted_core, core_digest),
+        }
+        drifted["terminal_digest"] = compute_filter_projection_product_terminal_digest(drifted)
+        _expect_invalid(parse_filter_projection_product_terminal, drifted)
+    assert parse_filter_projection_product_terminal(canonical_json(terminal)) == terminal
+
+
+def test_readiness_counts_canonical_for_every_consumer() -> None:
+    """F6r3: row_ready_count == visible_member_count == candidate_count inside the readiness parser itself."""
+
+    readiness = _terminal()["readiness_ref"]
+    for drifted, wrong in (
+        ("row_ready_count", 0),
+        ("row_ready_count", 1),
+        ("visible_member_count", 1),
+        ("candidate_count", 1),
+    ):
+        hostile = {**readiness, drifted: wrong}
+        hostile["readiness_ref_digest"] = compute_filter_projection_readiness_ref_digest(hostile)
+        # standalone readiness parsing rejects unready rows
+        _expect_invalid(parse_filter_projection_readiness_ref, hostile)
+        # and the V3 success parser inherits the same fence through the nested ref
+        success = _success_root()
+        _expect_invalid(parse_filter_projection_result_v3, {**success, "readiness": hostile})
+    assert parse_filter_projection_readiness_ref(canonical_json(readiness)) == readiness
+
+
+def test_result_v3_lane_coverage_derivation_table() -> None:
+    """F7r3: status and counts can never contradict (requested = completed + missing; exact status rows)."""
+
+    success = _success_root()
+    coverage = success["requested_lane_coverage"]
+    assert coverage == {"status": "complete", "requested_lane_count": 2, "completed_lane_count": 2, "missing_lane_count": 0}
+    hostile_cases = [
+        {**coverage, "status": "complete", "completed_lane_count": 0, "missing_lane_count": 2},  # the review probe
+        {**coverage, "status": "complete", "completed_lane_count": 1, "missing_lane_count": 1},
+        {**coverage, "status": "partial", "completed_lane_count": 2, "missing_lane_count": 0},
+        {**coverage, "status": "partial", "completed_lane_count": 0, "missing_lane_count": 2},
+        {**coverage, "status": "partial", "completed_lane_count": 1, "missing_lane_count": 2},  # 1+2 != requested 2
+        {**coverage, "status": "unavailable", "completed_lane_count": 1, "missing_lane_count": 1},
+        {**coverage, "status": "unavailable", "completed_lane_count": 0, "missing_lane_count": 1},
+        {**coverage, "requested_lane_count": 3},  # 3 != 2 + 0
+    ]
+    for hostile_coverage in hostile_cases:
+        _expect_invalid(
+            parse_filter_projection_result_v3,
+            {**success, "requested_lane_coverage": hostile_coverage},
+        )
+    # every consistent row of the derivation table passes
+    for good_coverage in (
+        {"status": "complete", "requested_lane_count": 2, "completed_lane_count": 2, "missing_lane_count": 0},
+        {"status": "partial", "requested_lane_count": 2, "completed_lane_count": 1, "missing_lane_count": 1},
+        {"status": "unavailable", "requested_lane_count": 2, "completed_lane_count": 0, "missing_lane_count": 2},
+    ):
+        good = {**success, "requested_lane_coverage": good_coverage}
+        assert parse_filter_projection_result_v3(canonical_json(good)) == good
+
+
+def test_result_v3_page_candidate_refs_are_unique() -> None:
+    """F8r3: the returned page is a window of the unique member set M; duplicate candidate_ref fails."""
+
+    success = _success_root()
+    duplicated = {
+        **success,
+        "candidates": [success["candidates"][0], success["candidates"][0]],
+    }
+    assert duplicated["candidates"][0]["candidate_ref"] == duplicated["candidates"][1]["candidate_ref"]
+    assert duplicated["returned_count"] == len(duplicated["candidates"]) == 2
+    _expect_invalid(parse_filter_projection_result_v3, duplicated)
+    assert parse_filter_projection_result_v3(canonical_json(success)) == success
 
 
 def test_retained_v2_history_never_retyped() -> None:

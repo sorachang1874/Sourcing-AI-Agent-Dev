@@ -55,15 +55,18 @@ accepted/rejected/truncated partition; result aggregates equal the lane sums
 with exact ordinal mapping; commit values must equal their nested execution
 result.  Equations needing external state require explicit owner pins:
 ``parse_cohort_execution_result`` and ``parse_cohort_execution_commit`` take
-the authoritative ``cohort_candidate_set.v1`` record and bind
+the authoritative ``cohort_candidate_set.v1`` and
+``cohort_execution_envelope.v1`` records; they exact-compare every shared
+identity field (workspace, run, generation, planning manifest digest), bind
 ``unique_candidate_count == candidate_set.member_count`` and the
-candidate-set digest exactly.
+candidate-set and envelope digests exactly, and bind every result lane to
+the envelope's planned lane (``L[i].lane_id == P[i].lane_id`` and
+``L[i].planned_lane_digest == recompute(P[i])``).
 
-Decode boundary: all parsers require the decoder-typed
-``CanonicalJsonObject`` produced solely by the shared strict decoder in
-``agent_runtime_namespace_ref`` (``strict_json_loads`` /
-``canonical_json_object``); duplicate keys are rejected at decode, never
-collapsed.
+Decode boundary: public parsers accept raw JSON text/bytes (strictly decoded
+by the shared decoder in ``agent_runtime_namespace_ref`` with duplicate-key
+and non-finite rejection) or the decoder-produced ``CanonicalJsonObject`` —
+never a plain dictionary.
 """
 
 from __future__ import annotations
@@ -77,9 +80,11 @@ from typing import Any
 from .agent_runtime_namespace_ref import (
     AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST,
     AGENT_RUNTIME_NAMESPACE_REF_SCHEMA_VERSION,
+    AgentRuntimeNamespaceRefError,
     CanonicalJsonObject,
-    canonical_json_object,
+    _canonical_json_object,
     parse_agent_runtime_namespace_ref,
+    strict_json_loads,
 )
 
 RETAINED_COHORT_HISTORY_LITERALS = (
@@ -803,11 +808,16 @@ def compute_cohort_execution_commit_digest(record: dict[str, Any]) -> str:
     return _record_digest(record, "commit_digest")
 
 
-def _require_decoder_typed(value: Any, label: str) -> CanonicalJsonObject:
+def _coerce_boundary(value: Any, label: str) -> CanonicalJsonObject:
+    if isinstance(value, (str, bytes, bytearray)):
+        try:
+            value = strict_json_loads(value)
+        except AgentRuntimeNamespaceRefError as exc:
+            raise CohortExecutionContractError(f"cohort execution contract {label} invalid: {exc}") from exc
     if not isinstance(value, CanonicalJsonObject):
         _fail(
             label,
-            "record must be produced by strict_json_loads or canonical_json_object;"
+            "record must be JSON text/bytes (strictly decoded) or a decoder-produced canonical JSON object;"
             " plain dictionaries are not a decode boundary",
         )
     return value
@@ -823,7 +833,7 @@ def parse_cohort_execution_capability(value: Any) -> CanonicalJsonObject:
     must equal the nested ref values (derivable nested identity).
     """
 
-    record = _require_decoder_typed(value, "cohort_execution_capability")
+    record = _coerce_boundary(value, "cohort_execution_capability")
     _validate_object(record, COHORT_EXECUTION_CAPABILITY_V2_SCHEMA["fields"], "cohort_execution_capability")
     ordered = {field: record[field] for field in COHORT_EXECUTION_CAPABILITY_V2_ORDERED_FIELDS}
     namespace_ref = parse_agent_runtime_namespace_ref(ordered["runtime_namespace_ref"])
@@ -832,7 +842,7 @@ def parse_cohort_execution_capability(value: Any) -> CanonicalJsonObject:
             _fail(shared, "must equal the nested runtime namespace ref value")
     if ordered["capability_digest"] != compute_cohort_execution_capability_digest(ordered):
         _fail("capability_digest", "does not recompute from fields 1-18")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_cohort_execution_capability(value: Any) -> None:
@@ -851,7 +861,7 @@ def parse_cohort_execution_envelope(value: Any) -> CanonicalJsonObject:
     all preceding fields.
     """
 
-    record = _require_decoder_typed(value, "cohort_execution_envelope")
+    record = _coerce_boundary(value, "cohort_execution_envelope")
     _validate_object(record, COHORT_EXECUTION_ENVELOPE_V1_SCHEMA["fields"], "cohort_execution_envelope")
     ordered = {field: record[field] for field in COHORT_EXECUTION_ENVELOPE_V1_ORDERED_FIELDS}
     capability = parse_cohort_execution_capability(ordered["capability"])
@@ -867,7 +877,7 @@ def parse_cohort_execution_envelope(value: Any) -> CanonicalJsonObject:
         _fail("ordered_planned_lane_refs", "ordinals must be the exact zero-based planning-v2 order")
     if ordered["envelope_digest"] != compute_cohort_execution_envelope_digest(ordered):
         _fail("envelope_digest", "does not recompute over all preceding fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_cohort_execution_envelope(value: Any) -> None:
@@ -883,7 +893,7 @@ def parse_cohort_execution_lane_result(value: Any) -> CanonicalJsonObject:
     and the accepted count equals the accepted digest enumeration.
     """
 
-    record = _require_decoder_typed(value, "cohort_execution_lane_result")
+    record = _coerce_boundary(value, "cohort_execution_lane_result")
     _validate_object(record, COHORT_EXECUTION_LANE_RESULT_V2_SCHEMA["fields"], "cohort_execution_lane_result")
     ordered = {field: record[field] for field in COHORT_EXECUTION_LANE_RESULT_V2_ORDERED_FIELDS}
     partition = (
@@ -895,7 +905,7 @@ def parse_cohort_execution_lane_result(value: Any) -> CanonicalJsonObject:
         _fail("accepted_occurrence_count", "must equal len(ordered_accepted_occurrence_digests)")
     if ordered["lane_result_digest"] != compute_cohort_execution_lane_result_digest(ordered):
         _fail("lane_result_digest", "does not recompute from the canonical lane-result fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_cohort_execution_lane_result(value: Any) -> None:
@@ -911,14 +921,14 @@ def parse_cohort_candidate_member(value: Any) -> CanonicalJsonObject:
     HTTPS URL; the empty-string alias fails closed.
     """
 
-    record = _require_decoder_typed(value, "cohort_candidate_member")
+    record = _coerce_boundary(value, "cohort_candidate_member")
     _validate_object(record, COHORT_CANDIDATE_MEMBER_V1_SCHEMA["fields"], "cohort_candidate_member")
     ordered = {
         field: record[field] for field in COHORT_CANDIDATE_MEMBER_V1_ORDERED_FIELDS if field in record
     }
     if ordered["member_digest"] != compute_cohort_candidate_member_digest(ordered):
         _fail("member_digest", "does not recompute from the canonical member fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_cohort_candidate_member(value: Any) -> None:
@@ -935,14 +945,16 @@ def parse_cohort_candidate_set(value: Any) -> CanonicalJsonObject:
     itself.
     """
 
-    record = _require_decoder_typed(value, "cohort_candidate_set")
+    record = _coerce_boundary(value, "cohort_candidate_set")
     _validate_object(record, COHORT_CANDIDATE_SET_V1_SCHEMA["fields"], "cohort_candidate_set")
     ordered = {field: record[field] for field in COHORT_CANDIDATE_SET_V1_ORDERED_FIELDS}
     if ordered["member_count"] != len(ordered["ordered_member_digests"]):
         _fail("member_count", "must equal len(ordered_member_digests)")
+    if len(set(ordered["ordered_member_digests"])) != len(ordered["ordered_member_digests"]):
+        _fail("ordered_member_digests", "must be unique (M is the unique canonical member set)")
     if ordered["candidate_set_digest"] != compute_cohort_candidate_set_digest(ordered):
         _fail("candidate_set_digest", "does not recompute from the header fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def validate_cohort_candidate_set(value: Any) -> None:
@@ -951,8 +963,8 @@ def validate_cohort_candidate_set(value: Any) -> None:
     parse_cohort_candidate_set(value)
 
 
-def _parse_cohort_execution_result_fields(value: Any, candidate_set: Any | None) -> CanonicalJsonObject:
-    record = _require_decoder_typed(value, "cohort_execution_result")
+def _parse_cohort_execution_result_fields(value: Any, candidate_set: Any | None, envelope: Any | None) -> CanonicalJsonObject:
+    record = _coerce_boundary(value, "cohort_execution_result")
     _validate_object(record, COHORT_EXECUTION_RESULT_V2_SCHEMA["fields"], "cohort_execution_result")
     ordered = {field: record[field] for field in COHORT_EXECUTION_RESULT_V2_ORDERED_FIELDS}
     lane_results = [parse_cohort_execution_lane_result(item) for item in ordered["ordered_lane_results"]]
@@ -970,43 +982,74 @@ def _parse_cohort_execution_result_fields(value: Any, candidate_set: Any | None)
     for aggregate_field, lane_field in aggregate_equations:
         if ordered[aggregate_field] != sum(item[lane_field] for item in lane_results):
             _fail(aggregate_field, f"must equal the exact lane {lane_field} sum")
+    # M = unique canonical member cores from union_i A_i: the unique member
+    # count can never exceed the accepted occurrence count.
+    if ordered["unique_candidate_count"] > ordered["accepted_occurrence_count"]:
+        _fail("unique_candidate_count", "cannot exceed accepted_occurrence_count (M from union of accepted occurrences)")
     if candidate_set is not None:
         # Member-set equations needing external state: bind the authoritative
         # candidate-set header exactly (unique_candidate_count = |M| =
-        # candidate_set.member_count).
+        # candidate_set.member_count) with every shared identity field.
         parsed_set = parse_cohort_candidate_set(candidate_set)
         if parsed_set["candidate_set_digest"] != ordered["candidate_set_digest"]:
             _fail("candidate_set_digest", "must equal the authoritative candidate-set digest")
         if parsed_set["member_count"] != ordered["unique_candidate_count"]:
             _fail("unique_candidate_count", "must equal candidate_set.member_count")
+        for shared in ("workspace_id", "acquisition_run_id", "execution_generation", "planning_manifest_digest"):
+            if parsed_set[shared] != ordered[shared]:
+                _fail(shared, "must equal the authoritative candidate-set value")
+    if envelope is not None:
+        # Lane-count equations needing external state: the authoritative
+        # envelope pins its digest and shared identity, and every result lane
+        # binds its planned lane (L[i].lane_id = P[i].lane_id and
+        # L[i].planned_lane_digest = recompute(P[i])).
+        parsed_envelope = parse_cohort_execution_envelope(envelope)
+        if parsed_envelope["envelope_digest"] != ordered["execution_envelope_digest"]:
+            _fail("execution_envelope_digest", "must equal the authoritative envelope digest")
+        for shared in ("workspace_id", "acquisition_run_id", "planning_manifest_digest", "capability_digest", "execution_generation"):
+            if ordered[shared] != parsed_envelope[shared]:
+                _fail(shared, "must equal the authoritative envelope value")
+        planned_refs = parsed_envelope["ordered_planned_lane_refs"]
+        if len(planned_refs) != len(lane_results):
+            _fail("planned_lane_count", "must equal len(envelope.ordered_planned_lane_refs)")
+        for lane, planned in zip(lane_results, planned_refs, strict=True):
+            if lane["ordinal"] != planned["ordinal"]:
+                _fail("ordinal", "result lane ordinal must equal the planned lane ordinal")
+            if lane["lane_id"] != planned["lane_id"]:
+                _fail("lane_id", "result lane must equal the planned lane id (L[i].lane_id = P[i].lane_id)")
+            if lane["planned_lane_digest"] != planned["lane_digest"]:
+                _fail("planned_lane_digest", "result lane must recompute the planned lane digest")
     if ordered["result_digest"] != compute_cohort_execution_result_digest(ordered):
         _fail("result_digest", "does not recompute from the canonical result-v2 fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
-def parse_cohort_execution_result(value: Any, *, candidate_set: Any) -> CanonicalJsonObject:
+def parse_cohort_execution_result(value: Any, *, candidate_set: Any, envelope: Any) -> CanonicalJsonObject:
     """Validate one ``cohort_execution_result.v2`` record and return it in manifest field order.
 
     Lane completeness is exact: ``planned_lane_count == executed_lane_count ==
     len(ordered_lane_results)`` with the zero-based ordinal mapping, every
     aggregate count equals the exact lane sum, and the explicit
-    ``candidate_set`` owner pin binds ``unique_candidate_count`` and
-    ``candidate_set_digest`` to the authoritative header (never a
-    ``missing_required_lane_count`` substitution).
+    ``candidate_set``/``envelope`` owner pins bind the shared identity fields,
+    ``unique_candidate_count``, ``candidate_set_digest``,
+    ``execution_envelope_digest``, and every result lane to its planned lane
+    (never a ``missing_required_lane_count`` substitution).
     """
 
     if candidate_set is None:
         _fail("candidate_set", "the authoritative candidate-set owner pin is required")
-    return _parse_cohort_execution_result_fields(value, candidate_set)
+    if envelope is None:
+        _fail("envelope", "the authoritative execution-envelope owner pin is required")
+    return _parse_cohort_execution_result_fields(value, candidate_set, envelope)
 
 
-def validate_cohort_execution_result(value: Any, *, candidate_set: Any) -> None:
+def validate_cohort_execution_result(value: Any, *, candidate_set: Any, envelope: Any) -> None:
     """Fail closed unless ``value`` is one exact ``cohort_execution_result.v2`` record."""
 
-    parse_cohort_execution_result(value, candidate_set=candidate_set)
+    parse_cohort_execution_result(value, candidate_set=candidate_set, envelope=envelope)
 
 
-def parse_cohort_execution_commit(value: Any, *, candidate_set: Any) -> CanonicalJsonObject:
+def parse_cohort_execution_commit(value: Any, *, candidate_set: Any, envelope: Any) -> CanonicalJsonObject:
     """Validate one ``cohort_execution_commit.v1`` record and return it in manifest field order.
 
     ``commit_contract_digest`` must be an exact copy of this contract's
@@ -1015,16 +1058,25 @@ def parse_cohort_execution_commit(value: Any, *, candidate_set: Any) -> Canonica
     every shared field must equal the nested execution result value,
     ``candidate_count`` must equal the nested result's
     ``unique_candidate_count`` and the authoritative candidate-set
-    ``member_count`` (explicit owner pin), and ``commit_digest`` must
-    recompute over every preceding contract field.
+    ``member_count``, the explicit ``candidate_set``/``envelope`` owner pins
+    propagate into the nested result validation and the envelope digest
+    exact-compares, and ``commit_digest`` must recompute over every preceding
+    contract field.
     """
 
     if candidate_set is None:
         _fail("candidate_set", "the authoritative candidate-set owner pin is required")
-    record = _require_decoder_typed(value, "cohort_execution_commit")
+    if envelope is None:
+        _fail("envelope", "the authoritative execution-envelope owner pin is required")
+    record = _coerce_boundary(value, "cohort_execution_commit")
     _validate_object(record, COHORT_EXECUTION_COMMIT_V1_SCHEMA["fields"], "cohort_execution_commit")
     ordered = {field: record[field] for field in COHORT_EXECUTION_COMMIT_V1_ORDERED_FIELDS}
-    result = parse_cohort_execution_result(ordered["execution_result_json"], candidate_set=candidate_set)
+    parsed_envelope = parse_cohort_execution_envelope(envelope)
+    if ordered["execution_envelope_digest"] != parsed_envelope["envelope_digest"]:
+        _fail("execution_envelope_digest", "must equal the authoritative envelope digest")
+    result = parse_cohort_execution_result(
+        ordered["execution_result_json"], candidate_set=candidate_set, envelope=parsed_envelope
+    )
     if ordered["execution_result_digest"] != result["result_digest"]:
         _fail("execution_result_digest", "does not equal the nested execution result digest")
     shared_fields = (
@@ -1049,13 +1101,13 @@ def parse_cohort_execution_commit(value: Any, *, candidate_set: Any) -> Canonica
         _fail("commit_contract_digest", "must equal this contract's contract_digest")
     if ordered["commit_digest"] != compute_cohort_execution_commit_digest(ordered):
         _fail("commit_digest", "does not recompute over every preceding contract field")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
-def validate_cohort_execution_commit(value: Any, *, candidate_set: Any) -> None:
+def validate_cohort_execution_commit(value: Any, *, candidate_set: Any, envelope: Any) -> None:
     """Fail closed unless ``value`` is one exact ``cohort_execution_commit.v1`` record."""
 
-    parse_cohort_execution_commit(value, candidate_set=candidate_set)
+    parse_cohort_execution_commit(value, candidate_set=candidate_set, envelope=envelope)
 
 
 _REF_PARSERS.update(
@@ -1064,8 +1116,8 @@ _REF_PARSERS.update(
         COHORT_EXECUTION_CAPABILITY_V2_SCHEMA_VERSION: parse_cohort_execution_capability,
         COHORT_EXECUTION_LANE_RESULT_V2_SCHEMA_VERSION: parse_cohort_execution_lane_result,
         # Internal ref resolution only: the public result/commit parsers
-        # additionally require the explicit candidate-set owner pin.
-        COHORT_EXECUTION_RESULT_V2_SCHEMA_VERSION: lambda value: _parse_cohort_execution_result_fields(value, None),
+        # additionally require the explicit candidate-set and envelope owner pins.
+        COHORT_EXECUTION_RESULT_V2_SCHEMA_VERSION: lambda value: _parse_cohort_execution_result_fields(value, None, None),
     }
 )
 

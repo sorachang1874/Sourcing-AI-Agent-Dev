@@ -30,8 +30,12 @@ Decode boundary (manifest canonical-JSON rule "duplicate keys rejected at
 decode"): this module owns the one shared strict JSON decoder for all three
 FF-SCHEMA contract families.  ``strict_json_loads`` rejects duplicate object
 keys and non-JSON constants (``NaN``/``Infinity``) at any depth and produces
-the decoder-typed ``CanonicalJsonObject``; contract parsers require that type
-so an already-collapsed standard-library decode can never reach validation.
+the decoder-typed ``CanonicalJsonObject``.  Public parsers accept raw
+text/bytes and invoke that decoder internally; a plain dictionary is never a
+decode boundary.  ``CanonicalJsonObject`` is provenance: it is produced only
+by the strict decoder or by trusted programmatic construction inside the
+three contract modules (mint and parse canonicalization), so external input
+always passes duplicate rejection at the text boundary.
 """
 
 from __future__ import annotations
@@ -87,11 +91,12 @@ _DECODE_TOKEN = object()
 class CanonicalJsonObject(dict):
     """Decoder-typed JSON object: duplicate-free and non-finite-free by construction.
 
-    Instances are produced solely by ``strict_json_loads`` (every text/bytes
-    boundary) and ``canonical_json_object`` (programmatic construction); the
-    constructor itself is token-guarded, and every FF-SCHEMA contract parser
-    requires this type so no caller can feed an already-collapsed
-    standard-library decode into validation.
+    Instances are produced solely by ``strict_json_loads`` (every external
+    text/bytes boundary) or by trusted programmatic construction inside the
+    three FF-SCHEMA contract modules (mint and parse canonicalization); the
+    constructor itself is token-guarded.  Contract parsers accept raw
+    text/bytes (strictly decoded) or this provenance type — never a plain
+    dictionary, which could be an already-collapsed standard-library decode.
     """
 
     __slots__ = ()
@@ -99,7 +104,7 @@ class CanonicalJsonObject(dict):
     def __init__(self, *args: Any, _token: object | None = None, **kwargs: Any) -> None:
         if _token is not _DECODE_TOKEN:
             raise AgentRuntimeNamespaceRefError(
-                "canonical JSON objects are produced only by strict_json_loads or canonical_json_object"
+                "canonical JSON objects are produced only by strict_json_loads or trusted contract-module construction"
             )
         super().__init__(*args, **kwargs)
 
@@ -140,11 +145,14 @@ def strict_json_loads(payload: str | bytes | bytearray) -> Any:
         raise AgentRuntimeNamespaceRefError("contract JSON payload is not valid JSON") from exc
 
 
-def canonical_json_object(value: Any) -> CanonicalJsonObject:
-    """Return the decoder-typed object for one JSON object value, preserving field order.
+def _canonical_json_object(value: Any) -> CanonicalJsonObject:
+    """Trusted programmatic construction: decoder-typed object for one JSON object value.
 
-    The value is re-encoded with ``allow_nan=False`` and strict-decoded, so
-    the result is duplicate-free and non-finite-free at every depth.
+    Private to the three FF-SCHEMA contract modules (mint and parse
+    canonicalization).  The value is re-encoded with ``allow_nan=False`` and
+    strict-decoded, so the result is duplicate-free and non-finite-free at
+    every depth.  This is never a public decode boundary: external input must
+    go through ``strict_json_loads`` or the text/bytes parse path.
     """
 
     try:
@@ -307,11 +315,13 @@ def assert_not_retained_path_bearing_history(value: Any) -> None:
         _fail("schema_version", "retained v1 path-bearing history is never re-minted as a namespace ref")
 
 
-def _require_decoder_typed(value: Any, label: str) -> CanonicalJsonObject:
+def _coerce_boundary(value: Any, label: str) -> CanonicalJsonObject:
+    if isinstance(value, (str, bytes, bytearray)):
+        value = strict_json_loads(value)
     if not isinstance(value, CanonicalJsonObject):
         _fail(
             label,
-            "record must be produced by strict_json_loads or canonical_json_object;"
+            "record must be JSON text/bytes (strictly decoded) or a decoder-produced canonical JSON object;"
             " plain dictionaries are not a decode boundary",
         )
     return value
@@ -326,22 +336,22 @@ def validate_agent_runtime_namespace_ref(value: Any) -> None:
 def parse_agent_runtime_namespace_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ref record and return it canonicalized in manifest field order.
 
-    Parse is closed: the record must be decoder-typed
-    (``CanonicalJsonObject`` from ``strict_json_loads`` or
-    ``canonical_json_object``), and unknown or missing fields,
-    type/enum/format/bound violations, retained path-bearing history shapes,
-    and any ``ref_digest`` that does not recompute from the first seven
-    fields all fail closed (a copied digest is never proof without rebuilding
-    its source object).
+    Parse is closed: ``value`` must be raw JSON text/bytes (strictly decoded
+    with duplicate-key and non-finite rejection) or a decoder-produced
+    ``CanonicalJsonObject`` — never a plain dictionary.  Unknown or missing
+    fields, type/enum/format/bound violations, retained path-bearing history
+    shapes, and any ``ref_digest`` that does not recompute from the first
+    seven fields all fail closed (a copied digest is never proof without
+    rebuilding its source object).
     """
 
-    record = _require_decoder_typed(value, "agent_runtime_namespace_ref")
+    record = _coerce_boundary(value, "agent_runtime_namespace_ref")
     assert_not_retained_path_bearing_history(record)
     _validate_object(record, AGENT_RUNTIME_NAMESPACE_REF_SCHEMA["fields"], "agent_runtime_namespace_ref")
     ordered = {field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_ORDERED_FIELDS}
     if ordered["ref_digest"] != compute_agent_runtime_namespace_ref_digest(ordered):
         _fail("ref_digest", "does not recompute from the first seven fields")
-    return canonical_json_object(ordered)
+    return _canonical_json_object(ordered)
 
 
 def mint_agent_runtime_namespace_ref(
@@ -370,14 +380,14 @@ def mint_agent_runtime_namespace_ref(
         "generation": generation,
     }
     candidate["ref_digest"] = compute_agent_runtime_namespace_ref_digest(candidate)
-    return parse_agent_runtime_namespace_ref(canonical_json_object(candidate))
+    return parse_agent_runtime_namespace_ref(_canonical_json_object(candidate))
 
 
 def agent_runtime_namespace_ref_public_record(value: Any) -> CanonicalJsonObject:
     """Project one validated ref to its exact public V3 subset; workspace/path/lifecycle never leave the server."""
 
     record = parse_agent_runtime_namespace_ref(value)
-    return canonical_json_object({field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS})
+    return _canonical_json_object({field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS})
 
 
 __all__ = [
@@ -396,7 +406,6 @@ __all__ = [
     "agent_runtime_namespace_ref_public_record",
     "assert_not_retained_path_bearing_history",
     "canonical_json",
-    "canonical_json_object",
     "compute_agent_runtime_namespace_ref_digest",
     "contract_digest",
     "mint_agent_runtime_namespace_ref",
