@@ -30,6 +30,37 @@ class FrontendC1aContractTest(unittest.TestCase):
               }).outputText;
               const module = { exports: {} };
               const localRequire = (specifier) => {
+                if (specifier === "./cohortSelection") {
+                  const unexpectedCohortSelectionCall = () => {
+                    throw new Error("c1a contract case unexpectedly used cohort selection");
+                  };
+                  return {
+                    buildCohortLocationApiPayload: unexpectedCohortSelectionCall,
+                    cloneCohortLocationSelection: unexpectedCohortSelectionCall,
+                    cloneCohortSelection: unexpectedCohortSelectionCall,
+                    equalCohortLocationSelection: unexpectedCohortSelectionCall,
+                    equalCohortSelection: unexpectedCohortSelectionCall,
+                    parseCohortLocationMirror: unexpectedCohortSelectionCall,
+                    parseCohortSelectionOptionsPayload: unexpectedCohortSelectionCall,
+                    parseCohortSelectionPayload: unexpectedCohortSelectionCall,
+                  };
+                }
+                if (specifier === "../../../contracts/frontend_api_runtime_contract") {
+                  const contractSource = fs.readFileSync(
+                    path.join(process.cwd(), "contracts/frontend_api_runtime_contract.ts"),
+                    "utf8",
+                  );
+                  const contractCompiled = ts.transpileModule(contractSource, {
+                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+                  }).outputText;
+                  const contractModule = { exports: {} };
+                  vm.runInNewContext(contractCompiled, {
+                    module: contractModule,
+                    exports: contractModule.exports,
+                    TextEncoder: globalThis.TextEncoder,
+                  });
+                  return contractModule.exports;
+                }
                 if (Object.prototype.hasOwnProperty.call(overrides, specifier)) {
                   return overrides[specifier];
                 }
