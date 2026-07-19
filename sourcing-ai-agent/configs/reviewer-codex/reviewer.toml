@@ -7,6 +7,15 @@
 # (the runner rejects "", "auto", "default", "inherit").
 # Update THIS file when the model lineup changes; never chase versions by
 # editing the runner or the gate doc.
+#
+# Channel fallback record (2026-07-19): while the ChatGPT account quota wall
+# lasts (usage limit until 2026-07-25), reviews route the SAME pinned
+# model/effort/tier through the operator-selected chshapi relay
+# (https://api.chshapi.org/v1, env key CODEX_CHSHAPI_API_KEY in macOS Keychain
+# service `codex-env`), patched into runtime/reviewer_codex_home_v2/config.toml
+# as model_provider="chshapi" after each bootstrap refresh. This is the
+# routing-table recorded fallback, not a model downgrade; every review
+# artifact executed via the relay must name the channel in its metadata.
 model = "gpt-5.6-sol"
 model_reasoning_effort = "ultra"
 service_tier = "priority"
