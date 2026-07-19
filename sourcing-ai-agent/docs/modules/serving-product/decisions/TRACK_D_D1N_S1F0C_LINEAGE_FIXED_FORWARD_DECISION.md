@@ -84,8 +84,12 @@ handoff tables:
   equality; the exact digest-pinned external `acquisition_plan_preview_record_v2` validator executes against every
   root snapshot preview, and every workspace/requester/provider-mode/runtime-namespace comparison in
   `requester_bindings` — base-row scope, nested preview scope, owner-ref scope, and every carrier copy — is bound
-  to executed predicate ids; the test evaluator executes every encoded predicate with a witness proof and one
-  hostile mutation per predicate); every miss/duplicate/foreign/malformed/split identity maps publicly to
+  to executed predicate ids; each binding's `comparison_links` is a total audit map in both directions (every
+  required comparison links at least one executed predicate, every encoded binding predicate is linked from at
+  least one required comparison, and `predicate_ids` equals the linked union), and the AcquisitionRun bundle
+  boundary is explicit: `p_run_bundle_workspace` joins the workspace map and the `p_run_bundle_carrier` bundle
+  carrier copy joins the workspace/provider-mode/runtime-namespace carrier-copy maps; the test evaluator executes
+  every encoded predicate with a witness proof and one hostile mutation per predicate); every miss/duplicate/foreign/malformed/split identity maps publicly to
   `projection_not_found`;
 - the `retained_contract_pins` section: the retained nine-field `acquisition_root_command_payload.v2` root and the
   18-field `acquisition_start_command_acceptance_owner_result_ref.v1` owner ref materialized as fully closed schemas
@@ -130,8 +134,24 @@ handoff tables:
   `max_serialized_bytes=65536` (64 KiB)/`max_items=8192`/`max_depth=10` limits); the tool contract decision-locks
   the complete `AgentToolSpec.to_fingerprint_record()` equivalent (tool name/kind, request pin, route
   binder/adapter, simulate fixture, release owner, execution subject, budget/capability, approval, command
-  exposure, and control policy, with every constant owner-pin digest recomputed from its pinned contract bytes)
+  exposure, and control policy, with every constant owner-pin digest recomputed from its pinned contract bytes
+  under the canonical `local_agent_canary_owner_contract_v1` owner-pin identity formula)
   and binds the exact result and serializer contract digests as constants;
+  `result_v3_slot_contract.canonical_fingerprints` materializes both fingerprints exactly: real JSON nulls
+  (never the string `"null"`) for request/result `query_owner`, `budget_owner`, `capability_type`,
+  `capability_issuer`, and the always-present top-level `query_owner_id`/`query_owner_revision`/
+  `query_owner_contract_digest` keys, the empty `required_provider_modes` array, and every canonical key; the
+  request pin binds the exact retained V2 request identity (`projection_filter_request_v2`, its materialized
+  `input_schema_digest`, and the versioned `ActionRequestSpec` action-contract digest recomputed from the pinned
+  registry owners) plus the exact retained V2 binder contract — byte-identical to the retained
+  `filter_projection_tool_v2` fingerprint under executable parity tests — and this decision authors no V3 request
+  contract (a future `projection_filter_request_v3` requires a separate complete request-contract decision with
+  owner, closed schema, materialized schema and `ActionRequestSpec` digests, V2 retention/migration rules,
+  collision check, and executable parity tests); every digest in the tool contract is a decision-locked constant,
+  and an executable oracle constructs real `ActionResultSpec`/`AgentToolSpec` objects from the pinned values,
+  compares `to_fingerprint_record()` recursively and type-strictly, mirror-validates the materialized variant
+  schemas/provenance/value-roles against the closed result contract, and pins the resulting
+  `result_schema_digest` and `tool_spec_digest`;
   the commandless full terminal tuple (`no_command_v1`, both-empty Action/Operation, zero attempt/generation/epoch),
   the deterministic `filter_projection_terminal_winner.v1` equation, the four closed internal owner refs with exact
   field manifests, and the replay/quarantine retention rules;
@@ -156,7 +176,9 @@ Retained exactly as history, with exact version + contract/result digest lookup 
 lexicographic-latest alias, mutable current alias, or auto-upgrade: `acquisition_root_command_payload.v2`,
 `cohort_execution_capability.v1`, `cohort_provider_manifest.v1`, planning `cohort_provider_manifest.v2`,
 `cohort_execution_result.v1`, `filter_projection_result_v2`, and `filter_projection_tool_v2`. V3 registration creates
-retained history only; the current tool alias remains V2 and the public/default served population remains zero.
+retained history only; the current tool alias remains V2 and the public/default served population remains zero. The
+V3 tool's request pin reuses the retained `projection_filter_request_v2` contract and V2 binder unchanged (exact
+materialized digests, parity-tested); no V3 request contract is invented by this decision.
 
 Rejected as implementation literals (they remain referenced as reviewed history only):
 `acquisition_start_lineage_ref.v1`, `cohort_provider_execution_manifest.v2`, and

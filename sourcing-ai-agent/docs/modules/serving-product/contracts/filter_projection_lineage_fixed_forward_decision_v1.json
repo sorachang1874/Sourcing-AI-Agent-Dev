@@ -278,7 +278,7 @@
   ],
   "contract_digest_equation": {
     "equation": "SHA256(UTF8(canonical_json(schema))) where schema is the row's full closed schema object {schema_version, owner, fields}: every ordered field descriptor binds its exact name, type, required optionality, and where applicable nonempty, constant, enum, format, minimum, maximum, min_items, max_items, max_length, items, fields, ref, ref_digest, provenance, value_role, derivation, variants, and ordering",
-    "schema_object_rule": "descriptor vocabulary is closed: name, type, required, nonempty, constant, enum, format, minimum, maximum, min_items, max_items, max_length, items, fields, ref, ref_digest, provenance, value_role, derivation, variants, ordering; types are string, integer, boolean, object, array; formats are sha256_hex, https_url; provenance values are server_derived, user_supplied, owner_state; value_role values are control, identifier, display_text, web_url; every object descriptor carries either closed fields or an immutable exact-version-and-digest ref+ref_digest reference (adopted contract, retained_contract_pins literal, or an external retained spec pinned by exact schema digest); every array descriptor carries closed items; adding an enum value or deleting a derivation rule changes the schema bytes and therefore the contract_digest",
+    "schema_object_rule": "descriptor vocabulary is closed: name, type, required, nonempty, constant, enum, format, minimum, maximum, min_items, max_items, max_length, items, fields, ref, ref_digest, provenance, value_role, derivation, variants, ordering; types are string, integer, boolean, object, array, null; a null descriptor carries constant JSON null exactly (real JSON null, never the string \"null\"); formats are sha256_hex, https_url; provenance values are server_derived, user_supplied, owner_state; value_role values are control, identifier, display_text, web_url; every object descriptor carries either closed fields or an immutable exact-version-and-digest ref+ref_digest reference (adopted contract, retained_contract_pins literal, or an external retained spec pinned by exact schema digest); every array descriptor carries closed items; adding an enum value or deleting a derivation rule changes the schema bytes and therefore the contract_digest",
     "canonical_json_rules": [
       "sorted object keys",
       "compact separators",
@@ -3442,6 +3442,9 @@
         "model_description",
         "tool_kind",
         "action_type",
+        "query_owner_id",
+        "query_owner_revision",
+        "query_owner_contract_digest",
         "request",
         "result_pin",
         "workspace_actor_binder",
@@ -3557,6 +3560,27 @@
             "constant": "filter_projection"
           },
           {
+            "name": "query_owner_id",
+            "type": "null",
+            "required": true,
+            "constant": null,
+            "derivation": "JSON null exactly: the canonical AgentToolSpec fingerprint always emits the top-level query-owner id/revision/digest keys; action tools bind no query owner"
+          },
+          {
+            "name": "query_owner_revision",
+            "type": "null",
+            "required": true,
+            "constant": null,
+            "derivation": "JSON null exactly: the canonical AgentToolSpec fingerprint always emits the top-level query-owner id/revision/digest keys; action tools bind no query owner"
+          },
+          {
+            "name": "query_owner_contract_digest",
+            "type": "null",
+            "required": true,
+            "constant": null,
+            "derivation": "JSON null exactly: the canonical AgentToolSpec fingerprint always emits the top-level query-owner id/revision/digest keys; action tools bind no query owner"
+          },
+          {
             "name": "request",
             "type": "object",
             "required": true,
@@ -3565,14 +3589,16 @@
                 "name": "schema_version",
                 "type": "string",
                 "required": true,
-                "constant": "projection_filter_request_v3"
+                "constant": "projection_filter_request_v2",
+                "derivation": "exact retained V2 request contract identity (agent_projection_query.FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION); the governing S1f0 decision keeps projection_filter_request_v2 unchanged and this decision authors no V3 request contract; any future projection_filter_request_v3 requires a separate complete request-contract decision (owner, closed schema, materialized schema and ActionRequestSpec digests, V2 retention/migration rules, collision check, executable parity tests)"
               },
               {
                 "name": "schema_digest",
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "derivation": "SHA256 over the exact closed projection_filter_request_v3 input schema; computed at registration and bound by the retained registry pin, never inferred"
+                "derivation": "exact FILTER_PROJECTION_V2_REQUEST_TOOL_SPEC.input_schema_digest recomputed from src/sourcing_agent/agent_projection_query.py at the canonization base; binds the closed V2 request schema bytes byte-for-byte",
+                "constant": "44d2643f8dc3a90e8d63d32c53da3f6655719546a1fded2f80304e5fd0c5db6f"
               },
               {
                 "name": "validator_owner",
@@ -3628,8 +3654,8 @@
                     "type": "string",
                     "required": true,
                     "format": "sha256_hex",
-                    "constant": "dc5d2ae4ad0115bb7e98f134097cdc4b1b6ff2ee4870623d631f52cf189fd113",
-                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                    "constant": "d5a0657b03f18f027d88a7d3f4e62be3ef3a270f19fb52421fadb8eb92642f8e",
+                    "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula); equals the retained filter_projection_tool_v2 request validator pin byte-for-byte"
                   }
                 ],
                 "derivation": "AgentToolRequestPin.validator_owner equivalent"
@@ -3651,17 +3677,18 @@
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "derivation": "SHA256 over the ActionRequestSpec fingerprint for projection_filter_request_v3; computed at registration from the pinned request schema, never inferred"
+                "derivation": "exact action_contract_digest(DEFAULT_ACTION_REGISTRY, FILTER_PROJECTION_V2_CANARY_ACTION_SPEC) recomputed from src/sourcing_agent/action_contract_identity.py at the canonization base; binds the versioned ActionRequestSpec fingerprint for projection_filter_request_v2",
+                "constant": "4587745d7a1e3d71856015f3262dc374399a14bf0b43f4bf40f911f9fc10475b"
               },
               {
                 "name": "query_owner",
-                "type": "string",
+                "type": "null",
                 "required": true,
-                "constant": "null",
-                "derivation": "null exactly: action tools never carry a query owner binding"
+                "constant": null,
+                "derivation": "JSON null exactly: action tools never carry a query owner binding"
               }
             ],
-            "derivation": "complete AgentToolRequestPin equivalent for the V3 request"
+            "derivation": "complete AgentToolRequestPin equivalent for the retained V2 request; byte-identical to the retained filter_projection_tool_v2 request pin (executable parity oracle)"
           },
           {
             "name": "result_pin",
@@ -3697,7 +3724,8 @@
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "derivation": "SHA256 over the complete ActionResultSpec.to_fingerprint_record() pinned by filter_projection_result_v3 and filter_projection_result_serializer_v3; computed at registration from the pinned contracts, never inferred"
+                "derivation": "exact result_schema_digest of the canonical ActionResultSpec fingerprint materialized in result_v3_slot_contract.canonical_fingerprints.result; SHA256 over the complete ActionResultSpec.to_fingerprint_record() pinned by filter_projection_result_v3 and filter_projection_result_serializer_v3; never inferred",
+                "constant": "de8ea20ca23b23d025e1a83a735744f7e96a9c56e1bda2198f32795c76fc3cb1"
               },
               {
                 "name": "serializer_owner",
@@ -3838,10 +3866,10 @@
               },
               {
                 "name": "query_owner",
-                "type": "string",
+                "type": "null",
                 "required": true,
-                "constant": "null",
-                "derivation": "null exactly: action tools never carry a query owner binding"
+                "constant": null,
+                "derivation": "JSON null exactly: action tools never carry a query owner binding"
               }
             ],
             "derivation": "complete AgentToolResultPin equivalent for the V3 result"
@@ -3855,13 +3883,13 @@
                 "name": "owner_id",
                 "type": "string",
                 "required": true,
-                "constant": "sourcing_agent.agent_projection_query.bind_filter_projection_v3_request"
+                "constant": "sourcing_agent.agent_projection_query.bind_filter_projection_v2_request"
               },
               {
                 "name": "owner_revision",
                 "type": "string",
                 "required": true,
-                "constant": "filter_projection_v3_binder_v1"
+                "constant": "filter_projection_v2_binder_v1"
               },
               {
                 "name": "contract",
@@ -3893,14 +3921,13 @@
                       "enum": [
                         "projection_id",
                         "membership_revision",
-                        "cohort_selection_registry_version",
-                        "cohort_selection_registry_digest",
-                        "cohort_selection_digest"
+                        "registry",
+                        "selection_digest"
                       ]
                     },
-                    "min_items": 5,
-                    "max_items": 5,
-                    "derivation": "exact ordered tuple ('projection_id', 'membership_revision', 'cohort_selection_registry_version', 'cohort_selection_registry_digest', 'cohort_selection_digest') of the pinned owner contract"
+                    "min_items": 4,
+                    "max_items": 4,
+                    "derivation": "exact ordered tuple ('projection_id', 'membership_revision', 'registry', 'selection_digest') of the pinned owner contract"
                   }
                 ],
                 "derivation": "complete closed owner contract; the pin digest binds these exact bytes"
@@ -3910,11 +3937,11 @@
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "constant": "86b9f1ce9645e9edb051444a8463a0fe465deb608d62ccb6f76870adbb5e7a12",
-                "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                "constant": "9d03c71587f583a174e2f981bc284db8f267599fe89322d1ec8bdfc281b1d2bc",
+                "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula); equals the retained filter_projection_tool_v2 workspace-actor binder pin byte-for-byte"
               }
             ],
-            "derivation": "AgentActionToolRoute.workspace_actor_binder equivalent"
+            "derivation": "AgentActionToolRoute.workspace_actor_binder equivalent: the exact retained V2 request binder contract (executable parity oracle)"
           },
           {
             "name": "adapter",
@@ -3958,8 +3985,8 @@
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "constant": "d90c38e934030c2c4b0f98d15aef029a4b25eedb91565344244ca2a485cde044",
-                "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                "constant": "8143dcf12ccee9112134bb5b5e1a3b581c4b2a11a9d0f2029014eca2c5bf58f6",
+                "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula)"
               }
             ],
             "derivation": "AgentActionToolRoute.adapter equivalent"
@@ -4105,8 +4132,8 @@
                     "type": "string",
                     "required": true,
                     "format": "sha256_hex",
-                    "constant": "314eaf809d67fd880e8824b722edec33412ba850af05469af1acbdb94051ae93",
-                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                    "constant": "663386982af29b7df7478f4ef16cd190676cee51bd60b80a230a4f49fbe25e1f",
+                    "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula)"
                   }
                 ],
                 "derivation": "sole external release owner; never a release decision"
@@ -4220,8 +4247,8 @@
                     "type": "string",
                     "required": true,
                     "format": "sha256_hex",
-                    "constant": "48ba7ac13b3dc77eac14f4aa413bec44fc996f4c39119bf966c1512ce122d3c1",
-                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                    "constant": "de748e418df4f06f03e63a41cdafadfa0da573cf3aa060931f3959763df59beb",
+                    "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula)"
                   }
                 ],
                 "derivation": "execution subject validator owner pin"
@@ -4290,8 +4317,8 @@
                     "type": "string",
                     "required": true,
                     "format": "sha256_hex",
-                    "constant": "41d3af618d5c7d7f1efb4b67a239cf57f49f20a28fdb08cb383ca55abaea32ac",
-                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                    "constant": "d44fbff56e6eb54804055c8443f6e89d0e8f1ae57147df5d1fdd26f23d024edc",
+                    "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula)"
                   }
                 ],
                 "derivation": "execution permission policy owner pin"
@@ -4327,10 +4354,10 @@
               },
               {
                 "name": "budget_owner",
-                "type": "string",
+                "type": "null",
                 "required": true,
-                "constant": "null",
-                "derivation": "null exactly: a read_only tool reserves no budget"
+                "constant": null,
+                "derivation": "JSON null exactly: a read_only tool reserves no budget"
               }
             ],
             "derivation": "complete AgentToolBudgetRequirement equivalent"
@@ -4347,11 +4374,29 @@
                 "constant": "not_required"
               },
               {
-                "name": "capability_metadata",
-                "type": "string",
+                "name": "capability_type",
+                "type": "null",
                 "required": true,
-                "constant": "null",
-                "derivation": "capability_type and capability_issuer are null and required_provider_modes is the empty tuple exactly"
+                "constant": null,
+                "derivation": "JSON null exactly: a not_required capability carries no capability_type"
+              },
+              {
+                "name": "capability_issuer",
+                "type": "null",
+                "required": true,
+                "constant": null,
+                "derivation": "JSON null exactly: a not_required capability carries no capability issuer"
+              },
+              {
+                "name": "required_provider_modes",
+                "type": "array",
+                "required": true,
+                "items": {
+                  "type": "string"
+                },
+                "min_items": 0,
+                "max_items": 0,
+                "derivation": "empty provider-mode array exactly: the canonical AgentToolCapabilityRequirement fingerprint emits required_provider_modes as [] for a not_required capability"
               }
             ],
             "derivation": "complete AgentToolCapabilityRequirement equivalent"
@@ -4409,8 +4454,8 @@
                     "type": "string",
                     "required": true,
                     "format": "sha256_hex",
-                    "constant": "ab13bfc75482c03659398a32103de8d720e5b096a65bd46b07b31519f8d08376",
-                    "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin"
+                    "constant": "582aa5f244b892c94586a2fe2c6da9ca8c27f247d0f076039737ea43c12a4c9f",
+                    "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula)"
                   }
                 ],
                 "derivation": "approval policy owner pin"
@@ -4457,7 +4502,8 @@
                     "type": "string",
                     "required": true,
                     "format": "sha256_hex",
-                    "derivation": "SHA256 over the ActionRequestSpec fingerprint for projection_filter_request_v3; computed at registration from the pinned request schema, never inferred"
+                    "derivation": "exact V2 action contract digest, identical to request.action_contract_digest; computed at canonization from the pinned ActionRequestSpec fingerprint, never inferred",
+                    "constant": "4587745d7a1e3d71856015f3262dc374399a14bf0b43f4bf40f911f9fc10475b"
                   },
                   {
                     "name": "command_exposure",
@@ -4479,14 +4525,15 @@
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "derivation": "SHA256 over canonical_json({owner_id, owner_revision, contract}) of this exact pin once action_contract_digest is computed at registration, never inferred"
+                "derivation": "SHA256 over canonical_json({schema_version: local_agent_canary_owner_contract_v1, owner_id, owner_revision, contract}) of this exact pin (the agent_canary_registry._owner_pin local-canary owner-pin identity formula)",
+                "constant": "c4c3590165c976fd1a0daae5432cccb73a986db379dcf8f1a6caa3c644916a29"
               }
             ],
             "derivation": "AgentToolBehavior.control_policy owner pin equivalent"
           }
         ]
       },
-      "contract_digest": "b78fe128e498a2949462e49357b413bccdf5cbdb4e2de002396cfba8f9d332ef"
+      "contract_digest": "d9e9b1148a26509e70e80c24f567ed310dc1f172abebe52f131d04064e7f0edd"
     },
     {
       "literal": "acquisition.cohort.execute",
@@ -6975,6 +7022,7 @@
             "p_op_workspace",
             "p_act_workspace",
             "p_run_workspace",
+            "p_run_bundle_workspace",
             "p_root_preview_workspace",
             "p_act_ref_workspace",
             "p_intent_carrier_owner_ref",
@@ -6985,7 +7033,56 @@
             "p_build_carrier_root_digest",
             "p_review_carrier_root_digest",
             "p_commit_carrier_root_digest",
+            "p_run_bundle_carrier",
             "p_carrier_consensus"
+          ],
+          "comparison_links": [
+            {
+              "comparison": "Action",
+              "predicate_ids": [
+                "p_act_workspace"
+              ]
+            },
+            {
+              "comparison": "OperationRun",
+              "predicate_ids": [
+                "p_op_workspace"
+              ]
+            },
+            {
+              "comparison": "AcquisitionRun",
+              "predicate_ids": [
+                "p_run_workspace",
+                "p_run_bundle_workspace"
+              ]
+            },
+            {
+              "comparison": "root snapshot preview",
+              "predicate_ids": [
+                "p_root_preview_workspace"
+              ]
+            },
+            {
+              "comparison": "owner ref",
+              "predicate_ids": [
+                "p_act_ref_workspace"
+              ]
+            },
+            {
+              "comparison": "every carrier copy",
+              "predicate_ids": [
+                "p_intent_carrier_owner_ref",
+                "p_build_carrier_owner_ref",
+                "p_review_carrier_owner_ref",
+                "p_commit_carrier_owner_ref",
+                "p_intent_carrier_root_digest",
+                "p_build_carrier_root_digest",
+                "p_review_carrier_root_digest",
+                "p_commit_carrier_root_digest",
+                "p_run_bundle_carrier",
+                "p_carrier_consensus"
+              ]
+            }
           ]
         },
         {
@@ -7004,6 +7101,20 @@
           "predicate_ids": [
             "p_act_requester",
             "p_root_preview_requester"
+          ],
+          "comparison_links": [
+            {
+              "comparison": "Action bound request target",
+              "predicate_ids": [
+                "p_act_requester"
+              ]
+            },
+            {
+              "comparison": "nested root snapshot preview",
+              "predicate_ids": [
+                "p_root_preview_requester"
+              ]
+            }
           ]
         },
         {
@@ -7028,7 +7139,31 @@
             "p_build_carrier_root_digest",
             "p_review_carrier_root_digest",
             "p_commit_carrier_root_digest",
+            "p_run_bundle_carrier",
             "p_carrier_consensus"
+          ],
+          "comparison_links": [
+            {
+              "comparison": "transport mode equals owner ref",
+              "predicate_ids": [
+                "p_act_ref_mode"
+              ]
+            },
+            {
+              "comparison": "every carrier copy",
+              "predicate_ids": [
+                "p_intent_carrier_owner_ref",
+                "p_build_carrier_owner_ref",
+                "p_review_carrier_owner_ref",
+                "p_commit_carrier_owner_ref",
+                "p_intent_carrier_root_digest",
+                "p_build_carrier_root_digest",
+                "p_review_carrier_root_digest",
+                "p_commit_carrier_root_digest",
+                "p_run_bundle_carrier",
+                "p_carrier_consensus"
+              ]
+            }
           ]
         },
         {
@@ -7053,7 +7188,31 @@
             "p_build_carrier_root_digest",
             "p_review_carrier_root_digest",
             "p_commit_carrier_root_digest",
+            "p_run_bundle_carrier",
             "p_carrier_consensus"
+          ],
+          "comparison_links": [
+            {
+              "comparison": "transport namespace equals owner ref",
+              "predicate_ids": [
+                "p_act_ref_namespace"
+              ]
+            },
+            {
+              "comparison": "every carrier copy",
+              "predicate_ids": [
+                "p_intent_carrier_owner_ref",
+                "p_build_carrier_owner_ref",
+                "p_review_carrier_owner_ref",
+                "p_commit_carrier_owner_ref",
+                "p_intent_carrier_root_digest",
+                "p_build_carrier_root_digest",
+                "p_review_carrier_root_digest",
+                "p_commit_carrier_root_digest",
+                "p_run_bundle_carrier",
+                "p_carrier_consensus"
+              ]
+            }
           ]
         }
       ],
@@ -10116,6 +10275,1009 @@
     "registration_rule": "append-only retained history; V3 is neither current nor served on registration",
     "result_link_policy": "no_command_v1",
     "effect_class": "read_only",
+    "canonical_fingerprints": {
+      "rule": "exact runtime fingerprint materialization: every value below is decision-locked; JSON nulls are real JSON nulls (never the string \"null\"), the not-required capability emits capability_type and capability_issuer as JSON null with the empty required_provider_modes array, and the top-level query-owner id/revision/digest keys are always present; each digest is SHA256(UTF8(canonical_json(record))) under the same canonical-JSON rules as contract_digest_equation; the executable oracle constructs a real sourcing_agent ActionResultSpec and AgentToolSpec from these exact values, compares to_fingerprint_record() recursively and type-strictly, and pins both digests",
+      "projection_rule": "variant_schemas, field_provenance, and field_value_roles are the exact ActionResultSpec equivalents of the filter_projection_result_v3 closed contract: descriptor constants map to const, enums to enum, sha256_hex to the exact 64-character lowercase hex pattern, https_url to the bounded HTTPS pattern, display_text to the nonempty display-text pattern, nonempty to minLength 1 with maxLength exactly when max_length is pinned, integers and booleans and arrays and objects to their bounded closed forms, and ref objects to the exact referenced contract fields; provenance is server_derived for the top-level variant and status discriminators, user_supplied under /cohort_selection, and owner_state elsewhere; the five cohort-selection string paths carry runtime role identifier and are listed in externally_controlled_identifier_paths (the canonical external-identifier rule, identical to retained v2) even though their decision-descriptor value_role pins classify the closed const/enum values as control; every other closed const/enum string path is control and every remaining string path is identifier or the pinned display_text/web_url role",
+      "result": {
+        "record": {
+          "allowed_variants": [
+            "success",
+            "deferred",
+            "error"
+          ],
+          "artifact_ref_schemes": [],
+          "externally_controlled_identifier_paths": [
+            "/cohort_selection/employment_statuses/*",
+            "/cohort_selection/role_bucket_ids/*",
+            "/cohort_selection/role_match",
+            "/cohort_selection/schema_version",
+            "/cohort_selection/source"
+          ],
+          "field_provenance": {
+            "deferred": {
+              "/decision_ref": "owner_state",
+              "/reason": "owner_state",
+              "/requested_target_ref": "owner_state",
+              "/requested_target_ref/membership_revision": "owner_state",
+              "/requested_target_ref/projection_id": "owner_state",
+              "/requested_target_ref/requested_terminal_digest": "owner_state",
+              "/requested_target_ref/requested_terminal_id": "owner_state",
+              "/requested_target_ref/route_revision_token": "owner_state",
+              "/reselection_required": "owner_state",
+              "/retryable": "owner_state",
+              "/status": "server_derived",
+              "/variant": "server_derived"
+            },
+            "error": {
+              "/decision_ref": "owner_state",
+              "/reason": "owner_state",
+              "/retryable": "owner_state",
+              "/status": "server_derived",
+              "/variant": "server_derived"
+            },
+            "success": {
+              "/candidate_set_digest": "owner_state",
+              "/candidates": "owner_state",
+              "/candidates/*/candidate_ref": "owner_state",
+              "/candidates/*/display_name": "owner_state",
+              "/candidates/*/employment_statuses": "owner_state",
+              "/candidates/*/headline": "owner_state",
+              "/candidates/*/public_profile_url": "owner_state",
+              "/candidates/*/role_bucket_ids": "owner_state",
+              "/cohort_selection": "user_supplied",
+              "/cohort_selection/employment_statuses": "user_supplied",
+              "/cohort_selection/role_bucket_ids": "user_supplied",
+              "/cohort_selection/role_match": "user_supplied",
+              "/cohort_selection/schema_version": "user_supplied",
+              "/cohort_selection/source": "user_supplied",
+              "/cohort_selection_digest": "owner_state",
+              "/cohort_selection_registry_digest": "owner_state",
+              "/cohort_selection_registry_version": "owner_state",
+              "/execution_commit_digest": "owner_state",
+              "/freshness": "owner_state",
+              "/freshness/candidate_set_digest": "owner_state",
+              "/freshness/freshness_ref_digest": "owner_state",
+              "/freshness/membership_revision": "owner_state",
+              "/freshness/owner": "owner_state",
+              "/freshness/product_terminal_id": "owner_state",
+              "/freshness/route_key": "owner_state",
+              "/freshness/route_kind": "owner_state",
+              "/freshness/route_revision_token": "owner_state",
+              "/freshness/schema_version": "owner_state",
+              "/freshness/status": "owner_state",
+              "/freshness/terminal_core_digest": "owner_state",
+              "/lane_summaries": "owner_state",
+              "/lane_summaries/*/coverage_status": "owner_state",
+              "/lane_summaries/*/employment_status": "owner_state",
+              "/lane_summaries/*/lane_id": "owner_state",
+              "/lane_summaries/*/result_count": "owner_state",
+              "/lane_summaries/*/role_bucket_id": "owner_state",
+              "/limit": "owner_state",
+              "/offset": "owner_state",
+              "/projection_ref": "owner_state",
+              "/projection_ref/membership_revision": "owner_state",
+              "/projection_ref/projection_id": "owner_state",
+              "/projection_ref/schema_version": "owner_state",
+              "/projection_ref/terminal_digest": "owner_state",
+              "/provider_mode": "owner_state",
+              "/readiness": "owner_state",
+              "/readiness/candidate_count": "owner_state",
+              "/readiness/candidate_set_digest": "owner_state",
+              "/readiness/membership_revision": "owner_state",
+              "/readiness/owner": "owner_state",
+              "/readiness/prerequisite_set_digest": "owner_state",
+              "/readiness/product_terminal_id": "owner_state",
+              "/readiness/projection_state": "owner_state",
+              "/readiness/readiness_ref_digest": "owner_state",
+              "/readiness/reason": "owner_state",
+              "/readiness/row_ready_count": "owner_state",
+              "/readiness/schema_version": "owner_state",
+              "/readiness/status": "owner_state",
+              "/readiness/terminal_core_digest": "owner_state",
+              "/readiness/visible_member_count": "owner_state",
+              "/requested_lane_coverage": "owner_state",
+              "/requested_lane_coverage/completed_lane_count": "owner_state",
+              "/requested_lane_coverage/missing_lane_count": "owner_state",
+              "/requested_lane_coverage/requested_lane_count": "owner_state",
+              "/requested_lane_coverage/status": "owner_state",
+              "/returned_count": "owner_state",
+              "/runtime_namespace_ref": "owner_state",
+              "/runtime_namespace_ref/namespace_ref_id": "owner_state",
+              "/runtime_namespace_ref/ref_digest": "owner_state",
+              "/runtime_namespace_ref/schema_version": "owner_state",
+              "/status": "server_derived",
+              "/total_count": "owner_state",
+              "/truncated": "owner_state",
+              "/variant": "server_derived"
+            }
+          },
+          "field_value_roles": {
+            "deferred": {
+              "/decision_ref": "identifier",
+              "/reason": "control",
+              "/requested_target_ref/membership_revision": "identifier",
+              "/requested_target_ref/projection_id": "identifier",
+              "/requested_target_ref/requested_terminal_digest": "identifier",
+              "/requested_target_ref/requested_terminal_id": "identifier",
+              "/requested_target_ref/route_revision_token": "identifier",
+              "/status": "control",
+              "/variant": "control"
+            },
+            "error": {
+              "/decision_ref": "identifier",
+              "/reason": "control",
+              "/status": "control",
+              "/variant": "control"
+            },
+            "success": {
+              "/candidate_set_digest": "identifier",
+              "/candidates/*/candidate_ref": "identifier",
+              "/candidates/*/display_name": "display_text",
+              "/candidates/*/employment_statuses/*": "control",
+              "/candidates/*/headline": "display_text",
+              "/candidates/*/public_profile_url": "web_url",
+              "/candidates/*/role_bucket_ids/*": "control",
+              "/cohort_selection/employment_statuses/*": "identifier",
+              "/cohort_selection/role_bucket_ids/*": "identifier",
+              "/cohort_selection/role_match": "identifier",
+              "/cohort_selection/schema_version": "identifier",
+              "/cohort_selection/source": "identifier",
+              "/cohort_selection_digest": "identifier",
+              "/cohort_selection_registry_digest": "identifier",
+              "/cohort_selection_registry_version": "control",
+              "/execution_commit_digest": "identifier",
+              "/freshness/candidate_set_digest": "identifier",
+              "/freshness/freshness_ref_digest": "identifier",
+              "/freshness/membership_revision": "identifier",
+              "/freshness/owner": "control",
+              "/freshness/product_terminal_id": "identifier",
+              "/freshness/route_key": "identifier",
+              "/freshness/route_kind": "control",
+              "/freshness/route_revision_token": "identifier",
+              "/freshness/schema_version": "control",
+              "/freshness/status": "control",
+              "/freshness/terminal_core_digest": "identifier",
+              "/lane_summaries/*/coverage_status": "control",
+              "/lane_summaries/*/employment_status": "control",
+              "/lane_summaries/*/lane_id": "identifier",
+              "/lane_summaries/*/role_bucket_id": "control",
+              "/projection_ref/membership_revision": "identifier",
+              "/projection_ref/projection_id": "identifier",
+              "/projection_ref/schema_version": "control",
+              "/projection_ref/terminal_digest": "identifier",
+              "/provider_mode": "control",
+              "/readiness/candidate_set_digest": "identifier",
+              "/readiness/membership_revision": "identifier",
+              "/readiness/owner": "control",
+              "/readiness/prerequisite_set_digest": "identifier",
+              "/readiness/product_terminal_id": "identifier",
+              "/readiness/projection_state": "control",
+              "/readiness/readiness_ref_digest": "identifier",
+              "/readiness/reason": "control",
+              "/readiness/schema_version": "control",
+              "/readiness/status": "control",
+              "/readiness/terminal_core_digest": "identifier",
+              "/requested_lane_coverage/status": "control",
+              "/runtime_namespace_ref/namespace_ref_id": "identifier",
+              "/runtime_namespace_ref/ref_digest": "identifier",
+              "/runtime_namespace_ref/schema_version": "control",
+              "/status": "control",
+              "/variant": "control"
+            }
+          },
+          "interpretation_contract": {
+            "canonical_json": {
+              "allow_nan": false,
+              "ensure_ascii": false,
+              "separators": [
+                ",",
+                ":"
+              ],
+              "sort_keys": true,
+              "utf8_byte_limit": "prevalidated_exact"
+            },
+            "canonicalizer_revision": "action_result_canonical_json_utf8_v3",
+            "limit_policy_revision": "action_result_prevalidation_limits_v3",
+            "max_integer_bits": 13600,
+            "schema_document_limits": {
+              "max_bytes": 32768,
+              "max_depth": 128,
+              "max_items": 10000
+            },
+            "schema_version": "action_result_interpretation_contract_v3",
+            "validator_owner": "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input",
+            "value_policy_revision": "action_result_positive_value_roles_v3",
+            "value_roles": [
+              "control",
+              "identifier",
+              "display_text",
+              "web_url",
+              "opaque_artifact_ref"
+            ]
+          },
+          "interpretation_contract_digest": "769301d3451385be8408440ed631ee5fc285eeb0d6152f6a568e66e4ca5d01b8",
+          "max_depth": 10,
+          "max_items": 8192,
+          "max_serialized_bytes": 65536,
+          "owner_binding": {
+            "action_type": "filter_projection",
+            "query_owner": null,
+            "tool_kind": "action"
+          },
+          "result_schema_version": "filter_projection_result_v3",
+          "serializer_contract": {
+            "canonical_json": "sorted_keys_compact_separators_utf8_allow_nan_false",
+            "is_error_parity": "false_for_success_stale_not_ready_true_for_masked",
+            "membership_source": "filter_projection_product_terminal.v1",
+            "owner_output": "closed_product_terminal_variant",
+            "owner_result_ref_rule": "sha256_canonical_owner_ref_except_owner_ref_digest",
+            "schema_version": "filter_projection_result_serializer_contract_v3",
+            "serialized_result_digest_rule": "sha256_over_serialized_canonical_bytes",
+            "variant_selection": "exact_variant_discriminator_closed_roots"
+          },
+          "serializer_contract_digest": "45f3fdbcb1c13982f27c9e4655b17846278a8bc1a50962cb92096aa587a28546",
+          "serializer_owner": "projection_search_service.filter_projection_result_serializer_v3",
+          "serializer_revision": "filter_projection_result_serializer_v3",
+          "tool_kind": "action",
+          "tool_name": "filter_projection",
+          "validator_owner": "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input",
+          "variant_schemas": {
+            "deferred": {
+              "additionalProperties": false,
+              "properties": {
+                "decision_ref": {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": [
+                    "projection_candidate_set_empty",
+                    "projection_publication_pending",
+                    "projection_state_not_serving",
+                    "projection_membership_pending",
+                    "projection_members_not_ready"
+                  ],
+                  "type": "string"
+                },
+                "requested_target_ref": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "membership_revision": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "projection_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "requested_terminal_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "requested_terminal_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "route_revision_token": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "projection_id",
+                    "membership_revision"
+                  ],
+                  "type": "object"
+                },
+                "reselection_required": {
+                  "type": "boolean"
+                },
+                "retryable": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "enum": [
+                    "stale",
+                    "not_ready"
+                  ],
+                  "type": "string"
+                },
+                "variant": {
+                  "const": "deferred",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "variant",
+                "status",
+                "reason",
+                "retryable",
+                "reselection_required",
+                "requested_target_ref",
+                "decision_ref"
+              ],
+              "type": "object"
+            },
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "decision_ref": {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "reason": {
+                  "const": "projection_not_found",
+                  "type": "string"
+                },
+                "retryable": {
+                  "const": false,
+                  "type": "boolean"
+                },
+                "status": {
+                  "const": "failed",
+                  "type": "string"
+                },
+                "variant": {
+                  "const": "error",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "variant",
+                "status",
+                "reason",
+                "retryable",
+                "decision_ref"
+              ],
+              "type": "object"
+            },
+            "success": {
+              "additionalProperties": false,
+              "properties": {
+                "candidate_set_digest": {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "candidates": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "candidate_ref": {
+                        "maxLength": 64,
+                        "minLength": 64,
+                        "pattern": "^[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "display_name": {
+                        "maxLength": 500,
+                        "minLength": 1,
+                        "pattern": "^(?s:.*\\S.*)$",
+                        "type": "string"
+                      },
+                      "employment_statuses": {
+                        "items": {
+                          "enum": [
+                            "current",
+                            "former"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 2,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "headline": {
+                        "maxLength": 1000,
+                        "minLength": 1,
+                        "pattern": "^(?s:.*\\S.*)$",
+                        "type": "string"
+                      },
+                      "public_profile_url": {
+                        "maxLength": 2048,
+                        "minLength": 1,
+                        "pattern": "^https://[^\\s]+$",
+                        "type": "string"
+                      },
+                      "role_bucket_ids": {
+                        "items": {
+                          "enum": [
+                            "research",
+                            "engineering",
+                            "product_management",
+                            "infra_systems",
+                            "founding"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 5,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "candidate_ref",
+                      "display_name",
+                      "headline",
+                      "employment_statuses",
+                      "role_bucket_ids"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 250,
+                  "type": "array"
+                },
+                "cohort_selection": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "employment_statuses": {
+                      "items": {
+                        "enum": [
+                          "current",
+                          "former"
+                        ],
+                        "type": "string"
+                      },
+                      "maxItems": 2,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "role_bucket_ids": {
+                      "items": {
+                        "enum": [
+                          "research",
+                          "engineering",
+                          "product_management",
+                          "infra_systems",
+                          "founding"
+                        ],
+                        "type": "string"
+                      },
+                      "maxItems": 5,
+                      "type": "array"
+                    },
+                    "role_match": {
+                      "enum": [
+                        "any",
+                        "all"
+                      ],
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "const": "cohort_selection.v1",
+                      "type": "string"
+                    },
+                    "source": {
+                      "const": "user_explicit",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "role_bucket_ids",
+                    "employment_statuses",
+                    "role_match",
+                    "source"
+                  ],
+                  "type": "object"
+                },
+                "cohort_selection_digest": {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "cohort_selection_registry_digest": {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "cohort_selection_registry_version": {
+                  "const": "cohort_selection.registry.v1",
+                  "type": "string"
+                },
+                "execution_commit_digest": {
+                  "maxLength": 64,
+                  "minLength": 64,
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "freshness": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "candidate_set_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "freshness_ref_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "membership_revision": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "owner": {
+                      "const": "serving_projection_owner",
+                      "type": "string"
+                    },
+                    "product_terminal_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "route_key": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "route_kind": {
+                      "enum": [
+                        "run_scope"
+                      ],
+                      "type": "string"
+                    },
+                    "route_revision_token": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "const": "filter_projection_freshness_ref.v1",
+                      "type": "string"
+                    },
+                    "status": {
+                      "const": "fresh",
+                      "type": "string"
+                    },
+                    "terminal_core_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "owner",
+                    "status",
+                    "product_terminal_id",
+                    "terminal_core_digest",
+                    "route_kind",
+                    "route_key",
+                    "route_revision_token",
+                    "membership_revision",
+                    "candidate_set_digest",
+                    "freshness_ref_digest"
+                  ],
+                  "type": "object"
+                },
+                "lane_summaries": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "coverage_status": {
+                        "enum": [
+                          "complete",
+                          "partial",
+                          "missing"
+                        ],
+                        "type": "string"
+                      },
+                      "employment_status": {
+                        "enum": [
+                          "current",
+                          "former"
+                        ],
+                        "type": "string"
+                      },
+                      "lane_id": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "result_count": {
+                        "maximum": 1000000,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "role_bucket_id": {
+                        "enum": [
+                          "all_roles",
+                          "research",
+                          "engineering",
+                          "product_management",
+                          "infra_systems",
+                          "founding"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "lane_id",
+                      "employment_status",
+                      "role_bucket_id",
+                      "coverage_status",
+                      "result_count"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "limit": {
+                  "maximum": 250,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "maximum": 100000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "projection_ref": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "membership_revision": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "projection_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "const": "filter_projection_product_ref.v1",
+                      "type": "string"
+                    },
+                    "terminal_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "projection_id",
+                    "membership_revision",
+                    "terminal_digest"
+                  ],
+                  "type": "object"
+                },
+                "provider_mode": {
+                  "enum": [
+                    "simulate",
+                    "scripted"
+                  ],
+                  "type": "string"
+                },
+                "readiness": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "candidate_count": {
+                      "maximum": 1000,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "candidate_set_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "membership_revision": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "owner": {
+                      "const": "serving_projection_owner",
+                      "type": "string"
+                    },
+                    "prerequisite_set_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "product_terminal_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "projection_state": {
+                      "const": "serving",
+                      "type": "string"
+                    },
+                    "readiness_ref_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "reason": {
+                      "const": "",
+                      "type": "string"
+                    },
+                    "row_ready_count": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "schema_version": {
+                      "const": "filter_projection_readiness_ref.v1",
+                      "type": "string"
+                    },
+                    "status": {
+                      "const": "ready",
+                      "type": "string"
+                    },
+                    "terminal_core_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "visible_member_count": {
+                      "maximum": 1000,
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "owner",
+                    "status",
+                    "reason",
+                    "product_terminal_id",
+                    "terminal_core_digest",
+                    "projection_state",
+                    "membership_revision",
+                    "candidate_set_digest",
+                    "candidate_count",
+                    "visible_member_count",
+                    "row_ready_count",
+                    "prerequisite_set_digest",
+                    "readiness_ref_digest"
+                  ],
+                  "type": "object"
+                },
+                "requested_lane_coverage": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "completed_lane_count": {
+                      "maximum": 64,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "missing_lane_count": {
+                      "maximum": 64,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "requested_lane_count": {
+                      "maximum": 64,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "status": {
+                      "enum": [
+                        "complete",
+                        "partial",
+                        "unavailable"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "requested_lane_count",
+                    "completed_lane_count",
+                    "missing_lane_count"
+                  ],
+                  "type": "object"
+                },
+                "returned_count": {
+                  "maximum": 250,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "runtime_namespace_ref": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "namespace_ref_id": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "ref_digest": {
+                      "maxLength": 64,
+                      "minLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "const": "agent_runtime_namespace_ref.v1",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "namespace_ref_id",
+                    "ref_digest"
+                  ],
+                  "type": "object"
+                },
+                "status": {
+                  "const": "ready",
+                  "type": "string"
+                },
+                "total_count": {
+                  "maximum": 1000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "variant": {
+                  "const": "success",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "variant",
+                "status",
+                "projection_ref",
+                "cohort_selection",
+                "cohort_selection_registry_version",
+                "cohort_selection_registry_digest",
+                "cohort_selection_digest",
+                "execution_commit_digest",
+                "candidate_set_digest",
+                "freshness",
+                "readiness",
+                "provider_mode",
+                "runtime_namespace_ref",
+                "requested_lane_coverage",
+                "lane_summaries",
+                "offset",
+                "limit",
+                "total_count",
+                "returned_count",
+                "truncated",
+                "candidates"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "result_schema_digest": "de8ea20ca23b23d025e1a83a735744f7e96a9c56e1bda2198f32795c76fc3cb1"
+      },
+      "tool": {
+        "record": {
+          "action_type": "filter_projection",
+          "adapter": {
+            "owner_contract_digest": "8143dcf12ccee9112134bb5b5e1a3b581c4b2a11a9d0f2029014eca2c5bf58f6",
+            "owner_id": "sourcing_agent.agent_projection_query.execute_filter_projection_v3",
+            "owner_revision": "filter_projection_v3_adapter_v1"
+          },
+          "behavior": {
+            "approval": {
+              "approval_policy": {
+                "owner_contract_digest": "582aa5f244b892c94586a2fe2c6da9ca8c27f247d0f076039737ea43c12a4c9f",
+                "owner_id": "agent.approval.not_required_policy",
+                "owner_revision": "approval_not_required_v1"
+              },
+              "mode": "not_required"
+            },
+            "command_exposure": "none",
+            "control_policy": {
+              "owner_contract_digest": "c4c3590165c976fd1a0daae5432cccb73a986db379dcf8f1a6caa3c644916a29",
+              "owner_id": "operation_runtime.ActionRegistry.allowed_workflow_command_contracts",
+              "owner_revision": "action_control_policy_v1"
+            },
+            "effect_class": "read_only",
+            "result_link_policy": "no_command_v1"
+          },
+          "budget": {
+            "budget_owner": null,
+            "mode": "not_required"
+          },
+          "capability": {
+            "capability_issuer": null,
+            "capability_type": null,
+            "mode": "not_required",
+            "required_provider_modes": []
+          },
+          "execution_subject": {
+            "authorization_checkpoints": [
+              "catalog_projection",
+              "invocation_acceptance"
+            ],
+            "permission_policy": {
+              "owner_contract_digest": "d44fbff56e6eb54804055c8443f6e89d0e8f1ae57147df5d1fdd26f23d024edc",
+              "owner_id": "agent.local_canary.permission_policy",
+              "owner_revision": "local_canary_permission_policy_v1"
+            },
+            "subject_schema_digest": "88630e7e5868d8d7529b38466c7224acfaed3c4eed5a728cd3c81b108e26859d",
+            "subject_schema_version": "local_agent_execution_subject_v1",
+            "subject_validator_owner": {
+              "owner_contract_digest": "de748e418df4f06f03e63a41cdafadfa0da573cf3aa060931f3959763df59beb",
+              "owner_id": "agent.local_canary.execution_subject_validator",
+              "owner_revision": "local_canary_execution_subject_validator_v1"
+            }
+          },
+          "model_description": "Filter one exact canonical projection with the user-confirmed Cohort selection.",
+          "query_owner_contract_digest": null,
+          "query_owner_id": null,
+          "query_owner_revision": null,
+          "release_state_ref": {
+            "release_key": "action:filter_projection",
+            "release_owner": {
+              "owner_contract_digest": "663386982af29b7df7478f4ef16cd190676cee51bd60b80a230a4f49fbe25e1f",
+              "owner_id": "agent.local_canary.release_owner",
+              "owner_revision": "local_canary_release_owner_v1"
+            }
+          },
+          "request": {
+            "action_contract_digest": "4587745d7a1e3d71856015f3262dc374399a14bf0b43f4bf40f911f9fc10475b",
+            "action_type": "filter_projection",
+            "query_owner": null,
+            "schema_digest": "44d2643f8dc3a90e8d63d32c53da3f6655719546a1fded2f80304e5fd0c5db6f",
+            "schema_version": "projection_filter_request_v2",
+            "tool_kind": "action",
+            "validator_owner": {
+              "owner_contract_digest": "d5a0657b03f18f027d88a7d3f4e62be3ef3a270f19fb52421fadb8eb92642f8e",
+              "owner_id": "sourcing_agent.model_tool_runtime.ToolSpec.validate_input",
+              "owner_revision": "tool_spec_validator_v1"
+            }
+          },
+          "result": {
+            "action_type": "filter_projection",
+            "max_depth": 10,
+            "max_items": 8192,
+            "max_serialized_bytes": 65536,
+            "query_owner": null,
+            "schema_digest": "de8ea20ca23b23d025e1a83a735744f7e96a9c56e1bda2198f32795c76fc3cb1",
+            "schema_version": "filter_projection_result_v3",
+            "serializer_owner": {
+              "owner_contract_digest": "45f3fdbcb1c13982f27c9e4655b17846278a8bc1a50962cb92096aa587a28546",
+              "owner_id": "projection_search_service.filter_projection_result_serializer_v3",
+              "owner_revision": "filter_projection_result_serializer_v3"
+            },
+            "tool_kind": "action",
+            "tool_name": "filter_projection",
+            "validation_contract_version": "action_result_interpretation_contract_v3",
+            "validator_owner": {
+              "owner_contract_digest": "769301d3451385be8408440ed631ee5fc285eeb0d6152f6a568e66e4ca5d01b8",
+              "owner_id": "sourcing_agent.model_tool_runtime.InternalToolValidatorSpec.validate_input",
+              "owner_revision": "internal_tool_validator_v3"
+            }
+          },
+          "schema_version": "agent_tool_spec_v2",
+          "simulate_fixture": {
+            "fixture_digest": "bbb4b4edbcf952af0a98b6d024a6644ab10867fffcb845c987826c141a5afacd",
+            "fixture_id": "agent.local_canary.simulate.filter_projection",
+            "fixture_revision": "filter_projection_fixture_v3"
+          },
+          "tool_kind": "action",
+          "tool_name": "filter_projection",
+          "tool_spec_version": "filter_projection_tool_v3",
+          "workspace_actor_binder": {
+            "owner_contract_digest": "9d03c71587f583a174e2f981bc284db8f267599fe89322d1ec8bdfc281b1d2bc",
+            "owner_id": "sourcing_agent.agent_projection_query.bind_filter_projection_v2_request",
+            "owner_revision": "filter_projection_v2_binder_v1"
+          }
+        },
+        "tool_spec_digest": "4e6e7b7bd9b0cbda6b31949d12ffd8768758b67076f815fd52792367d0a0867f"
+      }
+    },
     "projection_ref": {
       "schema_version": "filter_projection_product_ref.v1",
       "ordered_fields": [

@@ -17,12 +17,40 @@ from sourcing_agent.acquisition_plan_preview import (
     ACQUISITION_PLAN_PREVIEW_SOURCE_PREFERENCE,
     build_acquisition_plan_preview,
 )
+from sourcing_agent.action_contract_identity import action_contract_digest
 from sourcing_agent.action_result_schema import (
     ACTION_RESULT_INTERPRETATION_CONTRACT_DIGEST,
     ACTION_RESULT_VALIDATOR_OWNER,
+    ActionResultActionOwner,
+    ActionResultSpec,
+)
+from sourcing_agent.agent_canary_registry import (
+    FILTER_PROJECTION_TOOL_SPEC,
+    FILTER_PROJECTION_V2_CANARY_ACTION_SPEC,
+    LOCAL_CANARY_OWNER_CONTRACT_SCHEMA_VERSION,
+)
+from sourcing_agent.agent_projection_query import (
+    FILTER_PROJECTION_V2_REQUEST_SCHEMA_DIGEST,
+    FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION,
+    FILTER_PROJECTION_V2_REQUEST_TOOL_SPEC,
+)
+from sourcing_agent.agent_tool_registry import (
+    AgentActionToolRoute,
+    AgentExecutionSubjectRequirement,
+    AgentToolApprovalRequirement,
+    AgentToolBehavior,
+    AgentToolBudgetRequirement,
+    AgentToolCapabilityRequirement,
+    AgentToolOwnerPin,
+    AgentToolReleaseStateRef,
+    AgentToolRequestPin,
+    AgentToolResultPin,
+    AgentToolSimulateFixturePin,
+    AgentToolSpec,
 )
 from sourcing_agent.cohort_selection import COHORT_SELECTION_REGISTRY_VERSION
 from sourcing_agent.model_tool_runtime import ModelToolSchemaError
+from sourcing_agent.operation_runtime import DEFAULT_ACTION_REGISTRY
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = (
@@ -167,7 +195,7 @@ DESCRIPTOR_KEYS = {
     "variants",
     "ordering",
 }
-DESCRIPTOR_TYPES = {"string", "integer", "boolean", "object", "array"}
+DESCRIPTOR_TYPES = {"string", "integer", "boolean", "object", "array", "null"}
 DESCRIPTOR_FORMATS = {"sha256_hex", "https_url"}
 DESCRIPTOR_PROVENANCE = {"server_derived", "user_supplied", "owner_state"}
 DESCRIPTOR_VALUE_ROLES = {"control", "identifier", "display_text", "web_url"}
@@ -315,10 +343,14 @@ def _validate_descriptor(descriptor: object, label: str, *, named: bool) -> None
         assert all(type(value) is str for value in descriptor["enum"]), label
     if "constant" in descriptor:
         # exact constant type against the declared descriptor type: 0 is not False,
-        # True is not 1, and a string constant is never an integer.
-        assert declared_type in ("string", "integer", "boolean"), label
-        expected_python_type = {"string": str, "integer": int, "boolean": bool}[declared_type]
-        assert type(descriptor["constant"]) is expected_python_type, label
+        # True is not 1, a string constant is never an integer, and a null descriptor
+        # carries real JSON null, never the string "null".
+        assert declared_type in ("string", "integer", "boolean", "null"), label
+        if declared_type == "null":
+            assert descriptor["constant"] is None, label
+        else:
+            expected_python_type = {"string": str, "integer": int, "boolean": bool}[declared_type]
+            assert type(descriptor["constant"]) is expected_python_type, label
     if "variants" in descriptor:
         assert type(descriptor["variants"]) is list and descriptor["variants"], label
         assert set(descriptor["variants"]) <= RESULT_VARIANTS, label
@@ -748,7 +780,14 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
     for index, row in enumerate(join["requester_bindings"]):
         binding = _exact_keys(
             row,
-            {"field", "source_of_truth", "required_comparisons", "forbidden_substitutions", "predicate_ids"},
+            {
+                "field",
+                "source_of_truth",
+                "required_comparisons",
+                "forbidden_substitutions",
+                "predicate_ids",
+                "comparison_links",
+            },
             f"source_join.requester_bindings[{index}]",
         )
         assert type(binding["predicate_ids"]) is list and binding["predicate_ids"], (
@@ -762,6 +801,41 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
             assert predicate_id in predicate_ids, (
                 f"source_join.requester_bindings[{index}]: unknown predicate id {predicate_id}"
             )
+        # the audit map is total in both directions: every required comparison links at
+        # least one executed predicate, and every encoded binding predicate is linked
+        # from at least one required comparison
+        links = binding["comparison_links"]
+        assert type(links) is list and links, f"source_join.requester_bindings[{index}].comparison_links"
+        linked_comparisons: list[str] = []
+        linked_predicates: set[str] = set()
+        for link_index, link_row in enumerate(links):
+            link = _exact_keys(
+                link_row,
+                {"comparison", "predicate_ids"},
+                f"source_join.requester_bindings[{index}].comparison_links[{link_index}]",
+            )
+            assert type(link["comparison"]) is str and link["comparison"], (
+                f"source_join.requester_bindings[{index}].comparison_links[{link_index}].comparison"
+            )
+            assert type(link["predicate_ids"]) is list and link["predicate_ids"], (
+                f"source_join.requester_bindings[{index}].comparison_links[{link_index}].predicate_ids"
+            )
+            for predicate_id in link["predicate_ids"]:
+                assert predicate_id in predicate_ids, (
+                    f"source_join.requester_bindings[{index}].comparison_links[{link_index}]:"
+                    f" unknown predicate id {predicate_id}"
+                )
+            linked_comparisons.append(link["comparison"])
+            linked_predicates.update(link["predicate_ids"])
+        assert sorted(linked_comparisons) == sorted(binding["required_comparisons"]), (
+            f"source_join.requester_bindings[{index}]: comparison links do not cover required_comparisons"
+        )
+        assert len(set(linked_comparisons)) == len(linked_comparisons), (
+            f"source_join.requester_bindings[{index}]: duplicate comparison link"
+        )
+        assert linked_predicates == set(binding["predicate_ids"]), (
+            f"source_join.requester_bindings[{index}]: predicate_ids drift from comparison_links"
+        )
     lock_keys = _exact_keys(
         join["lock_keys"],
         {"advisory_groups", "row_lock_order", "group_value_order", "start_idempotency_formula", "extension_rule"},
@@ -1021,6 +1095,7 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
             "registration_rule",
             "result_link_policy",
             "effect_class",
+            "canonical_fingerprints",
             "projection_ref",
             "public_runtime_namespace_ref_fields",
             "success_root_fields",
@@ -1042,6 +1117,31 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         },
         "result_v3_slot_contract",
     )
+    canonical = _exact_keys(
+        result["canonical_fingerprints"],
+        {"rule", "projection_rule", "result", "tool"},
+        "result_v3.canonical_fingerprints",
+    )
+    assert type(canonical["rule"]) is str and canonical["rule"], "result_v3.canonical_fingerprints.rule"
+    assert type(canonical["projection_rule"]) is str and canonical["projection_rule"], (
+        "result_v3.canonical_fingerprints.projection_rule"
+    )
+    canonical_result = _exact_keys(
+        canonical["result"],
+        {"record", "result_schema_digest"},
+        "result_v3.canonical_fingerprints.result",
+    )
+    assert type(canonical_result["result_schema_digest"]) is str and SHA256_RE.fullmatch(
+        canonical_result["result_schema_digest"]
+    ), "result_v3.canonical_fingerprints.result.result_schema_digest"
+    canonical_tool = _exact_keys(
+        canonical["tool"],
+        {"record", "tool_spec_digest"},
+        "result_v3.canonical_fingerprints.tool",
+    )
+    assert type(canonical_tool["tool_spec_digest"]) is str and SHA256_RE.fullmatch(
+        canonical_tool["tool_spec_digest"]
+    ), "result_v3.canonical_fingerprints.tool.tool_spec_digest"
     _exact_keys(result["serializer"], {"owner_name", "revision", "owner"}, "result_v3.serializer")
     _exact_keys(result["projection_ref"], {"schema_version", "ordered_fields"}, "result_v3.projection_ref")
     _exact_keys(
@@ -2305,7 +2405,7 @@ def test_s1f0c_ff_digest_fields_match_the_section_field_manifests() -> None:
         "filter_projection_masked_absence_owner_ref.v1": 11,
         "filter_projection_result_v3": 26,
         "filter_projection_result_serializer_v3": 18,
-        "filter_projection_tool_v3": 27,
+        "filter_projection_tool_v3": 30,
         "acquisition.cohort.execute": 5,
     }
     assert set(digest_fields) == set(expected_counts)
@@ -3203,13 +3303,17 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
     mutated[1]["result_ref_json"]["workspace_id"] = "ws-foreign"
     _rebind_join_chain(mutated)
     assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
-    # every requester-binding comparison maps to at least one executed predicate
+    # every requester-binding comparison maps to at least one executed predicate, and the
+    # audit map is total in both directions: every required comparison links at least one
+    # executed predicate and every encoded binding predicate is linked from a comparison
     binding_ids = {pid for binding in spec["requester_bindings"] for pid in binding["predicate_ids"]}
     assert binding_ids <= set(predicate_ids)
     assert {
         "p_op_workspace",
         "p_act_workspace",
         "p_run_workspace",
+        "p_run_bundle_workspace",
+        "p_run_bundle_carrier",
         "p_root_preview_workspace",
         "p_root_preview_requester",
         "p_act_requester",
@@ -3217,6 +3321,31 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
         "p_act_ref_mode",
         "p_act_ref_namespace",
     } <= binding_ids
+    for binding in spec["requester_bindings"]:
+        linked_comparisons = [link["comparison"] for link in binding["comparison_links"]]
+        assert sorted(linked_comparisons) == sorted(binding["required_comparisons"]), binding["field"]
+        assert all(link["predicate_ids"] for link in binding["comparison_links"]), binding["field"]
+        linked_predicates = {pid for link in binding["comparison_links"] for pid in link["predicate_ids"]}
+        assert linked_predicates == set(binding["predicate_ids"]), binding["field"]
+        assert linked_predicates <= set(predicate_ids), binding["field"]
+    # the AcquisitionRun bundle boundary is part of every affected scope audit map: the
+    # bundle workspace comparison joins the workspace_id map and the bundle carrier copy
+    # joins the workspace_id, provider_mode, and runtime_namespace carrier-copy maps
+    by_field = {binding["field"]: binding for binding in spec["requester_bindings"]}
+    assert "p_run_bundle_workspace" in by_field["workspace_id"]["predicate_ids"]
+    assert "p_run_bundle_carrier" in by_field["workspace_id"]["predicate_ids"]
+    assert "p_run_bundle_carrier" in by_field["provider_mode"]["predicate_ids"]
+    assert "p_run_bundle_carrier" in by_field["runtime_namespace"]["predicate_ids"]
+    acquisition_link = next(
+        link for link in by_field["workspace_id"]["comparison_links"] if link["comparison"] == "AcquisitionRun"
+    )
+    assert acquisition_link["predicate_ids"] == ["p_run_workspace", "p_run_bundle_workspace"]
+    for field in ("workspace_id", "provider_mode", "runtime_namespace"):
+        carrier_link = next(
+            link for link in by_field[field]["comparison_links"] if link["comparison"] == "every carrier copy"
+        )
+        assert "p_run_bundle_carrier" in carrier_link["predicate_ids"], field
+        assert "p_carrier_consensus" in carrier_link["predicate_ids"], field
 
     # split identity across alternate keys fails closed
     mutated = _join_positive_rows()
@@ -4405,6 +4534,9 @@ def test_s1f0c_ff_v3_serializer_and_tool_fingerprints_are_fully_decision_locked(
         "model_description",
         "tool_kind",
         "action_type",
+        "query_owner_id",
+        "query_owner_revision",
+        "query_owner_contract_digest",
         "request",
         "result_pin",
         "workspace_actor_binder",
@@ -4424,28 +4556,50 @@ def test_s1f0c_ff_v3_serializer_and_tool_fingerprints_are_fully_decision_locked(
     assert t_fields["tool_kind"]["constant"] == "action"
     assert t_fields["action_type"]["constant"] == "filter_projection"
     assert t_fields["command_exposure"]["constant"] == "none"
+    # the top-level query-owner keys are always present and are real JSON nulls, never string sentinels
+    for query_owner_key in ("query_owner_id", "query_owner_revision", "query_owner_contract_digest"):
+        assert t_fields[query_owner_key]["type"] == "null"
+        assert t_fields[query_owner_key]["constant"] is None
 
     request_fields = {field["name"]: field for field in t_fields["request"]["fields"]}
-    assert request_fields["schema_version"]["constant"] == "projection_filter_request_v3"
-    assert request_fields["query_owner"]["constant"] == "null"
+    # the request pin binds the exact retained V2 request identity, never an invented V3 contract
+    assert request_fields["schema_version"]["constant"] == FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION
+    assert request_fields["schema_version"]["constant"] == "projection_filter_request_v2"
+    assert request_fields["schema_digest"]["constant"] == FILTER_PROJECTION_V2_REQUEST_SCHEMA_DIGEST
+    assert request_fields["schema_digest"]["constant"] == FILTER_PROJECTION_V2_REQUEST_TOOL_SPEC.input_schema_digest
+    assert request_fields["action_contract_digest"]["constant"] == action_contract_digest(
+        DEFAULT_ACTION_REGISTRY, FILTER_PROJECTION_V2_CANARY_ACTION_SPEC
+    )
+    assert request_fields["query_owner"]["type"] == "null"
+    assert request_fields["query_owner"]["constant"] is None
     result_pin_fields = {field["name"]: field for field in t_fields["result_pin"]["fields"]}
     assert result_pin_fields["validation_contract_version"]["constant"] == "action_result_interpretation_contract_v3"
     assert result_pin_fields["max_serialized_bytes"]["constant"] == 65536
     assert result_pin_fields["max_items"]["constant"] == 8192
     assert result_pin_fields["max_depth"]["constant"] == 10
-    assert result_pin_fields["query_owner"]["constant"] == "null"
+    assert result_pin_fields["query_owner"]["type"] == "null"
+    assert result_pin_fields["query_owner"]["constant"] is None
     budget_fields = {field["name"]: field for field in t_fields["budget"]["fields"]}
     assert budget_fields["mode"]["constant"] == "not_required"
+    assert budget_fields["budget_owner"]["type"] == "null"
+    assert budget_fields["budget_owner"]["constant"] is None
     capability_fields = {field["name"]: field for field in t_fields["capability"]["fields"]}
     assert capability_fields["mode"]["constant"] == "not_required"
+    assert capability_fields["capability_type"]["type"] == "null"
+    assert capability_fields["capability_type"]["constant"] is None
+    assert capability_fields["capability_issuer"]["type"] == "null"
+    assert capability_fields["capability_issuer"]["constant"] is None
+    assert capability_fields["required_provider_modes"]["min_items"] == 0
+    assert capability_fields["required_provider_modes"]["max_items"] == 0
     approval_fields = {field["name"]: field for field in t_fields["approval"]["fields"]}
     assert approval_fields["mode"]["constant"] == "not_required"
 
-    # every constant owner-pin digest recomputes from its own pinned contract bytes
+    # every constant owner-pin digest recomputes from its own pinned contract bytes under
+    # the canonical local-canary owner-pin identity formula (agent_canary_registry._owner_pin)
     def _check_owner_pin(pin_descriptor: dict[str, Any], label: str) -> None:
         pin_fields = {field["name"]: field for field in pin_descriptor["fields"]}
         pin = _materialize_constant_object(pin_descriptor["fields"], skip={"owner_contract_digest"})
-        recomputed = _sha256_json(pin)
+        recomputed = _sha256_json({"schema_version": LOCAL_CANARY_OWNER_CONTRACT_SCHEMA_VERSION, **pin})
         assert pin_fields["owner_contract_digest"]["constant"] == recomputed, label
 
     _check_owner_pin(request_fields["validator_owner"], "request.validator_owner")
@@ -4458,6 +4612,8 @@ def test_s1f0c_ff_v3_serializer_and_tool_fingerprints_are_fully_decision_locked(
     _check_owner_pin(subject_fields["subject_validator_owner"], "subject_validator_owner")
     _check_owner_pin(subject_fields["permission_policy"], "permission_policy")
     _check_owner_pin(approval_fields["approval_policy"], "approval_policy")
+    control_fields = {field["name"]: field for field in t_fields["control_policy"]["fields"]}
+    _check_owner_pin(t_fields["control_policy"], "control_policy")
     # the subject schema digest recomputes from the pinned subject contract bytes
     subject_contract = _materialize_constant_object(subject_fields["subject_validator_owner"]["fields"], skip={"owner_contract_digest"})[
         "contract"
@@ -4485,17 +4641,51 @@ def test_s1f0c_ff_v3_serializer_and_tool_fingerprints_are_fully_decision_locked(
     assert fixture_record["result_link_policy"] == "no_command_v1"
     assert fixture_record["approval_required"] is False
 
-    # registration-computed digests stay digest-typed with an explicit derivation, never constants
+    # every digest in the tool contract is a decision-locked constant; nothing defers to registration
+    control_contract_fields = {field["name"]: field for field in control_fields["contract"]["fields"]}
     for descriptor in (
         request_fields["schema_digest"],
         request_fields["action_contract_digest"],
         result_pin_fields["schema_digest"],
+        control_contract_fields["action_contract_digest"],
+        control_fields["owner_contract_digest"],
     ):
         assert descriptor["format"] == "sha256_hex"
-        assert "constant" not in descriptor
-        assert "computed at registration" in descriptor["derivation"]
-    control_fields = {field["name"]: field for field in t_fields["control_policy"]["fields"]}
+        assert type(descriptor["constant"]) is str and SHA256_RE.fullmatch(descriptor["constant"])
     assert control_fields["owner_id"]["constant"] == "operation_runtime.ActionRegistry.allowed_workflow_command_contracts"
+
+    # the V2-pinned request identity and every shared pin are byte-identical to the retained
+    # filter_projection_tool_v2 runtime fingerprint; only the V3 result/fixture/adapter move
+    retained_v2 = FILTER_PROJECTION_TOOL_SPEC.to_fingerprint_record()
+
+    def _pin_digest(pin_descriptor: dict[str, Any]) -> str:
+        pin_fields = {field["name"]: field for field in pin_descriptor["fields"]}
+        return pin_fields["owner_contract_digest"]["constant"]
+
+    binder_fields = {field["name"]: field for field in t_fields["workspace_actor_binder"]["fields"]}
+    assert binder_fields["owner_id"]["constant"] == retained_v2["workspace_actor_binder"]["owner_id"]
+    assert binder_fields["owner_revision"]["constant"] == retained_v2["workspace_actor_binder"]["owner_revision"]
+    assert binder_fields["owner_contract_digest"]["constant"] == (
+        retained_v2["workspace_actor_binder"]["owner_contract_digest"]
+    )
+    assert _pin_digest(request_fields["validator_owner"]) == (
+        retained_v2["request"]["validator_owner"]["owner_contract_digest"]
+    )
+    assert _pin_digest(release_fields["release_owner"]) == (
+        retained_v2["release_state_ref"]["release_owner"]["owner_contract_digest"]
+    )
+    assert _pin_digest(subject_fields["subject_validator_owner"]) == (
+        retained_v2["execution_subject"]["subject_validator_owner"]["owner_contract_digest"]
+    )
+    assert _pin_digest(subject_fields["permission_policy"]) == (
+        retained_v2["execution_subject"]["permission_policy"]["owner_contract_digest"]
+    )
+    assert _pin_digest(approval_fields["approval_policy"]) == (
+        retained_v2["behavior"]["approval"]["approval_policy"]["owner_contract_digest"]
+    )
+    assert _pin_digest(t_fields["control_policy"]) == (
+        retained_v2["behavior"]["control_policy"]["owner_contract_digest"]
+    )
 
     # hostile: drifting one model-safety limit moves the serializer contract digest
     widened = copy.deepcopy(serializer["schema"])
@@ -4504,6 +4694,318 @@ def test_s1f0c_ff_v3_serializer_and_tool_fingerprints_are_fully_decision_locked(
     thinned = copy.deepcopy(tool["schema"])
     thinned["fields"] = [field for field in thinned["fields"] if field["name"] != "capability"]
     assert _contract_digest(thinned) != tool["contract_digest"]
+
+
+def _project_descriptor_schema(descriptor: dict[str, Any], digests: dict[str, Any]) -> dict[str, Any]:
+    """Project one manifest descriptor to the exact runtime JSON Schema bytes.
+
+    This is the documented canonical_fingerprints projection rule: constants map to
+    const, enums to enum, sha256_hex to the exact 64-character lowercase hex pattern,
+    https_url to the bounded HTTPS pattern, display_text to the nonempty display-text
+    pattern, nonempty to minLength 1 with maxLength exactly when max_length is pinned,
+    and ref objects to the exact referenced contract fields.
+    """
+
+    dtype = descriptor["type"]
+    if dtype == "object":
+        fields = digests[descriptor["ref"]]["schema"]["fields"] if "ref" in descriptor else descriptor["fields"]
+        return {
+            "type": "object",
+            "properties": {field["name"]: _project_descriptor_schema(field, digests) for field in fields},
+            "required": [field["name"] for field in fields if field["required"]],
+            "additionalProperties": False,
+        }
+    if dtype == "array":
+        schema: dict[str, Any] = {"type": "array", "items": _project_descriptor_schema(descriptor["items"], digests)}
+        if "min_items" in descriptor:
+            schema["minItems"] = descriptor["min_items"]
+        if "max_items" in descriptor:
+            schema["maxItems"] = descriptor["max_items"]
+        return schema
+    if dtype == "integer":
+        schema = {"type": "integer"}
+        if "minimum" in descriptor:
+            schema["minimum"] = descriptor["minimum"]
+        if "maximum" in descriptor:
+            schema["maximum"] = descriptor["maximum"]
+        return schema
+    if dtype == "boolean":
+        schema = {"type": "boolean"}
+        if "constant" in descriptor:
+            schema["const"] = descriptor["constant"]
+        return schema
+    if "constant" in descriptor:
+        return {"type": "string", "const": descriptor["constant"]}
+    if "enum" in descriptor:
+        return {"type": "string", "enum": list(descriptor["enum"])}
+    fmt = descriptor.get("format")
+    if fmt == "sha256_hex":
+        return {"type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$"}
+    if fmt == "https_url":
+        return {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": descriptor["max_length"],
+            "pattern": r"^https://[^\s]+$",
+        }
+    schema = {"type": "string"}
+    if descriptor.get("nonempty"):
+        schema["minLength"] = 1
+    if "max_length" in descriptor:
+        schema["maxLength"] = descriptor["max_length"]
+    if descriptor.get("value_role") == "display_text":
+        schema["pattern"] = r"^(?s:.*\S.*)$"
+    return schema
+
+
+def _owner_pin_from_record(record: dict[str, Any]) -> AgentToolOwnerPin:
+    return AgentToolOwnerPin(
+        owner_id=record["owner_id"],
+        owner_revision=record["owner_revision"],
+        owner_contract_digest=record["owner_contract_digest"],
+    )
+
+
+def _action_result_spec_from_record(record: dict[str, Any]) -> ActionResultSpec:
+    return ActionResultSpec(
+        tool_name=record["tool_name"],
+        tool_kind=record["tool_kind"],
+        owner_binding=ActionResultActionOwner(action_type=record["owner_binding"]["action_type"]),
+        result_schema_version=record["result_schema_version"],
+        serializer_owner=record["serializer_owner"],
+        serializer_revision=record["serializer_revision"],
+        serializer_contract=copy.deepcopy(record["serializer_contract"]),
+        validator_owner=record["validator_owner"],
+        variant_schemas=copy.deepcopy(record["variant_schemas"]),
+        field_provenance=copy.deepcopy(record["field_provenance"]),
+        field_value_roles=copy.deepcopy(record["field_value_roles"]),
+        max_serialized_bytes=record["max_serialized_bytes"],
+        max_items=record["max_items"],
+        max_depth=record["max_depth"],
+        artifact_ref_schemes=tuple(record["artifact_ref_schemes"]),
+        interpretation_contract_version=record["interpretation_contract"]["schema_version"],
+        externally_controlled_identifier_paths=tuple(record["externally_controlled_identifier_paths"]),
+    )
+
+
+def _agent_tool_spec_from_record(record: dict[str, Any]) -> AgentToolSpec:
+    request = record["request"]
+    result = record["result"]
+    subject = record["execution_subject"]
+    behavior = record["behavior"]
+    return AgentToolSpec(
+        tool_spec_version=record["tool_spec_version"],
+        tool_name=record["tool_name"],
+        model_description=record["model_description"],
+        tool_kind=record["tool_kind"],
+        request=AgentToolRequestPin(
+            schema_version=request["schema_version"],
+            schema_digest=request["schema_digest"],
+            validator_owner=_owner_pin_from_record(request["validator_owner"]),
+            action_type=request["action_type"],
+            action_contract_digest=request["action_contract_digest"],
+            query_owner=None,
+        ),
+        result=AgentToolResultPin(
+            tool_name=result["tool_name"],
+            tool_kind=result["tool_kind"],
+            action_type=result["action_type"],
+            query_owner=None,
+            schema_version=result["schema_version"],
+            schema_digest=result["schema_digest"],
+            serializer_owner=_owner_pin_from_record(result["serializer_owner"]),
+            validator_owner=_owner_pin_from_record(result["validator_owner"]),
+            validation_contract_version=result["validation_contract_version"],
+            max_serialized_bytes=result["max_serialized_bytes"],
+            max_items=result["max_items"],
+            max_depth=result["max_depth"],
+        ),
+        route=AgentActionToolRoute(
+            action_type=record["action_type"],
+            workspace_actor_binder=_owner_pin_from_record(record["workspace_actor_binder"]),
+            adapter=_owner_pin_from_record(record["adapter"]),
+        ),
+        simulate_fixture=AgentToolSimulateFixturePin(
+            fixture_id=record["simulate_fixture"]["fixture_id"],
+            fixture_revision=record["simulate_fixture"]["fixture_revision"],
+            fixture_digest=record["simulate_fixture"]["fixture_digest"],
+        ),
+        release_state_ref=AgentToolReleaseStateRef(
+            release_owner=_owner_pin_from_record(record["release_state_ref"]["release_owner"]),
+            release_key=record["release_state_ref"]["release_key"],
+        ),
+        execution_subject=AgentExecutionSubjectRequirement(
+            subject_schema_version=subject["subject_schema_version"],
+            subject_schema_digest=subject["subject_schema_digest"],
+            subject_validator_owner=_owner_pin_from_record(subject["subject_validator_owner"]),
+            permission_policy=_owner_pin_from_record(subject["permission_policy"]),
+            authorization_checkpoints=tuple(subject["authorization_checkpoints"]),
+        ),
+        budget=AgentToolBudgetRequirement(mode=record["budget"]["mode"]),
+        capability=AgentToolCapabilityRequirement(mode=record["capability"]["mode"]),
+        behavior=AgentToolBehavior(
+            effect_class=behavior["effect_class"],
+            command_exposure=behavior["command_exposure"],
+            approval=AgentToolApprovalRequirement(
+                mode=behavior["approval"]["mode"],
+                approval_policy=_owner_pin_from_record(behavior["approval"]["approval_policy"]),
+            ),
+            control_policy=_owner_pin_from_record(behavior["control_policy"]),
+            explicit_result_link_policy=behavior["result_link_policy"],
+        ),
+        fingerprint_schema_version=record["schema_version"],
+    )
+
+
+def test_s1f0c_ff_canonical_fingerprints_are_exact_runtime_equivalents() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    digests = {row["literal"]: row for row in manifest["contract_digests"]}
+    canonical = manifest["result_v3_slot_contract"]["canonical_fingerprints"]
+    assert "real JSON null" in canonical["rule"]
+    assert "never the string" in canonical["rule"]
+
+    # the result oracle: a real ActionResultSpec built from the pinned values validates every
+    # runtime invariant and reproduces the materialized record byte-for-byte, type-strictly
+    result_record = canonical["result"]["record"]
+    result_spec = _action_result_spec_from_record(result_record)
+    _assert_type_strict_equal(result_spec.to_fingerprint_record(), result_record, "canonical result fingerprint")
+    assert result_spec.result_schema_digest == canonical["result"]["result_schema_digest"]
+    assert _sha256_json(result_record) == canonical["result"]["result_schema_digest"]
+
+    # the tool oracle: a real AgentToolSpec built from the pinned values reproduces the
+    # materialized record byte-for-byte, type-strictly, and pins the tool_spec_digest
+    tool_record = canonical["tool"]["record"]
+    tool_spec = _agent_tool_spec_from_record(tool_record)
+    _assert_type_strict_equal(tool_spec.to_fingerprint_record(), tool_record, "canonical tool fingerprint")
+    assert tool_spec.tool_spec_digest == canonical["tool"]["tool_spec_digest"]
+    assert _sha256_json(tool_record) == canonical["tool"]["tool_spec_digest"]
+
+    # the two blocks bind each other and the descriptor contract digests
+    assert tool_record["result"]["schema_digest"] == canonical["result"]["result_schema_digest"]
+    t_fields = {field["name"]: field for field in digests["filter_projection_tool_v3"]["schema"]["fields"]}
+    request_fields = {field["name"]: field for field in t_fields["request"]["fields"]}
+    result_pin_fields = {field["name"]: field for field in t_fields["result_pin"]["fields"]}
+    assert request_fields["schema_digest"]["constant"] == tool_record["request"]["schema_digest"]
+    assert request_fields["action_contract_digest"]["constant"] == tool_record["request"]["action_contract_digest"]
+    assert result_pin_fields["schema_digest"]["constant"] == tool_record["result"]["schema_digest"]
+
+    # the request pin is the real retained V2 contract identity: full record parity with the
+    # retained filter_projection_tool_v2 runtime fingerprint for every unchanged surface
+    retained_v2 = FILTER_PROJECTION_TOOL_SPEC.to_fingerprint_record()
+    _assert_type_strict_equal(tool_record["request"], retained_v2["request"], "V2 request pin parity")
+    assert tool_record["request"]["schema_version"] == FILTER_PROJECTION_V2_REQUEST_SCHEMA_VERSION
+    assert tool_record["request"]["schema_digest"] == FILTER_PROJECTION_V2_REQUEST_TOOL_SPEC.input_schema_digest
+    assert tool_record["request"]["action_contract_digest"] == action_contract_digest(
+        DEFAULT_ACTION_REGISTRY, FILTER_PROJECTION_V2_CANARY_ACTION_SPEC
+    )
+    _assert_type_strict_equal(
+        tool_record["workspace_actor_binder"], retained_v2["workspace_actor_binder"], "V2 binder parity"
+    )
+    _assert_type_strict_equal(tool_record["release_state_ref"], retained_v2["release_state_ref"], "release parity")
+    _assert_type_strict_equal(tool_record["execution_subject"], retained_v2["execution_subject"], "subject parity")
+    _assert_type_strict_equal(tool_record["budget"], retained_v2["budget"], "budget parity")
+    _assert_type_strict_equal(tool_record["capability"], retained_v2["capability"], "capability parity")
+    _assert_type_strict_equal(
+        tool_record["behavior"],
+        {**retained_v2["behavior"], "result_link_policy": "no_command_v1"},
+        "behavior parity plus the v2-schema result link policy",
+    )
+    # only the V3 result, fixture revision, and adapter identity move off the retained V2 tool
+    assert tool_record["adapter"]["owner_id"] == "sourcing_agent.agent_projection_query.execute_filter_projection_v3"
+    assert tool_record["adapter"]["owner_contract_digest"] != retained_v2["adapter"]["owner_contract_digest"]
+    assert tool_record["simulate_fixture"]["fixture_revision"] == "filter_projection_fixture_v3"
+    assert tool_record["result"]["schema_version"] == "filter_projection_result_v3"
+    assert tool_record["model_description"] == retained_v2["model_description"]
+
+    # the materialized variant schemas mirror the closed descriptor contract exactly
+    v3_fields = digests["filter_projection_result_v3"]["schema"]["fields"]
+    for variant in ("success", "deferred", "error"):
+        variant_fields = [field for field in v3_fields if variant in field.get("variants", [])]
+        projected = _project_descriptor_schema(
+            {"name": "root", "type": "object", "required": True, "fields": variant_fields}, digests
+        )
+        _assert_type_strict_equal(
+            result_record["variant_schemas"][variant], projected, f"variant {variant} schema mirrors the contract"
+        )
+
+    # provenance and value roles follow the documented rule on every materialized path
+    external_paths = set(result_record["externally_controlled_identifier_paths"])
+    assert external_paths == {
+        "/cohort_selection/schema_version",
+        "/cohort_selection/role_bucket_ids/*",
+        "/cohort_selection/employment_statuses/*",
+        "/cohort_selection/role_match",
+        "/cohort_selection/source",
+    }
+    for variant in ("success", "deferred", "error"):
+        for path, classification in result_record["field_provenance"][variant].items():
+            if path in ("/variant", "/status"):
+                assert classification == "server_derived", path
+            elif path == "/cohort_selection" or path.startswith("/cohort_selection/"):
+                assert classification == "user_supplied", path
+            else:
+                assert classification == "owner_state", path
+        roles = result_record["field_value_roles"][variant]
+        for path, role in roles.items():
+            field_schema = _schema_at_result_path_for_test(result_record["variant_schemas"][variant], path)
+            if path in external_paths:
+                # the canonical external-identifier rule: the five user-supplied
+                # cohort-selection string paths are runtime role identifier even though
+                # their closed const/enum values classify as control at descriptor level
+                assert role == "identifier", path
+            elif path in ("/candidates/*/display_name", "/candidates/*/headline"):
+                assert role == "display_text", path
+            elif path == "/candidates/*/public_profile_url":
+                assert role == "web_url", path
+            elif "const" in field_schema or "enum" in field_schema:
+                assert role == "control", path
+            else:
+                assert role == "identifier", path
+    # descriptor-pinned roles match the materialized record outside the documented exception
+    for path, descriptor in _walk_descriptors(v3_fields):
+        if descriptor["type"] != "string" or descriptor.get("fields"):
+            continue
+        for variant in descriptor.get("variants", []):
+            record_role = result_record["field_value_roles"][variant][path]
+            if path in external_paths:
+                assert descriptor["value_role"] == "control" and record_role == "identifier", path
+            else:
+                assert record_role == descriptor["value_role"], path
+
+    # hostile: the string "null" sentinel, a dropped top-level query-owner key, or a
+    # capability provider-mode mutation must change the canonical fingerprint bytes
+    assert tool_record["request"]["query_owner"] is None
+    assert tool_record["result"]["query_owner"] is None
+    assert tool_record["budget"]["budget_owner"] is None
+    assert tool_record["capability"]["capability_type"] is None
+    assert tool_record["capability"]["capability_issuer"] is None
+    assert tool_record["capability"]["required_provider_modes"] == []
+    assert tool_record["query_owner_id"] is None
+    assert tool_record["query_owner_revision"] is None
+    assert tool_record["query_owner_contract_digest"] is None
+    sentinel = copy.deepcopy(tool_record)
+    sentinel["request"]["query_owner"] = "null"
+    assert not _type_strict_equal(tool_spec.to_fingerprint_record(), sentinel)
+    assert _sha256_json(sentinel) != canonical["tool"]["tool_spec_digest"]
+    dropped = copy.deepcopy(tool_record)
+    del dropped["query_owner_id"]
+    assert not _type_strict_equal(tool_spec.to_fingerprint_record(), dropped)
+    widened = copy.deepcopy(tool_record)
+    widened["capability"]["required_provider_modes"] = ["live"]
+    assert _sha256_json(widened) != canonical["tool"]["tool_spec_digest"]
+    hostile_result = copy.deepcopy(result_record)
+    hostile_result["variant_schemas"]["success"]["properties"]["tenant_hint"] = {"type": "string"}
+    assert _sha256_json(hostile_result) != canonical["result"]["result_schema_digest"]
+
+
+def _schema_at_result_path_for_test(schema: dict[str, Any], path: str) -> dict[str, Any]:
+    current: dict[str, Any] = schema
+    for segment in path.split("/")[1:]:
+        if segment == "*":
+            current = current["items"]
+        else:
+            current = current["properties"][segment]
+    return current
 
 
 def test_s1f0c_ff_lane_provider_evidence_binds_the_owning_attempt_and_terminals_are_append_only() -> None:
