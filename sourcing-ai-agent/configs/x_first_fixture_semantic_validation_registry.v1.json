@@ -4,9 +4,9 @@
   "fixtures": [
     {
       "fixture_id": "x_first_selected_people_fixture_v1",
-      "manifest_sha256": "78522c7d62581af3d299f5ea5b96282bbd1f6c8c1cace35c2813452c795f0772",
-      "receipt_sha256": "a4fcec0dfbfe75885444d93a4591bdd3a24f7ca76f1b449be5dfb74acea5aff2",
-      "validator_revision_sha256": "4e648c96e30179fef327e46e44fafd477f3905e9c7913ec459766cdd704e691c"
+      "manifest_sha256": "f2ac74a74bfc21c105b52e07167afddcff48b2c7408a809d08211cbc8e033407",
+      "receipt_sha256": "615e9c068c3ba9fe12ad86f9b955ab3f5c41f8a668a81f43872e5fa40621537e",
+      "validator_revision_sha256": "f44f61134d689efc5115fff538fd6149150847a24dc4ab1acccd570c92ffb10d"
     }
   ],
   "authority": {

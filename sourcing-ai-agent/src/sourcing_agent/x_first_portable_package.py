@@ -36,7 +36,7 @@ _RECEIPT_SCHEMA_PATH = Path(
     "x.portable.research_campaign.semantic_validation_receipt.v1.schema.json"
 )
 _FIXTURE_REGISTRY_PATH = Path("configs/x_first_fixture_semantic_validation_registry.v1.json")
-FIXTURE_REGISTRY_SHA256 = "e8b5446a2719861f0e66de1c2e98bf328d58b40e23d499c84e1198d3abbb687a"
+FIXTURE_REGISTRY_SHA256 = "a4901921f7a142c85cd9a392fa1fc974df4e3c45ba8cf9ddc141abb527fba7c9"
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _IDENTIFIER_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}")
 _TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
@@ -123,7 +123,7 @@ _ARTIFACT_CONTRACTS = {
     ),
     "result": _ArtifactContract(
         "x.portable.research_campaign.result.v1",
-        "4d9d9d4792e36db429804f9d9292b64ba8cd0d82a4c617cafaf4240658469a65",
+        "31dbfc3d9f31a026df9fbe1d66fad38d00f91ff47f071533837adaa4f4f31403",
         "result_sha256",
         Path("contracts/external/x_first/x.portable.research_campaign.result.v1.schema.json"),
     ),
@@ -503,6 +503,19 @@ def _validate_fixture_execution(result: Mapping[str, Any]) -> None:
             or receipt.get("receipt_locator") is not None
         ):
             raise XFirstPortablePackageError("x_first_package_fixture_execution_invalid")
+    resolution_attempts = result.get("handle_resolution_attempts")
+    if not isinstance(resolution_attempts, list):
+        raise XFirstPortablePackageError("x_first_package_fixture_execution_invalid")
+    for row in resolution_attempts:
+        receipt = row.get("retrieval_receipt") if isinstance(row, Mapping) else None
+        if (
+            not isinstance(row, Mapping)
+            or row.get("source_status") != "fixture_synthetic"
+            or not isinstance(receipt, Mapping)
+            or receipt.get("source_status") != "fixture_synthetic"
+            or receipt.get("receipt_locator") is not None
+        ):
+            raise XFirstPortablePackageError("x_first_package_fixture_execution_invalid")
     optional_evidence = result.get("optional_channel_evidence")
     if not isinstance(optional_evidence, list):
         raise XFirstPortablePackageError("x_first_package_fixture_execution_invalid")
@@ -622,7 +635,12 @@ def validate_x_first_portable_package(
     )
     expected_attempt_count = sum(
         len(result[field])
-        for field in ("surface_attempts", "semantic_recall_attempts", "optional_channel_attempts")
+        for field in (
+            "surface_attempts",
+            "semantic_recall_attempts",
+            "optional_channel_attempts",
+            "handle_resolution_attempts",
+        )
     )
     expected_evidence_count = sum(
         len(result[field])
