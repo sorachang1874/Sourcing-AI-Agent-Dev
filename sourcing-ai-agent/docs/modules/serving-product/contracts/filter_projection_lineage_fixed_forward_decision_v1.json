@@ -277,8 +277,8 @@
     }
   ],
   "contract_digest_equation": {
-    "equation": "SHA256(UTF8(canonical_json(schema))) where schema is the row's full closed schema object {schema_version, owner, fields}: every ordered field descriptor binds its exact name, type, required optionality, and where applicable nonempty, constant, enum, format, minimum, maximum, items, fields, ref, derivation, variants, and ordering",
-    "schema_object_rule": "descriptor vocabulary is closed: name, type, required, nonempty, constant, enum, format, minimum, maximum, items, fields, ref, derivation, variants, ordering; types are string, integer, boolean, object, array; formats are sha256_hex, https_url; adding an enum value or deleting a derivation rule changes the schema bytes and therefore the contract_digest",
+    "equation": "SHA256(UTF8(canonical_json(schema))) where schema is the row's full closed schema object {schema_version, owner, fields}: every ordered field descriptor binds its exact name, type, required optionality, and where applicable nonempty, constant, enum, format, minimum, maximum, min_items, max_items, max_length, items, fields, ref, ref_digest, provenance, value_role, derivation, variants, and ordering",
+    "schema_object_rule": "descriptor vocabulary is closed: name, type, required, nonempty, constant, enum, format, minimum, maximum, min_items, max_items, max_length, items, fields, ref, ref_digest, provenance, value_role, derivation, variants, ordering; types are string, integer, boolean, object, array; formats are sha256_hex, https_url; provenance values are server_derived, user_supplied, owner_state; value_role values are control, identifier, display_text, web_url; every object descriptor carries either closed fields or an immutable exact-version-and-digest ref+ref_digest reference (adopted contract, retained_contract_pins literal, or an external retained spec pinned by exact schema digest); every array descriptor carries closed items; adding an enum value or deleting a derivation rule changes the schema bytes and therefore the contract_digest",
     "canonical_json_rules": [
       "sorted object keys",
       "compact separators",
@@ -320,7 +320,9 @@
             "name": "root_command_payload",
             "type": "object",
             "required": true,
-            "derivation": "complete exact nine-field AcquisitionStartV2RootCommandPayload (retained acquisition_root_command_payload.v2)"
+            "ref": "acquisition_root_command_payload.v2",
+            "ref_digest": "0733d2e18ee4c7f604c76233e6dd0c5c64c2be71c07575c66e1aa1da8806f453",
+            "derivation": "complete exact nine-field AcquisitionStartV2RootCommandPayload (retained acquisition_root_command_payload.v2); immutable exact-version-and-digest reference to retained_contract_pins"
           },
           {
             "name": "root_command_payload_digest",
@@ -333,7 +335,9 @@
             "name": "command_acceptance_owner_ref",
             "type": "object",
             "required": true,
-            "derivation": "complete exact existing 18-field AcquisitionStartCommandAcceptanceOwnerRef"
+            "ref": "acquisition_start_command_acceptance_owner_result_ref.v1",
+            "ref_digest": "cbb455932e59d00b17d0e783f4b906e08e23df5021c2303aa822eaa0da42b7f0",
+            "derivation": "complete exact existing 18-field AcquisitionStartCommandAcceptanceOwnerRef; immutable exact-version-and-digest reference to retained_contract_pins"
           },
           {
             "name": "command_acceptance_owner_ref_digest",
@@ -351,7 +355,7 @@
           }
         ]
       },
-      "contract_digest": "aac51f65e2b78196562cf0c3bf5e01e78aa5578426ce14750d9aa4a7be455086"
+      "contract_digest": "619327cbbfa86e3a57f369017ad595e7694c7fecf4eaa60fb86bc7917b01fed9"
     },
     {
       "literal": "acquisition_execution_authority.v1",
@@ -435,7 +439,8 @@
             "type": "object",
             "required": true,
             "ref": "acquisition_start_authority_carrier.v1",
-            "derivation": "exact field-for-field carrier"
+            "derivation": "exact field-for-field carrier",
+            "ref_digest": "619327cbbfa86e3a57f369017ad595e7694c7fecf4eaa60fb86bc7917b01fed9"
           },
           {
             "name": "authority_digest",
@@ -446,7 +451,7 @@
           }
         ]
       },
-      "contract_digest": "2a4971d1d2e8691a98ff6f03bf86e6d5a17fa09f76db235b964d2d77ade6b24d"
+      "contract_digest": "959db5f8a08dc550003b045ab60ed9ecc53d699897d349c2868f02b857c8510e"
     },
     {
       "literal": "agent_runtime_namespace_ref.v1",
@@ -604,7 +609,8 @@
             "type": "object",
             "required": true,
             "ref": "agent_runtime_namespace_ref.v1",
-            "derivation": "complete ref"
+            "derivation": "complete ref",
+            "ref_digest": "c5c52a1d0e411365d8a4cb3b3f2b9bcfcafed3763cad0ea87c51599c19f0dada"
           },
           {
             "name": "policy_revision",
@@ -676,7 +682,7 @@
           }
         ]
       },
-      "contract_digest": "014734493ca9036dcc81abe6e8a321ad148e275dbea606e5bae073784cee3761"
+      "contract_digest": "1e7439d825dccf31917bd42b0ba9a6d4330cc3af958e287dabb9028fdc11ba1e"
     },
     {
       "literal": "cohort_execution_envelope.v1",
@@ -734,7 +740,8 @@
             "name": "capability",
             "type": "object",
             "required": true,
-            "ref": "cohort_execution_capability.v2"
+            "ref": "cohort_execution_capability.v2",
+            "ref_digest": "1e7439d825dccf31917bd42b0ba9a6d4330cc3af958e287dabb9028fdc11ba1e"
           },
           {
             "name": "capability_digest",
@@ -758,7 +765,8 @@
             "type": "object",
             "required": true,
             "ref": "agent_runtime_namespace_ref.v1",
-            "derivation": "complete ref"
+            "derivation": "complete ref",
+            "ref_digest": "c5c52a1d0e411365d8a4cb3b3f2b9bcfcafed3763cad0ea87c51599c19f0dada"
           },
           {
             "name": "ordered_planned_lane_refs",
@@ -806,7 +814,7 @@
           }
         ]
       },
-      "contract_digest": "1c4ad663632b87e2c129823c39c3767601e58b7f2902a3336cb9904caa8212a4"
+      "contract_digest": "6553a90267ce44ce96742a9a6b20bbc88c2d1b2aa14831d757ed4d61af94675a"
     },
     {
       "literal": "cohort_execution_lane_result.v2",
@@ -1206,7 +1214,8 @@
             "required": true,
             "items": {
               "type": "object",
-              "ref": "cohort_execution_lane_result.v2"
+              "ref": "cohort_execution_lane_result.v2",
+              "ref_digest": "686c94b8ff7ed03eb86d3cabf95719f225ad60cbda61f7b07e613a7220196c97"
             },
             "ordering": "validated planning-v2 ordinal order with exact ordinal mapping"
           },
@@ -1282,7 +1291,7 @@
           }
         ]
       },
-      "contract_digest": "aac39089f773d8c6eb9ea4b490501914c375b0d9be4fd25c3910de2b4e8a7ab9"
+      "contract_digest": "ceaaa811c483d24780e6d589e4ed2a4baedbfb89d73714a97bca34ede8b275a2"
     },
     {
       "literal": "cohort_execution_commit.v1",
@@ -1400,7 +1409,8 @@
             "type": "object",
             "required": true,
             "ref": "cohort_execution_result.v2",
-            "derivation": "exact complete result record bytes"
+            "derivation": "exact complete result record bytes",
+            "ref_digest": "ceaaa811c483d24780e6d589e4ed2a4baedbfb89d73714a97bca34ede8b275a2"
           },
           {
             "name": "execution_result_digest",
@@ -1439,7 +1449,7 @@
           }
         ]
       },
-      "contract_digest": "821d1879c6fabcd8b9e1a541a6792eb674f92ac9a965f8daac2f1e4834b601af"
+      "contract_digest": "d7400102f5192048e4a9ee418d5c8095258f64b827d0c2ff90a3bae0a3e63645"
     },
     {
       "literal": "filter_projection_product_terminal.v1",
@@ -1586,7 +1596,8 @@
             "type": "object",
             "required": true,
             "ref": "agent_runtime_namespace_ref.v1",
-            "derivation": "complete ref"
+            "derivation": "complete ref",
+            "ref_digest": "c5c52a1d0e411365d8a4cb3b3f2b9bcfcafed3763cad0ea87c51599c19f0dada"
           },
           {
             "name": "candidate_set_digest",
@@ -1641,13 +1652,15 @@
             "name": "freshness_ref",
             "type": "object",
             "required": true,
-            "ref": "filter_projection_freshness_ref.v1"
+            "ref": "filter_projection_freshness_ref.v1",
+            "ref_digest": "80013649d3c809ebd7aee81198c4330f672bb50a10d45650f11013b36c7a4bac"
           },
           {
             "name": "readiness_ref",
             "type": "object",
             "required": true,
-            "ref": "filter_projection_readiness_ref.v1"
+            "ref": "filter_projection_readiness_ref.v1",
+            "ref_digest": "c184bb11486d0844339c0d351d9a184ad2e4d53cc6549245b9fb43249d64f63f"
           },
           {
             "name": "terminal_digest",
@@ -1658,7 +1671,7 @@
           }
         ]
       },
-      "contract_digest": "0499a1912d0d7929318709d43553c0fdbc36300b5aff083adccd187d0143fcd7"
+      "contract_digest": "b58f43046860815f60040df0a9a081ecf14f9907fa19c3448a7dfa00dfcdda99"
     },
     {
       "literal": "filter_projection_freshness_ref.v1",
@@ -2494,52 +2507,73 @@
             "name": "variant",
             "type": "string",
             "required": true,
+            "constant": "success",
             "variants": [
               "success"
             ],
+            "derivation": "exact success root discriminator; union discrimination is exact per variant; at least as strict as v2",
+            "provenance": "server_derived",
+            "value_role": "control"
+          },
+          {
+            "name": "variant",
+            "type": "string",
+            "required": true,
+            "constant": "deferred",
+            "variants": [
+              "deferred"
+            ],
+            "provenance": "server_derived",
+            "value_role": "control"
+          },
+          {
+            "name": "variant",
+            "type": "string",
+            "required": true,
+            "constant": "error",
+            "variants": [
+              "error"
+            ],
+            "provenance": "server_derived",
+            "value_role": "control"
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "required": true,
+            "constant": "ready",
+            "variants": [
+              "success"
+            ],
+            "derivation": "exact v2 success status constant retained",
+            "provenance": "server_derived",
+            "value_role": "control"
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "required": true,
             "enum": [
-              "success",
-              "deferred",
-              "error"
+              "stale",
+              "not_ready"
             ],
-            "derivation": "success root discriminator; value retained at least as strict as v2"
-          },
-          {
-            "name": "variant",
-            "type": "string",
-            "required": true,
             "variants": [
               "deferred"
             ],
-            "constant": "deferred"
-          },
-          {
-            "name": "variant",
-            "type": "string",
-            "required": true,
-            "variants": [
-              "error"
-            ],
-            "constant": "error"
+            "derivation": "exact v2 deferred status enum retained",
+            "provenance": "server_derived",
+            "value_role": "control"
           },
           {
             "name": "status",
             "type": "string",
             "required": true,
-            "variants": [
-              "success",
-              "deferred"
-            ],
-            "derivation": "exact v2 status semantics retained at least as strict"
-          },
-          {
-            "name": "status",
-            "type": "string",
-            "required": true,
+            "constant": "failed",
             "variants": [
               "error"
             ],
-            "constant": "failed"
+            "provenance": "server_derived",
+            "value_role": "control"
           },
           {
             "name": "projection_ref",
@@ -2548,7 +2582,9 @@
             "ref": "filter_projection_product_ref.v1",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "ref_digest": "ec6205440ea0cf547f3bcfc516775c8533547c30f60638b14d0df9d946219a18"
           },
           {
             "name": "cohort_selection",
@@ -2557,7 +2593,9 @@
             "nonempty": true,
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "user_supplied",
+            "value_role": "identifier"
           },
           {
             "name": "cohort_selection_registry_version",
@@ -2566,7 +2604,9 @@
             "nonempty": true,
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "value_role": "identifier"
           },
           {
             "name": "cohort_selection_registry_digest",
@@ -2576,7 +2616,9 @@
             "derivation": "exact pinned cohort selection registry",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "value_role": "identifier"
           },
           {
             "name": "cohort_selection_digest",
@@ -2586,7 +2628,9 @@
             "derivation": "exact pinned cohort selection",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "value_role": "identifier"
           },
           {
             "name": "execution_commit_digest",
@@ -2596,7 +2640,9 @@
             "derivation": "binds cohort_execution_commit.v1",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "value_role": "identifier"
           },
           {
             "name": "candidate_set_digest",
@@ -2606,7 +2652,9 @@
             "derivation": "binds cohort_candidate_set.v1",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "value_role": "identifier"
           },
           {
             "name": "freshness",
@@ -2615,7 +2663,9 @@
             "ref": "filter_projection_freshness_ref.v1",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "ref_digest": "80013649d3c809ebd7aee81198c4330f672bb50a10d45650f11013b36c7a4bac"
           },
           {
             "name": "readiness",
@@ -2624,7 +2674,9 @@
             "ref": "filter_projection_readiness_ref.v1",
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state",
+            "ref_digest": "c184bb11486d0844339c0d351d9a184ad2e4d53cc6549245b9fb43249d64f63f"
           },
           {
             "name": "provider_mode",
@@ -2637,95 +2689,216 @@
             "variants": [
               "success"
             ],
-            "derivation": "at this release boundary; live remains unauthorized"
+            "derivation": "at this release boundary; live remains unauthorized",
+            "provenance": "owner_state",
+            "value_role": "control"
           },
           {
             "name": "runtime_namespace_ref",
             "type": "object",
             "required": true,
-            "variants": [
-              "success"
-            ],
             "fields": [
               {
                 "name": "schema_version",
                 "type": "string",
                 "required": true,
-                "constant": "agent_runtime_namespace_ref.v1"
+                "constant": "agent_runtime_namespace_ref.v1",
+                "provenance": "owner_state",
+                "value_role": "control"
               },
               {
                 "name": "namespace_ref_id",
                 "type": "string",
                 "required": true,
-                "nonempty": true
+                "nonempty": true,
+                "provenance": "owner_state",
+                "value_role": "identifier"
               },
               {
                 "name": "ref_digest",
                 "type": "string",
                 "required": true,
                 "format": "sha256_hex",
-                "derivation": "binds agent_runtime_namespace_ref.v1"
+                "derivation": "binds agent_runtime_namespace_ref.v1",
+                "provenance": "owner_state",
+                "value_role": "identifier"
               }
             ],
-            "derivation": "public subset only; no path/workspace/private identity"
-          },
-          {
-            "name": "requested_lane_coverage",
-            "type": "string",
-            "required": true,
-            "nonempty": true,
             "variants": [
               "success"
             ],
-            "derivation": "compiler-derived exact coverage summary; at least as strict as v2"
+            "derivation": "public subset only; no path/workspace/private identity",
+            "provenance": "owner_state"
+          },
+          {
+            "name": "requested_lane_coverage",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "status",
+                "type": "string",
+                "required": true,
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unavailable"
+                ],
+                "provenance": "owner_state",
+                "value_role": "control"
+              },
+              {
+                "name": "requested_lane_count",
+                "type": "integer",
+                "required": true,
+                "minimum": 1,
+                "maximum": 64,
+                "provenance": "owner_state"
+              },
+              {
+                "name": "completed_lane_count",
+                "type": "integer",
+                "required": true,
+                "minimum": 0,
+                "maximum": 64,
+                "provenance": "owner_state"
+              },
+              {
+                "name": "missing_lane_count",
+                "type": "integer",
+                "required": true,
+                "minimum": 0,
+                "maximum": 64,
+                "provenance": "owner_state"
+              }
+            ],
+            "variants": [
+              "success"
+            ],
+            "derivation": "exact v2 closed coverage summary; at least as strict as v2",
+            "provenance": "owner_state"
           },
           {
             "name": "lane_summaries",
             "type": "array",
             "required": true,
             "items": {
-              "type": "object"
+              "type": "object",
+              "required": true,
+              "fields": [
+                {
+                  "name": "lane_id",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true,
+                  "max_length": 200,
+                  "derivation": "exact v2 lane identifier; at least as strict as v2",
+                  "provenance": "owner_state",
+                  "value_role": "identifier"
+                },
+                {
+                  "name": "employment_status",
+                  "type": "string",
+                  "required": true,
+                  "enum": [
+                    "current",
+                    "former"
+                  ],
+                  "provenance": "owner_state",
+                  "value_role": "control"
+                },
+                {
+                  "name": "role_bucket_id",
+                  "type": "string",
+                  "required": true,
+                  "enum": [
+                    "all_roles",
+                    "research",
+                    "engineering",
+                    "product_management",
+                    "infra_systems",
+                    "founding"
+                  ],
+                  "provenance": "owner_state",
+                  "value_role": "control"
+                },
+                {
+                  "name": "coverage_status",
+                  "type": "string",
+                  "required": true,
+                  "enum": [
+                    "complete",
+                    "partial",
+                    "missing"
+                  ],
+                  "provenance": "owner_state",
+                  "value_role": "control"
+                },
+                {
+                  "name": "result_count",
+                  "type": "integer",
+                  "required": true,
+                  "minimum": 0,
+                  "maximum": 1000000,
+                  "provenance": "owner_state"
+                }
+              ],
+              "provenance": "owner_state"
             },
+            "max_items": 64,
             "variants": [
               "success"
             ],
-            "derivation": "per-lane exact summaries; at least as strict as v2"
+            "derivation": "per-lane exact summaries; closed v2 lane-summary item schema; max_items=64 equals FILTER_PROJECTION_MAX_LANE_SUMMARIES; at least as strict as v2",
+            "provenance": "owner_state"
           },
           {
             "name": "offset",
             "type": "integer",
             "required": true,
             "minimum": 0,
+            "maximum": 100000,
             "variants": [
               "success"
-            ]
+            ],
+            "derivation": "paging bound equals FILTER_PROJECTION_MAX_OFFSET; at least as strict as v2",
+            "provenance": "owner_state"
           },
           {
             "name": "limit",
             "type": "integer",
             "required": true,
             "minimum": 1,
+            "maximum": 250,
             "variants": [
               "success"
-            ]
+            ],
+            "derivation": "paging bound equals FILTER_PROJECTION_MAX_LIMIT; at least as strict as v2",
+            "provenance": "owner_state"
           },
           {
             "name": "total_count",
             "type": "integer",
             "required": true,
             "minimum": 0,
+            "maximum": 1000,
             "variants": [
               "success"
-            ]
+            ],
+            "derivation": "count bound equals FILTER_PROJECTION_MAX_CANDIDATES; at least as strict as v2",
+            "provenance": "owner_state"
           },
           {
             "name": "returned_count",
             "type": "integer",
             "required": true,
             "minimum": 0,
+            "maximum": 250,
             "variants": [
               "success"
-            ]
+            ],
+            "derivation": "paging bound equals FILTER_PROJECTION_MAX_LIMIT; at least as strict as v2",
+            "provenance": "owner_state"
           },
           {
             "name": "truncated",
@@ -2733,27 +2906,106 @@
             "required": true,
             "variants": [
               "success"
-            ]
+            ],
+            "provenance": "owner_state"
           },
           {
             "name": "candidates",
             "type": "array",
             "required": true,
             "items": {
-              "type": "object"
+              "type": "object",
+              "required": true,
+              "fields": [
+                {
+                  "name": "candidate_ref",
+                  "type": "string",
+                  "required": true,
+                  "format": "sha256_hex",
+                  "derivation": "revision-bound bounded SHA-256 candidate ref",
+                  "provenance": "owner_state",
+                  "value_role": "identifier"
+                },
+                {
+                  "name": "display_name",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true,
+                  "max_length": 500,
+                  "derivation": "v2 display policy retained exactly",
+                  "provenance": "owner_state",
+                  "value_role": "display_text"
+                },
+                {
+                  "name": "headline",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true,
+                  "max_length": 1000,
+                  "derivation": "v2 display policy retained exactly",
+                  "provenance": "owner_state",
+                  "value_role": "display_text"
+                },
+                {
+                  "name": "public_profile_url",
+                  "type": "string",
+                  "required": false,
+                  "format": "https_url",
+                  "max_length": 2048,
+                  "derivation": "either absent from the canonical source object or an HTTPS URL; empty-string alias forbidden",
+                  "provenance": "owner_state",
+                  "value_role": "web_url"
+                },
+                {
+                  "name": "employment_statuses",
+                  "type": "array",
+                  "required": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "current",
+                      "former"
+                    ],
+                    "provenance": "owner_state",
+                    "value_role": "control"
+                  },
+                  "min_items": 1,
+                  "max_items": 2,
+                  "provenance": "owner_state"
+                },
+                {
+                  "name": "role_bucket_ids",
+                  "type": "array",
+                  "required": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "research",
+                      "engineering",
+                      "product_management",
+                      "infra_systems",
+                      "founding"
+                    ],
+                    "provenance": "owner_state",
+                    "value_role": "control"
+                  },
+                  "max_items": 5,
+                  "provenance": "owner_state"
+                }
+              ],
+              "provenance": "owner_state"
             },
+            "max_items": 250,
             "variants": [
               "success"
             ],
-            "derivation": "revision-bound bounded SHA-256 candidate refs; display/URL policies and the 64-KiB result limit at least as strict as v2"
+            "derivation": "closed v2 public candidate item schema; display/URL policies and the 64-KiB result limit remain at least as strict as v2; max_items=250 equals FILTER_PROJECTION_MAX_LIMIT",
+            "provenance": "owner_state"
           },
           {
             "name": "reason",
             "type": "string",
             "required": true,
-            "variants": [
-              "deferred"
-            ],
             "enum": [
               "projection_candidate_set_empty",
               "projection_publication_pending",
@@ -2761,16 +3013,23 @@
               "projection_membership_pending",
               "projection_members_not_ready"
             ],
-            "derivation": "exact closed deferred reason"
+            "variants": [
+              "deferred"
+            ],
+            "derivation": "exact closed deferred reason",
+            "provenance": "owner_state",
+            "value_role": "control"
           },
           {
             "name": "reason",
             "type": "string",
             "required": true,
+            "constant": "projection_not_found",
             "variants": [
               "error"
             ],
-            "constant": "projection_not_found"
+            "provenance": "owner_state",
+            "value_role": "control"
           },
           {
             "name": "retryable",
@@ -2778,16 +3037,18 @@
             "required": true,
             "variants": [
               "deferred"
-            ]
+            ],
+            "provenance": "owner_state"
           },
           {
             "name": "retryable",
             "type": "boolean",
             "required": true,
+            "constant": false,
             "variants": [
               "error"
             ],
-            "constant": false
+            "provenance": "owner_state"
           },
           {
             "name": "reselection_required",
@@ -2795,31 +3056,76 @@
             "required": true,
             "variants": [
               "deferred"
-            ]
+            ],
+            "provenance": "owner_state"
           },
           {
             "name": "requested_target_ref",
             "type": "object",
             "required": true,
+            "fields": [
+              {
+                "name": "projection_id",
+                "type": "string",
+                "required": true,
+                "nonempty": true,
+                "provenance": "owner_state",
+                "value_role": "identifier"
+              },
+              {
+                "name": "membership_revision",
+                "type": "integer",
+                "required": true,
+                "minimum": 1,
+                "provenance": "owner_state"
+              },
+              {
+                "name": "requested_terminal_id",
+                "type": "string",
+                "required": false,
+                "nonempty": true,
+                "provenance": "owner_state",
+                "value_role": "identifier"
+              },
+              {
+                "name": "requested_terminal_digest",
+                "type": "string",
+                "required": false,
+                "format": "sha256_hex",
+                "provenance": "owner_state",
+                "value_role": "identifier"
+              },
+              {
+                "name": "route_revision_token",
+                "type": "string",
+                "required": false,
+                "nonempty": true,
+                "provenance": "owner_state",
+                "value_role": "identifier"
+              }
+            ],
             "variants": [
               "deferred"
             ],
-            "derivation": "occurrence-bound requested target ref"
+            "derivation": "occurrence-bound requested target ref: projection_id and membership_revision always present; requested_terminal_id/requested_terminal_digest/route_revision_token present exactly when status=stale and absent for not_ready",
+            "provenance": "owner_state"
           },
           {
             "name": "decision_ref",
             "type": "string",
             "required": true,
             "format": "sha256_hex",
-            "derivation": "opaque SHA-256 over the occurrence-bound internal owner ref; discloses no foreign target; missing and foreign serialize byte-identical public shapes for the same occurrence pins",
             "variants": [
               "deferred",
               "error"
-            ]
+            ],
+            "derivation": "opaque SHA-256 over the occurrence-bound internal owner ref; discloses no foreign target; missing and foreign serialize byte-identical public shapes for the same occurrence pins",
+            "provenance": "owner_state",
+            "value_role": "identifier"
           }
         ]
       },
-      "contract_digest": "a73e1ca8adafe9ef6b155aaecd58721804017eb6a5ddadbe05623fbeb3e1fe9a"
+      "contract_digest": "7ec03353bf036075db8612cdea519b4882400ed054dce6ee3591812fd9490cdd"
     },
     {
       "literal": "filter_projection_result_serializer_v3",
@@ -2879,8 +3185,10 @@
         "effect_class",
         "result_link_policy",
         "result_schema_version",
+        "result_contract_digest",
         "serializer_owner_name",
         "serializer_revision",
+        "serializer_contract_digest",
         "registration_state"
       ],
       "schema": {
@@ -2918,6 +3226,14 @@
             "constant": "filter_projection_result_v3"
           },
           {
+            "name": "result_contract_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex",
+            "constant": "7ec03353bf036075db8612cdea519b4882400ed054dce6ee3591812fd9490cdd",
+            "derivation": "exact copy of the filter_projection_result_v3 contract_digest; binds the tool to the exact result contract"
+          },
+          {
             "name": "serializer_owner_name",
             "type": "string",
             "required": true,
@@ -2930,6 +3246,14 @@
             "constant": "filter_projection_result_serializer_v3"
           },
           {
+            "name": "serializer_contract_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex",
+            "constant": "e9269e0d243fe0e423232ca8a89c11efcf50b5961ebd13a1fb637d6a727ee56a",
+            "derivation": "exact copy of the filter_projection_result_serializer_v3 contract_digest; binds the tool to the exact serializer contract"
+          },
+          {
             "name": "registration_state",
             "type": "string",
             "required": true,
@@ -2940,7 +3264,7 @@
           }
         ]
       },
-      "contract_digest": "c0940a43d946fb2f912638b3714408f94368a217bd486a3eecb3b82739fcd2da"
+      "contract_digest": "70a1ff8ed8337172849fd50e90e6f5f1f7de57994b8aa394f5259760c13ec608"
     },
     {
       "literal": "acquisition.cohort.execute",
@@ -2995,6 +3319,384 @@
         ]
       },
       "contract_digest": "5507f2028f4bc4709b039bf4f962cb39bcc6c937a659e851baf35d67510cf8f2"
+    }
+  ],
+  "retained_contract_pins": [
+    {
+      "literal": "acquisition_root_command_payload.v2",
+      "retention": "retained history, exact and unmodified; not adopted by this decision and not a contract_digests row; pinned here so the carrier schema reference is an immutable exact-version-and-digest binding instead of prose",
+      "schema": {
+        "schema_version": "acquisition_root_command_payload.v2",
+        "owner": "acquisition_run_writer",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "string",
+            "required": true,
+            "constant": "acquisition_root_command_payload.v2"
+          },
+          {
+            "name": "command_type",
+            "type": "string",
+            "required": true,
+            "constant": "acquisition.run.create"
+          },
+          {
+            "name": "action_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "operation_run_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "workflow_run_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "confirmation_receipt_ref",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "receipt_id",
+                "type": "string",
+                "required": true,
+                "nonempty": true
+              },
+              {
+                "name": "receipt_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              }
+            ]
+          },
+          {
+            "name": "start_snapshot",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "schema_version",
+                "type": "string",
+                "required": true,
+                "constant": "acquisition_start_snapshot.v2"
+              },
+              {
+                "name": "preview",
+                "type": "object",
+                "required": true,
+                "ref": "acquisition_plan_preview_record_v2",
+                "ref_digest": "dace854d5ef4b31e545d983c3fedaf36eee1ea933567daf3f8c0d254a8fcd187",
+                "derivation": "external retained spec pin: exact input_schema_digest of _PREVIEW_RECORD_TOOL_SPEC (schema_version acquisition_plan_preview_record_v2) recomputed from src/sourcing_agent/acquisition_plan_preview.py at the canonization base; the preview subtree is owned by the plan-preview contract and is not retyped in this manifest"
+              },
+              {
+                "name": "request_pins",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "schema_version",
+                    "type": "string",
+                    "required": true,
+                    "constant": "acquisition_root_request_v2"
+                  },
+                  {
+                    "name": "schema_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex"
+                  }
+                ]
+              },
+              {
+                "name": "result_pins",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "schema_version",
+                    "type": "string",
+                    "required": true,
+                    "constant": "acquisition_start_result_v2"
+                  },
+                  {
+                    "name": "schema_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex"
+                  },
+                  {
+                    "name": "serializer_owner",
+                    "type": "string",
+                    "required": true,
+                    "constant": "acquisition.start_result_serializer_v2"
+                  },
+                  {
+                    "name": "serializer_revision",
+                    "type": "string",
+                    "required": true,
+                    "constant": "acquisition_start_result_serializer_v2"
+                  },
+                  {
+                    "name": "serializer_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex"
+                  },
+                  {
+                    "name": "interpretation_contract_version",
+                    "type": "string",
+                    "required": true,
+                    "constant": "action_result_interpretation_contract_v3"
+                  },
+                  {
+                    "name": "interpretation_contract_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex"
+                  }
+                ]
+              },
+              {
+                "name": "tool_pins",
+                "type": "object",
+                "required": true,
+                "fields": [
+                  {
+                    "name": "tool_spec_version",
+                    "type": "string",
+                    "required": true,
+                    "nonempty": true
+                  },
+                  {
+                    "name": "tool_spec_digest",
+                    "type": "string",
+                    "required": true,
+                    "format": "sha256_hex"
+                  }
+                ]
+              },
+              {
+                "name": "snapshot_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              }
+            ]
+          },
+          {
+            "name": "start_snapshot_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex",
+            "derivation": "exact equality to start_snapshot.snapshot_digest"
+          },
+          {
+            "name": "payload_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex",
+            "derivation": "SHA-256 canonical fields 1-8"
+          }
+        ]
+      },
+      "pin_digest": "0733d2e18ee4c7f604c76233e6dd0c5c64c2be71c07575c66e1aa1da8806f453"
+    },
+    {
+      "literal": "acquisition_start_command_acceptance_owner_result_ref.v1",
+      "retention": "retained history, exact and unmodified; not adopted by this decision and not a contract_digests row; pinned here so the carrier schema reference and the eight-row join schema_valid predicates are immutable exact-version-and-digest bindings instead of prose",
+      "schema": {
+        "schema_version": "acquisition_start_command_acceptance_owner_result_ref.v1",
+        "owner": "acquisition_run_writer",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "string",
+            "required": true,
+            "constant": "acquisition_start_command_acceptance_owner_result_ref.v1"
+          },
+          {
+            "name": "runtime_namespace",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "provider_mode",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "workspace_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "action_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "operation_run_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "workflow_run_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "workflow_command_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "terminal_winner_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "terminal_winner_sequence_number",
+            "type": "integer",
+            "required": true,
+            "constant": 1
+          },
+          {
+            "name": "command_source_event_id",
+            "type": "string",
+            "required": true,
+            "nonempty": true
+          },
+          {
+            "name": "command_source_event_sequence_number",
+            "type": "integer",
+            "required": true,
+            "constant": 2
+          },
+          {
+            "name": "command_source_event_contract_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex"
+          },
+          {
+            "name": "confirmation_receipt_ref",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "receipt_id",
+                "type": "string",
+                "required": true,
+                "nonempty": true
+              },
+              {
+                "name": "receipt_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              }
+            ]
+          },
+          {
+            "name": "parent_budget_envelope_ref",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "owner_id",
+                "type": "string",
+                "required": true,
+                "nonempty": true
+              },
+              {
+                "name": "owner_revision",
+                "type": "string",
+                "required": true,
+                "nonempty": true
+              },
+              {
+                "name": "owner_contract_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              },
+              {
+                "name": "confirmation_receipt_id",
+                "type": "string",
+                "required": true,
+                "nonempty": true
+              },
+              {
+                "name": "confirmation_receipt_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              },
+              {
+                "name": "budget_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              }
+            ]
+          },
+          {
+            "name": "start_snapshot_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex"
+          },
+          {
+            "name": "root_command_payload_digest",
+            "type": "string",
+            "required": true,
+            "format": "sha256_hex"
+          },
+          {
+            "name": "result_occurrence_ref",
+            "type": "object",
+            "required": true,
+            "fields": [
+              {
+                "name": "result_slot_id",
+                "type": "string",
+                "required": true,
+                "nonempty": true
+              },
+              {
+                "name": "slot_generation",
+                "type": "integer",
+                "required": true,
+                "minimum": 1
+              },
+              {
+                "name": "logical_occurrence_digest",
+                "type": "string",
+                "required": true,
+                "format": "sha256_hex"
+              }
+            ]
+          }
+        ]
+      },
+      "pin_digest": "cbb455932e59d00b17d0e783f4b906e08e23df5021c2303aa822eaa0da42b7f0"
     }
   ],
   "pg_aggregate_surfaces": {
@@ -3162,9 +3864,25 @@
           "row_role": "base",
           "cardinality": 1,
           "alternate_keys": [
-            "operation_run_id from the typed owner ref",
-            "(workspace_id, start_idempotency)",
-            "membership by the owner-ref action_id"
+            {
+              "fields": [
+                "operation_run_id"
+              ],
+              "source": "typed owner ref operation_run_id"
+            },
+            {
+              "fields": [
+                "workspace_id",
+                "start_idempotency"
+              ],
+              "source": "transport scope plus start idempotency"
+            },
+            {
+              "fields": [
+                "action_id"
+              ],
+              "source": "membership by the owner-ref action_id"
+            }
           ],
           "expect": {
             "owner_module": "acquisition_run_writer",
@@ -3192,14 +3910,43 @@
               "remote_field": "result_ref_json"
             }
           ],
-          "equality_predicate": "id equals owner ref and nested root; workspace_id == transport workspace == owner-ref workspace; action_id equals Action/root/owner ref; owner_module == acquisition_run_writer; operation_type == acquisition_run; start idempotency equals the Action idempotency and the deterministic agent-start-v2:{logical_occurrence_digest}; workflow_ref_json exactly names root workflow/id/command type/owner; result_ref_json is type-strict equal to Action result_ref_json and validates as the existing owner-ref type; persisted request/tool/result pins remain exact",
           "uniqueness_outcome": "exactly one candidate across every alternate identity; zero, more than one, or one row whose alternate identities split is the same not-found/conflict outcome",
           "command_identity": null,
           "command_type": null,
           "command_owner": null,
           "stage_id": null,
           "parent_command": null,
-          "idempotency_formula": null
+          "idempotency_formula": null,
+          "predicates": [
+            {
+              "id": "p_op_ref_valid",
+              "kind": "schema_valid",
+              "row": "operation_runs",
+              "path": [
+                "result_ref_json"
+              ],
+              "ref": "acquisition_start_command_acceptance_owner_result_ref.v1"
+            },
+            {
+              "id": "p_op_idem_formula",
+              "kind": "path_formula",
+              "row": "operation_runs",
+              "path": [
+                "start_idempotency"
+              ],
+              "template": "agent-start-v2:{logical_occurrence_digest}",
+              "binds": {
+                "logical_occurrence_digest": {
+                  "row": "agent_actions",
+                  "path": [
+                    "result_ref_json",
+                    "result_occurrence_ref",
+                    "logical_occurrence_digest"
+                  ]
+                }
+              }
+            }
+          ]
         },
         {
           "ordinal": 2,
@@ -3207,23 +3954,233 @@
           "row_role": "base",
           "cardinality": 1,
           "alternate_keys": [
-            "action_id from owner ref",
-            "(workspace_id, start_idempotency)"
+            {
+              "fields": [
+                "action_id"
+              ],
+              "source": "owner ref action_id"
+            },
+            {
+              "fields": [
+                "workspace_id",
+                "start_idempotency"
+              ],
+              "source": "transport scope plus start idempotency"
+            }
           ],
           "expect": {
             "action_type": "start_acquisition_run",
             "owner_module": "acquisition_run_writer",
-            "operation_type": "acquisition_run"
+            "operation_type": "acquisition_run",
+            "status": "queued",
+            "approval_status": "approved"
           },
           "links": [],
-          "equality_predicate": "workspace_id exact; action_type == start_acquisition_run; owner_module == acquisition_run_writer; operation_type == acquisition_run; idempotency equals OperationRun; approval is the exact approved start; target_ref_json and input_json rebuild one valid v2 bound request; nested snapshot preview has workspace_id == transport workspace and requester_id == transport requester; result_ref_json validates as the existing 18-field owner ref and is type-strict equal to OperationRun's ref",
           "uniqueness_outcome": "exactly one; missing, duplicate, foreign requester/workspace, malformed JSON, or split id/idempotency is indistinguishable",
           "command_identity": null,
           "command_type": null,
           "command_owner": null,
           "stage_id": null,
           "parent_command": null,
-          "idempotency_formula": null
+          "idempotency_formula": null,
+          "predicates": [
+            {
+              "id": "p_act_ref_valid",
+              "kind": "schema_valid",
+              "row": "agent_actions",
+              "path": [
+                "result_ref_json"
+              ],
+              "ref": "acquisition_start_command_acceptance_owner_result_ref.v1"
+            },
+            {
+              "id": "p_act_ref_action",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "action_id"
+                ]
+              },
+              "right": {
+                "row": "agent_actions",
+                "path": [
+                  "action_id"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_operation",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "operation_run_id"
+                ]
+              },
+              "right": {
+                "row": "operation_runs",
+                "path": [
+                  "operation_run_id"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_workflow",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "workflow_run_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "workflow_run_id"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_command",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "workflow_command_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "command_id"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_payload_digest",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "root_command_payload_digest"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "payload_digest"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_snapshot_digest",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "start_snapshot_digest"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "start_snapshot_digest"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_source_event",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "command_source_event_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "source_event_id"
+                ]
+              }
+            },
+            {
+              "id": "p_act_ref_winner_seq",
+              "kind": "path_constant",
+              "row": "agent_actions",
+              "path": [
+                "result_ref_json",
+                "terminal_winner_sequence_number"
+              ],
+              "constant": 1
+            },
+            {
+              "id": "p_act_ref_event_seq",
+              "kind": "path_constant",
+              "row": "agent_actions",
+              "path": [
+                "result_ref_json",
+                "command_source_event_sequence_number"
+              ],
+              "constant": 2
+            },
+            {
+              "id": "p_act_ref_mode",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "provider_mode"
+                ]
+              },
+              "right": {
+                "scope": "provider_mode"
+              }
+            },
+            {
+              "id": "p_act_ref_namespace",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "runtime_namespace"
+                ]
+              },
+              "right": {
+                "scope": "runtime_namespace"
+              }
+            },
+            {
+              "id": "p_act_receipt_eq",
+              "kind": "path_eq",
+              "left": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json",
+                  "confirmation_receipt_ref"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "confirmation_receipt_ref"
+                ]
+              }
+            }
+          ]
         },
         {
           "ordinal": 3,
@@ -3231,8 +4188,19 @@
           "row_role": "command",
           "cardinality": 1,
           "alternate_keys": [
-            "owner-ref workflow_command_id",
-            "(workflow_run_id, root idempotency)"
+            {
+              "fields": [
+                "command_id"
+              ],
+              "source": "owner-ref workflow_command_id"
+            },
+            {
+              "fields": [
+                "workflow_run_id",
+                "idempotency_key"
+              ],
+              "source": "root idempotency identity"
+            }
           ],
           "expect": {
             "command_type": "acquisition.run.create",
@@ -3241,14 +4209,172 @@
             "parent_command_id": ""
           },
           "links": [],
-          "equality_predicate": "workflow_run_id, operation_id, command id, command_type == acquisition.run.create, owner == acquisition_run_writer, stage_id == acquisition_run_create, empty parent_command_id, command id recomputes with command_id_for; persisted JSON is exact; its nested root v2 validates; root action/operation/workflow ids, receipt ref, snapshot digest, and payload digest equal the owner ref; physical causality columns exactly equal the payload causality",
           "uniqueness_outcome": "exactly one root candidate and exactly one root command of that type for the workflow/operation",
           "command_identity": "root",
           "command_type": "acquisition.run.create",
           "command_owner": "acquisition_run_writer",
           "stage_id": "acquisition_run_create",
           "parent_command": null,
-          "idempotency_formula": "acquisition.run.create:start-v2:{confirmation_receipt_digest}"
+          "idempotency_formula": "acquisition.run.create:start-v2:{confirmation_receipt_digest}",
+          "predicates": [
+            {
+              "id": "p_root_payload_valid",
+              "kind": "schema_valid",
+              "row": "root",
+              "path": [
+                "payload_json"
+              ],
+              "ref": "acquisition_root_command_payload.v2"
+            },
+            {
+              "id": "p_root_payload_digest",
+              "kind": "digest_recompute",
+              "row": "root",
+              "path": [
+                "payload_json",
+                "payload_digest"
+              ],
+              "source": {
+                "row": "root",
+                "path": [
+                  "payload_json"
+                ]
+              },
+              "exclude": [
+                "payload_digest"
+              ]
+            },
+            {
+              "id": "p_root_payload_action",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "action_id"
+                ]
+              },
+              "right": {
+                "row": "agent_actions",
+                "path": [
+                  "action_id"
+                ]
+              }
+            },
+            {
+              "id": "p_root_payload_operation",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "operation_run_id"
+                ]
+              },
+              "right": {
+                "row": "operation_runs",
+                "path": [
+                  "operation_run_id"
+                ]
+              }
+            },
+            {
+              "id": "p_root_payload_workflow",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "workflow_run_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "workflow_run_id"
+                ]
+              }
+            },
+            {
+              "id": "p_root_causal_group",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "causal_group_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "command_payload_causality",
+                  "causal_group_id"
+                ]
+              }
+            },
+            {
+              "id": "p_root_causal_event",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "source_event_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_id"
+                ]
+              }
+            },
+            {
+              "id": "p_root_causal_type",
+              "kind": "path_eq",
+              "left": {
+                "row": "root",
+                "path": [
+                  "source_event_type"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_type"
+                ]
+              }
+            },
+            {
+              "id": "p_root_idem_formula",
+              "kind": "path_formula",
+              "row": "root",
+              "path": [
+                "idempotency_key"
+              ],
+              "template": "acquisition.run.create:start-v2:{confirmation_receipt_digest}",
+              "binds": {
+                "confirmation_receipt_digest": {
+                  "row": "agent_actions",
+                  "path": [
+                    "result_ref_json",
+                    "confirmation_receipt_ref",
+                    "receipt_digest"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "p_root_command_id",
+              "kind": "deterministic_command_id",
+              "row": "root",
+              "command_id_field": "command_id",
+              "workflow_run_id_field": "workflow_run_id",
+              "idempotency_field": "idempotency_key",
+              "formula": "command_id == \"cmd_\" + sha1(workflow_run_id + \":\" + idempotency_key)[:24] (exact command_id_for recompute)"
+            }
+          ]
         },
         {
           "ordinal": 4,
@@ -3256,7 +4382,14 @@
           "row_role": "command",
           "cardinality": 1,
           "alternate_keys": [
-            "(workflow_run_id, operation_id, command_type)"
+            {
+              "fields": [
+                "workflow_run_id",
+                "operation_id",
+                "command_type"
+              ],
+              "source": "locked lineage identity"
+            }
           ],
           "expect": {
             "command_type": "acquisition.intent.resolve",
@@ -3280,14 +4413,205 @@
               "remote_field": "command_id"
             }
           ],
-          "equality_predicate": "owner == acquisition_planner, stage_id == acquisition_intent_resolve, parent is the root command, same workflow/operation/causal group, exact command id/idempotency/source event/physical causality, and the carrier equals the canonical carrier byte-for-byte",
           "uniqueness_outcome": "exactly one child of the root with this type; missing, duplicate, wrong-parent, or alternate-id split fails closed",
           "command_identity": "intent",
           "command_type": "acquisition.intent.resolve",
           "command_owner": "acquisition_planner",
           "stage_id": "acquisition_intent_resolve",
           "parent_command": "root",
-          "idempotency_formula": null
+          "idempotency_formula": null,
+          "predicates": [
+            {
+              "id": "p_intent_command_id",
+              "kind": "deterministic_command_id",
+              "row": "intent",
+              "command_id_field": "command_id",
+              "workflow_run_id_field": "workflow_run_id",
+              "idempotency_field": "idempotency_key",
+              "formula": "command_id == \"cmd_\" + sha1(workflow_run_id + \":\" + idempotency_key)[:24] (exact command_id_for recompute)"
+            },
+            {
+              "id": "p_intent_idem_nonempty",
+              "kind": "fields_valid",
+              "row": "intent",
+              "fields": [
+                {
+                  "name": "idempotency_key",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                }
+              ]
+            },
+            {
+              "id": "p_intent_causal_group",
+              "kind": "path_eq",
+              "left": {
+                "row": "intent",
+                "path": [
+                  "causal_group_id"
+                ]
+              },
+              "right": {
+                "row": "intent",
+                "path": [
+                  "command_payload_causality",
+                  "causal_group_id"
+                ]
+              }
+            },
+            {
+              "id": "p_intent_causal_event",
+              "kind": "path_eq",
+              "left": {
+                "row": "intent",
+                "path": [
+                  "source_event_id"
+                ]
+              },
+              "right": {
+                "row": "intent",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_id"
+                ]
+              }
+            },
+            {
+              "id": "p_intent_causal_type",
+              "kind": "path_eq",
+              "left": {
+                "row": "intent",
+                "path": [
+                  "source_event_type"
+                ]
+              },
+              "right": {
+                "row": "intent",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_type"
+                ]
+              }
+            },
+            {
+              "id": "p_intent_causal_group_shared",
+              "kind": "row_field_eq",
+              "row": "intent",
+              "field": "causal_group_id",
+              "other_row": "root",
+              "other_field": "causal_group_id"
+            },
+            {
+              "id": "p_intent_carrier_valid",
+              "kind": "schema_valid",
+              "row": "intent",
+              "path": [
+                "carrier_json"
+              ],
+              "ref": "acquisition_start_authority_carrier.v1"
+            },
+            {
+              "id": "p_intent_carrier_owner_ref",
+              "kind": "path_eq",
+              "left": {
+                "row": "intent",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "right": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json"
+                ]
+              }
+            },
+            {
+              "id": "p_intent_carrier_root",
+              "kind": "path_eq",
+              "left": {
+                "row": "intent",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json"
+                ]
+              }
+            },
+            {
+              "id": "p_intent_carrier_root_digest",
+              "kind": "path_eq",
+              "left": {
+                "row": "intent",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload_digest"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "payload_digest"
+                ]
+              }
+            },
+            {
+              "id": "p_intent_carrier_owner_digest",
+              "kind": "digest_recompute",
+              "row": "intent",
+              "path": [
+                "carrier_json",
+                "command_acceptance_owner_ref_digest"
+              ],
+              "source": {
+                "row": "intent",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "exclude": []
+            },
+            {
+              "id": "p_intent_carrier_digest",
+              "kind": "digest_recompute",
+              "row": "intent",
+              "path": [
+                "carrier_json",
+                "carrier_digest"
+              ],
+              "source": {
+                "row": "intent",
+                "path": [
+                  "carrier_json"
+                ]
+              },
+              "exclude": [
+                "carrier_digest"
+              ]
+            },
+            {
+              "id": "p_carrier_consensus",
+              "kind": "rows_equal",
+              "rows": [
+                "intent",
+                "build",
+                "review",
+                "commit"
+              ],
+              "path": [
+                "carrier_json"
+              ]
+            }
+          ]
         },
         {
           "ordinal": 5,
@@ -3295,7 +4619,14 @@
           "row_role": "command",
           "cardinality": 1,
           "alternate_keys": [
-            "(workflow_run_id, operation_id, command_type)"
+            {
+              "fields": [
+                "workflow_run_id",
+                "operation_id",
+                "command_type"
+              ],
+              "source": "locked lineage identity"
+            }
           ],
           "expect": {
             "command_type": "acquisition.plan.build",
@@ -3319,14 +4650,205 @@
               "remote_field": "command_id"
             }
           ],
-          "equality_predicate": "owner == acquisition_planner, stage_id == acquisition_plan_build, parent is the intent command, same workflow/operation/causal group, exact command id/idempotency/source event/physical causality, and exact carrier equality",
           "uniqueness_outcome": "exactly one child of intent with this type",
           "command_identity": "build",
           "command_type": "acquisition.plan.build",
           "command_owner": "acquisition_planner",
           "stage_id": "acquisition_plan_build",
           "parent_command": "intent",
-          "idempotency_formula": null
+          "idempotency_formula": null,
+          "predicates": [
+            {
+              "id": "p_build_command_id",
+              "kind": "deterministic_command_id",
+              "row": "build",
+              "command_id_field": "command_id",
+              "workflow_run_id_field": "workflow_run_id",
+              "idempotency_field": "idempotency_key",
+              "formula": "command_id == \"cmd_\" + sha1(workflow_run_id + \":\" + idempotency_key)[:24] (exact command_id_for recompute)"
+            },
+            {
+              "id": "p_build_idem_nonempty",
+              "kind": "fields_valid",
+              "row": "build",
+              "fields": [
+                {
+                  "name": "idempotency_key",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                }
+              ]
+            },
+            {
+              "id": "p_build_plan",
+              "kind": "fields_valid",
+              "row": "build",
+              "fields": [
+                {
+                  "name": "plan_id",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                }
+              ]
+            },
+            {
+              "id": "p_build_causal_group",
+              "kind": "path_eq",
+              "left": {
+                "row": "build",
+                "path": [
+                  "causal_group_id"
+                ]
+              },
+              "right": {
+                "row": "build",
+                "path": [
+                  "command_payload_causality",
+                  "causal_group_id"
+                ]
+              }
+            },
+            {
+              "id": "p_build_causal_event",
+              "kind": "path_eq",
+              "left": {
+                "row": "build",
+                "path": [
+                  "source_event_id"
+                ]
+              },
+              "right": {
+                "row": "build",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_id"
+                ]
+              }
+            },
+            {
+              "id": "p_build_causal_type",
+              "kind": "path_eq",
+              "left": {
+                "row": "build",
+                "path": [
+                  "source_event_type"
+                ]
+              },
+              "right": {
+                "row": "build",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_type"
+                ]
+              }
+            },
+            {
+              "id": "p_build_causal_group_shared",
+              "kind": "row_field_eq",
+              "row": "build",
+              "field": "causal_group_id",
+              "other_row": "root",
+              "other_field": "causal_group_id"
+            },
+            {
+              "id": "p_build_carrier_valid",
+              "kind": "schema_valid",
+              "row": "build",
+              "path": [
+                "carrier_json"
+              ],
+              "ref": "acquisition_start_authority_carrier.v1"
+            },
+            {
+              "id": "p_build_carrier_owner_ref",
+              "kind": "path_eq",
+              "left": {
+                "row": "build",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "right": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json"
+                ]
+              }
+            },
+            {
+              "id": "p_build_carrier_root",
+              "kind": "path_eq",
+              "left": {
+                "row": "build",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json"
+                ]
+              }
+            },
+            {
+              "id": "p_build_carrier_root_digest",
+              "kind": "path_eq",
+              "left": {
+                "row": "build",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload_digest"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "payload_digest"
+                ]
+              }
+            },
+            {
+              "id": "p_build_carrier_owner_digest",
+              "kind": "digest_recompute",
+              "row": "build",
+              "path": [
+                "carrier_json",
+                "command_acceptance_owner_ref_digest"
+              ],
+              "source": {
+                "row": "build",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "exclude": []
+            },
+            {
+              "id": "p_build_carrier_digest",
+              "kind": "digest_recompute",
+              "row": "build",
+              "path": [
+                "carrier_json",
+                "carrier_digest"
+              ],
+              "source": {
+                "row": "build",
+                "path": [
+                  "carrier_json"
+                ]
+              },
+              "exclude": [
+                "carrier_digest"
+              ]
+            }
+          ]
         },
         {
           "ordinal": 6,
@@ -3334,7 +4856,14 @@
           "row_role": "command",
           "cardinality": 1,
           "alternate_keys": [
-            "(workflow_run_id, operation_id, command_type)"
+            {
+              "fields": [
+                "workflow_run_id",
+                "operation_id",
+                "command_type"
+              ],
+              "source": "locked lineage identity"
+            }
           ],
           "expect": {
             "command_type": "acquisition.plan_review.request",
@@ -3358,14 +4887,219 @@
               "remote_field": "command_id"
             }
           ],
-          "equality_predicate": "owner == acquisition_planner, stage_id == acquisition_plan_review_request, parent is build, same workflow/operation/causal group, exact command id/idempotency/source event/physical causality, exact carrier, and plan id equality to build result/review execution bundle",
           "uniqueness_outcome": "exactly one child of build with this type",
           "command_identity": "review",
           "command_type": "acquisition.plan_review.request",
           "command_owner": "acquisition_planner",
           "stage_id": "acquisition_plan_review_request",
           "parent_command": "build",
-          "idempotency_formula": null
+          "idempotency_formula": null,
+          "predicates": [
+            {
+              "id": "p_review_command_id",
+              "kind": "deterministic_command_id",
+              "row": "review",
+              "command_id_field": "command_id",
+              "workflow_run_id_field": "workflow_run_id",
+              "idempotency_field": "idempotency_key",
+              "formula": "command_id == \"cmd_\" + sha1(workflow_run_id + \":\" + idempotency_key)[:24] (exact command_id_for recompute)"
+            },
+            {
+              "id": "p_review_idem_nonempty",
+              "kind": "fields_valid",
+              "row": "review",
+              "fields": [
+                {
+                  "name": "idempotency_key",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                }
+              ]
+            },
+            {
+              "id": "p_review_plan",
+              "kind": "fields_valid",
+              "row": "review",
+              "fields": [
+                {
+                  "name": "plan_id",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                },
+                {
+                  "name": "plan_review_id",
+                  "type": "integer",
+                  "required": true,
+                  "minimum": 1
+                }
+              ]
+            },
+            {
+              "id": "p_review_plan_eq",
+              "kind": "row_field_eq",
+              "row": "review",
+              "field": "plan_id",
+              "other_row": "build",
+              "other_field": "plan_id"
+            },
+            {
+              "id": "p_review_causal_group",
+              "kind": "path_eq",
+              "left": {
+                "row": "review",
+                "path": [
+                  "causal_group_id"
+                ]
+              },
+              "right": {
+                "row": "review",
+                "path": [
+                  "command_payload_causality",
+                  "causal_group_id"
+                ]
+              }
+            },
+            {
+              "id": "p_review_causal_event",
+              "kind": "path_eq",
+              "left": {
+                "row": "review",
+                "path": [
+                  "source_event_id"
+                ]
+              },
+              "right": {
+                "row": "review",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_id"
+                ]
+              }
+            },
+            {
+              "id": "p_review_causal_type",
+              "kind": "path_eq",
+              "left": {
+                "row": "review",
+                "path": [
+                  "source_event_type"
+                ]
+              },
+              "right": {
+                "row": "review",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_type"
+                ]
+              }
+            },
+            {
+              "id": "p_review_causal_group_shared",
+              "kind": "row_field_eq",
+              "row": "review",
+              "field": "causal_group_id",
+              "other_row": "root",
+              "other_field": "causal_group_id"
+            },
+            {
+              "id": "p_review_carrier_valid",
+              "kind": "schema_valid",
+              "row": "review",
+              "path": [
+                "carrier_json"
+              ],
+              "ref": "acquisition_start_authority_carrier.v1"
+            },
+            {
+              "id": "p_review_carrier_owner_ref",
+              "kind": "path_eq",
+              "left": {
+                "row": "review",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "right": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json"
+                ]
+              }
+            },
+            {
+              "id": "p_review_carrier_root",
+              "kind": "path_eq",
+              "left": {
+                "row": "review",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json"
+                ]
+              }
+            },
+            {
+              "id": "p_review_carrier_root_digest",
+              "kind": "path_eq",
+              "left": {
+                "row": "review",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload_digest"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "payload_digest"
+                ]
+              }
+            },
+            {
+              "id": "p_review_carrier_owner_digest",
+              "kind": "digest_recompute",
+              "row": "review",
+              "path": [
+                "carrier_json",
+                "command_acceptance_owner_ref_digest"
+              ],
+              "source": {
+                "row": "review",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "exclude": []
+            },
+            {
+              "id": "p_review_carrier_digest",
+              "kind": "digest_recompute",
+              "row": "review",
+              "path": [
+                "carrier_json",
+                "carrier_digest"
+              ],
+              "source": {
+                "row": "review",
+                "path": [
+                  "carrier_json"
+                ]
+              },
+              "exclude": [
+                "carrier_digest"
+              ]
+            }
+          ]
         },
         {
           "ordinal": 7,
@@ -3373,8 +5107,20 @@
           "row_role": "command",
           "cardinality": 1,
           "alternate_keys": [
-            "AcquisitionRun metadata source_command_id",
-            "(workflow_run_id, operation_id, command_type)"
+            {
+              "fields": [
+                "command_id"
+              ],
+              "source": "AcquisitionRun metadata source_command_id"
+            },
+            {
+              "fields": [
+                "workflow_run_id",
+                "operation_id",
+                "command_type"
+              ],
+              "source": "locked lineage identity"
+            }
           ],
           "expect": {
             "command_type": "acquisition.plan.commit",
@@ -3398,14 +5144,227 @@
               "remote_field": "command_id"
             }
           ],
-          "equality_predicate": "owner == acquisition_planner, stage_id == acquisition_plan_commit, parent is exactly the review command (no current fallback to review parent/build source), same workflow/operation/causal group, exact command id/idempotency/source event/physical causality, exact carrier, exact review id and plan id",
           "uniqueness_outcome": "exactly one commit command; missing, duplicate, foreign review, or fallback-selected parent fails closed",
           "command_identity": "commit",
           "command_type": "acquisition.plan.commit",
           "command_owner": "acquisition_planner",
           "stage_id": "acquisition_plan_commit",
           "parent_command": "review",
-          "idempotency_formula": null
+          "idempotency_formula": null,
+          "predicates": [
+            {
+              "id": "p_commit_command_id",
+              "kind": "deterministic_command_id",
+              "row": "commit",
+              "command_id_field": "command_id",
+              "workflow_run_id_field": "workflow_run_id",
+              "idempotency_field": "idempotency_key",
+              "formula": "command_id == \"cmd_\" + sha1(workflow_run_id + \":\" + idempotency_key)[:24] (exact command_id_for recompute)"
+            },
+            {
+              "id": "p_commit_idem_nonempty",
+              "kind": "fields_valid",
+              "row": "commit",
+              "fields": [
+                {
+                  "name": "idempotency_key",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                }
+              ]
+            },
+            {
+              "id": "p_commit_plan",
+              "kind": "fields_valid",
+              "row": "commit",
+              "fields": [
+                {
+                  "name": "plan_id",
+                  "type": "string",
+                  "required": true,
+                  "nonempty": true
+                },
+                {
+                  "name": "plan_review_id",
+                  "type": "integer",
+                  "required": true,
+                  "minimum": 1
+                }
+              ]
+            },
+            {
+              "id": "p_commit_plan_eq",
+              "kind": "row_field_eq",
+              "row": "commit",
+              "field": "plan_id",
+              "other_row": "review",
+              "other_field": "plan_id"
+            },
+            {
+              "id": "p_commit_review_eq",
+              "kind": "row_field_eq",
+              "row": "commit",
+              "field": "plan_review_id",
+              "other_row": "review",
+              "other_field": "plan_review_id"
+            },
+            {
+              "id": "p_commit_causal_group",
+              "kind": "path_eq",
+              "left": {
+                "row": "commit",
+                "path": [
+                  "causal_group_id"
+                ]
+              },
+              "right": {
+                "row": "commit",
+                "path": [
+                  "command_payload_causality",
+                  "causal_group_id"
+                ]
+              }
+            },
+            {
+              "id": "p_commit_causal_event",
+              "kind": "path_eq",
+              "left": {
+                "row": "commit",
+                "path": [
+                  "source_event_id"
+                ]
+              },
+              "right": {
+                "row": "commit",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_id"
+                ]
+              }
+            },
+            {
+              "id": "p_commit_causal_type",
+              "kind": "path_eq",
+              "left": {
+                "row": "commit",
+                "path": [
+                  "source_event_type"
+                ]
+              },
+              "right": {
+                "row": "commit",
+                "path": [
+                  "command_payload_causality",
+                  "source_event_type"
+                ]
+              }
+            },
+            {
+              "id": "p_commit_causal_group_shared",
+              "kind": "row_field_eq",
+              "row": "commit",
+              "field": "causal_group_id",
+              "other_row": "root",
+              "other_field": "causal_group_id"
+            },
+            {
+              "id": "p_commit_carrier_valid",
+              "kind": "schema_valid",
+              "row": "commit",
+              "path": [
+                "carrier_json"
+              ],
+              "ref": "acquisition_start_authority_carrier.v1"
+            },
+            {
+              "id": "p_commit_carrier_owner_ref",
+              "kind": "path_eq",
+              "left": {
+                "row": "commit",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "right": {
+                "row": "agent_actions",
+                "path": [
+                  "result_ref_json"
+                ]
+              }
+            },
+            {
+              "id": "p_commit_carrier_root",
+              "kind": "path_eq",
+              "left": {
+                "row": "commit",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json"
+                ]
+              }
+            },
+            {
+              "id": "p_commit_carrier_root_digest",
+              "kind": "path_eq",
+              "left": {
+                "row": "commit",
+                "path": [
+                  "carrier_json",
+                  "root_command_payload_digest"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "payload_json",
+                  "payload_digest"
+                ]
+              }
+            },
+            {
+              "id": "p_commit_carrier_owner_digest",
+              "kind": "digest_recompute",
+              "row": "commit",
+              "path": [
+                "carrier_json",
+                "command_acceptance_owner_ref_digest"
+              ],
+              "source": {
+                "row": "commit",
+                "path": [
+                  "carrier_json",
+                  "command_acceptance_owner_ref"
+                ]
+              },
+              "exclude": []
+            },
+            {
+              "id": "p_commit_carrier_digest",
+              "kind": "digest_recompute",
+              "row": "commit",
+              "path": [
+                "carrier_json",
+                "carrier_digest"
+              ],
+              "source": {
+                "row": "commit",
+                "path": [
+                  "carrier_json"
+                ]
+              },
+              "exclude": [
+                "carrier_digest"
+              ]
+            }
+          ]
         },
         {
           "ordinal": 8,
@@ -3413,10 +5372,31 @@
           "row_role": "base",
           "cardinality": 1,
           "alternate_keys": [
-            "requested acquisition_run_id",
-            "(workspace_id, idempotency_key)",
-            "operation_run_id",
-            "workflow_run_id"
+            {
+              "fields": [
+                "acquisition_run_id"
+              ],
+              "source": "requested acquisition_run_id"
+            },
+            {
+              "fields": [
+                "workspace_id",
+                "idempotency_key"
+              ],
+              "source": "transport scope plus run idempotency"
+            },
+            {
+              "fields": [
+                "operation_run_id"
+              ],
+              "source": "locked operation lineage"
+            },
+            {
+              "fields": [
+                "workflow_run_id"
+              ],
+              "source": "locked workflow lineage"
+            }
           ],
           "expect": {},
           "links": [
@@ -3441,14 +5421,187 @@
               "remote_field": "command_id"
             }
           ],
-          "equality_predicate": "id equals request; workspace/operation/workflow equal the locked lineage; deterministic id equals SHA-1 formula currently used from workflow, operation, review id, and plan id; idempotency is exactly acquisition_run:plan_commit:{commit_command_id}; plan_id and plan_review_id equal commit/review/plan records; metadata source command/type/owner equal the locked commit; request/plan/execution bundle are type-strict, internally equal to the locked command chain, and contain the exact carrier",
           "uniqueness_outcome": "exactly one row across all alternate identities; another run on the same operation/workflow is ambiguous for this operation-native route and fails closed",
           "command_identity": null,
           "command_type": null,
           "command_owner": null,
           "stage_id": null,
           "parent_command": null,
-          "idempotency_formula": "acquisition_run:plan_commit:{commit_command_id}"
+          "idempotency_formula": "acquisition_run:plan_commit:{commit_command_id}",
+          "predicates": [
+            {
+              "id": "p_run_requested",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "acquisition_run_id"
+                ]
+              },
+              "right": {
+                "scope": "acquisition_run_id"
+              }
+            },
+            {
+              "id": "p_run_idem_formula",
+              "kind": "path_formula",
+              "row": "acquisition_runs",
+              "path": [
+                "idempotency_key"
+              ],
+              "template": "acquisition_run:plan_commit:{commit_command_id}",
+              "binds": {
+                "commit_command_id": {
+                  "row": "commit",
+                  "path": [
+                    "command_id"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "p_run_plan_eq",
+              "kind": "row_field_eq",
+              "row": "acquisition_runs",
+              "field": "plan_id",
+              "other_row": "commit",
+              "other_field": "plan_id"
+            },
+            {
+              "id": "p_run_review_eq",
+              "kind": "row_field_eq",
+              "row": "acquisition_runs",
+              "field": "plan_review_id",
+              "other_row": "commit",
+              "other_field": "plan_review_id"
+            },
+            {
+              "id": "p_run_bundle_valid",
+              "kind": "schema_valid",
+              "row": "acquisition_runs",
+              "path": [
+                "execution_bundle_json"
+              ],
+              "ref": "acquisition_execution_authority.v1"
+            },
+            {
+              "id": "p_run_bundle_carrier",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json",
+                  "start_authority_carrier"
+                ]
+              },
+              "right": {
+                "row": "intent",
+                "path": [
+                  "carrier_json"
+                ]
+              }
+            },
+            {
+              "id": "p_run_bundle_workspace",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json",
+                  "workspace_id"
+                ]
+              },
+              "right": {
+                "scope": "workspace_id"
+              }
+            },
+            {
+              "id": "p_run_bundle_operation",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json",
+                  "operation_run_id"
+                ]
+              },
+              "right": {
+                "row": "operation_runs",
+                "path": [
+                  "operation_run_id"
+                ]
+              }
+            },
+            {
+              "id": "p_run_bundle_workflow",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json",
+                  "workflow_run_id"
+                ]
+              },
+              "right": {
+                "row": "root",
+                "path": [
+                  "workflow_run_id"
+                ]
+              }
+            },
+            {
+              "id": "p_run_bundle_plan",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json",
+                  "plan_id"
+                ]
+              },
+              "right": {
+                "row": "commit",
+                "path": [
+                  "plan_id"
+                ]
+              }
+            },
+            {
+              "id": "p_run_bundle_review",
+              "kind": "path_eq",
+              "left": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json",
+                  "plan_review_id"
+                ]
+              },
+              "right": {
+                "row": "commit",
+                "path": [
+                  "plan_review_id"
+                ]
+              }
+            },
+            {
+              "id": "p_run_bundle_digest",
+              "kind": "digest_recompute",
+              "row": "acquisition_runs",
+              "path": [
+                "execution_bundle_json",
+                "authority_digest"
+              ],
+              "source": {
+                "row": "acquisition_runs",
+                "path": [
+                  "execution_bundle_json"
+                ]
+              },
+              "exclude": [
+                "authority_digest"
+              ]
+            }
+          ]
         }
       ],
       "command_chain": {
@@ -3922,6 +6075,21 @@
             "columns": [
               "ref_digest"
             ]
+          },
+          {
+            "name": "uq_agent_runtime_namespace_refs_scoped_mode",
+            "columns": [
+              "namespace_ref_id",
+              "workspace_id",
+              "provider_mode"
+            ]
+          },
+          {
+            "name": "uq_agent_runtime_namespace_refs_scoped_digest",
+            "columns": [
+              "namespace_ref_id",
+              "ref_digest"
+            ]
           }
         ],
         "check_constraints": [
@@ -3938,17 +6106,187 @@
             "expression": "state IN ('active','retired')"
           },
           {
-            "name": "ck_agent_runtime_namespace_refs_ref_contract_digest_hex",
-            "expression": "ref_contract_digest ~ '^[0-9a-f]{64}$'"
+            "name": "ck_agent_runtime_namespace_refs_ref_contract_digest",
+            "expression": "ref_contract_digest = 'c5c52a1d0e411365d8a4cb3b3f2b9bcfcafed3763cad0ea87c51599c19f0dada'"
           },
           {
             "name": "ck_agent_runtime_namespace_refs_ref_digest_hex",
             "expression": "ref_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_agent_runtime_namespace_refs_namespace_ref_id_nonempty",
+            "expression": "namespace_ref_id <> ''"
+          },
+          {
+            "name": "ck_agent_runtime_namespace_refs_workspace_id_nonempty",
+            "expression": "workspace_id <> ''"
+          },
+          {
+            "name": "ck_agent_runtime_namespace_refs_policy_revision_nonempty",
+            "expression": "policy_revision <> ''"
+          },
+          {
+            "name": "ck_agent_runtime_namespace_refs_runtime_namespace_nonempty",
+            "expression": "runtime_namespace <> ''"
           }
         ],
         "foreign_keys": [],
         "indexes": []
-      }
+      },
+      "invariant_enforcement": [
+        {
+          "invariant": "namespace_ref_id PK",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "pk_agent_runtime_namespace_refs",
+            "ck_agent_runtime_namespace_refs_namespace_ref_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "exact nonempty strings",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_namespace_ref_id_nonempty",
+            "ck_agent_runtime_namespace_refs_workspace_id_nonempty",
+            "ck_agent_runtime_namespace_refs_policy_revision_nonempty",
+            "ck_agent_runtime_namespace_refs_runtime_namespace_nonempty"
+          ]
+        },
+        {
+          "invariant": "positive generation",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_generation"
+          ]
+        },
+        {
+          "invariant": "state in active|retired",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_state"
+          ]
+        },
+        {
+          "invariant": "unique (workspace_id,provider_mode,policy_revision,runtime_namespace,generation)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_agent_runtime_namespace_refs_scope"
+          ]
+        },
+        {
+          "invariant": "ref_digest unique",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_agent_runtime_namespace_refs_digest"
+          ]
+        },
+        {
+          "invariant": "no update to identity/path/digest fields",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "only state may transition active -> retired under the registry owner",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "no public reader receives runtime_namespace",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "reader_boundary"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:provider_mode:enum",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_mode"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:generation:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_generation"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:ref_digest:sha256_hex",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_ref_digest_hex"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:namespace_ref_id:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_namespace_ref_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:workspace_id:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_workspace_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:policy_revision:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_policy_revision_nonempty"
+          ]
+        },
+        {
+          "invariant": "agent_runtime_namespace_ref.v1:ref_contract_digest:contract_identity",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_agent_runtime_namespace_refs_ref_contract_digest"
+          ],
+          "covers_fields": [
+            "schema_version",
+            "owner"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK target: tenant/mode equality for attempts and terminals",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_agent_runtime_namespace_refs_scoped_mode"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK target: namespace ref identity plus digest equality for terminals",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_agent_runtime_namespace_refs_scoped_digest"
+          ]
+        }
+      ]
     },
     "cohort_execution_attempts": {
       "owner": "cohort_provider_runtime",
@@ -4168,15 +6506,14 @@
             ]
           },
           {
-            "name": "uq_cohort_execution_attempts_exposure",
+            "name": "uq_cohort_execution_attempts_scoped_identity",
             "columns": [
-              "provider_exposure_id"
-            ]
-          },
-          {
-            "name": "uq_cohort_execution_attempts_call",
-            "columns": [
-              "provider_call_id"
+              "execution_attempt_id",
+              "workspace_id",
+              "acquisition_run_id",
+              "operation_run_id",
+              "workflow_run_id",
+              "execution_generation"
             ]
           }
         ],
@@ -4204,18 +6541,94 @@
           {
             "name": "ck_cohort_execution_attempts_epoch",
             "expression": "control_epoch >= 0"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_accepted_complete",
+            "expression": "status <> 'accepted' OR (provider_exposure_id IS NOT NULL AND provider_call_id IS NOT NULL AND provider_response_digest IS NOT NULL AND result_digest IS NOT NULL)"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_exposure_nonempty",
+            "expression": "provider_exposure_id IS NULL OR provider_exposure_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_call_nonempty",
+            "expression": "provider_call_id IS NULL OR provider_call_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_provider_response_digest_hex",
+            "expression": "provider_response_digest IS NULL OR provider_response_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_result_digest_hex",
+            "expression": "result_digest IS NULL OR result_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_lease_token_digest_hex",
+            "expression": "lease_token_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_planning_manifest_digest_hex",
+            "expression": "planning_manifest_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_capability_digest_hex",
+            "expression": "capability_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_execution_envelope_digest_hex",
+            "expression": "execution_envelope_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_execution_attempt_id_nonempty",
+            "expression": "execution_attempt_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_workspace_id_nonempty",
+            "expression": "workspace_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_acquisition_run_id_nonempty",
+            "expression": "acquisition_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_operation_run_id_nonempty",
+            "expression": "operation_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_workflow_run_id_nonempty",
+            "expression": "workflow_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_workflow_command_id_nonempty",
+            "expression": "workflow_command_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_activity_run_id_nonempty",
+            "expression": "activity_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_activity_attempt_id_nonempty",
+            "expression": "activity_attempt_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_attempts_namespace_ref_id_nonempty",
+            "expression": "namespace_ref_id <> ''"
           }
         ],
         "foreign_keys": [
           {
-            "name": "fk_cohort_execution_attempts_namespace",
+            "name": "fk_cohort_execution_attempts_namespace_scoped",
             "columns": [
-              "namespace_ref_id"
+              "namespace_ref_id",
+              "workspace_id",
+              "provider_mode"
             ],
             "references": {
               "table": "agent_runtime_namespace_refs",
               "columns": [
-                "namespace_ref_id"
+                "namespace_ref_id",
+                "workspace_id",
+                "provider_mode"
               ]
             },
             "on_delete": "restrict",
@@ -4248,9 +6661,198 @@
               "acquisition_run_id"
             ],
             "unique": false
+          },
+          {
+            "name": "uq_cohort_execution_attempts_exposure_sent",
+            "columns": [
+              "provider_exposure_id"
+            ],
+            "unique": true,
+            "where": "provider_exposure_id IS NOT NULL"
+          },
+          {
+            "name": "uq_cohort_execution_attempts_call_sent",
+            "columns": [
+              "provider_call_id"
+            ],
+            "unique": true,
+            "where": "provider_call_id IS NOT NULL"
           }
         ]
-      }
+      },
+      "invariant_enforcement": [
+        {
+          "invariant": "execution_attempt_id PK",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "pk_cohort_execution_attempts",
+            "ck_cohort_execution_attempts_execution_attempt_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "unique (workspace_id,acquisition_run_id,execution_generation)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_attempts_run_generation"
+          ]
+        },
+        {
+          "invariant": "unique nonempty provider_exposure_id and provider_call_id only when sent",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_attempts_exposure_sent",
+            "uq_cohort_execution_attempts_call_sent",
+            "ck_cohort_execution_attempts_exposure_nonempty",
+            "ck_cohort_execution_attempts_call_nonempty"
+          ]
+        },
+        {
+          "invariant": "positive command attempt/generation, nonnegative control epoch",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_command_attempt",
+            "ck_cohort_execution_attempts_generation",
+            "ck_cohort_execution_attempts_epoch"
+          ]
+        },
+        {
+          "invariant": "state machine prepared -> sent -> response_received -> accepted or prepared|sent|response_received -> superseded|quarantined|failed",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "terminal states never reopen",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "accepted requires complete command/activity/current-fence and provider response fields",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_accepted_complete",
+            "ck_cohort_execution_attempts_workflow_command_id_nonempty",
+            "ck_cohort_execution_attempts_activity_run_id_nonempty",
+            "ck_cohort_execution_attempts_activity_attempt_id_nonempty",
+            "ck_cohort_execution_attempts_lease_token_digest_hex"
+          ]
+        },
+        {
+          "invariant": "non-live no_call is permitted only for an explicitly fixture-owned simulate result and still has a deterministic exposure record",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "retry_disposition exactly none|retry_planned|retry_exhausted|cancelled|superseded",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_disposition"
+          ]
+        },
+        {
+          "invariant": "a late response cannot select none after supersession",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "scope-local generation/current-winner authority required by F5; does not close R-019",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_attempts:provider_mode:enum",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_mode"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_attempts:status:enum",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_status"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_attempts:digests:sha256_hex",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_planning_manifest_digest_hex",
+            "ck_cohort_execution_attempts_capability_digest_hex",
+            "ck_cohort_execution_attempts_execution_envelope_digest_hex",
+            "ck_cohort_execution_attempts_provider_response_digest_hex",
+            "ck_cohort_execution_attempts_result_digest_hex"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_attempts:identity_columns:nonempty",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_attempts_workspace_id_nonempty",
+            "ck_cohort_execution_attempts_acquisition_run_id_nonempty",
+            "ck_cohort_execution_attempts_operation_run_id_nonempty",
+            "ck_cohort_execution_attempts_workflow_run_id_nonempty",
+            "ck_cohort_execution_attempts_namespace_ref_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK: tenant/mode equality with the namespace registry",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_cohort_execution_attempts_namespace_scoped",
+            "uq_agent_runtime_namespace_refs_scoped_mode"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK target: commit tenant/lineage/generation equality with the accepted attempt",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_attempts_scoped_identity"
+          ]
+        },
+        {
+          "invariant": "self-FK: supersession predecessor identity",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_cohort_execution_attempts_superseded"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_attempts:run lookup index",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ix_cohort_execution_attempts_run"
+          ]
+        }
+      ]
     },
     "cohort_execution_lane_results": {
       "owner": "cohort_provider_runtime",
@@ -4422,12 +7024,44 @@
             "expression": "truncated_occurrence_count >= 0"
           },
           {
+            "name": "ck_cohort_execution_lane_results_occurrence_partition",
+            "expression": "raw_occurrence_count = accepted_occurrence_count + rejected_occurrence_count + truncated_occurrence_count"
+          },
+          {
             "name": "ck_cohort_execution_lane_results_planned_lane_digest_hex",
             "expression": "planned_lane_digest ~ '^[0-9a-f]{64}$'"
           },
           {
             "name": "ck_cohort_execution_lane_results_lane_result_digest_hex",
             "expression": "lane_result_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_provider_response_digest_hex",
+            "expression": "provider_response_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_evidence_digest_hex",
+            "expression": "evidence_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_execution_attempt_id_nonempty",
+            "expression": "execution_attempt_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_lane_id_nonempty",
+            "expression": "lane_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_provider_exposure_id_nonempty",
+            "expression": "provider_exposure_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_provider_call_id_nonempty",
+            "expression": "provider_call_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_lane_results_evidence_ref_nonempty",
+            "expression": "evidence_ref <> ''"
           }
         ],
         "foreign_keys": [
@@ -4449,7 +7083,104 @@
           }
         ],
         "indexes": []
-      }
+      },
+      "invariant_enforcement": [
+        {
+          "invariant": "primary key (execution_attempt_id,lane_ordinal)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "pk_cohort_execution_lane_results",
+            "ck_cohort_execution_lane_results_ordinal"
+          ]
+        },
+        {
+          "invariant": "unique (execution_attempt_id,lane_id)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_lane_results_lane"
+          ]
+        },
+        {
+          "invariant": "immutable after insert",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ],
+          "covers_fields": [
+            "schema_version",
+            "ordered_accepted_occurrence_digests"
+          ]
+        },
+        {
+          "invariant": "evidence refs are opaque server identifiers, never filesystem paths",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_lane_result.v2:ordinal:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_lane_results_ordinal"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_lane_result.v2:occurrence_counts:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_lane_results_raw",
+            "ck_cohort_execution_lane_results_accepted",
+            "ck_cohort_execution_lane_results_rejected",
+            "ck_cohort_execution_lane_results_truncated"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_lane_result.v2:occurrence_partition:equation",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_lane_results_occurrence_partition"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_lane_result.v2:digests:sha256_hex",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_lane_results_planned_lane_digest_hex",
+            "ck_cohort_execution_lane_results_lane_result_digest_hex",
+            "ck_cohort_execution_lane_results_provider_response_digest_hex",
+            "ck_cohort_execution_lane_results_evidence_digest_hex"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_lane_result.v2:identity_columns:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_lane_results_lane_id_nonempty",
+            "ck_cohort_execution_lane_results_provider_exposure_id_nonempty",
+            "ck_cohort_execution_lane_results_provider_call_id_nonempty",
+            "ck_cohort_execution_lane_results_evidence_ref_nonempty"
+          ]
+        },
+        {
+          "invariant": "FK: lane result belongs to the exact attempt",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_cohort_execution_lane_results_attempt",
+            "ck_cohort_execution_lane_results_execution_attempt_id_nonempty"
+          ]
+        }
+      ]
     },
     "cohort_candidate_set_members": {
       "owner": "cohort_provider_runtime",
@@ -4556,6 +7287,14 @@
           {
             "name": "ck_cohort_candidate_set_members_lane_membership_digest_hex",
             "expression": "lane_membership_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_candidate_set_members_execution_commit_id_nonempty",
+            "expression": "execution_commit_id <> ''"
+          },
+          {
+            "name": "ck_cohort_candidate_set_members_candidate_identity_key_nonempty",
+            "expression": "candidate_identity_key <> ''"
           }
         ],
         "foreign_keys": [
@@ -4577,7 +7316,91 @@
           }
         ],
         "indexes": []
-      }
+      },
+      "invariant_enforcement": [
+        {
+          "invariant": "primary key (execution_commit_id,candidate_identity_key)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "pk_cohort_candidate_set_members",
+            "ck_cohort_candidate_set_members_candidate_identity_key_nonempty"
+          ]
+        },
+        {
+          "invariant": "unique (execution_commit_id,member_ordinal)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_candidate_set_members_ordinal"
+          ]
+        },
+        {
+          "invariant": "unique (execution_commit_id,member_digest)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_candidate_set_members_digest"
+          ]
+        },
+        {
+          "invariant": "immutable",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ],
+          "covers_fields": [
+            "schema_version",
+            "display_name",
+            "headline",
+            "public_profile_url",
+            "ordered_lane_memberships"
+          ]
+        },
+        {
+          "invariant": "ordinals are contiguous 0..member_count-1 in UTF-8 identity order",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ]
+        },
+        {
+          "invariant": "cohort_candidate_member.v1:member_ordinal:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_candidate_set_members_ordinal"
+          ]
+        },
+        {
+          "invariant": "cohort_candidate_member.v1:digests:sha256_hex",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_candidate_set_members_member_digest_hex",
+            "ck_cohort_candidate_set_members_lane_membership_digest_hex"
+          ]
+        },
+        {
+          "invariant": "cohort_candidate_member.v1:candidate_identity_key:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_candidate_set_members_candidate_identity_key_nonempty"
+          ]
+        },
+        {
+          "invariant": "FK: member belongs to the exact execution commit",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_cohort_candidate_set_members_commit",
+            "ck_cohort_candidate_set_members_execution_commit_id_nonempty"
+          ]
+        }
+      ]
     },
     "cohort_execution_commits": {
       "owner": "cohort_provider_runtime",
@@ -4754,6 +7577,18 @@
             "columns": [
               "execution_attempt_id"
             ]
+          },
+          {
+            "name": "uq_cohort_execution_commits_scoped_identity",
+            "columns": [
+              "execution_commit_id",
+              "workspace_id",
+              "acquisition_run_id",
+              "operation_run_id",
+              "workflow_run_id",
+              "candidate_set_digest",
+              "candidate_count"
+            ]
           }
         ],
         "check_constraints": [
@@ -4767,27 +7602,89 @@
           },
           {
             "name": "ck_cohort_execution_commits_candidate_count",
-            "expression": "candidate_count >= 0"
+            "expression": "candidate_count >= 0 AND candidate_count <= 1000"
           },
           {
-            "name": "ck_cohort_execution_commits_commit_contract_digest_hex",
-            "expression": "commit_contract_digest ~ '^[0-9a-f]{64}$'"
+            "name": "ck_cohort_execution_commits_commit_contract_digest",
+            "expression": "commit_contract_digest = 'd7400102f5192048e4a9ee418d5c8095258f64b827d0c2ff90a3bae0a3e63645'"
           },
           {
             "name": "ck_cohort_execution_commits_commit_digest_hex",
             "expression": "commit_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_start_authority_carrier_digest_hex",
+            "expression": "start_authority_carrier_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_execution_authority_digest_hex",
+            "expression": "execution_authority_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_planning_manifest_digest_hex",
+            "expression": "planning_manifest_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_capability_digest_hex",
+            "expression": "capability_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_execution_envelope_digest_hex",
+            "expression": "execution_envelope_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_execution_result_digest_hex",
+            "expression": "execution_result_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_candidate_set_digest_hex",
+            "expression": "candidate_set_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_cohort_execution_commits_execution_commit_id_nonempty",
+            "expression": "execution_commit_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_commits_workspace_id_nonempty",
+            "expression": "workspace_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_commits_acquisition_run_id_nonempty",
+            "expression": "acquisition_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_commits_operation_run_id_nonempty",
+            "expression": "operation_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_commits_workflow_run_id_nonempty",
+            "expression": "workflow_run_id <> ''"
+          },
+          {
+            "name": "ck_cohort_execution_commits_execution_attempt_id_nonempty",
+            "expression": "execution_attempt_id <> ''"
           }
         ],
         "foreign_keys": [
           {
-            "name": "fk_cohort_execution_commits_attempt",
+            "name": "fk_cohort_execution_commits_attempt_scoped",
             "columns": [
-              "execution_attempt_id"
+              "execution_attempt_id",
+              "workspace_id",
+              "acquisition_run_id",
+              "operation_run_id",
+              "workflow_run_id",
+              "execution_generation"
             ],
             "references": {
               "table": "cohort_execution_attempts",
               "columns": [
-                "execution_attempt_id"
+                "execution_attempt_id",
+                "workspace_id",
+                "acquisition_run_id",
+                "operation_run_id",
+                "workflow_run_id",
+                "execution_generation"
               ]
             },
             "on_delete": "restrict",
@@ -4806,7 +7703,148 @@
             "unique": false
           }
         ]
-      }
+      },
+      "invariant_enforcement": [
+        {
+          "invariant": "execution_commit_id PK",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "pk_cohort_execution_commits",
+            "ck_cohort_execution_commits_execution_commit_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "unique (workspace_id,acquisition_run_id,execution_generation)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_commits_run_generation"
+          ]
+        },
+        {
+          "invariant": "unique execution_attempt_id",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_commits_attempt"
+          ]
+        },
+        {
+          "invariant": "insert once",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "transition_guard"
+          ]
+        },
+        {
+          "invariant": "commit_digest covers every preceding contract field except timestamps and itself",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ],
+          "covers_fields": [
+            "commit_digest"
+          ]
+        },
+        {
+          "invariant": "the row and all candidate children commit in one UoW after the locked current-attempt predicate succeeds",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ],
+          "covers_fields": [
+            "execution_result_json"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commit.v1:schema_version:constant",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_commits_schema_version"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commit.v1:execution_generation:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_commits_generation"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commit.v1:candidate_count:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_commits_candidate_count"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commit.v1:commit_contract_digest:contract_identity",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_commits_commit_contract_digest"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commit.v1:digests:sha256_hex",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_commits_commit_digest_hex",
+            "ck_cohort_execution_commits_start_authority_carrier_digest_hex",
+            "ck_cohort_execution_commits_execution_authority_digest_hex",
+            "ck_cohort_execution_commits_planning_manifest_digest_hex",
+            "ck_cohort_execution_commits_capability_digest_hex",
+            "ck_cohort_execution_commits_execution_envelope_digest_hex",
+            "ck_cohort_execution_commits_execution_result_digest_hex",
+            "ck_cohort_execution_commits_candidate_set_digest_hex"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commit.v1:identity_columns:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_cohort_execution_commits_workspace_id_nonempty",
+            "ck_cohort_execution_commits_acquisition_run_id_nonempty",
+            "ck_cohort_execution_commits_operation_run_id_nonempty",
+            "ck_cohort_execution_commits_workflow_run_id_nonempty",
+            "ck_cohort_execution_commits_execution_attempt_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK: tenant/lineage/generation equality with the accepted attempt",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_cohort_execution_commits_attempt_scoped",
+            "uq_cohort_execution_attempts_scoped_identity"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK target: terminal tenant/lineage equality plus exact candidate_set_digest/candidate_count",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_cohort_execution_commits_scoped_identity"
+          ]
+        },
+        {
+          "invariant": "cohort_execution_commits:run lookup index",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ix_cohort_execution_commits_run"
+          ]
+        }
+      ]
     },
     "filter_projection_product_terminals": {
       "owner": "serving_projection_owner",
@@ -5065,6 +8103,13 @@
               "execution_commit_id",
               "projection_id"
             ]
+          },
+          {
+            "name": "uq_filter_projection_product_terminals_scoped_terminal",
+            "columns": [
+              "product_terminal_id",
+              "terminal_digest"
+            ]
           }
         ],
         "check_constraints": [
@@ -5073,16 +8118,24 @@
             "expression": "route_kind = 'run_scope'"
           },
           {
+            "name": "ck_filter_projection_product_terminals_route_state",
+            "expression": "route_state = 'active'"
+          },
+          {
             "name": "ck_filter_projection_product_terminals_mode",
             "expression": "provider_mode IN ('simulate','scripted')"
           },
           {
             "name": "ck_filter_projection_product_terminals_candidate_count",
-            "expression": "candidate_count > 0"
+            "expression": "candidate_count >= 1 AND candidate_count <= 1000"
           },
           {
             "name": "ck_filter_projection_product_terminals_visible",
             "expression": "visible_member_count = candidate_count"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_visible_bounds",
+            "expression": "visible_member_count >= 1 AND visible_member_count <= 1000"
           },
           {
             "name": "ck_filter_projection_product_terminals_excluded",
@@ -5093,24 +8146,108 @@
             "expression": "terminal_generation > 0"
           },
           {
-            "name": "ck_filter_projection_product_terminals_core_digest_hex",
+            "name": "ck_filter_projection_product_terminals_membership_revision",
+            "expression": "membership_revision > 0"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_projection_version",
+            "expression": "projection_version > 0"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_terminal_core_digest_hex",
             "expression": "terminal_core_digest ~ '^[0-9a-f]{64}$'"
           },
           {
             "name": "ck_filter_projection_product_terminals_terminal_digest_hex",
             "expression": "terminal_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_namespace_ref_digest_hex",
+            "expression": "namespace_ref_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_candidate_set_digest_hex",
+            "expression": "candidate_set_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_freshness_ref_digest_hex",
+            "expression": "freshness_ref_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_readiness_ref_digest_hex",
+            "expression": "readiness_ref_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_predecessor_digest_hex",
+            "expression": "predecessor_terminal_digest IS NULL OR predecessor_terminal_digest ~ '^[0-9a-f]{64}$'"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_predecessor_parity",
+            "expression": "(predecessor_terminal_id IS NULL) = (predecessor_terminal_digest IS NULL)"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_terminal_id_nonempty",
+            "expression": "product_terminal_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_workspace_id_nonempty",
+            "expression": "workspace_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_acq_run_id_nonempty",
+            "expression": "acquisition_run_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_op_run_id_nonempty",
+            "expression": "operation_run_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_workflow_run_id_nonempty",
+            "expression": "workflow_run_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_commit_id_nonempty",
+            "expression": "execution_commit_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_projection_id_nonempty",
+            "expression": "projection_id <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_route_key_nonempty",
+            "expression": "route_key <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_route_token_nonempty",
+            "expression": "route_revision_token <> ''"
+          },
+          {
+            "name": "ck_filter_projection_product_terminals_ns_ref_id_nonempty",
+            "expression": "namespace_ref_id <> ''"
           }
         ],
         "foreign_keys": [
           {
-            "name": "fk_filter_projection_product_terminals_commit",
+            "name": "fk_filter_projection_product_terminals_commit_scoped",
             "columns": [
-              "execution_commit_id"
+              "execution_commit_id",
+              "workspace_id",
+              "acquisition_run_id",
+              "operation_run_id",
+              "workflow_run_id",
+              "candidate_set_digest",
+              "candidate_count"
             ],
             "references": {
               "table": "cohort_execution_commits",
               "columns": [
-                "execution_commit_id"
+                "execution_commit_id",
+                "workspace_id",
+                "acquisition_run_id",
+                "operation_run_id",
+                "workflow_run_id",
+                "candidate_set_digest",
+                "candidate_count"
               ]
             },
             "on_delete": "restrict",
@@ -5119,14 +8256,18 @@
             "initially_deferred": false
           },
           {
-            "name": "fk_filter_projection_product_terminals_namespace",
+            "name": "fk_filter_projection_product_terminals_namespace_scoped",
             "columns": [
-              "namespace_ref_id"
+              "namespace_ref_id",
+              "workspace_id",
+              "provider_mode"
             ],
             "references": {
               "table": "agent_runtime_namespace_refs",
               "columns": [
-                "namespace_ref_id"
+                "namespace_ref_id",
+                "workspace_id",
+                "provider_mode"
               ]
             },
             "on_delete": "restrict",
@@ -5135,14 +8276,34 @@
             "initially_deferred": false
           },
           {
-            "name": "fk_filter_projection_product_terminals_predecessor",
+            "name": "fk_filter_projection_product_terminals_namespace_digest",
             "columns": [
-              "predecessor_terminal_id"
+              "namespace_ref_id",
+              "namespace_ref_digest"
+            ],
+            "references": {
+              "table": "agent_runtime_namespace_refs",
+              "columns": [
+                "namespace_ref_id",
+                "ref_digest"
+              ]
+            },
+            "on_delete": "restrict",
+            "on_update": "restrict",
+            "deferrable": false,
+            "initially_deferred": false
+          },
+          {
+            "name": "fk_filter_projection_product_terminals_predecessor_scoped",
+            "columns": [
+              "predecessor_terminal_id",
+              "predecessor_terminal_digest"
             ],
             "references": {
               "table": "filter_projection_product_terminals",
               "columns": [
-                "product_terminal_id"
+                "product_terminal_id",
+                "terminal_digest"
               ]
             },
             "on_delete": "restrict",
@@ -5162,7 +8323,263 @@
             "unique": false
           }
         ]
-      }
+      },
+      "invariant_enforcement": [
+        {
+          "invariant": "product_terminal_id PK",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "pk_filter_projection_product_terminals",
+            "ck_filter_projection_product_terminals_terminal_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "unique (workspace_id,projection_id,membership_revision)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_filter_projection_product_terminals_projection"
+          ]
+        },
+        {
+          "invariant": "unique (workspace_id,execution_commit_id,projection_id)",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "uq_filter_projection_product_terminals_commit"
+          ]
+        },
+        {
+          "invariant": "positive terminal generation; insert once; no UPDATE/DELETE normal path",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_generation"
+          ]
+        },
+        {
+          "invariant": "only route_kind=run_scope and active result route are eligible in S1f0c; collection-authoritative remains excluded",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_route_kind",
+            "ck_filter_projection_product_terminals_route_state"
+          ]
+        },
+        {
+          "invariant": "candidate_count == visible_member_count > 0, excluded count is zero, and member bytes/digest equal the exact execution commit",
+          "source": "prose",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_candidate_count",
+            "ck_filter_projection_product_terminals_visible",
+            "ck_filter_projection_product_terminals_visible_bounds",
+            "ck_filter_projection_product_terminals_excluded",
+            "fk_filter_projection_product_terminals_commit_scoped"
+          ]
+        },
+        {
+          "invariant": "terminal/freshness/readiness digests are recomputed from canonical nested records before insert",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ],
+          "covers_fields": [
+            "schema_version",
+            "owner",
+            "execution_commit_digest",
+            "runtime_namespace_ref",
+            "freshness_ref",
+            "readiness_ref"
+          ]
+        },
+        {
+          "invariant": "inserted by serving_projection_owner in the same transaction as the existing projection parent, exact replacement member set, and run route",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "uow_rule"
+          ]
+        },
+        {
+          "invariant": "not a second connection, second projection writer, or reader repair path",
+          "source": "prose",
+          "enforcement": "repository",
+          "mechanism": [
+            "reader_boundary"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:route_kind:enum",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_route_kind"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:provider_mode:enum",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_mode"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:candidate_count:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_candidate_count"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:visible_member_count:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_visible_bounds"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:visible_member_count:equation",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_visible"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:excluded_member_count:constant",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_excluded"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:terminal_generation:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_generation"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:membership_revision:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_membership_revision"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:projection_version:bounds",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_projection_version"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:digests:sha256_hex",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_terminal_core_digest_hex",
+            "ck_filter_projection_product_terminals_terminal_digest_hex",
+            "ck_filter_projection_product_terminals_candidate_set_digest_hex",
+            "ck_filter_projection_product_terminals_predecessor_digest_hex"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:identity_columns:nonempty",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_workspace_id_nonempty",
+            "ck_filter_projection_product_terminals_acq_run_id_nonempty",
+            "ck_filter_projection_product_terminals_op_run_id_nonempty",
+            "ck_filter_projection_product_terminals_workflow_run_id_nonempty",
+            "ck_filter_projection_product_terminals_commit_id_nonempty",
+            "ck_filter_projection_product_terminals_projection_id_nonempty",
+            "ck_filter_projection_product_terminals_route_key_nonempty",
+            "ck_filter_projection_product_terminals_route_token_nonempty"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminal.v1:predecessor_terminal_digest:parity",
+          "source": "schema",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_predecessor_parity"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminals:namespace_digests:sha256_hex",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_namespace_ref_digest_hex",
+            "ck_filter_projection_product_terminals_freshness_ref_digest_hex",
+            "ck_filter_projection_product_terminals_readiness_ref_digest_hex"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminals:namespace_ref_id:nonempty",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ck_filter_projection_product_terminals_ns_ref_id_nonempty"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK: tenant/lineage equality with the execution commit plus exact candidate_set_digest/candidate_count",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_filter_projection_product_terminals_commit_scoped",
+            "uq_cohort_execution_commits_scoped_identity"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK: tenant/mode equality with the namespace registry",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_filter_projection_product_terminals_namespace_scoped",
+            "uq_agent_runtime_namespace_refs_scoped_mode"
+          ]
+        },
+        {
+          "invariant": "composite scoped FK: namespace ref identity plus digest equality",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_filter_projection_product_terminals_namespace_digest",
+            "uq_agent_runtime_namespace_refs_scoped_digest"
+          ]
+        },
+        {
+          "invariant": "composite scoped self-FK: predecessor id/digest parity",
+          "source": "sql_target",
+          "enforcement": "sql",
+          "mechanism": [
+            "fk_filter_projection_product_terminals_predecessor_scoped",
+            "uq_filter_projection_product_terminals_scoped_terminal"
+          ]
+        },
+        {
+          "invariant": "filter_projection_product_terminals:route lookup index",
+          "source": "physical",
+          "enforcement": "sql",
+          "mechanism": [
+            "ix_filter_projection_product_terminals_route"
+          ]
+        }
+      ]
     }
   },
   "product_terminal_records": {
@@ -6238,7 +9655,7 @@
     "retained_literal_evidence": "retained v1/v2 literals verified present in the tracked tree at the pinned HEAD commit"
   },
   "digest_dependency_dag": {
-    "rule": "depends_on is the sorted set of distinct contracts referenced by a node's refs and binds, excluding constant self-bindings such as commit_contract_digest; a digest may only be constructed after every depends_on digest is complete; the graph must be acyclic; filter_projection_product_terminal.v1#core is the acyclic terminal core (canonical fields 1-24 through terminal_core_digest): freshness/readiness refs derive from the core and the envelope terminal_digest is derived last; identity constants (tool spec pins, serializer owner/revision, schema_version constants, commit_contract_digest) are bound inside each contract's own schema digest and are not construction edges",
+    "rule": "depends_on is the sorted set of distinct contracts referenced by a node's refs and binds, excluding constant self-bindings such as commit_contract_digest and excluding refs to retained_contract_pins literals or external retained specs (those are immutable exact-version-and-digest identity bindings covered by the referencing schema's own digest, not construction edges); a digest may only be constructed after every depends_on digest is complete; the graph must be acyclic; filter_projection_product_terminal.v1#core is the acyclic terminal core (canonical fields 1-24 through terminal_core_digest): freshness/readiness refs derive from the core and the envelope terminal_digest is derived last; identity constants (tool spec pins, serializer owner/revision, schema_version constants, commit_contract_digest) are bound inside each contract's own schema digest and are not construction edges, while the tool result/serializer contract-digest constants are construction binds",
     "nodes": [
       {
         "node": "acquisition_start_authority_carrier.v1",
@@ -6520,8 +9937,20 @@
       {
         "node": "filter_projection_tool_v3",
         "refs": [],
-        "binds": [],
-        "depends_on": []
+        "binds": [
+          {
+            "field": "result_contract_digest",
+            "contract": "filter_projection_result_v3"
+          },
+          {
+            "field": "serializer_contract_digest",
+            "contract": "filter_projection_result_serializer_v3"
+          }
+        ],
+        "depends_on": [
+          "filter_projection_result_serializer_v3",
+          "filter_projection_result_v3"
+        ]
       },
       {
         "node": "acquisition.cohort.execute",

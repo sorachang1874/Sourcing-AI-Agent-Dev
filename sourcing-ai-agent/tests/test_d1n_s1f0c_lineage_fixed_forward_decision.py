@@ -48,6 +48,7 @@ TOP_LEVEL_KEYS = {
     "schema_registry_lock",
     "contract_digest_equation",
     "contract_digests",
+    "retained_contract_pins",
     "digest_dependency_dag",
     "pg_aggregate_surfaces",
     "start_authority_contracts",
@@ -140,16 +141,50 @@ DESCRIPTOR_KEYS = {
     "format",
     "minimum",
     "maximum",
+    "min_items",
+    "max_items",
+    "max_length",
     "items",
     "fields",
     "ref",
+    "ref_digest",
+    "provenance",
+    "value_role",
     "derivation",
     "variants",
     "ordering",
 }
 DESCRIPTOR_TYPES = {"string", "integer", "boolean", "object", "array"}
 DESCRIPTOR_FORMATS = {"sha256_hex", "https_url"}
+DESCRIPTOR_PROVENANCE = {"server_derived", "user_supplied", "owner_state"}
+DESCRIPTOR_VALUE_ROLES = {"control", "identifier", "display_text", "web_url"}
 RESULT_VARIANTS = {"success", "deferred", "error"}
+
+RETAINED_PIN_LITERALS = {
+    "acquisition_root_command_payload.v2",
+    "acquisition_start_command_acceptance_owner_result_ref.v1",
+}
+# External retained specs are pinned by their exact live schema digest, recomputed
+# from the pinned source at the canonization base: this value equals
+# acquisition_plan_preview._PREVIEW_RECORD_TOOL_SPEC.input_schema_digest.
+EXTERNAL_RETAINED_SPEC_REFS = {
+    "acquisition_plan_preview_record_v2": "dace854d5ef4b31e545d983c3fedaf36eee1ea933567daf3f8c0d254a8fcd187",
+}
+NON_CONSTRUCTION_REFS = RETAINED_PIN_LITERALS | set(EXTERNAL_RETAINED_SPEC_REFS)
+
+ENFORCEMENT_SOURCES = {"prose", "schema", "physical", "sql_target"}
+REPOSITORY_MECHANISMS = {"transition_guard", "uow_rule", "reader_boundary", "crash_recovery"}
+PREDICATE_KINDS = {
+    "row_field_eq",
+    "path_eq",
+    "path_constant",
+    "path_formula",
+    "schema_valid",
+    "digest_recompute",
+    "fields_valid",
+    "rows_equal",
+    "deterministic_command_id",
+}
 
 CORE_NODE = "filter_projection_product_terminal.v1#core"
 TERMINAL_ENVELOPE_NODE = "filter_projection_product_terminal.v1"
@@ -236,25 +271,55 @@ def _validate_descriptor(descriptor: object, label: str, *, named: bool) -> None
         assert type(descriptor.get("required")) is bool, label
     elif "required" in descriptor:
         assert type(descriptor["required"]) is bool, label
-    assert descriptor.get("type") in DESCRIPTOR_TYPES, label
+    declared_type = descriptor.get("type")
+    assert declared_type in DESCRIPTOR_TYPES, label
     if "nonempty" in descriptor:
+        assert declared_type == "string", label
         assert descriptor["nonempty"] is True, label
     if "format" in descriptor:
+        assert declared_type == "string", label
         assert descriptor["format"] in DESCRIPTOR_FORMATS, label
-    if "minimum" in descriptor:
-        assert type(descriptor["minimum"]) is int, label
-    if "maximum" in descriptor:
-        assert type(descriptor["maximum"]) is int, label
+    for bound in ("minimum", "maximum"):
+        if bound in descriptor:
+            assert declared_type == "integer", label
+            assert type(descriptor[bound]) is int, label  # rejects bool and float aliases
+    if "minimum" in descriptor and "maximum" in descriptor:
+        assert descriptor["minimum"] <= descriptor["maximum"], label
+    for bound in ("min_items", "max_items"):
+        if bound in descriptor:
+            assert declared_type == "array", label
+            assert type(descriptor[bound]) is int, label  # rejects bool and float aliases
+            assert descriptor[bound] >= 0, label
+    if "min_items" in descriptor and "max_items" in descriptor:
+        assert descriptor["min_items"] <= descriptor["max_items"], label
+    if "max_length" in descriptor:
+        assert declared_type == "string", label
+        assert type(descriptor["max_length"]) is int, label  # rejects bool and float aliases
+        assert descriptor["max_length"] >= 1, label
     if "enum" in descriptor:
+        assert declared_type == "string", label
         assert type(descriptor["enum"]) is list and descriptor["enum"], label
         assert all(type(value) is str for value in descriptor["enum"]), label
     if "constant" in descriptor:
-        assert type(descriptor["constant"]) in (str, int, bool), label
+        # exact constant type against the declared descriptor type: 0 is not False,
+        # True is not 1, and a string constant is never an integer.
+        assert declared_type in ("string", "integer", "boolean"), label
+        expected_python_type = {"string": str, "integer": int, "boolean": bool}[declared_type]
+        assert type(descriptor["constant"]) is expected_python_type, label
     if "variants" in descriptor:
         assert type(descriptor["variants"]) is list and descriptor["variants"], label
         assert set(descriptor["variants"]) <= RESULT_VARIANTS, label
     if "ref" in descriptor:
+        assert declared_type == "object", label
         assert type(descriptor["ref"]) is str and descriptor["ref"], label
+    if "ref_digest" in descriptor:
+        assert "ref" in descriptor, label
+        assert type(descriptor["ref_digest"]) is str and SHA256_RE.fullmatch(descriptor["ref_digest"]), label
+    if "provenance" in descriptor:
+        assert descriptor["provenance"] in DESCRIPTOR_PROVENANCE, label
+    if "value_role" in descriptor:
+        assert declared_type == "string", label
+        assert descriptor["value_role"] in DESCRIPTOR_VALUE_ROLES, label
     if "derivation" in descriptor:
         assert type(descriptor["derivation"]) is str and descriptor["derivation"], label
     if "ordering" in descriptor:
@@ -264,9 +329,98 @@ def _validate_descriptor(descriptor: object, label: str, *, named: bool) -> None
         _validate_descriptor(descriptor["items"], f"{label}.items", named=False)
     if "fields" in descriptor:
         assert descriptor["type"] == "object", label
+        assert "ref" not in descriptor, label
         assert type(descriptor["fields"]) is list, label
         for index, sub in enumerate(descriptor["fields"]):
             _validate_descriptor(sub, f"{label}.fields[{index}]", named=True)
+
+
+def _validate_join_predicate(
+    predicate: object,
+    label: str,
+    row_names: set[str],
+    predicate_ids: set[str],
+) -> None:
+    """Validate one machine-encoded join predicate against its closed kind vocabulary."""
+
+    def _path(value: object, path_label: str) -> list[str]:
+        assert type(value) is list and value, path_label
+        assert all(type(part) is str and part for part in value), path_label
+        return value
+
+    def _endpoint(value: object, endpoint_label: str, *, allow_scope: bool) -> None:
+        assert type(value) is dict, endpoint_label
+        if allow_scope and set(value) == {"scope"}:
+            assert type(value["scope"]) is str and value["scope"], endpoint_label
+            return
+        record = _exact_keys(value, {"row", "path"}, endpoint_label)
+        assert record["row"] in row_names, f"{endpoint_label}: unknown row {record['row']}"
+        _path(record["path"], endpoint_label)
+
+    assert type(predicate) is dict, label
+    assert "id" in predicate, label
+    assert type(predicate["id"]) is str and predicate["id"], label
+    assert predicate["id"] not in predicate_ids, f"{label}: duplicate predicate id"
+    predicate_ids.add(predicate["id"])
+    kind = predicate.get("kind")
+    assert kind in PREDICATE_KINDS, f"{label}: unknown predicate kind {kind}"
+    if kind == "row_field_eq":
+        record = _exact_keys(predicate, {"id", "kind", "row", "field", "other_row", "other_field"}, label)
+        assert record["row"] in row_names and record["other_row"] in row_names, label
+        assert type(record["field"]) is str and record["field"], label
+        assert type(record["other_field"]) is str and record["other_field"], label
+    elif kind == "path_eq":
+        record = _exact_keys(predicate, {"id", "kind", "left", "right"}, label)
+        _endpoint(record["left"], f"{label}.left", allow_scope=False)
+        _endpoint(record["right"], f"{label}.right", allow_scope=True)
+    elif kind == "path_constant":
+        record = _exact_keys(predicate, {"id", "kind", "row", "path", "constant"}, label)
+        assert record["row"] in row_names, label
+        _path(record["path"], label)
+        assert type(record["constant"]) in (str, int, bool), label
+    elif kind == "path_formula":
+        record = _exact_keys(predicate, {"id", "kind", "row", "path", "template", "binds"}, label)
+        assert record["row"] in row_names, label
+        _path(record["path"], label)
+        assert type(record["template"]) is str and record["template"], label
+        assert type(record["binds"]) is dict and record["binds"], label
+        for name, endpoint in record["binds"].items():
+            assert type(name) is str and name, label
+            assert f"{{{name}}}" in record["template"], f"{label}: unbound formula name {name}"
+            _endpoint(endpoint, f"{label}.binds.{name}", allow_scope=True)
+    elif kind == "schema_valid":
+        record = _exact_keys(predicate, {"id", "kind", "row", "path", "ref"}, label)
+        assert record["row"] in row_names, label
+        _path(record["path"], label)
+        assert type(record["ref"]) is str and record["ref"], label
+    elif kind == "digest_recompute":
+        record = _exact_keys(predicate, {"id", "kind", "row", "path", "source", "exclude"}, label)
+        assert record["row"] in row_names, label
+        _path(record["path"], label)
+        _endpoint(record["source"], f"{label}.source", allow_scope=False)
+        assert type(record["exclude"]) is list, label
+        assert all(type(field) is str and field for field in record["exclude"]), label
+    elif kind == "fields_valid":
+        record = _exact_keys(predicate, {"id", "kind", "row", "fields"}, label)
+        assert record["row"] in row_names, label
+        assert type(record["fields"]) is list and record["fields"], label
+        for field_index, field in enumerate(record["fields"]):
+            _validate_descriptor(field, f"{label}.fields[{field_index}]", named=True)
+    elif kind == "rows_equal":
+        record = _exact_keys(predicate, {"id", "kind", "rows", "path"}, label)
+        assert type(record["rows"]) is list and len(record["rows"]) >= 2, label
+        assert all(row in row_names for row in record["rows"]), label
+        _path(record["path"], label)
+    elif kind == "deterministic_command_id":
+        record = _exact_keys(
+            predicate,
+            {"id", "kind", "row", "command_id_field", "workflow_run_id_field", "idempotency_field", "formula"},
+            label,
+        )
+        assert record["row"] in row_names, label
+        for key in ("command_id_field", "workflow_run_id_field", "idempotency_field"):
+            assert type(record[key]) is str and record[key], label
+        assert record["formula"].startswith('command_id == "cmd_" + sha1('), label
 
 
 def _validate_schema_object(schema: object, literal: str, owner: str) -> None:
@@ -381,6 +535,46 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
             f"contract_digests[{index}]",
         )
         _validate_schema_object(record["schema"], record["literal"], record["contract_owner"])
+    digested_literals = {row["literal"] for row in manifest["contract_digests"]}
+    pin_rows = manifest["retained_contract_pins"]
+    assert type(pin_rows) is list and len(pin_rows) == 2, "retained_contract_pins"
+    pin_digests: dict[str, str] = {}
+    for index, row in enumerate(pin_rows):
+        record = _exact_keys(row, {"literal", "retention", "schema", "pin_digest"}, f"retained_contract_pins[{index}]")
+        assert record["literal"] in RETAINED_PIN_LITERALS, record["literal"]
+        assert record["literal"] not in digested_literals, record["literal"]
+        assert type(record["retention"]) is str and record["retention"], record["literal"]
+        _validate_schema_object(record["schema"], record["literal"], record["schema"]["owner"])
+        pin_digests[record["literal"]] = record["pin_digest"]
+    assert set(pin_digests) == RETAINED_PIN_LITERALS
+    # every ref is an immutable exact-version-and-digest reference: adopted contracts
+    # bind the live contract digest, retained pins bind the pin digest, and external
+    # retained specs bind the closed pinned constant
+    all_schemas = [row["schema"] for row in manifest["contract_digests"]]
+    all_schemas.extend(row["schema"] for row in pin_rows)
+    digest_by_literal = {row["literal"]: row["contract_digest"] for row in manifest["contract_digests"]}
+
+    def _check_ref(descriptor: dict[str, Any], label: str) -> None:
+        ref = descriptor.get("ref")
+        if ref is not None:
+            assert "ref_digest" in descriptor, f"{label}: ref without ref_digest"
+            if ref in digest_by_literal:
+                expected = digest_by_literal[ref]
+            elif ref in pin_digests:
+                expected = pin_digests[ref]
+            else:
+                assert ref in EXTERNAL_RETAINED_SPEC_REFS, f"{label}: unknown ref {ref}"
+                expected = EXTERNAL_RETAINED_SPEC_REFS[ref]
+            assert descriptor["ref_digest"] == expected, f"{label}: stale ref_digest for {ref}"
+        for sub in descriptor.get("fields", []):
+            _check_ref(sub, label)
+        items = descriptor.get("items")
+        if isinstance(items, dict):
+            _check_ref(items, label)
+
+    for schema in all_schemas:
+        for field in schema["fields"]:
+            _check_ref(field, schema["schema_version"])
     dag = _exact_keys(manifest["digest_dependency_dag"], {"rule", "nodes"}, "digest_dependency_dag")
     for index, row in enumerate(dag["nodes"]):
         node = _exact_keys(row, {"node", "refs", "binds", "depends_on"}, f"digest_dependency_dag.nodes[{index}]")
@@ -412,6 +606,8 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         },
         "pg_aggregate_surfaces.migration_reservation",
     )
+    assert type(surfaces["migration_reservation"]["slot"]) is int, "migration_reservation.slot"
+    assert type(surfaces["migration_reservation"]["predecessor_slot"]) is int, "migration_reservation.predecessor_slot"
     start = _exact_keys(
         manifest["start_authority_contracts"],
         {"carrier", "execution_authority", "writer_taxonomy", "source_join"},
@@ -471,6 +667,8 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         {"requested", "transport_derived", "value_rule", "provider_mode_boundary", "discovery_rule"},
         "source_join.scope_inputs",
     )
+    join_row_names: set[str] = set()
+    pending_predicates: list[tuple[str, dict[str, Any]]] = []
     for index, row in enumerate(join["rows"]):
         join_row = _exact_keys(
             row,
@@ -482,7 +680,7 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
                 "alternate_keys",
                 "expect",
                 "links",
-                "equality_predicate",
+                "predicates",
                 "uniqueness_outcome",
                 "command_identity",
                 "command_type",
@@ -493,12 +691,33 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
             },
             f"source_join.rows[{index}]",
         )
+        assert type(join_row["ordinal"]) is int, f"source_join.rows[{index}].ordinal"
+        assert type(join_row["cardinality"]) is int, f"source_join.rows[{index}].cardinality"
+        row_name = join_row["relation"] if join_row["row_role"] == "base" else join_row["command_identity"]
+        assert type(row_name) is str and row_name, f"source_join.rows[{index}]"
+        join_row_names.add(row_name)
+        assert type(join_row["alternate_keys"]) is list and join_row["alternate_keys"], f"source_join.rows[{index}]"
+        for ak_index, alternate_key in enumerate(join_row["alternate_keys"]):
+            ak_row = _exact_keys(
+                alternate_key,
+                {"fields", "source"},
+                f"source_join.rows[{index}].alternate_keys[{ak_index}]",
+            )
+            assert type(ak_row["fields"]) is list and ak_row["fields"], f"source_join.rows[{index}]"
+            assert all(type(field) is str and field for field in ak_row["fields"]), f"source_join.rows[{index}]"
+            assert type(ak_row["source"]) is str and ak_row["source"], f"source_join.rows[{index}]"
         for link_index, link in enumerate(join_row["links"]):
             _exact_keys(
                 link,
                 {"local_field", "remote_row", "remote_field"},
                 f"source_join.rows[{index}].links[{link_index}]",
             )
+        assert type(join_row["predicates"]) is list and join_row["predicates"], f"source_join.rows[{index}]"
+        for pred_index, predicate in enumerate(join_row["predicates"]):
+            pending_predicates.append((f"source_join.rows[{index}].predicates[{pred_index}]", predicate))
+    predicate_ids: set[str] = set()
+    for label, predicate in pending_predicates:
+        _validate_join_predicate(predicate, label, join_row_names, predicate_ids)
     _exact_keys(
         join["command_chain"],
         {"identities", "parent_predicates", "same_group_rule", "cardinality_rule", "commit_parent_fallback"},
@@ -516,7 +735,8 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         "source_join.lock_keys",
     )
     for index, row in enumerate(lock_keys["advisory_groups"]):
-        _exact_keys(row, {"order", "keys"}, f"source_join.lock_keys.advisory_groups[{index}]")
+        advisory_group = _exact_keys(row, {"order", "keys"}, f"source_join.lock_keys.advisory_groups[{index}]")
+        assert type(advisory_group["order"]) is int, f"source_join.lock_keys.advisory_groups[{index}].order"
     runtime = _exact_keys(
         manifest["runtime_namespace_capability_envelope"],
         {
@@ -635,8 +855,13 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
     )
     relations = manifest["physical_relations"]
     assert type(relations) is dict
+    descriptor_mechanisms: dict[str, set[str]] = {}
     for name, row in relations.items():
-        relation = _exact_keys(row, {"owner", "columns", "constraints", "descriptor"}, f"physical_relations.{name}")
+        relation = _exact_keys(
+            row,
+            {"owner", "columns", "constraints", "descriptor", "invariant_enforcement"},
+            f"physical_relations.{name}",
+        )
         descriptor = _exact_keys(
             relation["descriptor"],
             {"columns", "primary_key", "unique_constraints", "check_constraints", "foreign_keys", "indexes"},
@@ -659,7 +884,49 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
                 fk_row["references"], {"table", "columns"}, f"{name}.descriptor.foreign_keys[{fk_index}].references"
             )
         for ix_index, index_row in enumerate(descriptor["indexes"]):
-            _exact_keys(index_row, {"name", "columns", "unique"}, f"{name}.descriptor.indexes[{ix_index}]")
+            index_record = _exact_keys(
+                index_row,
+                {"name", "columns", "unique"} | ({"where"} if "where" in index_row else set()),
+                f"{name}.descriptor.indexes[{ix_index}]",
+            )
+            assert type(index_record["unique"]) is bool, f"{name}.descriptor.indexes[{ix_index}]"
+            if "where" in index_record:
+                assert type(index_record["where"]) is str and index_record["where"], (
+                    f"{name}.descriptor.indexes[{ix_index}].where"
+                )
+        descriptor_mechanisms[name] = (
+            {descriptor["primary_key"]["name"]}
+            | {group["name"] for group in descriptor["unique_constraints"]}
+            | {check["name"] for check in descriptor["check_constraints"]}
+            | {foreign_key["name"] for foreign_key in descriptor["foreign_keys"]}
+            | {index_row["name"] for index_row in descriptor["indexes"]}
+        )
+    all_mechanisms = set().union(*descriptor_mechanisms.values())
+    for name, row in relations.items():
+        enforcement_rows = row["invariant_enforcement"]
+        assert type(enforcement_rows) is list and enforcement_rows, name
+        for row_index, enforcement_row in enumerate(enforcement_rows):
+            label = f"physical_relations.{name}.invariant_enforcement[{row_index}]"
+            record = _exact_keys(
+                enforcement_row,
+                {"invariant", "source", "enforcement", "mechanism"}
+                | ({"covers_fields"} if "covers_fields" in enforcement_row else set()),
+                label,
+            )
+            assert type(record["invariant"]) is str and record["invariant"], label
+            assert record["source"] in ENFORCEMENT_SOURCES, label
+            assert record["enforcement"] in ("sql", "repository"), label
+            assert type(record["mechanism"]) is list and record["mechanism"], label
+            assert all(type(mechanism) is str and mechanism for mechanism in record["mechanism"]), label
+            if record["enforcement"] == "sql":
+                for mechanism in record["mechanism"]:
+                    assert mechanism in all_mechanisms, f"{label}: unknown sql mechanism {mechanism}"
+            else:
+                for mechanism in record["mechanism"]:
+                    assert mechanism in REPOSITORY_MECHANISMS, f"{label}: unknown repository mechanism {mechanism}"
+            if "covers_fields" in record:
+                assert type(record["covers_fields"]) is list and record["covers_fields"], label
+                assert all(type(field) is str and field for field in record["covers_fields"]), label
     terminal = _exact_keys(
         manifest["product_terminal_records"],
         {
@@ -833,11 +1100,12 @@ def _validate_closed_manifest(value: object) -> dict[str, Any]:
         "lock_order",
     )
     for index, row in enumerate(lock["groups"]):
-        _exact_keys(
+        lock_group = _exact_keys(
             row,
             {"order", "lock_group", "used_by", "first_write_after"},
             f"lock_order.groups[{index}]",
         )
+        assert type(lock_group["order"]) is int, f"lock_order.groups[{index}].order"
     for index, row in enumerate(lock["write_race_outcomes"]):
         _exact_keys(
             row,
@@ -968,7 +1236,7 @@ def _git_grep_paths(needle: str, head: str) -> list[str]:
 
 def _schema_refs(descriptor: dict[str, Any]) -> set[str]:
     refs: set[str] = set()
-    if "ref" in descriptor:
+    if "ref" in descriptor and descriptor["ref"] not in NON_CONSTRUCTION_REFS:
         refs.add(descriptor["ref"])
     if "items" in descriptor:
         refs |= _schema_refs(descriptor["items"])
@@ -1074,8 +1342,100 @@ def _assert_pg_descriptors_valid(manifest: dict[str, Any]) -> None:
         assert len(identifier.encode("utf-8")) <= 63, identifier
 
 
-def _join_positive_rows() -> list[dict[str, Any]]:
-    return [
+def _sha256_json(value: Any) -> str:
+    blob = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _command_id(workflow_run_id: str, idempotency_key: str) -> str:
+    return "cmd_" + hashlib.sha1(f"{workflow_run_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:24]
+
+
+def _join_fixture() -> dict[str, Any]:
+    """Deterministic positive fixture: every digest/idempotency/command id is recomputed."""
+
+    receipt = {"receipt_id": "rcpt-1", "receipt_digest": "a" * 64}
+    occurrence = {"result_slot_id": "slot-1", "slot_generation": 3, "logical_occurrence_digest": "b" * 64}
+    snapshot = {
+        "schema_version": "acquisition_start_snapshot.v2",
+        "preview": {"preview_id": "pv-1", "marker": "external-preview-bytes"},
+        "request_pins": {"schema_version": "acquisition_root_request_v2", "schema_digest": "c" * 64},
+        "result_pins": {
+            "schema_version": "acquisition_start_result_v2",
+            "schema_digest": "d" * 64,
+            "serializer_owner": "acquisition.start_result_serializer_v2",
+            "serializer_revision": "acquisition_start_result_serializer_v2",
+            "serializer_contract_digest": "e" * 64,
+            "interpretation_contract_version": "action_result_interpretation_contract_v3",
+            "interpretation_contract_digest": "f" * 64,
+        },
+        "tool_pins": {"tool_spec_version": "v2.1", "tool_spec_digest": "0" * 64},
+    }
+    snapshot["snapshot_digest"] = _sha256_json(snapshot)
+    payload = {
+        "schema_version": "acquisition_root_command_payload.v2",
+        "command_type": "acquisition.run.create",
+        "action_id": "act-1",
+        "operation_run_id": "op-1",
+        "workflow_run_id": "wf-1",
+        "confirmation_receipt_ref": copy.deepcopy(receipt),
+        "start_snapshot": copy.deepcopy(snapshot),
+        "start_snapshot_digest": snapshot["snapshot_digest"],
+    }
+    payload["payload_digest"] = _sha256_json(payload)
+    root_idempotency = f"acquisition.run.create:start-v2:{receipt['receipt_digest']}"
+    root_command_id = _command_id("wf-1", root_idempotency)
+    owner_ref = {
+        "schema_version": "acquisition_start_command_acceptance_owner_result_ref.v1",
+        "runtime_namespace": "ns-1",
+        "provider_mode": "simulate",
+        "workspace_id": "ws-1",
+        "action_id": "act-1",
+        "operation_run_id": "op-1",
+        "workflow_run_id": "wf-1",
+        "workflow_command_id": root_command_id,
+        "terminal_winner_id": "winner-1",
+        "terminal_winner_sequence_number": 1,
+        "command_source_event_id": "evt-src-root",
+        "command_source_event_sequence_number": 2,
+        "command_source_event_contract_digest": "1" * 64,
+        "confirmation_receipt_ref": copy.deepcopy(receipt),
+        "parent_budget_envelope_ref": {
+            "owner_id": "budget-owner-1",
+            "owner_revision": "rev-1",
+            "owner_contract_digest": "2" * 64,
+            "confirmation_receipt_id": "rcpt-1",
+            "confirmation_receipt_digest": receipt["receipt_digest"],
+            "budget_digest": "3" * 64,
+        },
+        "start_snapshot_digest": snapshot["snapshot_digest"],
+        "root_command_payload_digest": payload["payload_digest"],
+        "result_occurrence_ref": copy.deepcopy(occurrence),
+    }
+    carrier = {
+        "schema_version": "acquisition_start_authority_carrier.v1",
+        "root_command_payload": copy.deepcopy(payload),
+        "root_command_payload_digest": payload["payload_digest"],
+        "command_acceptance_owner_ref": copy.deepcopy(owner_ref),
+        "command_acceptance_owner_ref_digest": _sha256_json(owner_ref),
+    }
+    carrier["carrier_digest"] = _sha256_json(carrier)
+    bundle = {
+        "schema_version": "acquisition_execution_authority.v1",
+        "owner": "acquisition_planner",
+        "workspace_id": "ws-1",
+        "operation_run_id": "op-1",
+        "workflow_run_id": "wf-1",
+        "plan_id": "plan-1",
+        "plan_review_id": 11,
+        "request_digest": "4" * 64,
+        "plan_body_digest": "5" * 64,
+        "start_authority_carrier": copy.deepcopy(carrier),
+    }
+    bundle["authority_digest"] = _sha256_json(bundle)
+
+    start_idempotency = f"agent-start-v2:{occurrence['logical_occurrence_digest']}"
+    rows: list[dict[str, Any]] = [
         {
             "relation": "operation_runs",
             "operation_run_id": "op-1",
@@ -1083,8 +1443,8 @@ def _join_positive_rows() -> list[dict[str, Any]]:
             "operation_type": "acquisition_run",
             "workspace_id": "ws-1",
             "action_id": "act-1",
-            "start_idempotency": "agent-start-v2:abc",
-            "result_ref_json": {"owner": "ref"},
+            "start_idempotency": start_idempotency,
+            "result_ref_json": copy.deepcopy(owner_ref),
         },
         {
             "relation": "agent_actions",
@@ -1093,80 +1453,315 @@ def _join_positive_rows() -> list[dict[str, Any]]:
             "owner_module": "acquisition_run_writer",
             "operation_type": "acquisition_run",
             "workspace_id": "ws-1",
-            "start_idempotency": "agent-start-v2:abc",
-            "result_ref_json": {"owner": "ref"},
+            "start_idempotency": start_idempotency,
+            "result_ref_json": copy.deepcopy(owner_ref),
             "bound_requester_id": "req-1",
-            "owner_ref_provider_mode": "simulate",
-            "owner_ref_runtime_namespace": "ns-1",
+            "status": "queued",
+            "approval_status": "approved",
         },
-        {
+    ]
+    command_specs = [
+        (
+            "root",
+            "acquisition.run.create",
+            "acquisition_run_writer",
+            "acquisition_run_create",
+            "",
+            root_idempotency,
+            "evt-src-root",
+        ),
+        (
+            "intent",
+            "acquisition.intent.resolve",
+            "acquisition_planner",
+            "acquisition_intent_resolve",
+            None,
+            "acquisition.intent.resolve:wf-1:op-1",
+            "evt-src-intent",
+        ),
+        (
+            "build",
+            "acquisition.plan.build",
+            "acquisition_planner",
+            "acquisition_plan_build",
+            None,
+            "acquisition.plan.build:wf-1:op-1",
+            "evt-src-build",
+        ),
+        (
+            "review",
+            "acquisition.plan_review.request",
+            "acquisition_planner",
+            "acquisition_plan_review_request",
+            None,
+            "acquisition.plan_review.request:wf-1:op-1",
+            "evt-src-review",
+        ),
+        (
+            "commit",
+            "acquisition.plan.commit",
+            "acquisition_planner",
+            "acquisition_plan_commit",
+            None,
+            "acquisition.plan.commit:wf-1:op-1",
+            "evt-src-commit",
+        ),
+    ]
+    command_ids: dict[str, str] = {}
+    for identity, command_type, owner, stage_id, _parent, idempotency, source_event in command_specs:
+        command_ids[identity] = _command_id("wf-1", idempotency)
+    parents = {
+        "root": "",
+        "intent": command_ids["root"],
+        "build": command_ids["intent"],
+        "review": command_ids["build"],
+        "commit": command_ids["review"],
+    }
+    for identity, command_type, owner, stage_id, _parent, idempotency, source_event in command_specs:
+        row: dict[str, Any] = {
             "relation": "workflow_commands",
-            "command_identity": "root",
-            "command_id": "cmd-root",
-            "command_type": "acquisition.run.create",
-            "command_owner": "acquisition_run_writer",
-            "stage_id": "acquisition_run_create",
-            "parent_command_id": "",
+            "command_identity": identity,
+            "command_id": command_ids[identity],
+            "command_type": command_type,
+            "command_owner": owner,
+            "stage_id": stage_id,
+            "parent_command_id": parents[identity],
             "workflow_run_id": "wf-1",
             "operation_id": "op-1",
-        },
-        {
-            "relation": "workflow_commands",
-            "command_identity": "intent",
-            "command_id": "cmd-intent",
-            "command_type": "acquisition.intent.resolve",
-            "command_owner": "acquisition_planner",
-            "stage_id": "acquisition_intent_resolve",
-            "parent_command_id": "cmd-root",
-            "workflow_run_id": "wf-1",
-            "operation_id": "op-1",
-        },
-        {
-            "relation": "workflow_commands",
-            "command_identity": "build",
-            "command_id": "cmd-build",
-            "command_type": "acquisition.plan.build",
-            "command_owner": "acquisition_planner",
-            "stage_id": "acquisition_plan_build",
-            "parent_command_id": "cmd-intent",
-            "workflow_run_id": "wf-1",
-            "operation_id": "op-1",
-        },
-        {
-            "relation": "workflow_commands",
-            "command_identity": "review",
-            "command_id": "cmd-review",
-            "command_type": "acquisition.plan_review.request",
-            "command_owner": "acquisition_planner",
-            "stage_id": "acquisition_plan_review_request",
-            "parent_command_id": "cmd-build",
-            "workflow_run_id": "wf-1",
-            "operation_id": "op-1",
-        },
-        {
-            "relation": "workflow_commands",
-            "command_identity": "commit",
-            "command_id": "cmd-commit",
-            "command_type": "acquisition.plan.commit",
-            "command_owner": "acquisition_planner",
-            "stage_id": "acquisition_plan_commit",
-            "parent_command_id": "cmd-review",
-            "workflow_run_id": "wf-1",
-            "operation_id": "op-1",
-        },
+            "idempotency_key": idempotency,
+            "causal_group_id": "cg-1",
+            "source_event_id": source_event,
+            "source_event_type": "CommandPlanRequested",
+            "command_payload_causality": {
+                "causal_group_id": "cg-1",
+                "source_event_id": source_event,
+                "source_event_type": "CommandPlanRequested",
+            },
+        }
+        if identity == "root":
+            row["payload_json"] = copy.deepcopy(payload)
+        else:
+            row["carrier_json"] = copy.deepcopy(carrier)
+        if identity in ("build", "review", "commit"):
+            row["plan_id"] = "plan-1"
+        if identity in ("review", "commit"):
+            row["plan_review_id"] = 11
+        rows.append(row)
+    rows.append(
         {
             "relation": "acquisition_runs",
             "acquisition_run_id": "run-1",
             "workspace_id": "ws-1",
             "operation_run_id": "op-1",
             "workflow_run_id": "wf-1",
-            "metadata_source_command_id": "cmd-commit",
-        },
-    ]
+            "metadata_source_command_id": command_ids["commit"],
+            "idempotency_key": f"acquisition_run:plan_commit:{command_ids['commit']}",
+            "plan_id": "plan-1",
+            "plan_review_id": 11,
+            "execution_bundle_json": copy.deepcopy(bundle),
+        }
+    )
+    return {"rows": rows, "command_ids": command_ids}
 
 
-def _evaluate_source_join(spec: dict[str, Any], scope: dict[str, str], rows: list[dict[str, Any]]) -> str:
-    """Evaluate the manifest's structured join predicate. Returns accepted or the public miss."""
+def _join_positive_rows() -> list[dict[str, Any]]:
+    return _join_fixture()["rows"]
+
+
+def _resolve_path(row: dict[str, Any], path: list[str]) -> Any:
+    current: Any = row
+    for part in path:
+        if type(current) is not dict or part not in current:
+            return _MISSING
+        current = current[part]
+    return current
+
+
+class _Missing:
+    pass
+
+
+_MISSING = _Missing()
+
+
+def _validate_value_against_descriptor(value: Any, descriptor: dict[str, Any], schemas: dict[str, Any]) -> bool:
+    """Execute one manifest descriptor against a concrete value, recursively closed."""
+
+    declared = descriptor["type"]
+    if declared == "string":
+        if type(value) is not str:
+            return False
+        if descriptor.get("nonempty") and not value:
+            return False
+        if "max_length" in descriptor and len(value) > descriptor["max_length"]:
+            return False
+        if "enum" in descriptor and value not in descriptor["enum"]:
+            return False
+        if descriptor.get("format") == "sha256_hex" and not SHA256_RE.fullmatch(value):
+            return False
+        if descriptor.get("format") == "https_url" and not (
+            value.startswith("https://") and not any(character.isspace() for character in value)
+        ):
+            return False
+    elif declared == "integer":
+        if type(value) is not int:
+            return False
+        if "minimum" in descriptor and value < descriptor["minimum"]:
+            return False
+        if "maximum" in descriptor and value > descriptor["maximum"]:
+            return False
+    elif declared == "boolean":
+        if type(value) is not bool:
+            return False
+    elif declared == "object":
+        if type(value) is not dict:
+            return False
+        if "ref" in descriptor:
+            ref = descriptor["ref"]
+            if ref in EXTERNAL_RETAINED_SPEC_REFS:
+                return True
+            schema = schemas.get(ref)
+            if schema is None:
+                return False
+            return _validate_object_against_fields(value, schema["fields"], schemas)
+        fields = descriptor.get("fields")
+        if fields is None:
+            return False
+        return _validate_object_against_fields(value, fields, schemas)
+    elif declared == "array":
+        if type(value) is not list:
+            return False
+        if "min_items" in descriptor and len(value) < descriptor["min_items"]:
+            return False
+        if "max_items" in descriptor and len(value) > descriptor["max_items"]:
+            return False
+        items = descriptor.get("items")
+        if not isinstance(items, dict):
+            return False
+        return all(_validate_value_against_descriptor(item, items, schemas) for item in value)
+    if "constant" in descriptor:
+        return _type_strict_equal(value, descriptor["constant"])
+    return True
+
+
+def _validate_object_against_fields(
+    value: dict[str, Any], fields: list[dict[str, Any]], schemas: dict[str, Any]
+) -> bool:
+    declared = {field["name"]: field for field in fields}
+    required = {name for name, field in declared.items() if field.get("required") is True}
+    if not required <= set(value):
+        return False
+    if not set(value) <= set(declared):
+        return False
+    return all(_validate_value_against_descriptor(value[name], declared[name], schemas) for name in value)
+
+
+def _manifest_schemas(manifest: dict[str, Any]) -> dict[str, Any]:
+    schemas = {row["literal"]: row["schema"] for row in manifest["contract_digests"]}
+    schemas.update({row["literal"]: row["schema"] for row in manifest["retained_contract_pins"]})
+    return schemas
+
+
+def _execute_predicate(
+    predicate: dict[str, Any],
+    selected: dict[str, dict[str, Any]],
+    scope: dict[str, str],
+    schemas: dict[str, Any],
+) -> bool:
+    """Execute one machine-encoded join predicate; every kind is machine-enforced data."""
+
+    kind = predicate["kind"]
+
+    def _endpoint(endpoint: dict[str, Any]) -> Any:
+        if "scope" in endpoint:
+            return scope.get(endpoint["scope"], _MISSING)
+        row = selected.get(endpoint["row"])
+        if row is None:
+            return _MISSING
+        return _resolve_path(row, endpoint["path"])
+
+    if kind == "row_field_eq":
+        left = selected[predicate["row"]].get(predicate["field"], _MISSING)
+        right = selected[predicate["other_row"]].get(predicate["other_field"], _MISSING)
+        return left is not _MISSING and right is not _MISSING and _type_strict_equal(left, right)
+    if kind == "path_eq":
+        left = _endpoint(predicate["left"])
+        right = _endpoint(predicate["right"])
+        return left is not _MISSING and right is not _MISSING and _type_strict_equal(left, right)
+    if kind == "path_constant":
+        value = _resolve_path(selected[predicate["row"]], predicate["path"])
+        return value is not _MISSING and _type_strict_equal(value, predicate["constant"])
+    if kind == "path_formula":
+        binds: dict[str, str] = {}
+        for name, endpoint in predicate["binds"].items():
+            bound = _endpoint(endpoint)
+            if type(bound) is not str:
+                return False
+            binds[name] = bound
+        rendered = predicate["template"]
+        for name, bound in binds.items():
+            rendered = rendered.replace("{" + name + "}", bound)
+        value = _resolve_path(selected[predicate["row"]], predicate["path"])
+        return type(value) is str and value == rendered
+    if kind == "schema_valid":
+        value = _resolve_path(selected[predicate["row"]], predicate["path"])
+        if value is _MISSING:
+            return False
+        ref = predicate["ref"]
+        if ref in EXTERNAL_RETAINED_SPEC_REFS:
+            return type(value) is dict
+        schema = schemas.get(ref)
+        if schema is None:
+            return False
+        return _validate_object_against_fields(value, schema["fields"], schemas)
+    if kind == "digest_recompute":
+        digest_value = _resolve_path(selected[predicate["row"]], predicate["path"])
+        source = _endpoint(predicate["source"])
+        if type(digest_value) is not str or type(source) is not dict:
+            return False
+        rebuilt = {key: value for key, value in source.items() if key not in set(predicate["exclude"])}
+        return digest_value == _sha256_json(rebuilt)
+    if kind == "fields_valid":
+        row = selected[predicate["row"]]
+        for field in predicate["fields"]:
+            value = row.get(field["name"], _MISSING)
+            if value is _MISSING:
+                return False
+            if not _validate_value_against_descriptor(value, field, schemas):
+                return False
+        return True
+    if kind == "rows_equal":
+        values = [_resolve_path(selected[row], predicate["path"]) for row in predicate["rows"]]
+        if any(value is _MISSING for value in values):
+            return False
+        first = values[0]
+        return all(_type_strict_equal(first, value) for value in values[1:])
+    if kind == "deterministic_command_id":
+        row = selected[predicate["row"]]
+        workflow_run_id = row.get(predicate["workflow_run_id_field"])
+        idempotency = row.get(predicate["idempotency_field"])
+        command_id = row.get(predicate["command_id_field"])
+        if type(workflow_run_id) is not str or type(idempotency) is not str or type(command_id) is not str:
+            return False
+        return command_id == _command_id(workflow_run_id, idempotency)
+    raise AssertionError(f"unknown predicate kind {kind}")
+
+
+def _evaluate_source_join(
+    spec: dict[str, Any],
+    scope: dict[str, str],
+    rows: list[dict[str, Any]],
+    witness: list[str] | None = None,
+    schemas: dict[str, Any] | None = None,
+) -> str:
+    """Evaluate the manifest's structured join predicate. Returns accepted or the public miss.
+
+    Every encoded predicate is executed in row order; when ``witness`` is given, the
+    ids of all evaluated predicates are appended so the test can prove full coverage.
+    """
+
+    if schemas is None:
+        schemas = _manifest_schemas(_validate_closed_manifest(_load(MANIFEST_PATH)))
     scope_inputs = spec["scope_inputs"]
     for field in scope_inputs["requested"] + scope_inputs["transport_derived"]:
         if type(scope.get(field)) is not str or not scope[field]:
@@ -1198,16 +1793,71 @@ def _evaluate_source_join(spec: dict[str, Any], scope: dict[str, str], rows: lis
     bindings = {binding["field"] for binding in spec["requester_bindings"]}
     assert bindings == {"workspace_id", "requester_id", "provider_mode", "runtime_namespace"}
     for relation in ("operation_runs", "agent_actions", "acquisition_runs"):
-        if selected[relation].get("workspace_id") != scope["workspace_id"]:
+        if not _type_strict_equal(selected[relation].get("workspace_id"), scope["workspace_id"]):
             return "projection_not_found"
     action = selected["agent_actions"]
-    if action.get("bound_requester_id") != scope["requester_id"]:
+    if not _type_strict_equal(action.get("bound_requester_id"), scope["requester_id"]):
         return "projection_not_found"
-    if action.get("owner_ref_provider_mode") != scope["provider_mode"]:
-        return "projection_not_found"
-    if action.get("owner_ref_runtime_namespace") != scope["runtime_namespace"]:
-        return "projection_not_found"
+
+    for spec_row in spec["rows"]:
+        for predicate in spec_row["predicates"]:
+            if not _execute_predicate(predicate, selected, scope, schemas):
+                return "projection_not_found"
+            if witness is not None:
+                witness.append(predicate["id"])
     return "accepted"
+
+
+def _sabotage_for_predicate(predicate: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    """Apply one hostile mutation derived from an encoded predicate's own target."""
+
+    def _find_row(name: str) -> dict[str, Any]:
+        for row in rows:
+            if row.get("command_identity") == name:
+                return row
+            if row.get("relation") == name and row.get("command_identity") is None:
+                return row
+        raise AssertionError(f"unknown join row {name}")
+
+    kind = predicate["kind"]
+    descriptor: dict[str, Any] | None = None
+    if kind == "row_field_eq":
+        row_name, path = predicate["row"], [predicate["field"]]
+    elif kind == "path_eq":
+        row_name, path = predicate["left"]["row"], predicate["left"]["path"]
+    elif kind in ("path_constant", "path_formula", "schema_valid", "digest_recompute"):
+        row_name, path = predicate["row"], predicate["path"]
+    elif kind == "fields_valid":
+        row_name = predicate["row"]
+        descriptor = predicate["fields"][0]
+        path = [descriptor["name"]]
+    elif kind == "rows_equal":
+        row_name, path = predicate["rows"][-1], predicate["path"]
+    elif kind == "deterministic_command_id":
+        row_name, path = predicate["row"], [predicate["command_id_field"]]
+    else:  # pragma: no cover - guarded by _validate_join_predicate
+        raise AssertionError(f"unknown predicate kind {kind}")
+    target = _find_row(row_name)
+    parent = target
+    for part in path[:-1]:
+        parent = parent[part]
+    leaf = path[-1]
+    if descriptor is not None:
+        # violate the declared descriptor itself: integer bounds or nonempty strings
+        if descriptor["type"] == "integer":
+            parent[leaf] = descriptor.get("minimum", 1) - 1
+        else:
+            parent[leaf] = ""
+        return
+    current = parent[leaf]
+    if type(current) is bool:
+        parent[leaf] = 0
+    elif type(current) is int:
+        parent[leaf] = "sabotaged"
+    elif type(current) is str:
+        parent[leaf] = 0
+    else:
+        parent[leaf] = {"__sabotage__": 0}
 
 
 def test_s1f0c_ff_manifest_is_closed_and_unknown_keys_fail() -> None:
@@ -1364,6 +2014,42 @@ def test_s1f0c_ff_contract_digests_recompute_exactly_under_the_pinned_equation()
         recomputed = _contract_digest(row["schema"])
         assert row["contract_digest"] == recomputed, row["literal"]
         assert SHA256_RE.fullmatch(row["contract_digest"]), row["literal"]
+    for row in manifest["retained_contract_pins"]:
+        assert _contract_digest(row["schema"]) == row["pin_digest"], row["literal"]
+        assert SHA256_RE.fullmatch(row["pin_digest"]), row["literal"]
+
+    # the tool contract binds the exact result and serializer contract digests
+    digests = {row["literal"]: row for row in manifest["contract_digests"]}
+    tool_fields = {field["name"]: field for field in digests["filter_projection_tool_v3"]["schema"]["fields"]}
+    assert (
+        tool_fields["result_contract_digest"]["constant"] == digests["filter_projection_result_v3"]["contract_digest"]
+    )
+    assert (
+        tool_fields["serializer_contract_digest"]["constant"]
+        == digests["filter_projection_result_serializer_v3"]["contract_digest"]
+    )
+    # the carrier retained root/owner-ref pins are exact-version-and-digest references
+    pin_digests = {row["literal"]: row["pin_digest"] for row in manifest["retained_contract_pins"]}
+    carrier_fields = {
+        field["name"]: field for field in digests["acquisition_start_authority_carrier.v1"]["schema"]["fields"]
+    }
+    assert carrier_fields["root_command_payload"]["ref"] == "acquisition_root_command_payload.v2"
+    assert carrier_fields["root_command_payload"]["ref_digest"] == pin_digests["acquisition_root_command_payload.v2"]
+    assert carrier_fields["command_acceptance_owner_ref"]["ref"] == (
+        "acquisition_start_command_acceptance_owner_result_ref.v1"
+    )
+    assert (
+        carrier_fields["command_acceptance_owner_ref"]["ref_digest"]
+        == pin_digests["acquisition_start_command_acceptance_owner_result_ref.v1"]
+    )
+    # every adopted ref carries the exact target contract digest
+    for row in manifest["contract_digests"]:
+        for field in row["schema"]["fields"]:
+            for descriptor in [field, *field.get("fields", []), field.get("items", {})]:
+                if isinstance(descriptor, dict) and descriptor.get("ref") in digests:
+                    assert descriptor["ref_digest"] == digests[descriptor["ref"]]["contract_digest"], (
+                        f"{row['literal']}.{descriptor.get('name')}"
+                    )
 
     # hostile: semantics drift must move the digest (enum widening / derivation deletion)
     capability = next(row for row in manifest["contract_digests"] if row["literal"] == "cohort_execution_capability.v2")
@@ -1427,7 +2113,7 @@ def test_s1f0c_ff_digest_fields_match_the_section_field_manifests() -> None:
         "filter_projection_masked_absence_owner_ref.v1": 11,
         "filter_projection_result_v3": 26,
         "filter_projection_result_serializer_v3": 5,
-        "filter_projection_tool_v3": 8,
+        "filter_projection_tool_v3": 10,
         "acquisition.cohort.execute": 5,
     }
     assert set(digest_fields) == set(expected_counts)
@@ -1732,6 +2418,13 @@ def test_s1f0c_ff_v3_result_and_slot_mapping_is_commandless_and_closed() -> None
     tool_fields = {field["name"]: field for field in digests["filter_projection_tool_v3"]["schema"]["fields"]}
     assert tool_fields["effect_class"]["constant"] == "read_only"
     assert tool_fields["result_link_policy"]["constant"] == "no_command_v1"
+    assert (
+        tool_fields["result_contract_digest"]["constant"] == digests["filter_projection_result_v3"]["contract_digest"]
+    )
+    assert (
+        tool_fields["serializer_contract_digest"]["constant"]
+        == digests["filter_projection_result_serializer_v3"]["contract_digest"]
+    )
     serializer_fields = {
         field["name"]: field for field in digests["filter_projection_result_serializer_v3"]["schema"]["fields"]
     }
@@ -1740,11 +2433,41 @@ def test_s1f0c_ff_v3_result_and_slot_mapping_is_commandless_and_closed() -> None
     assert command_fields["command_type"]["constant"] == "acquisition.cohort.execute"
     assert command_fields["provider_mode"]["enum"] == ["simulate", "scripted"]
 
+    # exact union discrimination: each variant projects exactly its declared root fields
+    variant_roots = {
+        "success": result["success_root_fields"],
+        "deferred": result["deferred_root_fields"],
+        "error": result["masked_root_fields"],
+    }
+    v3_descriptors = digests["filter_projection_result_v3"]["schema"]["fields"]
+    for variant, root_fields in variant_roots.items():
+        projected = sorted({field["name"] for field in v3_descriptors if variant in set(field.get("variants", []))})
+        assert projected == sorted(root_fields), f"variant {variant} projection drift"
+    for name in {field["name"] for field in v3_descriptors}:
+        variants_covered = set().union(
+            *(set(field.get("variants", [])) for field in v3_descriptors if field["name"] == name)
+        )
+        expected_variants = {variant for variant, root_fields in variant_roots.items() if name in root_fields}
+        assert variants_covered == expected_variants, name
+    # the success discriminator and status are exact constants, not open enums
+    success_variant = next(
+        field for field in v3_descriptors if field["name"] == "variant" and field.get("variants") == ["success"]
+    )
+    assert success_variant.get("constant") == "success" and "enum" not in success_variant
+    success_status = next(
+        field for field in v3_descriptors if field["name"] == "status" and field.get("variants") == ["success"]
+    )
+    assert success_status.get("constant") == "ready"
+    deferred_status = next(
+        field for field in v3_descriptors if field["name"] == "status" and field.get("variants") == ["deferred"]
+    )
+    assert deferred_status.get("enum") == ["stale", "not_ready"]
+
 
 def test_s1f0c_ff_lock_order_and_write_race_outcomes_fail_closed() -> None:
     manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
     lock = manifest["lock_order"]
-    assert [group["order"] for group in lock["groups"]] == [0, 1, 2, 3, 4, 5, 6]
+    _assert_type_strict_equal([group["order"] for group in lock["groups"]], [0, 1, 2, 3, 4, 5, 6], "lock order")
     assert any("lower number after a higher number" in rule for rule in lock["rules"])
     assert any("UTF-8" in rule for rule in lock["rules"])
     assert "start_authority_contracts.source_join.lock_keys" in lock["groups"][1]["lock_group"]
@@ -2130,7 +2853,7 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
     assert "projection_not_found" in spec["public_miss_outcome"]
 
     rows = spec["rows"]
-    assert [row["ordinal"] for row in rows] == [1, 2, 3, 4, 5, 6, 7, 8]
+    _assert_type_strict_equal([row["ordinal"] for row in rows], [1, 2, 3, 4, 5, 6, 7, 8], "join ordinals")
     assert [row["relation"] for row in rows] == [
         "operation_runs",
         "agent_actions",
@@ -2141,7 +2864,7 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
         "workflow_commands",
         "acquisition_runs",
     ]
-    assert all(row["cardinality"] == 1 for row in rows)
+    _assert_type_strict_equal([row["cardinality"] for row in rows], [1] * 8, "join cardinality")
     assert all(row["alternate_keys"] for row in rows)
     command_rows = [row for row in rows if row["row_role"] == "command"]
     assert [row["command_identity"] for row in command_rows] == COMMAND_IDENTITIES
@@ -2185,7 +2908,9 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
     assert "approval actor" in requester_binding["forbidden_substitutions"]
 
     lock_keys = spec["lock_keys"]
-    assert [group["order"] for group in lock_keys["advisory_groups"]] == [1, 2, 3, 4]
+    _assert_type_strict_equal(
+        [group["order"] for group in lock_keys["advisory_groups"]], [1, 2, 3, 4], "advisory order"
+    )
     assert lock_keys["advisory_groups"][0]["keys"][0].startswith("acquisition_run source id advisory key")
     assert (
         lock_keys["advisory_groups"][3]["keys"][1] == "the five command id/idempotency identities in UTF-8 byte order"
@@ -2199,8 +2924,15 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
     assert lock_keys["start_idempotency_formula"] == "agent-start-v2:{logical_occurrence_digest}"
     assert lock_keys["group_value_order"] == "values inside a group sort by UTF-8 bytes"
 
-    # positive and same-owner positive
-    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), _join_positive_rows()) == "accepted"
+    # every decisive clause is machine-encoded as an executed predicate, never prose
+    predicate_ids = [predicate["id"] for row in rows for predicate in row["predicates"]]
+    assert len(predicate_ids) == len(set(predicate_ids)) == 92
+    assert all(predicate["kind"] in PREDICATE_KINDS for row in rows for predicate in row["predicates"])
+
+    # positive and same-owner positive; the witness proves every predicate executes
+    witness: list[str] = []
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), _join_positive_rows(), witness) == "accepted"
+    assert witness == predicate_ids
     positive_rows = _join_positive_rows()
     for row in positive_rows:
         if row["relation"] == "workflow_commands":
@@ -2270,6 +3002,94 @@ def test_s1f0c_ff_source_join_is_structured_and_evaluates_every_case() -> None:
     mutated[1]["result_ref_json"] = 0
     assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
 
+    # one hostile mutation for every encoded predicate, derived from the predicate itself
+    all_predicates = [predicate for row in rows for predicate in row["predicates"]]
+    for predicate in all_predicates:
+        mutated = _join_positive_rows()
+        _sabotage_for_predicate(predicate, mutated)
+        assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found", predicate["id"]
+
+    # reviewer-executed hostile clauses, one explicit mutation each
+    # approval state: an unapproved Action can never mint lineage authority
+    mutated = _join_positive_rows()
+    mutated[1]["approval_status"] = "pending_approval"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[1]["status"] = "completed"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # requested acquisition_run_id: a foreign run joined by shared lineage ids is rejected
+    mutated = _join_positive_rows()
+    mutated[7]["acquisition_run_id"] = "foreign-run"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # owner-ref/root rebuilding: nested owner-ref identity and root payload bytes are rebuilt and compared
+    mutated = _join_positive_rows()
+    mutated[1]["result_ref_json"]["workflow_command_id"] = "cmd-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[2]["payload_json"]["action_id"] = "act-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[2]["payload_json"]["payload_digest"] = "9" * 64
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # deterministic command IDs and idempotency formulas
+    mutated = _join_positive_rows()
+    mutated[2]["command_id"] = "cmd-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[2]["idempotency_key"] = "acquisition.run.create:start-v2:zzz"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[7]["idempotency_key"] = "acquisition_run:plan_commit:cmd-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # physical causality: columns must equal the payload causality and share one causal group
+    mutated = _join_positive_rows()
+    mutated[2]["causal_group_id"] = "cg-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[3]["source_event_id"] = "evt-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[6]["command_payload_causality"]["source_event_type"] = "CommandCompleted"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # source events: the owner ref binds the root command source event exactly
+    mutated = _join_positive_rows()
+    mutated[1]["result_ref_json"]["command_source_event_id"] = "evt-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # carrier equality: a wrong carrier on any workflow command fails, even a uniformly wrong one
+    for index in (3, 4, 5, 6):
+        mutated = _join_positive_rows()
+        mutated[index]["carrier_json"]["carrier_digest"] = "8" * 64
+        assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found", index
+    mutated = _join_positive_rows()
+    wrong_carrier = copy.deepcopy(mutated[3]["carrier_json"])
+    wrong_carrier["root_command_payload"]["workflow_run_id"] = "wf-x"
+    for index in (3, 4, 5, 6):
+        mutated[index]["carrier_json"] = copy.deepcopy(wrong_carrier)
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # plan/review identity across build/review/commit and the AcquisitionRun
+    mutated = _join_positive_rows()
+    mutated[5]["plan_review_id"] = 0
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[6]["plan_review_id"] = 12
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[5]["plan_id"] = "plan-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    # AcquisitionRun bundle equality: carrier, tenant, lineage, plan, and digest
+    mutated = _join_positive_rows()
+    mutated[7]["execution_bundle_json"]["plan_id"] = "plan-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[7]["execution_bundle_json"]["start_authority_carrier"]["carrier_digest"] = "7" * 64
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[7]["execution_bundle_json"]["workspace_id"] = "ws-x"
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+    mutated = _join_positive_rows()
+    mutated[7]["execution_bundle_json"]["authority_digest"] = "6" * 64
+    assert _evaluate_source_join(spec, dict(JOIN_SCOPE), mutated) == "projection_not_found"
+
     # other downstream command types in the same workflow are allowed, not duplicates
     mutated = _join_positive_rows()
     mutated.append(
@@ -2300,6 +3120,16 @@ def test_s1f0c_ff_pg_descriptors_are_typed_and_identifiers_fit_63_bytes() -> Non
     commit_checks = {check["name"]: check["expression"] for check in commits["check_constraints"]}
     assert (
         commit_checks["ck_cohort_execution_commits_schema_version"] == "schema_version = 'cohort_execution_commit.v1'"
+    )
+    # the commit descriptor enforces the exact canonical bounds and contract-digest constant
+    commit_schema = next(row for row in manifest["contract_digests"] if row["literal"] == "cohort_execution_commit.v1")
+    commit_fields = {field["name"]: field for field in commit_schema["schema"]["fields"]}
+    count_field = commit_fields["candidate_count"]
+    assert commit_checks["ck_cohort_execution_commits_candidate_count"] == (
+        f"candidate_count >= {count_field['minimum']} AND candidate_count <= {count_field['maximum']}"
+    )
+    assert commit_checks["ck_cohort_execution_commits_commit_contract_digest"] == (
+        f"commit_contract_digest = '{commit_schema['contract_digest']}'"
     )
     attempts_fk = relations["cohort_execution_attempts"]["descriptor"]["foreign_keys"]
     assert {fk_row["references"]["table"] for fk_row in attempts_fk} == {
@@ -2501,8 +3331,8 @@ def test_s1f0c_ff_execution_commit_persists_schema_identity() -> None:
     }
     checks = {check["name"]: check["expression"] for check in relation["descriptor"]["check_constraints"]}
     assert checks["ck_cohort_execution_commits_schema_version"] == "schema_version = 'cohort_execution_commit.v1'"
-    assert (
-        checks["ck_cohort_execution_commits_commit_contract_digest_hex"] == "commit_contract_digest ~ '^[0-9a-f]{64}$'"
+    assert checks["ck_cohort_execution_commits_commit_contract_digest"] == (
+        f"commit_contract_digest = '{commit_row['contract_digest']}'"
     )
     # the physical columns mirror the record fields plus created_at
     assert [column["name"] for column in columns if column["name"] != "created_at"] == commit_fields
@@ -2511,3 +3341,546 @@ def test_s1f0c_ff_execution_commit_persists_schema_identity() -> None:
     mutated = copy.deepcopy(commit_row["schema"])
     mutated["fields"] = [field for field in mutated["fields"] if field["name"] != "commit_contract_digest"]
     assert _contract_digest(mutated) != commit_row["contract_digest"]
+
+
+LINKED_RELATION_SCHEMAS = {
+    "agent_runtime_namespace_refs": "agent_runtime_namespace_ref.v1",
+    "cohort_execution_lane_results": "cohort_execution_lane_result.v2",
+    "cohort_candidate_set_members": "cohort_candidate_member.v1",
+    "cohort_execution_commits": "cohort_execution_commit.v1",
+    "filter_projection_product_terminals": "filter_projection_product_terminal.v1",
+}
+CONTRACT_IDENTITY_CHECKS = {
+    ("cohort_execution_commits", "commit_contract_digest"): "cohort_execution_commit.v1",
+    ("agent_runtime_namespace_refs", "ref_contract_digest"): "agent_runtime_namespace_ref.v1",
+}
+FIELD_COLUMN_ALIASES = {
+    ("cohort_execution_lane_results", "ordinal"): "lane_ordinal",
+}
+
+
+def _canonical_check_expressions(field: dict[str, Any], nullable: bool) -> list[str]:
+    """Render the exact SQL check a column-backed canonical field descriptor requires."""
+
+    name = field["name"]
+    if "constant" in field:
+        constant = field["constant"]
+        if type(constant) is str:
+            return [f"{name} = '{constant}'"]
+        return [f"{name} = {constant}"]
+    expressions: list[str] = []
+    if "enum" in field:
+        if len(field["enum"]) == 1:
+            expressions.append(f"{name} = '{field['enum'][0]}'")
+        else:
+            values = ",".join(f"'{value}'" for value in field["enum"])
+            expressions.append(f"{name} IN ({values})")
+    if field.get("format") == "sha256_hex":
+        if nullable:
+            expressions.append(f"{name} IS NULL OR {name} ~ '^[0-9a-f]{{64}}$'")
+        else:
+            expressions.append(f"{name} ~ '^[0-9a-f]{{64}}$'")
+    has_minimum = "minimum" in field
+    has_maximum = "maximum" in field
+    if has_minimum and has_maximum:
+        expressions.append(f"{name} >= {field['minimum']} AND {name} <= {field['maximum']}")
+    elif has_minimum:
+        minimum = field["minimum"]
+        if minimum == 0:
+            expressions.append(f"{name} >= 0")
+        elif minimum == 1:
+            expressions.append(f"{name} > 0")
+        else:
+            expressions.append(f"{name} >= {minimum}")
+    elif has_maximum:
+        expressions.append(f"{name} <= {field['maximum']}")
+    if field.get("nonempty"):
+        if nullable:
+            expressions.append(f"{name} IS NULL OR {name} <> ''")
+        else:
+            expressions.append(f"{name} <> ''")
+    return expressions
+
+
+def test_s1f0c_ff_pg_invariant_enforcement_is_one_to_one() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    relations = manifest["physical_relations"]
+    digests = {row["literal"]: row for row in manifest["contract_digests"]}
+    for name, relation in relations.items():
+        rows = relation["invariant_enforcement"]
+        # prose constraints map bijectively to prose-source enforcement rows
+        prose_rows = [row for row in rows if row["source"] == "prose"]
+        assert sorted(row["invariant"] for row in prose_rows) == sorted(relation["constraints"]), name
+        assert len({row["invariant"] for row in prose_rows}) == len(prose_rows), name
+        # every declared descriptor mechanism is classified by at least one enforcement row
+        descriptor = relation["descriptor"]
+        mechanisms = (
+            {descriptor["primary_key"]["name"]}
+            | {group["name"] for group in descriptor["unique_constraints"]}
+            | {check["name"] for check in descriptor["check_constraints"]}
+            | {foreign_key["name"] for foreign_key in descriptor["foreign_keys"]}
+            | {index["name"] for index in descriptor["indexes"]}
+        )
+        classified = set().union(*(set(row["mechanism"]) for row in rows))
+        assert mechanisms <= classified, f"{name}: unclassified mechanisms {sorted(mechanisms - classified)}"
+    for name, literal in LINKED_RELATION_SCHEMAS.items():
+        relation = relations[name]
+        descriptor = relation["descriptor"]
+        check_expressions = {check["expression"] for check in descriptor["check_constraints"]}
+        columns = {column["name"]: column for column in descriptor["columns"]}
+        covered_fields = set().union(*(set(row.get("covers_fields", [])) for row in relation["invariant_enforcement"]))
+        for field in digests[literal]["schema"]["fields"]:
+            column_name = FIELD_COLUMN_ALIASES.get((name, field["name"]), field["name"])
+            column = columns.get(column_name)
+            if column is None or column["type"] == "jsonb":
+                # transition/UoW-only invariant: explicitly repository-owned
+                assert field["name"] in covered_fields, f"{name}.{field['name']}: no enforcement owner"
+                continue
+            identity_literal = CONTRACT_IDENTITY_CHECKS.get((name, column_name))
+            if identity_literal is not None:
+                expected = f"{column_name} = '{digests[identity_literal]['contract_digest']}'"
+                assert expected in check_expressions, f"{name}: missing exact contract-digest check {expected!r}"
+                continue
+            for expression in _canonical_check_expressions({**field, "name": column_name}, column["nullable"]):
+                assert expression in check_expressions, f"{name}: missing exact check {expression!r}"
+    # both contract-identity digest columns pin the exact recomputed contract digests
+    namespace_checks = {
+        check["name"]: check["expression"]
+        for check in relations["agent_runtime_namespace_refs"]["descriptor"]["check_constraints"]
+    }
+    assert namespace_checks["ck_agent_runtime_namespace_refs_ref_contract_digest"] == (
+        f"ref_contract_digest = '{digests['agent_runtime_namespace_ref.v1']['contract_digest']}'"
+    )
+    # tenant/mode equality across references is SQL-enforced through composite scoped FKs
+    attempts_fk = relations["cohort_execution_attempts"]["descriptor"]["foreign_keys"]
+    assert any(
+        fk_row["columns"] == ["namespace_ref_id", "workspace_id", "provider_mode"]
+        and fk_row["references"]
+        == {
+            "table": "agent_runtime_namespace_refs",
+            "columns": ["namespace_ref_id", "workspace_id", "provider_mode"],
+        }
+        for fk_row in attempts_fk
+    )
+    commits_fk = relations["cohort_execution_commits"]["descriptor"]["foreign_keys"]
+    assert any(
+        fk_row["columns"]
+        == [
+            "execution_attempt_id",
+            "workspace_id",
+            "acquisition_run_id",
+            "operation_run_id",
+            "workflow_run_id",
+            "execution_generation",
+        ]
+        and fk_row["references"]["table"] == "cohort_execution_attempts"
+        for fk_row in commits_fk
+    )
+    terminal_fk = relations["filter_projection_product_terminals"]["descriptor"]["foreign_keys"]
+    assert any(
+        fk_row["columns"]
+        == [
+            "execution_commit_id",
+            "workspace_id",
+            "acquisition_run_id",
+            "operation_run_id",
+            "workflow_run_id",
+            "candidate_set_digest",
+            "candidate_count",
+        ]
+        and fk_row["references"]["table"] == "cohort_execution_commits"
+        for fk_row in terminal_fk
+    )
+    assert any(
+        fk_row["columns"] == ["predecessor_terminal_id", "predecessor_terminal_digest"]
+        and fk_row["references"]["table"] == "filter_projection_product_terminals"
+        for fk_row in terminal_fk
+    )
+    # state-dependent attempt fields and predecessor parity are exact row-local checks
+    attempts_checks = {
+        check["expression"] for check in relations["cohort_execution_attempts"]["descriptor"]["check_constraints"]
+    }
+    assert (
+        "status <> 'accepted' OR (provider_exposure_id IS NOT NULL AND provider_call_id IS NOT NULL "
+        "AND provider_response_digest IS NOT NULL AND result_digest IS NOT NULL)"
+    ) in attempts_checks
+    terminal_checks = {
+        check["expression"]
+        for check in relations["filter_projection_product_terminals"]["descriptor"]["check_constraints"]
+    }
+    assert "(predecessor_terminal_id IS NULL) = (predecessor_terminal_digest IS NULL)" in terminal_checks
+    assert "route_state = 'active'" in terminal_checks
+    # unique-when-sent is a partial unique index, not a plain nullable unique
+    attempts_indexes = {
+        index["name"]: index for index in relations["cohort_execution_attempts"]["descriptor"]["indexes"]
+    }
+    assert attempts_indexes["uq_cohort_execution_attempts_exposure_sent"]["unique"] is True
+    assert attempts_indexes["uq_cohort_execution_attempts_exposure_sent"]["where"] == "provider_exposure_id IS NOT NULL"
+    assert attempts_indexes["uq_cohort_execution_attempts_call_sent"]["where"] == "provider_call_id IS NOT NULL"
+
+    # hostile: dropping one exact bound or weakening an expression breaks one-to-one coverage
+    hostile = copy.deepcopy(manifest)
+    hostile_checks = hostile["physical_relations"]["cohort_execution_commits"]["descriptor"]["check_constraints"]
+    for check in hostile_checks:
+        if check["name"] == "ck_cohort_execution_commits_candidate_count":
+            check["expression"] = "candidate_count >= 0"
+    hostile_manifest = hostile["physical_relations"]
+    relaxed = {
+        check["expression"] for check in hostile_manifest["cohort_execution_commits"]["descriptor"]["check_constraints"]
+    }
+    commit_fields = {field["name"]: field for field in digests["cohort_execution_commit.v1"]["schema"]["fields"]}
+    expected = _canonical_check_expressions(commit_fields["candidate_count"], False)
+    assert expected and expected[0] not in relaxed
+
+
+def _walk_descriptors(fields: list[dict[str, Any]], prefix: str = "") -> list[tuple[str, dict[str, Any]]]:
+    walked: list[tuple[str, dict[str, Any]]] = []
+    for field in fields:
+        path = f"{prefix}/{field['name']}"
+        walked.append((path, field))
+        if isinstance(field.get("items"), dict):
+            walked.extend(_walk_item_descriptor(field["items"], f"{path}/*"))
+        for sub in field.get("fields", []):
+            walked.extend(_walk_descriptors([sub], path))
+    return walked
+
+
+def _walk_item_descriptor(items: dict[str, Any], prefix: str) -> list[tuple[str, dict[str, Any]]]:
+    walked = [(prefix, items)]
+    if isinstance(items.get("items"), dict):
+        walked.extend(_walk_item_descriptor(items["items"], f"{prefix}/*"))
+    for sub in items.get("fields", []):
+        walked.extend(_walk_descriptors([sub], prefix))
+    return walked
+
+
+def test_s1f0c_ff_v3_provenance_value_roles_and_closed_items() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    digests = {row["literal"]: row for row in manifest["contract_digests"]}
+    v3_fields = digests["filter_projection_result_v3"]["schema"]["fields"]
+    walked = _walk_descriptors(v3_fields)
+
+    # every descriptor at every depth carries an explicit provenance pin
+    missing_provenance = [path for path, descriptor in walked if "provenance" not in descriptor]
+    assert missing_provenance == []
+    for path, descriptor in walked:
+        if path.split("/")[-1] in ("variant", "status") and path.count("/") == 1:
+            assert descriptor["provenance"] == "server_derived", path
+        elif path == "/cohort_selection" or path.startswith("/cohort_selection/"):
+            assert descriptor["provenance"] == "user_supplied", path
+        else:
+            assert descriptor["provenance"] == "owner_state", path
+
+    # every string-typed leaf carries the exact value-role map, at least as strict as v2
+    def _expected_value_role(path: str, descriptor: dict[str, Any]) -> str:
+        if path in ("/candidates/*/display_name", "/candidates/*/headline"):
+            return "display_text"
+        if path == "/candidates/*/public_profile_url":
+            return "web_url"
+        if "constant" in descriptor or "enum" in descriptor:
+            return "control"
+        return "identifier"
+
+    string_leaves = [
+        (path, descriptor)
+        for path, descriptor in walked
+        if descriptor["type"] == "string" and not descriptor.get("fields")
+    ]
+    assert string_leaves, "v3 must expose string leaves"
+    for path, descriptor in string_leaves:
+        assert descriptor.get("value_role") == _expected_value_role(path, descriptor), path
+
+    # closed lane-summary items with exact v2 enums/bounds and item bounds
+    lane_summaries = next(field for field in v3_fields if field["name"] == "lane_summaries")
+    assert lane_summaries["max_items"] == 64
+    lane_item_fields = {field["name"]: field for field in lane_summaries["items"]["fields"]}
+    assert set(lane_item_fields) == {
+        "lane_id",
+        "employment_status",
+        "role_bucket_id",
+        "coverage_status",
+        "result_count",
+    }
+    assert lane_item_fields["employment_status"]["enum"] == ["current", "former"]
+    assert lane_item_fields["role_bucket_id"]["enum"] == [
+        "all_roles",
+        "research",
+        "engineering",
+        "product_management",
+        "infra_systems",
+        "founding",
+    ]
+    assert lane_item_fields["coverage_status"]["enum"] == ["complete", "partial", "missing"]
+    assert lane_item_fields["result_count"]["minimum"] == 0
+    assert lane_item_fields["result_count"]["maximum"] == 1_000_000
+
+    # closed candidate items with v2 display/URL policies, exact required/optional split
+    candidates = next(field for field in v3_fields if field["name"] == "candidates")
+    assert candidates["max_items"] == 250
+    candidate_fields = {field["name"]: field for field in candidates["items"]["fields"]}
+    assert set(candidate_fields) == {
+        "candidate_ref",
+        "display_name",
+        "headline",
+        "public_profile_url",
+        "employment_statuses",
+        "role_bucket_ids",
+    }
+    required = {name for name, field in candidate_fields.items() if field["required"] is True}
+    assert required == {"candidate_ref", "display_name", "headline", "employment_statuses", "role_bucket_ids"}
+    assert candidate_fields["candidate_ref"]["format"] == "sha256_hex"
+    assert candidate_fields["display_name"]["max_length"] == 500
+    assert candidate_fields["display_name"]["nonempty"] is True
+    assert candidate_fields["headline"]["max_length"] == 1000
+    assert candidate_fields["public_profile_url"]["format"] == "https_url"
+    assert candidate_fields["public_profile_url"]["max_length"] == 2048
+    assert candidate_fields["employment_statuses"]["min_items"] == 1
+    assert candidate_fields["employment_statuses"]["max_items"] == 2
+    assert candidate_fields["employment_statuses"]["items"]["enum"] == ["current", "former"]
+    assert candidate_fields["role_bucket_ids"]["max_items"] == 5
+    assert candidate_fields["role_bucket_ids"]["items"]["enum"] == [
+        "research",
+        "engineering",
+        "product_management",
+        "infra_systems",
+        "founding",
+    ]
+
+    # closed requested-target and requested-lane-coverage schemas; exact paging bounds
+    requested_target = next(field for field in v3_fields if field["name"] == "requested_target_ref")
+    target_fields = {field["name"]: field for field in requested_target["fields"]}
+    assert set(target_fields) == {
+        "projection_id",
+        "membership_revision",
+        "requested_terminal_id",
+        "requested_terminal_digest",
+        "route_revision_token",
+    }
+    assert target_fields["projection_id"]["required"] is True
+    assert target_fields["membership_revision"]["minimum"] == 1
+    assert target_fields["requested_terminal_digest"]["required"] is False
+    assert target_fields["requested_terminal_digest"]["format"] == "sha256_hex"
+    coverage = next(field for field in v3_fields if field["name"] == "requested_lane_coverage")
+    coverage_fields = {field["name"]: field for field in coverage["fields"]}
+    assert coverage_fields["status"]["enum"] == ["complete", "partial", "unavailable"]
+    assert coverage_fields["requested_lane_count"]["minimum"] == 1
+    assert coverage_fields["requested_lane_count"]["maximum"] == 64
+    paging = {
+        field["name"]: field
+        for field in v3_fields
+        if field["name"] in ("offset", "limit", "total_count", "returned_count")
+    }
+    assert paging["offset"]["maximum"] == 100_000
+    assert paging["limit"]["maximum"] == 250
+    assert paging["total_count"]["maximum"] == 1000
+    assert paging["returned_count"]["maximum"] == 250
+
+    # hostile: dropping one value-role or widening one item bound is detected
+    hostile = copy.deepcopy(v3_fields)
+    hostile_walked = _walk_descriptors(hostile)
+    target = next(descriptor for path, descriptor in hostile_walked if path == "/candidates/*/display_name")
+    del target["value_role"]
+    assert any(
+        "value_role" not in descriptor
+        for path, descriptor in _walk_descriptors(hostile)
+        if descriptor["type"] == "string"
+    )
+    widened = copy.deepcopy(v3_fields)
+    next(field for field in widened if field["name"] == "candidates")["max_items"] = 251
+    assert next(field for field in widened if field["name"] == "candidates")["max_items"] != candidates["max_items"]
+    assert (
+        _contract_digest(
+            {"schema_version": "filter_projection_result_v3", "owner": "filter_projection", "fields": widened}
+        )
+        != digests["filter_projection_result_v3"]["contract_digest"]
+    )
+
+
+def test_s1f0c_ff_retained_pins_are_closed_and_exact() -> None:
+    manifest = _validate_closed_manifest(_load(MANIFEST_PATH))
+    pins = {row["literal"]: row for row in manifest["retained_contract_pins"]}
+    assert set(pins) == RETAINED_PIN_LITERALS
+
+    owner_ref = pins["acquisition_start_command_acceptance_owner_result_ref.v1"]
+    owner_fields = owner_ref["schema"]["fields"]
+    assert [field["name"] for field in owner_fields] == [
+        "schema_version",
+        "runtime_namespace",
+        "provider_mode",
+        "workspace_id",
+        "action_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "workflow_command_id",
+        "terminal_winner_id",
+        "terminal_winner_sequence_number",
+        "command_source_event_id",
+        "command_source_event_sequence_number",
+        "command_source_event_contract_digest",
+        "confirmation_receipt_ref",
+        "parent_budget_envelope_ref",
+        "start_snapshot_digest",
+        "root_command_payload_digest",
+        "result_occurrence_ref",
+    ]
+    by_name = {field["name"]: field for field in owner_fields}
+    assert by_name["terminal_winner_sequence_number"]["constant"] == 1
+    assert by_name["command_source_event_sequence_number"]["constant"] == 2
+    assert {field["name"] for field in by_name["confirmation_receipt_ref"]["fields"]} == {
+        "receipt_id",
+        "receipt_digest",
+    }
+    assert {field["name"] for field in by_name["parent_budget_envelope_ref"]["fields"]} == {
+        "owner_id",
+        "owner_revision",
+        "owner_contract_digest",
+        "confirmation_receipt_id",
+        "confirmation_receipt_digest",
+        "budget_digest",
+    }
+    occurrence_fields = {field["name"]: field for field in by_name["result_occurrence_ref"]["fields"]}
+    assert occurrence_fields["slot_generation"]["minimum"] == 1
+
+    root_payload = pins["acquisition_root_command_payload.v2"]
+    root_fields = {field["name"]: field for field in root_payload["schema"]["fields"]}
+    assert list(root_fields) == [
+        "schema_version",
+        "command_type",
+        "action_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "confirmation_receipt_ref",
+        "start_snapshot",
+        "start_snapshot_digest",
+        "payload_digest",
+    ]
+    assert root_fields["command_type"]["constant"] == "acquisition.run.create"
+    snapshot_fields = {field["name"] for field in root_fields["start_snapshot"]["fields"]}
+    assert snapshot_fields == {
+        "schema_version",
+        "preview",
+        "request_pins",
+        "result_pins",
+        "tool_pins",
+        "snapshot_digest",
+    }
+    preview = next(field for field in root_fields["start_snapshot"]["fields"] if field["name"] == "preview")
+    assert preview["ref"] == "acquisition_plan_preview_record_v2"
+    assert preview["ref_digest"] == EXTERNAL_RETAINED_SPEC_REFS["acquisition_plan_preview_record_v2"]
+
+    # no open object/array descriptor remains anywhere in the manifest schemas
+    def _assert_closed(descriptor: dict[str, Any], label: str) -> None:
+        if descriptor["type"] == "object":
+            assert "fields" in descriptor or ("ref" in descriptor and "ref_digest" in descriptor), label
+        if descriptor["type"] == "array":
+            items = descriptor.get("items")
+            assert isinstance(items, dict), label
+            _assert_closed(items, f"{label}.items")
+        for sub in descriptor.get("fields", []):
+            _assert_closed(sub, f"{label}.{sub['name']}")
+
+    for row in manifest["contract_digests"]:
+        for field in row["schema"]["fields"]:
+            _assert_closed(field, f"{row['literal']}.{field['name']}")
+    for row in manifest["retained_contract_pins"]:
+        for field in row["schema"]["fields"]:
+            _assert_closed(field, f"{row['literal']}.{field['name']}")
+
+    # hostile: a retained pin constant mutation moves the pin digest
+    mutated = copy.deepcopy(owner_ref["schema"])
+    next(field for field in mutated["fields"] if field["name"] == "terminal_winner_sequence_number")["constant"] = 2
+    assert _contract_digest(mutated) != owner_ref["pin_digest"]
+
+
+def test_s1f0c_ff_descriptor_constants_and_numerics_reject_type_aliases() -> None:
+    # wrong-type constants are rejected against every declared descriptor type
+    for descriptor in (
+        {"name": "x", "type": "boolean", "required": True, "constant": 0},
+        {"name": "x", "type": "boolean", "required": True, "constant": 1},
+        {"name": "x", "type": "integer", "required": True, "constant": True},
+        {"name": "x", "type": "integer", "required": True, "constant": False},
+        {"name": "x", "type": "integer", "required": True, "constant": 1.0},
+        {"name": "x", "type": "string", "required": True, "constant": 1},
+        {"name": "x", "type": "string", "required": True, "constant": True},
+    ):
+        with pytest.raises(AssertionError):
+            _validate_descriptor(descriptor, "hostile constant", named=True)
+    # every numeric descriptor field rejects bool/float aliases
+    for key, alias in (
+        ("minimum", True),
+        ("minimum", 0.0),
+        ("maximum", False),
+        ("maximum", 1000.0),
+        ("min_items", True),
+        ("min_items", 0.0),
+        ("max_items", False),
+        ("max_items", 250.0),
+        ("max_length", True),
+        ("max_length", 500.0),
+    ):
+        declared = (
+            "array" if key in ("min_items", "max_items") else ("integer" if key in ("minimum", "maximum") else "string")
+        )
+        descriptor = {"name": "x", "type": declared, "required": True, key: alias}
+        if declared == "array":
+            descriptor["items"] = {"type": "string"}
+        with pytest.raises(AssertionError):
+            _validate_descriptor(descriptor, f"hostile {key}", named=True)
+
+    # exhaustive alias sweep over every numeric/boolean constant in every manifest schema
+    manifest = _load(MANIFEST_PATH)
+    schemas = [row["schema"] for row in manifest["contract_digests"]]
+    schemas.extend(row["schema"] for row in manifest["retained_contract_pins"])
+    numeric_keys = ("minimum", "maximum", "min_items", "max_items", "max_length")
+    mutations = 0
+    for schema in schemas:
+        for _path, descriptor in _walk_descriptors(schema["fields"]):
+            if "constant" in descriptor:
+                constant = descriptor["constant"]
+                if type(constant) is bool:
+                    aliases = [0 if constant is False else 1, 0.0 if constant is False else 1.0]
+                elif type(constant) is int:
+                    aliases = [constant == 0 if constant == 0 else True, float(constant)]
+                else:
+                    aliases = [0, True]
+                for alias in aliases:
+                    hostile = dict(descriptor, constant=alias)
+                    with pytest.raises(AssertionError):
+                        _validate_descriptor(hostile, "alias sweep constant", named=True)
+                    mutations += 1
+            for key in numeric_keys:
+                if key in descriptor:
+                    for alias in (bool(descriptor[key]), float(descriptor[key])):
+                        hostile = dict(descriptor)
+                        hostile[key] = alias
+                        with pytest.raises(AssertionError):
+                            _validate_descriptor(hostile, f"alias sweep {key}", named=True)
+                        mutations += 1
+    assert mutations > 100, "alias sweep must cover every schema numeric"
+
+    # manifest-level numeric fields reject bool/float aliases inside the closed validator
+    for mutate in (
+        lambda m: m["start_authority_contracts"]["source_join"]["rows"][0].update(ordinal=True),
+        lambda m: m["start_authority_contracts"]["source_join"]["rows"][0].update(cardinality=True),
+        lambda m: m["lock_order"]["groups"][0].update(order=False),
+        lambda m: m["start_authority_contracts"]["source_join"]["lock_keys"]["advisory_groups"][0].update(order=True),
+        lambda m: m["pg_aggregate_surfaces"]["migration_reservation"].update(slot=True),
+        lambda m: m["pg_aggregate_surfaces"]["migration_reservation"].update(predecessor_slot=False),
+        lambda m: m["start_authority_contracts"]["source_join"]["rows"][0].update(ordinal=1.0),
+    ):
+        hostile = copy.deepcopy(manifest)
+        mutate(hostile)
+        with pytest.raises(AssertionError):
+            _validate_closed_manifest(hostile)
+
+    # no float value exists anywhere in the manifest
+    def _assert_no_float(value: object, path: str) -> None:
+        assert type(value) is not float, path
+        if type(value) is dict:
+            for key, item in value.items():
+                _assert_no_float(item, f"{path}.{key}")
+        elif type(value) is list:
+            for index, item in enumerate(value):
+                _assert_no_float(item, f"{path}[{index}]")
+
+    _assert_no_float(manifest, "manifest")

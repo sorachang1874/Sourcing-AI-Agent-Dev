@@ -60,10 +60,13 @@ handoff tables:
 - handoff section 1.1: all 21 schema/registry literals with contract owner, physical writer/storage owner, and the
   collision/append-only rule, plus the contract digest equation `SHA256(UTF8(canonical_json(schema)))` where `schema`
   is each row's full closed schema object (exact field descriptors binding types, constants, enums, optionality,
-  derivation rules, and nested structure; adding an enum value or deleting a derivation rule changes the digest), the
-  canonical-JSON rules (sorted keys, compact separators, Unicode preserved, `allow_nan=false`, duplicate keys
-  rejected, recursive type-strict equality), and the 22 materialized contract digests — every adopted literal plus
-  `filter_projection_product_ref.v1`, with no registry literal left undigested;
+  bounds, item bounds, closed nested structure, exact-version-and-digest references, provenance/value-role pins, and
+  derivation rules; adding an enum value or deleting a derivation rule changes the digest), the canonical-JSON rules
+  (sorted keys, compact separators, Unicode preserved, `allow_nan=false`, duplicate keys rejected, recursive
+  type-strict equality with descriptor constants type-checked against their declared types and every numeric
+  descriptor field rejecting boolean/float aliases), and the 22 materialized contract digests — every adopted literal
+  plus `filter_projection_product_ref.v1`, with no registry literal left undigested — plus the two
+  `retained_contract_pins` digests for the retained root payload and owner-ref schemas;
 - the `digest_dependency_dag`: every digest construction edge as machine data. The candidate-set digest depends only
   on source/member inputs and the execution result then binds the completed candidate-set digest; the product terminal
   has an acyclic `terminal_core_digest` (fields 1-23), the freshness/readiness refs derive from that core, and the
@@ -73,9 +76,18 @@ handoff tables:
   `0015_s1f0c_filter_projection_lineage.sql` (`reserved_not_authored`);
 - handoff section 3: the closed six-field start carrier, the eleven-field execution authority with its normative
   plan-body digest exclusion, the six-stage writer taxonomy, and the eight-row source join as structured machine data
-  (all eight rows, the five command identities with expected command types/stages/owners, alternate keys,
-  parent/causality predicates with the forbidden commit-parent fallback, requester bindings, and the exact advisory
-  lock keys); every miss/duplicate/foreign/malformed/split identity maps publicly to `projection_not_found`;
+  (all eight rows, the five command identities with expected command types/stages/owners, structured alternate keys,
+  and 92 executed join predicates in nine closed kinds — row/path field equality, constants, idempotency formulas,
+  schema validation against the retained pins and adopted contracts, digest recomputation, carrier consensus, and
+  deterministic command-id recompute — covering approval state, the requested `acquisition_run_id`, owner-ref/root
+  rebuilding, physical causality, source events, carrier equality, plan/review identity, and AcquisitionRun bundle
+  equality; the test evaluator executes every encoded predicate with a witness proof and one hostile mutation per
+  predicate); every miss/duplicate/foreign/malformed/split identity maps publicly to `projection_not_found`;
+- the `retained_contract_pins` section: the retained nine-field `acquisition_root_command_payload.v2` root and the
+  18-field `acquisition_start_command_acceptance_owner_result_ref.v1` owner ref materialized as fully closed schemas
+  with recomputed pin digests; the carrier binds them as immutable exact-version-and-digest references, every adopted
+  contract ref carries the exact target `contract_digest` as a `ref_digest` constant, and the external
+  `acquisition_plan_preview_record_v2` preview spec is pinned by its exact live schema digest;
 - handoff section 4: the opaque namespace ref (public subset `schema_version, namespace_ref_id, ref_digest`), the
   19-field capability v2 (`simulate|scripted` only at this boundary), the 12-field execution envelope with its fixed
   recompile sequence, and the lane-result/member/candidate-set/result-v2/execution-commit records; the commit record
@@ -83,15 +95,26 @@ handoff tables:
   produce indistinguishable commit bytes;
 - handoff section 5: full column and constraint ownership for all six physical relations plus a typed PG descriptor
   per relation (column types, nullability/defaults, primary/unique/check/foreign keys with targets, actions, and
-  deferrability, and index definitions), the reserved creation/rollback order, and 63-byte identifier validation;
+  deferrability, and index definitions including partial unique indexes), the reserved creation/rollback order, and
+  63-byte identifier validation; every relation also carries `invariant_enforcement`: an enforcement owner for every
+  declared invariant, with prose constraints mapped one-to-one, canonical row-local invariants encoded as exact SQL
+  checks (exact contract-digest constants for `commit_contract_digest`/`ref_contract_digest`, exact bounds such as
+  commit `candidate_count` `0..1000` and terminal counts `1..1000`, nonempty identity and state-dependent attempt
+  checks), tenant/mode and digest equality across references encoded as composite scoped foreign keys, predecessor
+  id/digest parity as an exact check plus composite self-FK, and transition/UoW-only invariants explicitly marked
+  repository-enforced; the decision test proves one-to-one coverage between canonical schemas, prose constraints,
+  and DDL descriptors;
 - handoff section 6: the 27-field product terminal with the acyclic `terminal_core_digest`, the freshness/readiness
   refs carrying the core digest, the exact eight-item readiness prerequisite set bound inside the readiness schema
   derivation, the five-step deferred reason precedence, and the core/envelope terminal-digest equalities;
 - handoff section 7: the V3 success/deferred/masked public roots bound by the `filter_projection_result_v3` schema
-  (per-variant field descriptors and masked constants), the commandless full terminal tuple (`no_command_v1`,
-  both-empty Action/Operation, zero attempt/generation/epoch), the deterministic
-  `filter_projection_terminal_winner.v1` equation, the four closed internal owner refs with exact field manifests, and
-  the replay/quarantine retention rules;
+  with exact union discrimination (the success discriminator and success/deferred `status` are exact constants/enums,
+  never open unions), closed lane-summary, candidate, requested-target-ref, and requested-lane-coverage item schemas
+  with exact v2 enums, display/URL policies, and paging/item bounds, per-descriptor provenance and value-role pins,
+  and the masked constants; the tool contract binds the exact result and serializer contract digests as constants;
+  the commandless full terminal tuple (`no_command_v1`, both-empty Action/Operation, zero attempt/generation/epoch),
+  the deterministic `filter_projection_terminal_winner.v1` equation, the four closed internal owner refs with exact
+  field manifests, and the replay/quarantine retention rules;
 - handoff section 8: the 13-edge end-to-end owner graph using only canonical owner IDs from the closed `owners`
   registry, with descriptive labels kept in the separate `owner_label` field;
 - handoff section 9: the seven-group global lock order and the 18 locked write/race outcomes;
