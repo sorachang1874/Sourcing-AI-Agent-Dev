@@ -155,6 +155,8 @@ def _selected_result(*, request: dict, plan: dict, catalog: dict, selection: dic
     result["discovery_origins"] = []
     result["surface_attempts"] = []
     result["observations"] = []
+    result["handle_resolution_attempts"] = []
+    result["handle_resolution_outcomes"] = []
     for handle_index, (handle, account_ref) in enumerate(
         (("progress_x", "xacct_progress_x"), ("selected_x", "xacct_selected_x")),
         start=1,
@@ -333,6 +335,78 @@ class PortableCampaignPackageTests(unittest.TestCase):
             MiniDraft202012Error,
             r"schema_validation_failed:.*missing:canonical_url",
         ):
+            build_fixture_simulate_package(
+                selection=package["artifacts"]["selection"],
+                policy=package["artifacts"]["policy"],
+                catalog=package["artifacts"]["catalog"],
+                request=package["artifacts"]["request"],
+                binding=package["artifacts"]["binding"],
+                plan=package["artifacts"]["plan"],
+                result=result,
+                validated_at="2026-07-18T08:02:00Z",
+            )
+
+    def test_non_fixture_handle_resolution_attempt_never_receives_a_semantic_receipt(self) -> None:
+        package = selected_fixture_package()
+        result = copy.deepcopy(package["artifacts"]["result"])
+        subject = next(
+            row for row in result["subject_outcomes"] if row["seed_ref"] == "selected_name_only_subject"
+        )
+        subject["terminal_state"] = "failed"
+        subject["reason"] = "resolution execution failed"
+        query_text = "resolve selected name only researcher"
+        error = {
+            "error_code": "x_search_timeout",
+            "error_message_sha256": text_sha256("simulated resolution timeout"),
+        }
+        receipt = {
+            "schema_version": "x.handle_resolution.attempt_receipt.v1",
+            "query_sha256": text_sha256(query_text),
+            "observed_at": "2026-07-18T08:00:00Z",
+            "execution_state": "failed",
+            "result_truncated": False,
+            "continuation_state": "unknown",
+            "input_continuation_ref": None,
+            "continuation_ref": None,
+            "source_status": "receipt_bound",
+            "error": error,
+            "receipt_locator": "fixture://receipt/handle-resolution/selected-name-only/failed-1",
+            "receipt_sha256": "",
+        }
+        receipt["receipt_sha256"] = _content_sha256(receipt, "receipt_sha256")
+        attempt = {
+            "attempt_id": "hra_selected_name_only_1",
+            "seed_ref": "selected_name_only_subject",
+            "ordinal": 1,
+            "query_text": query_text,
+            "query_sha256": receipt["query_sha256"],
+            "observed_at": "2026-07-18T08:00:00Z",
+            "receipt_ref": f"sha256:{receipt['receipt_sha256']}",
+            "source_status": "receipt_bound",
+            "execution_state": "failed",
+            "result_truncated": False,
+            "continuation_state": "unknown",
+            "input_continuation_ref": None,
+            "continuation_ref": None,
+            "error": error,
+            "retrieval_receipt": receipt,
+        }
+        result["handle_resolution_attempts"] = [attempt]
+        result["handle_resolution_outcomes"] = [
+            {
+                "seed_ref": "selected_name_only_subject",
+                "terminal_state": "failed",
+                "attempt_ids": [attempt["attempt_id"]],
+                "receipt_refs": [attempt["receipt_ref"]],
+                "reason_code": "execution_failed",
+                "reason": "resolution search timed out before any verified match",
+                "error_codes": ["x_search_timeout"],
+                "source_status": "receipt_bound",
+            }
+        ]
+        result["result_sha256"] = _content_sha256(result, "result_sha256")
+
+        with self.assertRaisesRegex(PortableCampaignPackageError, "portable_package_not_fixture_only"):
             build_fixture_simulate_package(
                 selection=package["artifacts"]["selection"],
                 policy=package["artifacts"]["policy"],

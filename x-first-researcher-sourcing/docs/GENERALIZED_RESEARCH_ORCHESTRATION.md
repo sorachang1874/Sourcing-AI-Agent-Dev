@@ -55,7 +55,11 @@ Every authored-surface, semantic-recall, and optional-channel call is an ordinal
 chain. Page 1 has `input_continuation_ref=null`; a successor must consume the exact prior `continuation_ref`. Failed
 calls do not advance the frontier, so a retry consumes the same input continuation. A chain is complete only when its
 last successful page says `exhausted`. A result with an available continuation is persistable as `partial` by marking
-the subject `research_in_progress`; changing that artifact to `complete` fails validation.
+the subject `research_in_progress`; changing that artifact to `complete` fails validation. An in-progress subject is
+only legal while every one of its accounts still holds a live frontier: at least one authored-surface or
+semantic-recall chain whose tip is an unconsumed `continuation_available` page or a retryable `failed` call. An
+account whose chains are all exhausted, or that has no bound attempts at all, cannot be parked as
+`research_in_progress`; an unstarted planned chain is remaining work but not a bound frontier.
 
 For `authored_surface_only`, exploratory, verification, and hybrid questions all consume the broad Post and Reply
 corpus and emit no alias-search tasks. This is the default fit for selected-person research: retrieve the person's own
@@ -149,6 +153,19 @@ attempt/observation frontier without claiming terminal analysis; the other subje
 evidence belongs first to an X external account, not to a canonical person. The main product's adjudication owner must
 accept a link proposal before it may materialize that evidence on a person record.
 
+The negative resolution path is typed as first-class attempts and outcomes. A non-X seed may end
+`no_verified_account` only when a bound `handle_resolution_outcome` proves an exhausted chain of real `no_match`
+attempts (`search_exhausted_no_match`), and may end `failed` only when the outcome binds at least one `failed`
+attempt with its error receipt (`execution_failed`). Every resolution attempt carries its own inline,
+content-addressed attempt receipt mirroring query hash, execution state, truncation, and continuation frontier, so an
+unexecuted or dropped resolution cannot be reported as a terminal negative. `handle_resolution_required` remains the
+honest queued state: it claims no attempts and keeps the campaign `partial`.
+
+An `x_account` seed asserts its handle at the source, so its subject may only be `analyzed` or
+`research_in_progress`: the queued/negative resolution states are meaningless for it, and a terminal x-seed failure
+carries no typed execution proof in this version. A failed x-seed fetch is persisted as `research_in_progress` with a
+retryable failed frontier; a terminal x-seed execution outcome may be introduced by a future contract version.
+
 A cross-source link proposal must cite account-side `handle_resolution_evidence`, even when the input already proposed
 a handle. Each evidence row binds the seed and X account to an X-host profile URL, observation time, query text/hash,
 observed value/content hash, and an inline content-addressed retrieval receipt. Name-only same-name matches can remain
@@ -183,7 +200,10 @@ Evidence status is preserved as `fixture_synthetic`, `source_bound`, `human_supp
 `model_mediated_unverified`. A dimension result cannot claim `source_bound` when any supporting observation has a
 weaker status. Fixture attempts are explicitly synthetic and cannot be relabeled as unverified or presented as
 Grok/X coverage. Optional evidence has its own URL, timestamp, excerpt hash, receipt and task binding; a `no_result`
-outcome requires a fully exhausted chain of only `no_result` attempts and cannot conceal a failed call.
+outcome requires a fully exhausted chain of only `no_result` attempts and cannot conceal a failed call. An optional
+channel with bound evidence, or any chain whose tip is an unconsumed continuation or a retryable failed call, is
+persistable as a `research_in_progress` outcome instead of being forced into a terminal lie; it keeps the campaign
+`partial` and never satisfies the `complete` or `failed` derivations.
 
 `complete`, `partial`, and `failed` are derived states rather than producer prose. `complete` requires every input
 subject to be analyzed, exhausted Post and Reply chains for every analyzed account, a valid question/account semantic
@@ -225,7 +245,10 @@ completion criteria.
 `target_direction_core_rate` and `target_direction_active_rate` are owned per question/account result row, so multiple
 configured verification questions do not collapse into one account denominator. The marginal-call metric is emitted
 as `0/0` unless every included attempt is receipt-bound. `coverage_source_status` is likewise derived from all authored,
-semantic, and optional attempts; mixed fixture provenance is rejected rather than downgraded or upgraded.
+semantic, and optional attempts; mixed fixture provenance is rejected rather than downgraded or upgraded. Typed
+handle-resolution attempts are validated under their own family with inline attempt receipts and are not folded into
+the coverage-provenance summary or the marginal-call denominator in this version; the resolution family may join those
+denominators in a future policy revision.
 
 ## Product integration topology
 
@@ -254,7 +277,7 @@ CI. The X-First result is an evidence-source artifact, not a product writer.
 | Campaign intent and cross-source seeds | portable request producer | bad hash, source host confusion, ambiguous field shape |
 | Deterministic task resolution | `research_orchestration.py` + portable plan schema | plan differs from recomputation |
 | External-account observations and semantic outcomes | portable result producer plus receipts | bad bindings, missing terminal outcome, trust upgrade |
-| Handle-resolution evidence | content-addressed retrieval receipt plus downstream identity owner | wrong X host/handle, query/content/hash drift, missing account-side evidence |
+| Handle-resolution evidence and typed negative outcomes | content-addressed retrieval/attempt receipts plus downstream identity owner | wrong X host/handle, query/content/hash drift, missing account-side evidence, or a terminal `no_verified_account`/`failed` without an exhausted `no_match` chain or a bound `failed` attempt |
 | Optional-channel execution and discovered seeds | optional task outcomes + discovery origins | missing outcome, unbound origin, or skipped required follow-up |
 | Source subject to X account link | downstream identity adjudication owner | automatic merge or missing human review |
 | Canonical person/evidence materialization | `sourcing-ai-agent` product owners | direct X-First write/import |
@@ -262,17 +285,22 @@ CI. The X-First result is an evidence-source artifact, not a product writer.
 
 ## Current validation boundary
 
-The checked campaign fixture includes one asserted X account, one LinkedIn-origin proposed handle, and one unresolved
-name-only seed. The LinkedIn-origin proposal cites a synthetic but fully content-addressed account-side resolution
+The checked campaign fixture includes one asserted X account, one LinkedIn-origin proposed handle, and one name-only
+seed whose terminal `no_verified_account` is proven by an exhausted two-page `no_match` resolution chain with inline
+attempt receipts. The LinkedIn-origin proposal cites a synthetic but fully content-addressed account-side resolution
 receipt. A separate selected-subject regression builds a source-bound LinkedIn seed and a source-bound name-only
 seed from the product-owned selection artifact, uses verification with `authored_surface_only`, and verifies the exact
 request binding. All checked campaign attempts and observations remain `fixture_synthetic`; no provider or product call
 occurs. The orchestration registry covers both selected-subject schemas in addition to policy, catalog, request, plan,
-and result schemas, so their presence is checked at the portable boundary.
+and result schemas, plus the package manifest and semantic validation receipt schemas; the checked selected-subject
+package fixture is rebuilt and compared byte-for-byte on every preflight so validator, schema, or fixture drift fails
+fast instead of surfacing in a later live review. Accepted contract residuals and their expiry conditions live in
+`docs/RESIDUAL_LEDGER.md`; the product-lane sync payload for this batch lives in
+`docs/PRODUCT_INTEGRATION_SYNC.md`.
 
 Run:
 
 ```bash
 PYTHONPATH=src python3 -m x_first.research_orchestration
-PYTHONPATH=src python3 -m unittest tests.test_research_orchestration tests.test_selected_subject_adapter -v
+PYTHONPATH=src python3 -m unittest tests.test_research_orchestration tests.test_selected_subject_adapter tests.test_portable_campaign_package -v
 ```

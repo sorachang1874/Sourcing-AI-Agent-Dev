@@ -29,6 +29,14 @@
     {
       "schema_version": "x.portable.selected_subject.request_binding.v1",
       "path": "contracts/x.portable.selected_subject.request_binding.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.package_manifest.v1",
+      "path": "contracts/x.portable.research_campaign.package_manifest.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.semantic_validation_receipt.v1",
+      "path": "contracts/x.portable.research_campaign.semantic_validation_receipt.v1.schema.json"
     }
   ],
   "checked_assets": [
@@ -36,7 +44,8 @@
     "fixtures/research_scope_catalog_fixture_v1.json",
     "fixtures/portable_research_campaign_request_fixture_v1.json",
     "fixtures/portable_research_campaign_plan_fixture_v1.json",
-    "fixtures/portable_research_campaign_result_fixture_v1.json"
+    "fixtures/portable_research_campaign_result_fixture_v1.json",
+    "fixtures/selected_subject_fixture_simulate_package_v1.json"
   ],
   "provider_calls_allowed": false,
   "product_writes_allowed": false,

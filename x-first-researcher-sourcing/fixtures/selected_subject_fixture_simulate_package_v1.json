@@ -1065,6 +1065,7 @@
           "x_account_ref": "xacct_selected_x"
         }
       ],
+      "handle_resolution_attempts": [],
       "handle_resolution_evidence": [
         {
           "canonical_url": "https://x.com/selected_x",
@@ -1115,6 +1116,7 @@
           "x_account_ref": "xacct_progress_x"
         }
       ],
+      "handle_resolution_outcomes": [],
       "limitations": [],
       "observations": [
         {
@@ -1184,7 +1186,7 @@
       "plan_sha256": "3cb1625982cc51778bed1a9390226147bc2bedec0086404978b1a8cea1d72550",
       "relationship_results": [],
       "request_sha256": "d92abc4780bc930fcace17ef4659f3a8546296cef575e6457714e51087a27ef9",
-      "result_sha256": "3464a3f5d85743720f29516b37408af55f3f28bcb5d1ee0113ab04e0e0164774",
+      "result_sha256": "13de3eba22301d28151a7143fff26834113d0b8ab74bd912216dbbe3ae792c88",
       "schema_version": "x.portable.research_campaign.result.v1",
       "semantic_recall_attempts": [],
       "semantic_recall_outcomes": [
@@ -1412,9 +1414,9 @@
         "schema_version": "x.portable.research_campaign.request.v1"
       },
       "result": {
-        "contract_schema_sha256": "4d9d9d4792e36db429804f9d9292b64ba8cd0d82a4c617cafaf4240658469a65",
-        "declared_content_sha256": "3464a3f5d85743720f29516b37408af55f3f28bcb5d1ee0113ab04e0e0164774",
-        "payload_sha256": "eb48ef5f34cfd369c6e4d90ec5ce8fe94c2a6052f4bf6ba78c5ebbbd9716d08c",
+        "contract_schema_sha256": "31dbfc3d9f31a026df9fbe1d66fad38d00f91ff47f071533837adaa4f4f31403",
+        "declared_content_sha256": "13de3eba22301d28151a7143fff26834113d0b8ab74bd912216dbbe3ae792c88",
+        "payload_sha256": "06189fc6c82f6e04c03495b4d46d35ecee9b5319cc45d4d975ef34ed276d6e07",
         "schema_version": "x.portable.research_campaign.result.v1"
       },
       "selection": {
@@ -1431,8 +1433,8 @@
       "provider_calls_allowed": false
     },
     "campaign_id": "fixture_general_research_campaign",
-    "manifest_sha256": "78522c7d62581af3d299f5ea5b96282bbd1f6c8c1cace35c2813452c795f0772",
-    "package_id": "package_29e16c36dfc2e2b03ca309e4",
+    "manifest_sha256": "f2ac74a74bfc21c105b52e07167afddcff48b2c7408a809d08211cbc8e033407",
+    "package_id": "package_7e0965252404a7ff4af2dc86",
     "package_mode": "fixture_simulate",
     "schema_version": "x.portable.research_campaign.package_manifest.v1",
     "selection_id": "fixture_selected_subjects"
@@ -1444,7 +1446,7 @@
       "plan": "3021748d3c29c47571a824e1b26c40272b2e0c5aee9af2a61793892de757142a",
       "policy": "81e7996106a45c8137d92d63200a77c099048069f06d53189e2809df88dd223f",
       "request": "64868a6e84bd6e89cf161f3dadc781c6988a0ae9ccdb2a1669753184f96abd09",
-      "result": "eb48ef5f34cfd369c6e4d90ec5ce8fe94c2a6052f4bf6ba78c5ebbbd9716d08c",
+      "result": "06189fc6c82f6e04c03495b4d46d35ecee9b5319cc45d4d975ef34ed276d6e07",
       "selection": "ee75aad73fe553c95d1fadc7cf38d4b84a07f1dad8e1968e143a99e2ded06a16"
     },
     "authority": {
@@ -1470,10 +1472,10 @@
       "simulated_external_attempt_count": 4,
       "simulated_external_evidence_count": 6
     },
-    "manifest_sha256": "78522c7d62581af3d299f5ea5b96282bbd1f6c8c1cace35c2813452c795f0772",
-    "package_id": "package_29e16c36dfc2e2b03ca309e4",
-    "receipt_id": "receipt_78522c7d62581af3d299f5ea",
-    "receipt_sha256": "a4fcec0dfbfe75885444d93a4591bdd3a24f7ca76f1b449be5dfb74acea5aff2",
+    "manifest_sha256": "f2ac74a74bfc21c105b52e07167afddcff48b2c7408a809d08211cbc8e033407",
+    "package_id": "package_7e0965252404a7ff4af2dc86",
+    "receipt_id": "receipt_f2ac74a74bfc21c105b52e07",
+    "receipt_sha256": "615e9c068c3ba9fe12ad86f9b955ab3f5c41f8a668a81f43872e5fa40621537e",
     "schema_version": "x.portable.research_campaign.semantic_validation_receipt.v1",
     "selection_id": "fixture_selected_subjects",
     "validated_at": "2026-07-18T08:02:00Z",
@@ -1482,7 +1484,7 @@
     "validator": {
       "validator_id": "x_first.portable_campaign.semantic_validator",
       "validator_revision": "x_first.portable_campaign.semantic_validator.v1",
-      "validator_revision_sha256": "4e648c96e30179fef327e46e44fafd477f3905e9c7913ec459766cdd704e691c"
+      "validator_revision_sha256": "f44f61134d689efc5115fff538fd6149150847a24dc4ab1acccd570c92ffb10d"
     }
   }
 }

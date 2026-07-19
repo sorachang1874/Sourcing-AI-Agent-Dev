@@ -137,6 +137,15 @@ def _validate_fixture_execution(result: Mapping[str, Any]) -> tuple[int, int]:
             ):
                 raise PortableCampaignPackageError("portable_package_not_fixture_only")
             attempt_count += 1
+    for row in result["handle_resolution_attempts"]:
+        receipt = row["retrieval_receipt"]
+        if (
+            row["source_status"] != "fixture_synthetic"
+            or receipt["source_status"] != "fixture_synthetic"
+            or receipt["receipt_locator"] is not None
+        ):
+            raise PortableCampaignPackageError("portable_package_not_fixture_only")
+        attempt_count += 1
     evidence_count = 0
     for observation in result["observations"]:
         if (

@@ -958,6 +958,17 @@ def validate_campaign_result(
             ):
                 raise ResearchOrchestrationError("portable_result_handle_history_time_invalid")
 
+    receipt_statuses: dict[str, str] = {}
+    attempt_source_statuses: set[str] = set()
+
+    def register_receipt(receipt_ref: str, source_status: str) -> None:
+        prior_status = receipt_statuses.get(receipt_ref)
+        if prior_status is not None and prior_status != source_status:
+            raise ResearchOrchestrationError("portable_result_receipt_source_status_conflict")
+        if prior_status is not None:
+            raise ResearchOrchestrationError("portable_result_receipt_reused_across_attempts")
+        receipt_statuses[receipt_ref] = source_status
+
     handle_resolution_evidence_by_id: dict[str, Mapping[str, Any]] = {}
     for evidence in result["handle_resolution_evidence"]:
         evidence_id = evidence["evidence_id"]
@@ -1004,7 +1015,9 @@ def validate_campaign_result(
         if outcome["terminal_state"] not in active_subject_states and outcome["x_account_refs"]:
             raise ResearchOrchestrationError("portable_result_nonanalyzed_subject_has_account")
         seed = seeds[outcome["seed_ref"]]
-        if seed["source_kind"] == "x_account" and outcome["terminal_state"] in active_subject_states:
+        if seed["source_kind"] == "x_account":
+            if outcome["terminal_state"] not in active_subject_states:
+                raise ResearchOrchestrationError("portable_result_x_seed_terminal_state_invalid")
             expected_handle = seed["x_handle_proposals"][0]["handle"].casefold()
             if any(
                 accounts[account_ref]["current_handle"].casefold() != expected_handle
@@ -1012,6 +1025,129 @@ def validate_campaign_result(
             ):
                 raise ResearchOrchestrationError("portable_result_x_seed_account_mismatch")
         referenced_accounts.update(outcome["x_account_refs"])
+
+    resolution_attempts_by_seed: dict[str, list[Mapping[str, Any]]] = {}
+    resolution_attempt_ids: set[str] = set()
+    for attempt in result["handle_resolution_attempts"]:
+        seed = seeds.get(attempt["seed_ref"])
+        if (
+            seed is None
+            or seed["source_kind"] == "x_account"
+            or attempt["attempt_id"] in resolution_attempt_ids
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_attempt_invalid")
+        if attempt["query_sha256"] != text_sha256(attempt["query_text"]):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_attempt_hash_invalid")
+        observed_at = _timestamp(
+            attempt["observed_at"], "portable_result_handle_resolution_attempt_time_invalid"
+        )
+        if not execution_started_at <= observed_at <= execution_completed_at:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_attempt_time_invalid")
+        if attempt["execution_state"] == "no_match":
+            frontier_ok = attempt["error"] is None and (
+                (
+                    attempt["continuation_state"] == "exhausted"
+                    and not attempt["result_truncated"]
+                    and attempt["continuation_ref"] is None
+                )
+                or (
+                    attempt["continuation_state"] == "continuation_available"
+                    and attempt["result_truncated"]
+                    and attempt["continuation_ref"] is not None
+                )
+            )
+        else:
+            frontier_ok = (
+                attempt["execution_state"] == "failed"
+                and attempt["error"] is not None
+                and not attempt["result_truncated"]
+                and attempt["continuation_state"] == "unknown"
+                and attempt["continuation_ref"] is None
+            )
+        if not frontier_ok:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_attempt_frontier_invalid")
+        receipt = attempt["retrieval_receipt"]
+        if (
+            receipt["receipt_sha256"] != _content_sha256(receipt, "receipt_sha256")
+            or attempt["receipt_ref"] != f"sha256:{receipt['receipt_sha256']}"
+            or receipt["query_sha256"] != attempt["query_sha256"]
+            or receipt["observed_at"] != attempt["observed_at"]
+            or receipt["execution_state"] != attempt["execution_state"]
+            or receipt["result_truncated"] != attempt["result_truncated"]
+            or receipt["continuation_state"] != attempt["continuation_state"]
+            or receipt["input_continuation_ref"] != attempt["input_continuation_ref"]
+            or receipt["continuation_ref"] != attempt["continuation_ref"]
+            or receipt["source_status"] != attempt["source_status"]
+            or receipt["error"] != attempt["error"]
+            or (attempt["source_status"] == "receipt_bound" and receipt["receipt_locator"] is None)
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_attempt_receipt_invalid")
+        register_receipt(attempt["receipt_ref"], attempt["source_status"])
+        resolution_attempt_ids.add(attempt["attempt_id"])
+        resolution_attempts_by_seed.setdefault(attempt["seed_ref"], []).append(attempt)
+
+    resolution_chain_exhausted: dict[str, bool] = {}
+    for seed_ref, attempts in resolution_attempts_by_seed.items():
+        resolution_chain_exhausted[seed_ref] = _validate_pagination_chain(
+            attempts,
+            error="portable_result_handle_resolution_attempt_pagination_invalid",
+        )
+
+    resolution_outcomes_by_seed: dict[str, Mapping[str, Any]] = {}
+    for outcome in result["handle_resolution_outcomes"]:
+        seed_ref = outcome["seed_ref"]
+        seed = seeds.get(seed_ref)
+        attempts = resolution_attempts_by_seed.get(seed_ref, [])
+        if (
+            seed is None
+            or seed["source_kind"] == "x_account"
+            or seed_ref in resolution_outcomes_by_seed
+            or not attempts
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_invalid")
+        ordered = sorted(attempts, key=lambda row: row["ordinal"])
+        if outcome["attempt_ids"] != [row["attempt_id"] for row in ordered] or outcome["receipt_refs"] != [
+            row["receipt_ref"] for row in ordered
+        ]:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_binding_invalid")
+        if outcome["source_status"] != _attempt_status_summary({row["source_status"] for row in ordered}):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_source_status_invalid")
+        expected_error_codes = sorted(
+            {row["error"]["error_code"] for row in ordered if row["error"] is not None}
+        )
+        if outcome["error_codes"] != expected_error_codes:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_error_binding_invalid")
+        if outcome["terminal_state"] == "no_verified_account":
+            if outcome["reason_code"] != "search_exhausted_no_match" or not resolution_chain_exhausted[seed_ref]:
+                raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_state_invalid")
+        elif (
+            outcome["reason_code"] != "execution_failed"
+            or resolution_chain_exhausted[seed_ref]
+            or not any(row["execution_state"] == "failed" for row in ordered)
+        ):
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_state_invalid")
+        resolution_outcomes_by_seed[seed_ref] = outcome
+
+    if set(resolution_attempts_by_seed) != set(resolution_outcomes_by_seed):
+        raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_coverage_invalid")
+    expected_resolution_outcomes: set[str] = set()
+    for outcome in outcomes:
+        seed_ref = outcome["seed_ref"]
+        resolution = resolution_outcomes_by_seed.get(seed_ref)
+        if outcome["terminal_state"] in {"no_verified_account", "failed"}:
+            if seeds[seed_ref]["source_kind"] != "x_account":
+                if resolution is None:
+                    raise ResearchOrchestrationError(
+                        "portable_result_handle_resolution_outcome_coverage_invalid"
+                    )
+                expected_resolution_outcomes.add(seed_ref)
+        elif resolution is not None:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_coverage_invalid")
+        if resolution is not None and resolution["terminal_state"] != outcome["terminal_state"]:
+            raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_state_mismatch")
+    if set(resolution_outcomes_by_seed) != expected_resolution_outcomes:
+        raise ResearchOrchestrationError("portable_result_handle_resolution_outcome_coverage_invalid")
+
     optional_tasks = {row["task_id"]: row for row in plan["optional_channel_tasks"]}
     discovery_origin_pairs: set[tuple[str, str]] = set()
     discovery_accounts: set[str] = set()
@@ -1107,16 +1243,6 @@ def validate_campaign_result(
     surface_attempt_receipts: dict[tuple[str, str], list[str]] = {}
     surface_attempt_by_receipt: dict[str, Mapping[str, Any]] = {}
     attempt_receipts: dict[tuple[str, str], dict[str, str]] = {}
-    receipt_statuses: dict[str, str] = {}
-    attempt_source_statuses: set[str] = set()
-
-    def register_receipt(receipt_ref: str, source_status: str) -> None:
-        prior_status = receipt_statuses.get(receipt_ref)
-        if prior_status is not None and prior_status != source_status:
-            raise ResearchOrchestrationError("portable_result_receipt_source_status_conflict")
-        if prior_status is not None:
-            raise ResearchOrchestrationError("portable_result_receipt_reused_across_attempts")
-        receipt_statuses[receipt_ref] = source_status
 
     for attempt in result["surface_attempts"]:
         account = accounts.get(attempt["x_account_ref"])
@@ -1375,6 +1501,26 @@ def validate_campaign_result(
     if any(accounts[account_ref]["identity_status"] == "quarantined_handle_reuse" for account_ref in analyzed_accounts):
         raise ResearchOrchestrationError("portable_result_quarantined_account_analyzed")
 
+    for account_ref in in_progress_accounts:
+        live_surface_frontier = False
+        for surface in ("post", "reply"):
+            surface_chain = surface_attempt_groups.get((account_ref, surface))
+            if surface_chain:
+                tip = max(surface_chain, key=lambda row: row["ordinal"])
+                live_surface_frontier = live_surface_frontier or (
+                    tip["execution_state"] == "failed" or tip["continuation_state"] == "continuation_available"
+                )
+        live_semantic_frontier = False
+        for query_key, semantic_chain in semantic_attempt_groups.items():
+            if query_key[0] != account_ref:
+                continue
+            tip = max(semantic_chain, key=lambda row: row["page_ordinal"])
+            live_semantic_frontier = live_semantic_frontier or (
+                tip["execution_state"] == "failed" or tip["continuation_state"] == "continuation_available"
+            )
+        if not (live_surface_frontier or live_semantic_frontier):
+            raise ResearchOrchestrationError("portable_result_research_in_progress_frontier_invalid")
+
     recall_attempts_by_subject: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for attempt in result["semantic_recall_attempts"]:
         recall_attempts_by_subject.setdefault((attempt["x_account_ref"], attempt["question_id"]), []).append(attempt)
@@ -1568,7 +1714,11 @@ def validate_campaign_result(
             ):
                 raise ResearchOrchestrationError("portable_result_semantic_recall_not_run_invalid")
         elif terminal_state == "failed":
-            if stop_reason != "execution_failed" or outcome["adaptive_stop_decision"] is not None:
+            if (
+                stop_reason != "execution_failed"
+                or outcome["adaptive_stop_decision"] is not None
+                or not any(row["execution_state"] == "failed" for row in attempts)
+            ):
                 raise ResearchOrchestrationError("portable_result_semantic_recall_failed_invalid")
         else:
             raise ResearchOrchestrationError("portable_result_semantic_recall_terminal_state_invalid")
@@ -1756,6 +1906,9 @@ def validate_campaign_result(
         elif terminal_state == "failed":
             if outcome["evidence_refs"] or not any(row["execution_state"] == "failed" for row in task_attempts):
                 raise ResearchOrchestrationError("portable_result_optional_failed_invalid")
+        elif terminal_state == "research_in_progress":
+            if not task_attempts or chain_exhausted:
+                raise ResearchOrchestrationError("portable_result_optional_research_in_progress_invalid")
         elif terminal_state == "not_run":
             if task_attempts or outcome["evidence_refs"]:
                 raise ResearchOrchestrationError("portable_result_optional_not_run_invalid")
@@ -1977,6 +2130,14 @@ def validate_checked_in_assets(root: Path | None = None) -> list[str]:
                 "x.portable.selected_subject.request_binding.v1",
                 "contracts/x.portable.selected_subject.request_binding.v1.schema.json",
             ),
+            (
+                "x.portable.research_campaign.package_manifest.v1",
+                "contracts/x.portable.research_campaign.package_manifest.v1.schema.json",
+            ),
+            (
+                "x.portable.research_campaign.semantic_validation_receipt.v1",
+                "contracts/x.portable.research_campaign.semantic_validation_receipt.v1.schema.json",
+            ),
         ]
         if (
             registry.get("schema_version") != "x.research_orchestration.contract_registry.v1"
@@ -1989,6 +2150,7 @@ def validate_checked_in_assets(root: Path | None = None) -> list[str]:
                 "fixtures/portable_research_campaign_request_fixture_v1.json",
                 "fixtures/portable_research_campaign_plan_fixture_v1.json",
                 "fixtures/portable_research_campaign_result_fixture_v1.json",
+                "fixtures/selected_subject_fixture_simulate_package_v1.json",
             ]
             or any(
                 registry.get(field) is not False
@@ -2002,6 +2164,25 @@ def validate_checked_in_assets(root: Path | None = None) -> list[str]:
             or any(not (base / path).is_file() for _, path in expected_contracts)
         ):
             return ["research_orchestration_contract_registry_invalid"]
+        from x_first.portable_campaign_package import build_fixture_simulate_package
+
+        package = strict_load_json(base / "fixtures" / "selected_subject_fixture_simulate_package_v1.json")
+        package_artifacts = package.get("artifacts")
+        package_receipt = package.get("semantic_validation_receipt")
+        if not isinstance(package_artifacts, Mapping) or not isinstance(package_receipt, Mapping):
+            return ["selected_subject_fixture_simulate_package_invalid"]
+        rebuilt_package = build_fixture_simulate_package(
+            selection=package_artifacts["selection"],
+            policy=package_artifacts["policy"],
+            catalog=package_artifacts["catalog"],
+            request=package_artifacts["request"],
+            binding=package_artifacts["binding"],
+            plan=package_artifacts["plan"],
+            result=package_artifacts["result"],
+            validated_at=package_receipt["validated_at"],
+        )
+        if rebuilt_package != package:
+            return ["selected_subject_fixture_simulate_package_drift"]
     except Exception as exc:  # noqa: BLE001 - stable local asset validator surface
         return [str(exc)]
     return []

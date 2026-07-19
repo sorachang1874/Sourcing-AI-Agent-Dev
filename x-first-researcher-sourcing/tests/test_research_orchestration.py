@@ -1215,6 +1215,12 @@ class ResearchOrchestrationTests(unittest.TestCase):
         result["request_sha256"] = request["request_sha256"]
         result["plan_sha256"] = plan["plan_sha256"]
         result["subject_outcomes"] = [row for row in result["subject_outcomes"] if row["seed_ref"] != "seed_name_only"]
+        result["handle_resolution_attempts"] = [
+            row for row in result["handle_resolution_attempts"] if row["seed_ref"] != "seed_name_only"
+        ]
+        result["handle_resolution_outcomes"] = [
+            row for row in result["handle_resolution_outcomes"] if row["seed_ref"] != "seed_name_only"
+        ]
         result["coverage"]["subjects_total"] = 2
         result["coverage"]["terminal_subject_outcomes"] = 2
         cross_source_metric = next(
@@ -1419,6 +1425,499 @@ class ResearchOrchestrationTests(unittest.TestCase):
             "portable_campaign_conversation_graph_anchor_missing",
         ):
             build_campaign_plan(request=request, catalog=self.catalog, policy=self.policy)
+
+    def test_research_in_progress_requires_a_live_unconsumed_frontier(self) -> None:
+        def strip_analyzed_rows(result: dict) -> None:
+            subject = next(row for row in result["subject_outcomes"] if row["seed_ref"] == "seed_x_account")
+            subject["terminal_state"] = "research_in_progress"
+            subject["reason"] = "fixture pagination frontier remains unconsumed"
+            for field in (
+                "dimension_results", "affiliation_results", "exploratory_findings", "semantic_recall_outcomes"
+            ):
+                result[field] = [row for row in result[field] if row["x_account_ref"] != "xacct_fixture_author"]
+
+        # All chains exhausted: parking the subject as in-progress is rejected.
+        result = copy.deepcopy(self.result)
+        strip_analyzed_rows(result)
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_research_in_progress_frontier_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # Zero attempts anywhere: no bound frontier exists to resume from.
+        result = copy.deepcopy(self.result)
+        strip_analyzed_rows(result)
+        result["surface_attempts"] = [
+            row for row in result["surface_attempts"] if row["x_account_ref"] != "xacct_fixture_author"
+        ]
+        result["observations"] = [
+            row for row in result["observations"] if row["x_account_ref"] != "xacct_fixture_author"
+        ]
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_research_in_progress_frontier_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # One surface exhausted and the other never attempted is not a live frontier.
+        result = copy.deepcopy(self.result)
+        strip_analyzed_rows(result)
+        result["surface_attempts"] = [
+            row
+            for row in result["surface_attempts"]
+            if not (row["x_account_ref"] == "xacct_fixture_author" and row["surface"] == "reply")
+        ]
+        result["observations"] = [
+            row for row in result["observations"] if row["observation_id"] != "obs_fixture_reply"
+        ]
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_research_in_progress_frontier_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # A retryable failed tip is a live frontier.
+        result = copy.deepcopy(self.result)
+        strip_analyzed_rows(result)
+        first_page = result["surface_attempts"][0]
+        first_page.update(
+            {
+                "result_truncated": True,
+                "continuation_state": "continuation_available",
+                "continuation_ref": "fixture://cursor/fixture_author/post/page-2",
+            }
+        )
+        result["surface_attempts"].append(
+            {
+                **first_page,
+                "ordinal": 2,
+                "receipt_ref": "fixture://receipt/fixture_author/post/page-2-failed",
+                "execution_state": "failed",
+                "bound_observation_count": 0,
+                "result_truncated": False,
+                "continuation_state": "unknown",
+                "input_continuation_ref": first_page["continuation_ref"],
+                "continuation_ref": None,
+            }
+        )
+        result["coverage"]["terminal_subject_outcomes"] = 2
+        metrics = {row["metric_id"]: row for row in result["coverage"]["metric_values"]}
+        metrics["candidate_authored_both_surface_coverage_rate"]["numerator"] = 1
+        metrics["target_direction_core_rate"].update({"numerator": 0, "denominator": 1})
+        metrics["target_direction_active_rate"].update({"numerator": 1, "denominator": 1})
+        metrics["evidence_backed_temporal_state_rate"].update({"numerator": 2, "denominator": 2})
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+        )
+
+        # A semantic chain with an unconsumed continuation is also a live frontier.
+        result = copy.deepcopy(self.result)
+        strip_analyzed_rows(result)
+        task = next(row for row in self.plan["candidate_authored_tasks"] if row["handle"] == "fixture_author")
+        target = next(row for row in task["recall_targets"] if row["question_id"] == "verify_coding_work")
+        query = target["recall_queries"][0]
+        receipt_ref = "fixture://receipt/fixture_author/semantic/progress-1"
+        result["semantic_recall_attempts"].append(
+            {
+                "x_account_ref": "xacct_fixture_author",
+                "question_id": "verify_coding_work",
+                "label_id": query["label_id"],
+                "ordinal": 1,
+                "page_ordinal": 1,
+                "surface": query["surface"],
+                "query_text": query["query_text"],
+                "query_sha256": orchestration.text_sha256(query["query_text"]),
+                "receipt_ref": receipt_ref,
+                "source_status": "fixture_synthetic",
+                "execution_state": "completed",
+                "bound_observation_count": 1,
+                "result_truncated": True,
+                "continuation_state": "continuation_available",
+                "input_continuation_ref": None,
+                "continuation_ref": "fixture://cursor/fixture_author/semantic/progress-1/page-2",
+                "new_unique_observation_refs": ["obs_fixture_semantic_progress"],
+                "new_target_evidence_refs": [],
+            }
+        )
+        text = "Fixture semantic progress observation."
+        result["observations"].append(
+            {
+                "observation_id": "obs_fixture_semantic_progress",
+                "x_account_ref": "xacct_fixture_author",
+                "surface": query["surface"],
+                "platform_object_id": "1003",
+                "canonical_url": "https://x.com/fixture_author/status/1003",
+                "author_platform_user_id": None,
+                "author_handle": "fixture_author",
+                "published_at": "2026-07-17T10:00:00Z",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "text_or_excerpt": text,
+                "content_sha256": orchestration.text_sha256(text),
+                "source_status": "fixture_synthetic",
+                "receipt_ref": receipt_ref,
+            }
+        )
+        result["coverage"]["terminal_subject_outcomes"] = 2
+        result["coverage"]["observation_count"] = 5
+        metrics = {row["metric_id"]: row for row in result["coverage"]["metric_values"]}
+        metrics["source_bound_evidence_rate"].update({"numerator": 0, "denominator": 5})
+        metrics["target_direction_core_rate"].update({"numerator": 0, "denominator": 1})
+        metrics["target_direction_active_rate"].update({"numerator": 1, "denominator": 1})
+        metrics["evidence_backed_temporal_state_rate"].update({"numerator": 2, "denominator": 2})
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+        )
+
+    def test_handle_resolution_outcome_requires_exhausted_typed_attempts(self) -> None:
+        def sync_receipt(attempt: dict) -> None:
+            receipt = attempt["retrieval_receipt"]
+            for field in (
+                "execution_state",
+                "result_truncated",
+                "continuation_state",
+                "input_continuation_ref",
+                "continuation_ref",
+                "error",
+            ):
+                receipt[field] = attempt[field]
+            _rehash(receipt, "receipt_sha256")
+            attempt["receipt_ref"] = f"sha256:{receipt['receipt_sha256']}"
+
+        def sync_outcome_receipts(result: dict) -> None:
+            outcome = result["handle_resolution_outcomes"][0]
+            outcome["receipt_refs"] = [row["receipt_ref"] for row in result["handle_resolution_attempts"]]
+
+        # The terminal negative outcome cannot exist without its typed outcome row.
+        result = copy.deepcopy(self.result)
+        result["handle_resolution_outcomes"] = []
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_handle_resolution_outcome_coverage_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # An outcome without any bound attempt is rejected.
+        result = copy.deepcopy(self.result)
+        result["handle_resolution_attempts"] = []
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(ResearchOrchestrationError, "portable_result_handle_resolution_outcome_invalid"):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # A chain with an unconsumed continuation cannot claim an exhausted negative outcome.
+        result = copy.deepcopy(self.result)
+        attempt = result["handle_resolution_attempts"][1]
+        attempt.update(
+            {
+                "result_truncated": True,
+                "continuation_state": "continuation_available",
+                "continuation_ref": "fixture://cursor/handle-resolution/seed_name_only/page-3",
+            }
+        )
+        sync_receipt(attempt)
+        sync_outcome_receipts(result)
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_handle_resolution_outcome_state_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # Receipt fields must mirror the attempt they bind.
+        result = copy.deepcopy(self.result)
+        attempt = result["handle_resolution_attempts"][1]
+        attempt["retrieval_receipt"]["continuation_state"] = "continuation_available"
+        _rehash(attempt["retrieval_receipt"], "receipt_sha256")
+        attempt["receipt_ref"] = f"sha256:{attempt['retrieval_receipt']['receipt_sha256']}"
+        sync_outcome_receipts(result)
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_handle_resolution_attempt_receipt_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # X-account seeds never take resolution attempts.
+        result = copy.deepcopy(self.result)
+        rogue = copy.deepcopy(result["handle_resolution_attempts"][0])
+        rogue["attempt_id"] = "hra_seed_x_account_1"
+        rogue["seed_ref"] = "seed_x_account"
+        result["handle_resolution_attempts"].append(rogue)
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(ResearchOrchestrationError, "portable_result_handle_resolution_attempt_invalid"):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # A failed outcome must bind at least one failed attempt.
+        result = copy.deepcopy(self.result)
+        subject = next(row for row in result["subject_outcomes"] if row["seed_ref"] == "seed_name_only")
+        subject["terminal_state"] = "failed"
+        subject["reason"] = "resolution execution failed"
+        outcome = result["handle_resolution_outcomes"][0]
+        outcome.update({"terminal_state": "failed", "reason_code": "execution_failed"})
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_handle_resolution_outcome_state_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # Subject and resolution terminal states must match.
+        result = copy.deepcopy(self.result)
+        subject = next(row for row in result["subject_outcomes"] if row["seed_ref"] == "seed_name_only")
+        subject["terminal_state"] = "failed"
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_handle_resolution_outcome_state_mismatch"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # A failed tip with a bound error receipt is a legal terminal failure.
+        result = copy.deepcopy(self.result)
+        subject = next(row for row in result["subject_outcomes"] if row["seed_ref"] == "seed_name_only")
+        subject["terminal_state"] = "failed"
+        subject["reason"] = "resolution execution failed after one negative page"
+        attempt = result["handle_resolution_attempts"][1]
+        error = {
+            "error_code": "x_search_timeout",
+            "error_message_sha256": orchestration.text_sha256("simulated resolution timeout"),
+        }
+        attempt.update(
+            {
+                "execution_state": "failed",
+                "result_truncated": False,
+                "continuation_state": "unknown",
+                "continuation_ref": None,
+                "error": error,
+            }
+        )
+        sync_receipt(attempt)
+        outcome = result["handle_resolution_outcomes"][0]
+        outcome.update(
+            {
+                "terminal_state": "failed",
+                "reason_code": "execution_failed",
+                "reason": "second resolution page timed out and the chain stopped",
+                "error_codes": ["x_search_timeout"],
+            }
+        )
+        sync_outcome_receipts(result)
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+        )
+
+    def test_x_seed_subjects_have_no_unattested_terminal_states(self) -> None:
+        # An asserted-handle seed cannot claim an unexecuted resolution state, and a terminal
+        # x-seed failure is only representable as a resumable in-progress frontier in v1.
+        for terminal_state in ("failed", "no_verified_account", "handle_resolution_required"):
+            with self.subTest(terminal_state=terminal_state):
+                result = copy.deepcopy(self.result)
+                subject = next(row for row in result["subject_outcomes"] if row["seed_ref"] == "seed_x_account")
+                subject["terminal_state"] = terminal_state
+                subject["x_account_refs"] = []
+                _rehash(result, "result_sha256")
+                with self.assertRaisesRegex(
+                    ResearchOrchestrationError, "portable_result_x_seed_terminal_state_invalid"
+                ):
+                    validate_campaign_result(
+                        result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+                    )
+
+    def test_semantic_recall_failed_outcome_requires_a_bound_failed_attempt(self) -> None:
+        # The reviewed escape: a failed outcome over zero attempts must no longer validate.
+        result = copy.deepcopy(self.result)
+        outcome = next(
+            row
+            for row in result["semantic_recall_outcomes"]
+            if row["x_account_ref"] == "xacct_fixture_author" and row["question_id"] == "verify_coding_work"
+        )
+        outcome["terminal_state"] = "failed"
+        outcome["stop_reason"] = "execution_failed"
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(ResearchOrchestrationError, "portable_result_semantic_recall_failed_invalid"):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # Binding one failed attempt makes the failed outcome legal.
+        result = copy.deepcopy(self.result)
+        task = next(row for row in self.plan["candidate_authored_tasks"] if row["handle"] == "fixture_author")
+        target = next(row for row in task["recall_targets"] if row["question_id"] == "verify_coding_work")
+        query = target["recall_queries"][0]
+        result["semantic_recall_attempts"].append(
+            {
+                "x_account_ref": "xacct_fixture_author",
+                "question_id": "verify_coding_work",
+                "label_id": query["label_id"],
+                "ordinal": 1,
+                "page_ordinal": 1,
+                "surface": query["surface"],
+                "query_text": query["query_text"],
+                "query_sha256": orchestration.text_sha256(query["query_text"]),
+                "receipt_ref": "fixture://receipt/fixture_author/semantic/failed-1",
+                "source_status": "fixture_synthetic",
+                "execution_state": "failed",
+                "bound_observation_count": 0,
+                "result_truncated": False,
+                "continuation_state": "unknown",
+                "input_continuation_ref": None,
+                "continuation_ref": None,
+                "new_unique_observation_refs": [],
+                "new_target_evidence_refs": [],
+            }
+        )
+        outcome = next(
+            row
+            for row in result["semantic_recall_outcomes"]
+            if row["x_account_ref"] == "xacct_fixture_author" and row["question_id"] == "verify_coding_work"
+        )
+        outcome.update(
+            {
+                "terminal_state": "failed",
+                "stop_reason": "execution_failed",
+                "attempted_query_sha256s": [orchestration.text_sha256(query["query_text"])],
+                "receipt_refs": ["fixture://receipt/fixture_author/semantic/failed-1"],
+            }
+        )
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+        )
+
+    def test_optional_channel_research_in_progress_preserves_partial_frontier(self) -> None:
+        # A first page with bound evidence and an unconsumed continuation is persistable.
+        result = copy.deepcopy(self.result)
+        attempt = result["optional_channel_attempts"][0]
+        attempt.update(
+            {
+                "execution_state": "completed",
+                "bound_evidence_count": 1,
+                "result_truncated": True,
+                "continuation_state": "continuation_available",
+                "continuation_ref": "fixture://cursor/optional/direct-credit/page-2",
+                "evidence_refs": ["optional_evidence_direct_credit_1"],
+            }
+        )
+        text = "Fixture direct-credit page one evidence."
+        result["optional_channel_evidence"].append(
+            {
+                "evidence_id": "optional_evidence_direct_credit_1",
+                "task_id": attempt["task_id"],
+                "evidence_kind": "project_direct_credit",
+                "canonical_url": "https://fixture.invalid/project/direct-credit/1",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "text_or_excerpt": text,
+                "content_sha256": orchestration.text_sha256(text),
+                "receipt_ref": attempt["receipt_ref"],
+                "source_status": "fixture_synthetic",
+            }
+        )
+        outcome = result["optional_channel_outcomes"][0]
+        outcome.update(
+            {
+                "terminal_state": "research_in_progress",
+                "evidence_refs": ["optional_evidence_direct_credit_1"],
+                "reason": "first direct-credit page retained with an unconsumed continuation",
+            }
+        )
+        _rehash(result, "result_sha256")
+        validate_campaign_result(
+            result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+        )
+
+        # An in-progress optional outcome still blocks the complete status.
+        complete_lie = copy.deepcopy(result)
+        complete_lie["status"] = "complete"
+        _rehash(complete_lie, "result_sha256")
+        with self.assertRaisesRegex(ResearchOrchestrationError, "portable_result_status_derivation_invalid"):
+            validate_campaign_result(
+                complete_lie, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # An exhausted chain cannot be parked as in-progress.
+        result = copy.deepcopy(self.result)
+        attempt = result["optional_channel_attempts"][0]
+        attempt.update(
+            {
+                "execution_state": "completed",
+                "bound_evidence_count": 1,
+                "evidence_refs": ["optional_evidence_direct_credit_1"],
+            }
+        )
+        result["optional_channel_evidence"].append(
+            {
+                "evidence_id": "optional_evidence_direct_credit_1",
+                "task_id": attempt["task_id"],
+                "evidence_kind": "project_direct_credit",
+                "canonical_url": "https://fixture.invalid/project/direct-credit/1",
+                "observed_at": "2026-07-18T08:00:00Z",
+                "text_or_excerpt": text,
+                "content_sha256": orchestration.text_sha256(text),
+                "receipt_ref": attempt["receipt_ref"],
+                "source_status": "fixture_synthetic",
+            }
+        )
+        result["optional_channel_outcomes"][0].update(
+            {
+                "terminal_state": "research_in_progress",
+                "evidence_refs": ["optional_evidence_direct_credit_1"],
+            }
+        )
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_optional_research_in_progress_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+        # Zero attempts cannot claim an in-progress optional outcome.
+        result = copy.deepcopy(self.result)
+        result["optional_channel_attempts"] = []
+        result["optional_channel_outcomes"][0].update(
+            {
+                "terminal_state": "research_in_progress",
+                "attempt_ids": [],
+                "evidence_refs": [],
+                "source_status": "unverified",
+            }
+        )
+        _rehash(result, "result_sha256")
+        with self.assertRaisesRegex(
+            ResearchOrchestrationError, "portable_result_optional_research_in_progress_invalid"
+        ):
+            validate_campaign_result(
+                result, request=self.request, plan=self.plan, catalog=self.catalog, policy=self.policy
+            )
+
+    def test_registry_covers_package_trust_assets(self) -> None:
+        registry = strict_load_json(ROOT / "contracts" / "research_orchestration_contract_registry.v1.json")
+        contracts = [row["schema_version"] for row in registry["contracts"]]
+        self.assertIn("x.portable.research_campaign.package_manifest.v1", contracts)
+        self.assertIn("x.portable.research_campaign.semantic_validation_receipt.v1", contracts)
+        self.assertIn(
+            "fixtures/selected_subject_fixture_simulate_package_v1.json",
+            registry["checked_assets"],
+        )
 
     def test_portable_module_has_no_sourcing_agent_runtime_import(self) -> None:
         source = inspect.getsource(orchestration)

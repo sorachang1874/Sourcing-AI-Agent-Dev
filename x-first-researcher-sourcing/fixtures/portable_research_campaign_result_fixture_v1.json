@@ -13,20 +13,24 @@
     {
       "seed_ref": "seed_x_account",
       "terminal_state": "analyzed",
-      "x_account_refs": ["xacct_fixture_author"],
+      "x_account_refs": [
+        "xacct_fixture_author"
+      ],
       "reason": "fixture X account has terminal Post and Reply analysis"
     },
     {
       "seed_ref": "seed_linkedin_profile",
       "terminal_state": "analyzed",
-      "x_account_refs": ["xacct_linked_seed"],
+      "x_account_refs": [
+        "xacct_linked_seed"
+      ],
       "reason": "cross-source X handle remains a reversible proposal"
     },
     {
       "seed_ref": "seed_name_only",
-      "terminal_state": "handle_resolution_required",
+      "terminal_state": "no_verified_account",
       "x_account_refs": [],
-      "reason": "name-only seed has no asserted or proposed X handle"
+      "reason": "exhausted two-page fixture resolution chain found no verified account"
     }
   ],
   "external_accounts": [
@@ -71,6 +75,86 @@
         "receipt_locator": "fixture://receipt/handle-resolution/linked-seed",
         "receipt_sha256": "6f6ef63737fd081cb85f1f207f9dfaed8424dc54fdeab98126fdaab583c5e011"
       }
+    }
+  ],
+  "handle_resolution_attempts": [
+    {
+      "attempt_id": "hra_seed_name_only_1",
+      "seed_ref": "seed_name_only",
+      "ordinal": 1,
+      "query_text": "fixture name-only researcher professional X search",
+      "query_sha256": "9393d5cb196e333dd86a9f4e4b1fd1425ac3edd6ddd99557a38936479668a913",
+      "observed_at": "2026-07-18T07:59:30Z",
+      "receipt_ref": "sha256:c84885eebe663c65b4a3a3e4c33e2ee1847fd3ef5be5f3e954a4ccf5e2003640",
+      "source_status": "fixture_synthetic",
+      "execution_state": "no_match",
+      "result_truncated": true,
+      "continuation_state": "continuation_available",
+      "input_continuation_ref": null,
+      "continuation_ref": "fixture://cursor/handle-resolution/seed_name_only/page-2",
+      "error": null,
+      "retrieval_receipt": {
+        "schema_version": "x.handle_resolution.attempt_receipt.v1",
+        "query_sha256": "9393d5cb196e333dd86a9f4e4b1fd1425ac3edd6ddd99557a38936479668a913",
+        "observed_at": "2026-07-18T07:59:30Z",
+        "execution_state": "no_match",
+        "result_truncated": true,
+        "continuation_state": "continuation_available",
+        "input_continuation_ref": null,
+        "continuation_ref": "fixture://cursor/handle-resolution/seed_name_only/page-2",
+        "source_status": "fixture_synthetic",
+        "error": null,
+        "receipt_locator": null,
+        "receipt_sha256": "c84885eebe663c65b4a3a3e4c33e2ee1847fd3ef5be5f3e954a4ccf5e2003640"
+      }
+    },
+    {
+      "attempt_id": "hra_seed_name_only_2",
+      "seed_ref": "seed_name_only",
+      "ordinal": 2,
+      "query_text": "fixture name-only researcher professional X search",
+      "query_sha256": "9393d5cb196e333dd86a9f4e4b1fd1425ac3edd6ddd99557a38936479668a913",
+      "observed_at": "2026-07-18T08:00:00Z",
+      "receipt_ref": "sha256:3c6c31e84d98cffeb90e8f0b88d22de4e84816262b7febdeae3cbc6061df94d1",
+      "source_status": "fixture_synthetic",
+      "execution_state": "no_match",
+      "result_truncated": false,
+      "continuation_state": "exhausted",
+      "input_continuation_ref": "fixture://cursor/handle-resolution/seed_name_only/page-2",
+      "continuation_ref": null,
+      "error": null,
+      "retrieval_receipt": {
+        "schema_version": "x.handle_resolution.attempt_receipt.v1",
+        "query_sha256": "9393d5cb196e333dd86a9f4e4b1fd1425ac3edd6ddd99557a38936479668a913",
+        "observed_at": "2026-07-18T08:00:00Z",
+        "execution_state": "no_match",
+        "result_truncated": false,
+        "continuation_state": "exhausted",
+        "input_continuation_ref": "fixture://cursor/handle-resolution/seed_name_only/page-2",
+        "continuation_ref": null,
+        "source_status": "fixture_synthetic",
+        "error": null,
+        "receipt_locator": null,
+        "receipt_sha256": "3c6c31e84d98cffeb90e8f0b88d22de4e84816262b7febdeae3cbc6061df94d1"
+      }
+    }
+  ],
+  "handle_resolution_outcomes": [
+    {
+      "seed_ref": "seed_name_only",
+      "terminal_state": "no_verified_account",
+      "attempt_ids": [
+        "hra_seed_name_only_1",
+        "hra_seed_name_only_2"
+      ],
+      "receipt_refs": [
+        "sha256:c84885eebe663c65b4a3a3e4c33e2ee1847fd3ef5be5f3e954a4ccf5e2003640",
+        "sha256:3c6c31e84d98cffeb90e8f0b88d22de4e84816262b7febdeae3cbc6061df94d1"
+      ],
+      "reason_code": "search_exhausted_no_match",
+      "reason": "two-page fixture name-search chain exhausted with no verified account match",
+      "error_codes": [],
+      "source_status": "fixture_synthetic"
     }
   ],
   "cross_source_link_proposals": [
@@ -160,7 +244,10 @@
       "terminal_state": "authored_surface_complete",
       "attempted_query_sha256s": [],
       "stop_reason": "broad_authored_surface_completed",
-      "receipt_refs": ["fixture://receipt/fixture_author/post", "fixture://receipt/fixture_author/reply"],
+      "receipt_refs": [
+        "fixture://receipt/fixture_author/post",
+        "fixture://receipt/fixture_author/reply"
+      ],
       "adaptive_stop_decision": null
     },
     {
@@ -180,7 +267,10 @@
       "terminal_state": "authored_surface_complete",
       "attempted_query_sha256s": [],
       "stop_reason": "broad_authored_surface_completed",
-      "receipt_refs": ["fixture://receipt/linked_seed/post", "fixture://receipt/linked_seed/reply"],
+      "receipt_refs": [
+        "fixture://receipt/linked_seed/post",
+        "fixture://receipt/linked_seed/reply"
+      ],
       "adaptive_stop_decision": null
     },
     {
@@ -262,7 +352,9 @@
       "scope_id": "fixture_lab",
       "temporal_state": "current",
       "matches_temporal_filter": true,
-      "evidence_refs": ["seed_x_account"],
+      "evidence_refs": [
+        "seed_x_account"
+      ],
       "reason": "fixture seed reports current affiliation",
       "source_status": "fixture_synthetic"
     },
@@ -271,7 +363,9 @@
       "scope_id": "fixture_lab",
       "temporal_state": "current",
       "matches_temporal_filter": true,
-      "evidence_refs": ["seed_linkedin_profile"],
+      "evidence_refs": [
+        "seed_linkedin_profile"
+      ],
       "reason": "fixture external profile reports current affiliation",
       "source_status": "fixture_synthetic"
     }
@@ -285,7 +379,10 @@
       "relevance_state": "ambiguous",
       "target_activity_temporal_state": "current",
       "matches_temporal_filter": true,
-      "evidence_refs": ["obs_fixture_post", "obs_fixture_reply"],
+      "evidence_refs": [
+        "obs_fixture_post",
+        "obs_fixture_reply"
+      ],
       "reason": "exploratory mode proposes topics without forcing one configured target",
       "source_status": "fixture_synthetic"
     },
@@ -293,11 +390,16 @@
       "x_account_ref": "xacct_fixture_author",
       "question_id": "verify_coding_work",
       "dimension_id": "research_workstream",
-      "matched_label_ids": ["coding"],
+      "matched_label_ids": [
+        "coding"
+      ],
       "relevance_state": "target_core",
       "target_activity_temporal_state": "current",
       "matches_temporal_filter": true,
-      "evidence_refs": ["obs_fixture_post", "obs_fixture_reply"],
+      "evidence_refs": [
+        "obs_fixture_post",
+        "obs_fixture_reply"
+      ],
       "reason": "both synthetic authored surfaces explicitly discuss current coding research",
       "source_status": "fixture_synthetic"
     },
@@ -309,7 +411,10 @@
       "relevance_state": "ambiguous",
       "target_activity_temporal_state": "historical",
       "matches_temporal_filter": true,
-      "evidence_refs": ["obs_linked_post", "obs_linked_reply"],
+      "evidence_refs": [
+        "obs_linked_post",
+        "obs_linked_reply"
+      ],
       "reason": "exploratory mode retains coding and infrastructure as proposed topics",
       "source_status": "fixture_synthetic"
     },
@@ -317,11 +422,16 @@
       "x_account_ref": "xacct_linked_seed",
       "question_id": "verify_coding_work",
       "dimension_id": "research_workstream",
-      "matched_label_ids": ["coding"],
+      "matched_label_ids": [
+        "coding"
+      ],
       "relevance_state": "target_adjacent",
       "target_activity_temporal_state": "historical",
       "matches_temporal_filter": true,
-      "evidence_refs": ["obs_linked_post", "obs_linked_reply"],
+      "evidence_refs": [
+        "obs_linked_post",
+        "obs_linked_reply"
+      ],
       "reason": "synthetic evidence is relevant but mixes coding with historical infrastructure",
       "source_status": "fixture_synthetic"
     }
@@ -332,7 +442,9 @@
       "x_account_ref": "xacct_fixture_author",
       "question_id": "discover_research_topics",
       "proposed_label": "evaluation",
-      "evidence_refs": ["obs_fixture_post"],
+      "evidence_refs": [
+        "obs_fixture_post"
+      ],
       "reason": "self-authored synthetic Post explicitly discusses evaluation",
       "source_status": "fixture_synthetic"
     },
@@ -341,7 +453,9 @@
       "x_account_ref": "xacct_linked_seed",
       "question_id": "discover_research_topics",
       "proposed_label": "infrastructure",
-      "evidence_refs": ["obs_linked_reply"],
+      "evidence_refs": [
+        "obs_linked_reply"
+      ],
       "reason": "self-authored synthetic Reply explicitly discusses infrastructure",
       "source_status": "fixture_synthetic"
     }
@@ -369,7 +483,9 @@
       "task_id": "opt_5adcddeee4b0bd056f50cae8",
       "channel_id": "project_direct_credit",
       "terminal_state": "no_result",
-      "attempt_ids": ["opt_attempt_direct_credit_1"],
+      "attempt_ids": [
+        "opt_attempt_direct_credit_1"
+      ],
       "evidence_refs": [],
       "reason": "synthetic fixture exercises the opt-in channel without producing a new lead",
       "source_status": "fixture_synthetic"
@@ -386,13 +502,41 @@
     "observation_count": 4,
     "coverage_source_status": "fixture_synthetic",
     "metric_values": [
-      {"metric_id": "candidate_authored_both_surface_coverage_rate", "numerator": 2, "denominator": 2},
-      {"metric_id": "source_bound_evidence_rate", "numerator": 0, "denominator": 4},
-      {"metric_id": "target_direction_core_rate", "numerator": 1, "denominator": 2},
-      {"metric_id": "target_direction_active_rate", "numerator": 2, "denominator": 2},
-      {"metric_id": "evidence_backed_temporal_state_rate", "numerator": 4, "denominator": 4},
-      {"metric_id": "target_core_unique_account_yield_per_native_call", "numerator": 0, "denominator": 0},
-      {"metric_id": "cross_source_handle_resolution_rate", "numerator": 1, "denominator": 2}
+      {
+        "metric_id": "candidate_authored_both_surface_coverage_rate",
+        "numerator": 2,
+        "denominator": 2
+      },
+      {
+        "metric_id": "source_bound_evidence_rate",
+        "numerator": 0,
+        "denominator": 4
+      },
+      {
+        "metric_id": "target_direction_core_rate",
+        "numerator": 1,
+        "denominator": 2
+      },
+      {
+        "metric_id": "target_direction_active_rate",
+        "numerator": 2,
+        "denominator": 2
+      },
+      {
+        "metric_id": "evidence_backed_temporal_state_rate",
+        "numerator": 4,
+        "denominator": 4
+      },
+      {
+        "metric_id": "target_core_unique_account_yield_per_native_call",
+        "numerator": 0,
+        "denominator": 0
+      },
+      {
+        "metric_id": "cross_source_handle_resolution_rate",
+        "numerator": 1,
+        "denominator": 2
+      }
     ]
   },
   "limitations": [
@@ -407,5 +551,5 @@
     "automatic_cross_source_merge_allowed": false,
     "outreach_allowed": false
   },
-  "result_sha256": "a31640936cef4604f78ac7cb205de42c6e442b08f871ec8effe2cda3fe0e29f9"
+  "result_sha256": "b86a052670c0baa3e9dbd0296a7db8563e653053e5e85aed7917296ddcd92b7d"
 }
