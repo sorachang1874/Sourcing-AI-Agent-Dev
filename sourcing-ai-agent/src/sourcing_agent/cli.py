@@ -3096,7 +3096,10 @@ def main() -> None:
 
     export_control_plane_parser = subparsers.add_parser(
         "export-control-plane-snapshot",
-        help="Export control-plane state plus generation indexes as a Postgres restore/migration snapshot",
+        help=(
+            "Export projection/domain control-plane state plus generation indexes as a Postgres migration "
+            "snapshot; the PG-only durable runtime causal aggregate is excluded and recorded as a typed gap"
+        ),
     )
     export_control_plane_parser.add_argument(
         "--output",

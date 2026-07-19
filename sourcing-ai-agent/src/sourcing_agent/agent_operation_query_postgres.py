@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from .acquisition_start_command_acceptance import (
@@ -390,6 +391,69 @@ def _canonical_workflow_command_contract(row: dict[str, Any]) -> dict[str, Any]:
             for field in dict_fields
         },
     }
+
+
+_WORKFLOW_COMMAND_MUTABLE_LIFECYCLE_FIELDS = frozenset({"not_before_at", "downstream_command_ids"})
+
+
+def _canonical_workflow_command_identity_contract(row: dict[str, Any]) -> dict[str, Any]:
+    """Return the immutable command/acceptance identity fields of one command.
+
+    ``not_before_at`` and ``downstream_command_ids`` are mutable lifecycle
+    state: S1e2c result acceptance legitimately releases the creation-time
+    sentinel hold, and root completion legitimately links downstream children.
+    Those two fields must never be compared against the creation-time row;
+    they are validated through the explicit lifecycle contract in
+    ``_workflow_command_lifecycle_state`` instead.
+    """
+
+    contract = _canonical_workflow_command_contract(row)
+    return {
+        field: value for field, value in contract.items() if field not in _WORKFLOW_COMMAND_MUTABLE_LIFECYCLE_FIELDS
+    }
+
+
+def _is_workflow_command_release_timestamp(value: str) -> bool:
+    text = str(value)
+    if not text or text != text.strip():
+        return False
+    try:
+        datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
+    except ValueError:
+        return False
+    return True
+
+
+def _workflow_command_lifecycle_state(workflow_command: dict[str, Any], *, hold_until: str) -> str:
+    """Validate the mutable lifecycle fields of one accepted root command.
+
+    The accepted start-v2 root command is created under a sentinel hold
+    (``pending_hold``), is released by S1e2c result acceptance (``released``,
+    either cleared or moved to a retry-backoff timestamp), and may then link
+    downstream children when the root completes (``progressed``).  Inspect must
+    accept the current state of that ``pending_hold -> released -> progressed``
+    contract rather than the creation-time snapshot; any value outside the
+    explicit contract raises.
+    """
+
+    contract = _canonical_workflow_command_contract(workflow_command)
+    not_before_at = contract["not_before_at"]
+    downstream_ids = contract["downstream_command_ids"]
+    if type(not_before_at) is not str or (
+        not_before_at != hold_until
+        and not_before_at != ""
+        and not _is_workflow_command_release_timestamp(not_before_at)
+    ):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    if not downstream_ids:
+        return "pending_hold" if not_before_at == hold_until else "released"
+    if (
+        not_before_at != ""
+        or any(type(item) is not str or not item or item != item.strip() for item in downstream_ids)
+        or len(set(downstream_ids)) != len(downstream_ids)
+    ):
+        raise ValueError("agent tool inspect result workflow command link mismatch")
+    return "progressed"
 
 
 def _operation_command_planned_event_identity(
@@ -1032,7 +1096,7 @@ def _validate_start_acceptance_physical_dependencies(
     ):
         raise ValueError("agent tool inspect result workflow command link mismatch")
 
-    from .acquisition_start_v2_create_postgres import _canonical_create_rows
+    from .acquisition_start_v2_create_postgres import _RESULT_ACCEPTANCE_HOLD_UNTIL, _canonical_create_rows
 
     expected_rows = _canonical_create_rows(
         binding=start_binding,
@@ -1044,6 +1108,7 @@ def _validate_start_acceptance_physical_dependencies(
         for event in expected_rows["workflow_events"]
         if str(event.get("event_type") or "") == "CommandPlanRequested"
     )
+    _workflow_command_lifecycle_state(workflow_command, hold_until=_RESULT_ACCEPTANCE_HOLD_UNTIL)
     if (
         not json_contract_equal(owner_result_ref, expected_rows["owner_result_ref"])
         or not json_contract_equal(
@@ -1055,8 +1120,8 @@ def _validate_start_acceptance_physical_dependencies(
             _canonical_workflow_event_contract(dict(expected_source_event)),
         )
         or not json_contract_equal(
-            _canonical_workflow_command_contract(workflow_command),
-            _canonical_workflow_command_contract(dict(expected_rows["workflow_command"])),
+            _canonical_workflow_command_identity_contract(workflow_command),
+            _canonical_workflow_command_identity_contract(dict(expected_rows["workflow_command"])),
         )
         or not json_contract_equal(
             _canonical_operation_event_contract(planned_event),

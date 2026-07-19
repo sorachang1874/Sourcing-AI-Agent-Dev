@@ -7,6 +7,9 @@ from typing import Any
 import pytest
 
 from sourcing_agent import acquisition_start_v2_postgres as start_postgres
+from sourcing_agent.acquisition_start_command_acceptance import (
+    ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION,
+)
 from sourcing_agent.acquisition_start_v2 import (
     ACQUISITION_START_V2_REQUEST_SCHEMA_DIGEST,
     ACQUISITION_START_V2_REQUEST_SCHEMA_VERSION,
@@ -255,3 +258,184 @@ def test_swapped_occurrence_shape_cannot_remain_exact_without_matching_start_ide
         )
         == "partial_or_mixed_v2"
     )
+
+
+def _erase_all_pins(record: dict[str, Any]) -> None:
+    for field in _CURRENT_START_V2_PINS:
+        record[field] = ""
+
+
+def _erase_start_snapshot_and_input_keys(action: dict[str, Any]) -> None:
+    action["input_json"] = {}
+    action["target_ref_json"] = {}
+
+
+def _erase_accepted_result_carriers(action: dict[str, Any], operation: dict[str, Any]) -> None:
+    action["result_ref_json"] = {}
+    action["idempotency_key"] = "legacy-drifted-idempotency"
+    action["metadata_json"] = {}
+    operation["result_ref_json"] = {}
+    operation["idempotency_key"] = "legacy-drifted-idempotency"
+    operation["workflow_ref_json"] = {}
+
+
+def _owner_result_ref_carrier() -> dict[str, Any]:
+    return {"schema_version": ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_SCHEMA_VERSION}
+
+
+def _start_workflow_ref_carrier() -> dict[str, Any]:
+    return {
+        "workflow_run_id": "wf_operation_" + "1" * 24,
+        "command_id": "cmd_" + "2" * 24,
+        "command_type": "acquisition.run.create",
+        "owner": "acquisition_run_writer",
+    }
+
+
+@pytest.mark.parametrize(
+    "carrier",
+    (
+        "action_result_ref",
+        "operation_result_ref",
+        "occurrence_idempotency_pair",
+        "operation_idempotency_identity",
+        "operation_workflow_reference",
+    ),
+)
+def test_each_immutable_accepted_result_carrier_alone_survives_compound_pin_drift(carrier: str) -> None:
+    action, operation = _exact_records()
+    occurrence_ref = json.loads(action["metadata_json"])["result_occurrence_ref"]
+    start_idempotency = action["idempotency_key"]
+    # Erase every current pin and the input/snapshot markers so that exactly one
+    # immutable accepted-result carrier survives alone; junk-valued pins are
+    # covered separately by the drifted-pin rule below.
+    for record in (action, operation):
+        _erase_all_pins(record)
+    _erase_start_snapshot_and_input_keys(action)
+    _erase_accepted_result_carriers(action, operation)
+    if carrier == "action_result_ref":
+        action["result_ref_json"] = _owner_result_ref_carrier()
+    elif carrier == "operation_result_ref":
+        operation["result_ref_json"] = _owner_result_ref_carrier()
+    elif carrier == "occurrence_idempotency_pair":
+        action["metadata_json"] = {"result_occurrence_ref": occurrence_ref}
+        action["idempotency_key"] = start_idempotency
+    elif carrier == "operation_idempotency_identity":
+        operation["idempotency_key"] = start_idempotency
+    elif carrier == "operation_workflow_reference":
+        operation["workflow_ref_json"] = _start_workflow_ref_carrier()
+
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=action,
+            operation_run=operation,
+        )
+        == "partial_or_mixed_v2"
+    ), carrier
+    preflight = acquisition_start_v2_generic_operation_control_preflight(
+        action=action,
+        operation_run=operation,
+    )
+
+    assert preflight["status"] == "invalid"
+    assert preflight["reason"] == ACQUISITION_START_V2_GENERIC_OPERATION_CONTROL_IDENTITY_MISMATCH
+    assert preflight["module_state_mutated"] is False
+
+
+def test_compound_pin_drift_without_any_carrier_still_fails_closed_on_start_candidate() -> None:
+    action, operation = _exact_records()
+    for record in (action, operation):
+        for field in _CURRENT_START_V2_PINS:
+            record[field] = f"drifted-{field}"
+    _erase_start_snapshot_and_input_keys(action)
+    _erase_accepted_result_carriers(action, operation)
+
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=action,
+            operation_run=operation,
+        )
+        == "partial_or_mixed_v2"
+    )
+
+
+def _legacy_schema_defined_start_records() -> tuple[dict[str, Any], dict[str, Any]]:
+    spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_START_ACQUISITION_RUN)
+    action = {
+        "action_id": "act-legacy-start-1",
+        "action_type": ACTION_START_ACQUISITION_RUN,
+        "workspace_id": "workspace-1",
+        "request_schema_version": spec.request_schema_version,
+        "request_schema_digest": spec.request_schema_digest,
+        "input": {"target_company": "Acme", "query": "find people"},
+        "target_ref": {"workspace_id": "workspace-1"},
+        "metadata": {},
+        "result_ref": {},
+        "idempotency_key": "legacy-start-idempotency",
+    }
+    operation = {
+        "operation_run_id": "op-legacy-start-1",
+        "action_id": "act-legacy-start-1",
+        "workspace_id": "workspace-1",
+        "request_schema_version": spec.request_schema_version,
+        "request_schema_digest": spec.request_schema_digest,
+        "workflow_ref": _start_workflow_ref_carrier(),
+        "result_ref": {},
+        "idempotency_key": "legacy-start-idempotency",
+    }
+    return action, operation
+
+
+def test_coherent_legacy_schema_defined_start_remains_generic_ready() -> None:
+    action, operation = _legacy_schema_defined_start_records()
+    baseline = copy.deepcopy((action, operation))
+
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=action,
+            operation_run=operation,
+        )
+        == "non_v2"
+    )
+    assert acquisition_start_v2_generic_operation_control_preflight(
+        action=action,
+        operation_run=operation,
+    ) == {"status": "ready"}
+    assert (action, operation) == baseline
+
+
+def test_drifted_legacy_start_pin_pair_fails_closed() -> None:
+    action, operation = _legacy_schema_defined_start_records()
+    operation["request_schema_digest"] = "f" * 64
+
+    assert (
+        classify_acquisition_start_v2_generic_control_provenance(
+            action=action,
+            operation_run=operation,
+        )
+        == "partial_or_mixed_v2"
+    )
+
+
+def test_occurrence_reference_on_start_candidate_is_an_owner_bound_marker() -> None:
+    action = {
+        "action_id": "act-start-occurrence-only",
+        "action_type": ACTION_START_ACQUISITION_RUN,
+        "workspace_id": "workspace-1",
+        "request_schema_version": "",
+        "request_schema_digest": "",
+        "input": {},
+        "target_ref": {},
+        "metadata": {"result_occurrence_ref": copy.deepcopy(_WELL_FORMED_OCCURRENCE)},
+        "result_ref": {},
+        "idempotency_key": "legacy-drifted-idempotency",
+    }
+
+    assert classify_acquisition_start_v2_generic_control_provenance(action=action) == "partial_or_mixed_v2"
+
+
+def test_agent_start_v2_idempotency_identity_on_non_start_action_fails_closed() -> None:
+    action = _schema_less_non_start_action()
+    action["idempotency_key"] = "agent-start-v2:" + "b" * 64
+
+    assert classify_acquisition_start_v2_generic_control_provenance(action=action) == "partial_or_mixed_v2"

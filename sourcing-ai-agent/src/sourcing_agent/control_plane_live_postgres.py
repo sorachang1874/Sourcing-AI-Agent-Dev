@@ -16184,6 +16184,15 @@ def _require_no_public_workflow_command_sql_mutation(sql: str, *, method: str) -
     dedicated command method so its hold, claim, and causality contracts stay
     atomic.  Inspect SQL tokens rather than raw substrings so comments and
     string literals cannot either hide a write or cause a false rejection.
+
+    Statements whose mutation behavior cannot be proven from their tokens fail
+    closed: ``DO`` (dollar-quoted body), ``CALL`` (procedure body), ``EXECUTE``
+    (prepared statement body), ``PREPARE`` of a mutating body, ``EXPLAIN`` of a
+    mutating statement (``ANALYZE`` executes it), ``CREATE FUNCTION/PROCEDURE``
+    (opaque body invoked later), and ``DROP OWNED``.  Parenthesized
+    ``ONLY (table_name)`` targets and ``U&"..."`` unicode-escape identifier
+    spelling are normalized before target comparison so they cannot hide the
+    command table either.
     """
 
     if _postgres_sql_mutates_workflow_commands(sql):
@@ -16268,6 +16277,10 @@ def _postgres_command_mutates_workflow_commands(
             and (_sql_qualified_identifier(tokens, after_target + 2, end)[0] == "workflow_commands")
         )
     if command == "drop":
+        if _sql_word_is(tokens, index, "owned"):
+            # DROP OWNED BY drops every object owned by the role, including the
+            # command table itself and its protective triggers/indexes.
+            return True
         if not _sql_word_is(tokens, index, "table"):
             return False
         index += 1
@@ -16276,7 +16289,101 @@ def _postgres_command_mutates_workflow_commands(
         return _sql_target_list_contains_workflow_commands(tokens, index, end)
     if command == "create":
         return _postgres_create_mutates_workflow_commands(tokens, index, end)
+    if command == "select":
+        return _postgres_select_mutates_workflow_commands(tokens, index, end)
+    if command == "explain":
+        # EXPLAIN ANALYZE executes its inner statement; classify the inner
+        # statement rather than trusting the EXPLAIN wrapper.
+        return _postgres_explain_mutates_workflow_commands(tokens, index, end)
+    if command == "prepare":
+        # PREPARE stores a statement for later EXECUTE; EXECUTE itself is
+        # always fenced below because its body lives outside this statement.
+        return _postgres_prepare_mutates_workflow_commands(tokens, index, end)
+    if command in {"do", "call", "execute"}:
+        # Dollar-quoted bodies (DO), procedure bodies (CALL), and prepared
+        # statement names (EXECUTE) are opaque to this tokenizer and can carry
+        # arbitrary DML against workflow_commands, so they fail closed.
+        return True
     return False
+
+
+def _postgres_explain_mutates_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    index = start
+    while any(_sql_word_is(tokens, index, option) for option in ("analyze", "verbose")):
+        index += 1
+    index = _skip_postgres_symbol_group(tokens, index, end)
+    if index >= end:
+        # An EXPLAIN without a visible explained statement cannot be proven
+        # read-only, so it fails closed.
+        return True
+    return _postgres_statement_mutates_workflow_commands(tokens, index, end)
+
+
+def _postgres_prepare_mutates_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    index = start
+    if not _sql_identifier_at(tokens, index):
+        return True
+    index += 1
+    index = _skip_postgres_symbol_group(tokens, index, end)
+    if not _sql_word_is(tokens, index, "as"):
+        return True
+    index += 1
+    if index >= end:
+        return True
+    return _postgres_statement_mutates_workflow_commands(tokens, index, end)
+
+
+def _postgres_select_mutates_workflow_commands(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> bool:
+    depth = 0
+    for index in range(start, end):
+        token = tokens[index]
+        if token == ("symbol", "("):
+            depth += 1
+        elif token == ("symbol", ")"):
+            depth = max(0, depth - 1)
+        elif token[0] == "word" and depth == 0:
+            if token[1] == "from":
+                return False
+            if token[1] == "into":
+                candidate = index + 1
+                while any(
+                    _sql_word_is(tokens, candidate, modifier) for modifier in ("temp", "temporary", "unlogged", "table")
+                ):
+                    candidate += 1
+                return _sql_target_is_workflow_commands(tokens, candidate, end)
+    return False
+
+
+def _skip_postgres_symbol_group(
+    tokens: list[_PostgresSqlToken],
+    start: int,
+    end: int,
+) -> int:
+    if start >= end or tokens[start] != ("symbol", "("):
+        return start
+    depth = 0
+    index = start
+    while index < end:
+        if tokens[index] == ("symbol", "("):
+            depth += 1
+        elif tokens[index] == ("symbol", ")"):
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        index += 1
+    return index
 
 
 def _postgres_create_mutates_workflow_commands(
@@ -16290,6 +16397,13 @@ def _postgres_create_mutates_workflow_commands(
         for modifier in {"global", "local", "temporary", "temp", "unlogged", "unique", "concurrently"}
     ):
         index += 1
+    if _sql_word_is(tokens, index, "or") and _sql_word_is(tokens, index + 1, "replace"):
+        index += 2
+    if any(_sql_word_is(tokens, index, kind) for kind in {"function", "procedure"}):
+        # Function/procedure bodies are dollar-quoted and opaque to this
+        # tokenizer; a body can carry arbitrary DML that a later SELECT/CALL
+        # would execute, so creation fails closed.
+        return True
     if _sql_word_is(tokens, index, "table"):
         index += 1
         if (
@@ -16338,10 +16452,15 @@ def _sql_qualified_identifier(
     start: int,
     end: int,
 ) -> tuple[str, int]:
-    if start >= end or not _sql_identifier_at(tokens, start):
+    index = start
+    while index < end and tokens[index] == ("symbol", "("):
+        # PostgreSQL accepts parenthesized targets such as ONLY (table_name);
+        # unwrap them so the parentheses cannot hide the real target.
+        index += 1
+    if index >= end or not _sql_identifier_at(tokens, index):
         return "", start
-    target = tokens[start][1]
-    index = start + 1
+    target = tokens[index][1]
+    index += 1
     while index + 1 < end and tokens[index] == ("symbol", ".") and _sql_identifier_at(tokens, index + 1):
         target = tokens[index + 1][1]
         index += 2
@@ -16384,6 +16503,10 @@ def _tokenize_postgres_sql(sql: str) -> list[_PostgresSqlToken]:
                 continue
         if character == '"':
             value, index = _read_postgres_quoted_identifier(text, index)
+            tokens.append(("quoted_identifier", value))
+            continue
+        if character in {"u", "U"} and text.startswith('&"', index + 1):
+            value, index = _read_postgres_unicode_identifier(text, index)
             tokens.append(("quoted_identifier", value))
             continue
         if character.isalpha() or character == "_":
@@ -16442,6 +16565,46 @@ def _read_postgres_quoted_identifier(text: str, start: int) -> tuple[str, int]:
         value.append(text[index])
         index += 1
     return "".join(value), index
+
+
+def _read_postgres_unicode_identifier(text: str, start: int) -> tuple[str, int]:
+    """Read a PostgreSQL ``U&"..."`` unicode identifier with its escape decoding.
+
+    PostgreSQL lexes ``u&"..."`` (no whitespace between ``u`` and ``&``) as one
+    quoted identifier whose ``\\XXXX`` / ``\\+XXXXXX`` escapes (or a custom
+    ``UESCAPE '<char>'`` escape) decode to code points.  Decoding here keeps
+    escape spelling from hiding a ``workflow_commands`` mutation target.
+    Malformed input is left undecoded; PostgreSQL rejects it before execution.
+    """
+
+    raw, index = _read_postgres_quoted_identifier(text, start + 2)
+    escape = "\\"
+    uescape_match = re.match(r"\s*uescape\s*'(.)'", text[index:], flags=re.IGNORECASE | re.DOTALL)
+    if uescape_match is not None:
+        escape = uescape_match.group(1)
+        index += uescape_match.end()
+    if escape == '"':
+        # PostgreSQL rejects a quote as the escape character.
+        return raw, index
+
+    def _replace_short(match: re.Match[str]) -> str:
+        try:
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    def _replace_long(match: re.Match[str]) -> str:
+        try:
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    escaped = re.escape(escape)
+    decoded = re.sub(escaped + r"\+([0-9A-Fa-f]{6})", _replace_long, raw)
+    decoded = re.sub(escaped + r"([0-9A-Fa-f]{4})", _replace_short, decoded)
+    if escape != "\\":
+        decoded = decoded.replace(escape + escape, escape)
+    return decoded, index
 
 
 def _is_retryable_postgres_exception(error: Exception) -> bool:

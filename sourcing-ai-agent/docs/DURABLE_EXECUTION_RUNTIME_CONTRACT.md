@@ -503,6 +503,11 @@ Database constraints must enforce:
 - no duplicate terminal command result for the same command
 - command lease claim atomicity
 
+Write-path and restore boundaries:
+
+- `workflow_commands` writes must enter through dedicated command-writer methods. The public raw SQL helpers on the live PG adapter fence any statement whose tokens mutate the command table, including `UPDATE`/`DELETE`/`INSERT`/`MERGE`/`COPY FROM`/`TRUNCATE`/`ALTER`/`DROP`/`CREATE` target forms, `WITH`-wrapped DML, and multi-statement input, and they fail closed on wrappers whose mutation behavior cannot be proven from tokens: `DO`, `CALL`, `EXECUTE`, `PREPARE` of a mutating body, `EXPLAIN` of a mutating statement (`ANALYZE` executes it), `SELECT ... INTO`, `CREATE [OR REPLACE] FUNCTION/PROCEDURE`, and `DROP OWNED`. Parenthesized `ONLY (table_name)` targets and `U&"..."` unicode-escape identifier spelling are normalized before target comparison. The fence is a row-mutation guard, not a privilege boundary; remaining leading commands are proven non-mutating by the explicit raw-SQL fence test matrix.
+- The complete PG-only durable runtime causal aggregate (`workflow_commands`, `workflow_events`, `workflow_current_state`, `runtime_outbox`, `agent_actions`, `operation_runs`, `agent_tool_result_slots`/`attempts`/`journal`, `workflow_activity_runs`, `workflow_activity_attempts`, `workflow_entity_deltas`, `operation_events`) is excluded from generic control-plane snapshot export/import. Generic snapshots are projection/domain-only and record the exclusion as a typed `excluded_pg_only_durable_runtime_tables` gap; every generic restore boundary (snapshot→PG sync, runtime→PG mirror, snapshot→SQLite restore) rejects aggregate tables so no partial aggregate can pass as complete. Durable-runtime backup/restore must use a quiesced PG logical backup outside the generic snapshot path.
+
 ## Owner Registry
 
 Every command type has one owner.

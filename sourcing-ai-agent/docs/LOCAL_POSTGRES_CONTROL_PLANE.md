@@ -239,6 +239,14 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
   - generation-first object storage
   - local hot cache
 - `sqlite_snapshot` 已退役；不要再导出、上传、下载、导入或恢复 SQLite snapshot
+- generic control-plane snapshot（`export-control-plane-snapshot` / `sync-control-plane-postgres` / bundle 里的
+  `control_plane_snapshot.json`）只是 projection/domain-only 的迁移快照：完整的 PG-only durable runtime 因果聚合
+  （`workflow_commands`、`workflow_events`、`workflow_current_state`、`runtime_outbox`、`agent_actions`、
+  `operation_runs`、`agent_tool_result_slots` / `agent_tool_result_attempts` / `agent_tool_result_journal`、
+  `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas`、`operation_events`）
+  一律不进入 generic export；snapshot 头部用 `excluded_pg_only_durable_runtime_tables` 显式记录这个 typed gap，
+  且所有 generic import/restore 边界（PG snapshot sync、runtime mirror sync、SQLite restore）都会拒绝这些表，
+  因此任何部分聚合都无法冒充完整恢复。durable runtime 的备份/恢复必须走 quiesced 的 PG 逻辑备份，而不是 generic snapshot。
 - 如果要把环境迁到另一台 Mac，优先使用：
   - Postgres logical dump
   - `.local-postgres.env`

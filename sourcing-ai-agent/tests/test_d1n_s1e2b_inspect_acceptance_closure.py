@@ -445,6 +445,159 @@ class D1nS1e2bInspectAcceptanceClosureTest(PGControlPlaneStoreTestMixin, unittes
             workflow_ref,
         )
 
+    def _prepare_start_terminal(self, *, start_occurrence: AgentToolOccurrence, suffix: str) -> Any:
+        return self.repository.prepare_start_acquisition_tool_result(
+            occurrence=start_occurrence,
+            result_attempt_id=f"attempt_s1e2b_start_accept_{suffix}",
+            provider_call_id=f"provider_s1e2b_start_accept_{suffix}",
+            tool_call_id=f"tool_s1e2b_start_accept_{suffix}",
+        )
+
+    def _command_row(self, command_id: str) -> dict[str, Any]:
+        rows = self._rows("workflow_commands", where="command_id = %s", params=(command_id,))
+        self.assertEqual(len(rows), 1)
+        return rows[0]
+
+    def test_inspect_preparation_and_acceptance_follow_command_lifecycle_after_s1e2c_release(self) -> None:
+        start_occurrence, owner_ref = self._arrange_created(suffix="lifecycle_release")
+        command_id = str(owner_ref["workflow_command_id"])
+        self.assertEqual(self._command_row(command_id)["not_before_at"], "9999-12-31 23:59:59")
+
+        pending_occurrence = self._inspect_occurrence(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_release_pending",
+        )
+        pending_terminal = self._prepare_inspect(
+            occurrence=pending_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_release_pending",
+        )
+        self.assertEqual(pending_terminal.serialized_result["variant"], "success")
+
+        start_terminal = self._prepare_start_terminal(start_occurrence=start_occurrence, suffix="lifecycle_release")
+        accepted = self.repository.accept_start_acquisition_tool_result_uow(
+            occurrence=start_occurrence,
+            terminal=start_terminal,
+            attempted_slot_generation=start_occurrence.slot_generation,
+        )
+        self.assertEqual(accepted["outcome"], "accepted")
+        self.assertEqual(self._command_row(command_id)["not_before_at"], "")
+
+        released_occurrence = self._inspect_occurrence(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_release_released",
+        )
+        released_terminal = self._prepare_inspect(
+            occurrence=released_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_release_released",
+        )
+        self.assertEqual(released_terminal.serialized_result["variant"], "success")
+        inspect_accepted = self.repository.accept_inspect_operation_tool_result_uow(
+            occurrence=released_occurrence,
+            terminal=released_terminal,
+            attempted_slot_generation=released_occurrence.slot_generation,
+        )
+        self.assertEqual(inspect_accepted["outcome"], "accepted")
+
+    def test_inspect_preparation_follows_progressed_command_with_linked_downstream_child(self) -> None:
+        start_occurrence, owner_ref = self._arrange_created(suffix="lifecycle_progressed")
+        command_id = str(owner_ref["workflow_command_id"])
+        child_command_id = f"cmd_s1e2b_child_{command_id.removeprefix('cmd_')}"
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET not_before_at = '', downstream_command_ids_json = %s "
+            "WHERE command_id = %s",
+            (json.dumps([child_command_id]), command_id),
+        )
+
+        progressed_occurrence = self._inspect_occurrence(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_progressed",
+        )
+        progressed_terminal = self._prepare_inspect(
+            occurrence=progressed_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_progressed",
+        )
+        self.assertEqual(progressed_terminal.serialized_result["variant"], "success")
+        inspect_accepted = self.repository.accept_inspect_operation_tool_result_uow(
+            occurrence=progressed_occurrence,
+            terminal=progressed_terminal,
+            attempted_slot_generation=progressed_occurrence.slot_generation,
+        )
+        self.assertEqual(inspect_accepted["outcome"], "accepted")
+
+    def test_inspect_rejects_command_lifecycle_states_outside_the_explicit_contract(self) -> None:
+        cases = (
+            (
+                "hold_with_linked_children",
+                "UPDATE {schema}.workflow_commands SET downstream_command_ids_json = %s WHERE command_id = %s",
+                lambda command_id: (json.dumps(["cmd_s1e2b_child_1"]), command_id),
+            ),
+            (
+                "progressed_with_retry_backoff",
+                "UPDATE {schema}.workflow_commands SET not_before_at = %s, downstream_command_ids_json = %s "
+                "WHERE command_id = %s",
+                lambda command_id: ("2026-07-19 09:30:00", json.dumps(["cmd_s1e2b_child_2"]), command_id),
+            ),
+            (
+                "invalid_not_before_marker",
+                "UPDATE {schema}.workflow_commands SET not_before_at = %s WHERE command_id = %s",
+                lambda command_id: ("released", command_id),
+            ),
+            (
+                "duplicate_linked_children",
+                "UPDATE {schema}.workflow_commands SET not_before_at = '', downstream_command_ids_json = %s "
+                "WHERE command_id = %s",
+                lambda command_id: (json.dumps(["cmd_s1e2b_child_3", "cmd_s1e2b_child_3"]), command_id),
+            ),
+            (
+                "non_string_linked_child",
+                "UPDATE {schema}.workflow_commands SET not_before_at = '', downstream_command_ids_json = %s "
+                "WHERE command_id = %s",
+                lambda command_id: (json.dumps([7]), command_id),
+            ),
+            (
+                "blank_linked_child",
+                "UPDATE {schema}.workflow_commands SET not_before_at = '', downstream_command_ids_json = %s "
+                "WHERE command_id = %s",
+                lambda command_id: (json.dumps([" cmd_s1e2b_child_4 "]), command_id),
+            ),
+        )
+        for ordinal, (label, sql, params_for) in enumerate(cases, start=1):
+            with self.subTest(lifecycle=label):
+                start_occurrence, owner_ref = self._arrange_created(suffix=f"lifecycle_reject_{ordinal}")
+                command_id = str(owner_ref["workflow_command_id"])
+                self._execute(sql, params_for(command_id))
+                self._assert_inspect_rejects_without_effects(
+                    start_occurrence=start_occurrence,
+                    owner_ref=owner_ref,
+                    suffix=f"lifecycle_reject_{ordinal}",
+                )
+
+    def test_inspect_preparation_follows_released_command_with_retry_backoff_timestamp(self) -> None:
+        start_occurrence, owner_ref = self._arrange_created(suffix="lifecycle_backoff")
+        command_id = str(owner_ref["workflow_command_id"])
+        self._execute(
+            "UPDATE {schema}.workflow_commands SET not_before_at = %s WHERE command_id = %s",
+            ("2026-07-19 09:30:00+00:00", command_id),
+        )
+
+        backoff_occurrence = self._inspect_occurrence(
+            start_occurrence=start_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_backoff",
+        )
+        backoff_terminal = self._prepare_inspect(
+            occurrence=backoff_occurrence,
+            owner_ref=owner_ref,
+            suffix="lifecycle_backoff",
+        )
+        self.assertEqual(backoff_terminal.serialized_result["variant"], "success")
+
     def test_owner_ref_digest_helper_is_type_sensitive(self) -> None:
         self.assertNotEqual(_digest({"sequence": True}), _digest({"sequence": 1}))
         self.assertNotEqual(_digest({"sequence": 2.0}), _digest({"sequence": 2}))

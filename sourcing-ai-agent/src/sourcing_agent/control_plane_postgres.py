@@ -32,14 +32,36 @@ LEGACY_TARGET_PUBLIC_WEB_TABLES = (
 
 GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES = frozenset(
     {
-        # Durable commands are a PG-only causal aggregate. Generic snapshots and
-        # migration-only SQLite mirrors cannot safely replace, truncate, or upsert
-        # held command state.
+        # The durable runtime is one PG-only causal aggregate: commands, their
+        # event/current-state/outbox children, the Action/Operation rows that
+        # plan them, the agent result slots/attempts/journal that accept them,
+        # and the Activity/EntityDelta evidence they produce.  Generic
+        # snapshots and migration-only SQLite mirrors cannot safely replace,
+        # truncate, or upsert any slice of that aggregate: restoring a subset
+        # would pair new command children with unrelated retained target
+        # commands, so the complete aggregate is excluded from generic
+        # export/import and every generic restore boundary rejects it.
         "workflow_commands",
+        "workflow_events",
+        "workflow_current_state",
+        "runtime_outbox",
+        "agent_actions",
+        "operation_runs",
+        "agent_tool_result_slots",
+        "agent_tool_result_attempts",
+        "agent_tool_result_journal",
+        "workflow_activity_runs",
+        "workflow_activity_attempts",
+        "workflow_entity_deltas",
+        "operation_events",
     }
 )
 
 DEFAULT_CONTROL_PLANE_TABLES = [
+    # Portable projection/domain control-plane inventory used by generic
+    # snapshot export and migration-only runtime sync.  The complete PG-only
+    # durable runtime causal aggregate is deliberately absent; see
+    # GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES.
     "candidates",
     "evidence",
     "jobs",
@@ -82,21 +104,9 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "agent_worker_runs",
     "workflow_job_leases",
     "workflow_recovery_intents",
-    "workflow_events",
-    "workflow_current_state",
-    "runtime_outbox",
-    "agent_actions",
-    "operation_runs",
     "acquisition_plan_previews",
-    "agent_tool_result_slots",
-    "agent_tool_result_attempts",
-    "agent_tool_result_journal",
     "acquisition_runs",
-    "workflow_activity_runs",
-    "workflow_activity_attempts",
-    "workflow_entity_deltas",
     "acquisition_discovery_lanes",
-    "operation_events",
     "query_dispatches",
     "confidence_policy_runs",
     "confidence_policy_controls",
@@ -613,6 +623,7 @@ def export_control_plane_snapshot(
         "output_path": str(resolved_output_path),
         "table_count": len(table_summaries),
         "tables": dict(table_summaries),
+        "excluded_pg_only_durable_runtime_tables": sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES),
     }
 
 
@@ -754,6 +765,7 @@ def restore_control_plane_snapshot_to_sqlite(
     ).expanduser()
     target_sqlite_path.parent.mkdir(parents=True, exist_ok=True)
     selected_tables = _resolve_snapshot_table_names(snapshot_payload=snapshot_payload, tables=tables)
+    _reject_generic_postgres_import_tables(selected_tables)
     tables_payload = dict(snapshot_payload.get("tables") or {})
     restored_tables: dict[str, Any] = {}
     connection = _connect_sqlite(str(target_sqlite_path))
@@ -936,6 +948,7 @@ def sync_runtime_control_plane_to_postgres(
         "state_path": str(resolved_state_path),
         "table_count_requested": len(selected_tables),
         "tables": selected_tables,
+        "excluded_pg_only_durable_runtime_tables": sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES),
         "truncate_first": bool(truncate_first),
         "force": bool(force),
         "schema": effective_schema,
@@ -1134,6 +1147,11 @@ def _write_control_plane_snapshot_json(
         ("source_backend", source_backend),
         ("include_all_sqlite_tables", bool(include_all_sqlite_tables)),
         ("requested_tables", list(requested_tables)),
+        # Typed explicit gap: the snapshot is a projection/domain-only
+        # export.  The complete PG-only durable runtime causal aggregate is
+        # never carried by generic snapshots, and every generic import
+        # boundary rejects it, so no partial aggregate can pass as complete.
+        ("excluded_pg_only_durable_runtime_tables", sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES)),
     ]
     with temp_path.open("w", encoding="utf-8") as handle:
         handle.write("{\n")
@@ -1850,16 +1868,18 @@ def _resolve_export_table_names(
     include_all_sqlite_tables: bool = False,
 ) -> list[str]:
     explicit_tables = [str(item).strip() for item in list(tables or []) if str(item).strip()]
+    if explicit_tables:
+        _reject_generic_postgres_import_tables(explicit_tables)
     if include_all_sqlite_tables:
         resolved = _list_sqlite_tables(connection)
         if _generation_index_exists(runtime_dir):
             resolved.append("generation_index_entries")
         if explicit_tables:
             resolved.extend(explicit_tables)
-        return _dedupe_table_names(resolved)
+        return _exclude_pg_only_durable_runtime_tables(_dedupe_table_names(resolved))
     if explicit_tables:
         return _dedupe_table_names(explicit_tables)
-    return _dedupe_table_names(DEFAULT_CONTROL_PLANE_TABLES)
+    return _exclude_pg_only_durable_runtime_tables(_dedupe_table_names(DEFAULT_CONTROL_PLANE_TABLES))
 
 
 def _resolve_snapshot_table_names(
@@ -1871,6 +1891,18 @@ def _resolve_snapshot_table_names(
     if explicit_tables:
         return _dedupe_table_names(explicit_tables)
     return _dedupe_table_names(list(dict(snapshot_payload.get("tables") or {}).keys()))
+
+
+def _exclude_pg_only_durable_runtime_tables(table_names: list[str]) -> list[str]:
+    """Filter the PG-only causal aggregate out of inventory-driven selections.
+
+    Explicitly requested durable-runtime tables are rejected by
+    ``_reject_generic_postgres_import_tables`` instead; inventory-driven
+    selections (default inventory, ``include_all_sqlite_tables``) silently skip
+    them and the snapshot header records the typed explicit gap.
+    """
+
+    return [table_name for table_name in table_names if table_name not in GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES]
 
 
 def _reject_generic_postgres_import_tables(table_names: list[str] | tuple[str, ...]) -> None:
@@ -1955,16 +1987,18 @@ def _resolve_export_table_names_postgres(
     include_all_sqlite_tables: bool = False,
 ) -> list[str]:
     explicit_tables = [str(item).strip() for item in list(tables or []) if str(item).strip()]
+    if explicit_tables:
+        _reject_generic_postgres_import_tables(explicit_tables)
     if include_all_sqlite_tables:
         resolved = _list_postgres_tables(cursor)
         if _generation_index_exists(runtime_dir):
             resolved.append("generation_index_entries")
         if explicit_tables:
             resolved.extend(explicit_tables)
-        return _dedupe_table_names(resolved)
+        return _exclude_pg_only_durable_runtime_tables(_dedupe_table_names(resolved))
     if explicit_tables:
         return _dedupe_table_names(explicit_tables)
-    return _dedupe_table_names(DEFAULT_CONTROL_PLANE_TABLES)
+    return _exclude_pg_only_durable_runtime_tables(_dedupe_table_names(DEFAULT_CONTROL_PLANE_TABLES))
 
 
 def _list_postgres_tables(cursor: Any) -> list[str]:

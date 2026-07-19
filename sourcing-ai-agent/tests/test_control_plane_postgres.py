@@ -12,13 +12,31 @@ from sourcing_agent.control_plane_postgres import (
     ACQUISITION_SHARD_REGISTRY_FORMER_TABLE,
     ACQUISITION_SHARD_REGISTRY_LOGICAL_TABLE,
     DEFAULT_CONTROL_PLANE_TABLES,
+    GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
     _connect_postgres,
     control_plane_postgres_sync_state_path,
     ensure_acquisition_shard_registry_split_schema,
     export_control_plane_snapshot,
+    restore_control_plane_snapshot_to_sqlite,
     sync_control_plane_snapshot_to_postgres,
     sync_runtime_control_plane_to_postgres,
     upsert_acquisition_shard_registry_rows,
+)
+
+_PG_ONLY_CAUSAL_AGGREGATE_TABLES = (
+    "workflow_commands",
+    "workflow_events",
+    "workflow_current_state",
+    "runtime_outbox",
+    "agent_actions",
+    "operation_runs",
+    "agent_tool_result_slots",
+    "agent_tool_result_attempts",
+    "agent_tool_result_journal",
+    "workflow_activity_runs",
+    "workflow_activity_attempts",
+    "workflow_entity_deltas",
+    "operation_events",
 )
 
 
@@ -175,6 +193,247 @@ class _FakeSnapshotPostgresConnection:
 class ControlPlanePostgresTest(unittest.TestCase):
     def test_default_generic_import_inventory_excludes_workflow_commands(self) -> None:
         self.assertNotIn("workflow_commands", DEFAULT_CONTROL_PLANE_TABLES)
+
+    def test_generic_import_exclusion_covers_the_complete_pg_only_causal_aggregate(self) -> None:
+        self.assertEqual(
+            GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES,
+            frozenset(_PG_ONLY_CAUSAL_AGGREGATE_TABLES),
+        )
+        for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+            self.assertNotIn(table_name, DEFAULT_CONTROL_PLANE_TABLES)
+
+    def _snapshot_payload(self, table_rows: dict[str, list[dict[str, object]]]) -> dict[str, object]:
+        tables: dict[str, object] = {}
+        for table_name, rows in table_rows.items():
+            columns = [
+                {"name": column, "type": "TEXT", "notnull": 0, "default": "", "pk_position": index == 0}
+                for index, column in enumerate(rows[0] if rows else ("placeholder",))
+            ]
+            tables[table_name] = {"columns": columns, "row_count": len(rows), "rows": rows}
+        return {"schema_version": 1, "tables": tables}
+
+    def test_default_export_excludes_aggregate_and_records_typed_explicit_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE workflow_events (event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL)")
+            connection.execute("CREATE TABLE operation_runs (operation_run_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("INSERT INTO jobs (job_id, status) VALUES (?, ?)", ("job-1", "completed"))
+            connection.execute(
+                "INSERT INTO workflow_events (event_id, event_type) VALUES (?, ?)",
+                ("evt-1", "CommandPlanRequested"),
+            )
+            connection.execute(
+                "INSERT INTO operation_runs (operation_run_id, status) VALUES (?, ?)",
+                ("op-1", "queued"),
+            )
+            connection.commit()
+            connection.close()
+            output_path = Path(tempdir) / "snapshot.json"
+
+            result = export_control_plane_snapshot(
+                runtime_dir=runtime_dir,
+                output_path=output_path,
+                source_backend="sqlite",
+            )
+
+            expected_gap = sorted(_PG_ONLY_CAUSAL_AGGREGATE_TABLES)
+            self.assertEqual(result["status"], "exported")
+            self.assertEqual(result["excluded_pg_only_durable_runtime_tables"], expected_gap)
+            self.assertIn("jobs", result["tables"])
+            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+                self.assertNotIn(table_name, result["tables"])
+            snapshot_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(snapshot_payload["excluded_pg_only_durable_runtime_tables"], expected_gap)
+            self.assertIn("jobs", snapshot_payload["tables"])
+            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+                self.assertNotIn(table_name, snapshot_payload["tables"])
+
+    def test_include_all_export_filters_aggregate_out_of_inventory_driven_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE workflow_commands (command_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE operation_events (event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL)")
+            connection.commit()
+            connection.close()
+            output_path = Path(tempdir) / "snapshot.json"
+
+            result = export_control_plane_snapshot(
+                runtime_dir=runtime_dir,
+                output_path=output_path,
+                source_backend="sqlite",
+                include_all_sqlite_tables=True,
+            )
+
+            self.assertEqual(result["status"], "exported")
+            self.assertEqual(set(result["tables"]), {"jobs"})
+            snapshot_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(set(snapshot_payload["tables"]), {"jobs"})
+            self.assertEqual(
+                snapshot_payload["excluded_pg_only_durable_runtime_tables"],
+                sorted(_PG_ONLY_CAUSAL_AGGREGATE_TABLES),
+            )
+
+    def test_explicit_export_of_durable_runtime_tables_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE workflow_events (event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL)")
+            connection.commit()
+            connection.close()
+
+            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+                with self.subTest(table_name=table_name):
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        f"cannot restore PG-only durable runtime tables: {table_name}",
+                    ):
+                        export_control_plane_snapshot(
+                            runtime_dir=runtime_dir,
+                            output_path=Path(tempdir) / f"snapshot-{table_name}.json",
+                            source_backend="sqlite",
+                            tables=[table_name],
+                        )
+
+    def test_snapshot_import_rejects_each_durable_runtime_table_before_postgres(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+                snapshot_path = Path(tempdir) / f"snapshot-{table_name}.json"
+                snapshot_path.write_text(
+                    json.dumps(
+                        self._snapshot_payload({table_name: [{"aggregate_key": "held-1", "status": "held"}]}),
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                with self.subTest(table_name=table_name):
+                    with (
+                        mock.patch("sourcing_agent.control_plane_postgres._import_psycopg") as import_psycopg,
+                        mock.patch("sourcing_agent.control_plane_postgres._connect_postgres") as connect_postgres,
+                        self.assertRaisesRegex(
+                            ValueError,
+                            f"cannot restore PG-only durable runtime tables: {table_name}",
+                        ),
+                    ):
+                        sync_control_plane_snapshot_to_postgres(
+                            snapshot_path=snapshot_path,
+                            dsn="postgresql://user:pass@localhost:5432/sourcing",
+                            truncate_first=True,
+                        )
+                    import_psycopg.assert_not_called()
+                    connect_postgres.assert_not_called()
+
+    def test_sqlite_restore_rejects_partial_aggregate_that_cannot_pass_as_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            # A snapshot carrying command children without their commands is a
+            # partial aggregate; the SQLite restore boundary must reject it
+            # rather than materialize an incoherent mirror.
+            partial_snapshot_path = Path(tempdir) / "partial.json"
+            partial_snapshot_path.write_text(
+                json.dumps(
+                    self._snapshot_payload(
+                        {
+                            "jobs": [{"job_id": "job-1", "status": "completed"}],
+                            "operation_events": [{"event_id": "evt-1", "event_type": "ActionApproved"}],
+                        }
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "cannot restore PG-only durable runtime tables: operation_events",
+            ):
+                restore_control_plane_snapshot_to_sqlite(
+                    snapshot_path=partial_snapshot_path,
+                    runtime_dir=runtime_dir,
+                )
+
+            portable_snapshot_path = Path(tempdir) / "portable.json"
+            portable_snapshot_path.write_text(
+                json.dumps(
+                    self._snapshot_payload({"jobs": [{"job_id": "job-1", "status": "completed"}]}),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            restored = restore_control_plane_snapshot_to_sqlite(
+                snapshot_path=portable_snapshot_path,
+                runtime_dir=runtime_dir,
+            )
+            self.assertEqual(restored["status"], "restored")
+            self.assertEqual(restored["tables"]["jobs"]["row_count"], 1)
+
+    def test_runtime_mirror_default_selection_skips_aggregate_but_explicit_selection_rejects(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE operation_runs (operation_run_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("INSERT INTO jobs (job_id, status) VALUES (?, ?)", ("job-1", "completed"))
+            connection.commit()
+            connection.close()
+
+            fake_connections: list[_FakeConnection] = []
+
+            def _connect(dsn: str) -> _FakeConnection:
+                connection = _FakeConnection(dsn, row_counts={"jobs": 1})
+                fake_connections.append(connection)
+                return connection
+
+            fake_psycopg = SimpleNamespace(connect=_connect)
+            with mock.patch(
+                "sourcing_agent.control_plane_postgres._import_psycopg",
+                return_value=fake_psycopg,
+            ):
+                result = sync_runtime_control_plane_to_postgres(
+                    runtime_dir=runtime_dir,
+                    sqlite_path=db_path,
+                    dsn="postgresql://user:pass@localhost:5432/sourcing",
+                    force=True,
+                )
+            self.assertEqual(result["status"], "synced")
+            self.assertIn("jobs", result["tables"])
+            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+                self.assertNotIn(table_name, result["tables"])
+            self.assertEqual(result["postgres"]["tables"]["jobs"]["row_count"], 1)
+
+            for table_name in _PG_ONLY_CAUSAL_AGGREGATE_TABLES:
+                with self.subTest(table_name=table_name):
+                    with (
+                        mock.patch("sourcing_agent.control_plane_postgres._import_psycopg") as import_psycopg,
+                        mock.patch("sourcing_agent.control_plane_postgres._connect_postgres") as connect_postgres,
+                        self.assertRaisesRegex(
+                            ValueError,
+                            f"cannot restore PG-only durable runtime tables: {table_name}",
+                        ),
+                    ):
+                        sync_runtime_control_plane_to_postgres(
+                            runtime_dir=runtime_dir,
+                            sqlite_path=db_path,
+                            dsn="postgresql://user:pass@localhost:5432/sourcing",
+                            tables=[table_name],
+                            force=True,
+                        )
+                    import_psycopg.assert_not_called()
+                    connect_postgres.assert_not_called()
 
     def test_ensure_acquisition_shard_registry_split_schema_normalizes_legacy_provider_cap_hit(self) -> None:
         class _LegacyCursor:
@@ -797,8 +1056,6 @@ class ControlPlanePostgresTest(unittest.TestCase):
             for direct_stream, include_all, tables, truncate_first in [
                 (False, False, ["workflow_commands"], False),
                 (True, False, ["workflow_commands"], True),
-                (False, True, None, True),
-                (True, True, None, True),
             ]:
                 with self.subTest(
                     direct_stream=direct_stream,
@@ -827,6 +1084,62 @@ class ControlPlanePostgresTest(unittest.TestCase):
                     import_psycopg.assert_not_called()
                     connect_postgres.assert_not_called()
                     self.assertFalse(control_plane_postgres_sync_state_path(runtime_dir).exists())
+
+            source_connection = sqlite3.connect(db_path)
+            try:
+                held_row = source_connection.execute(
+                    "SELECT command_id, status FROM workflow_commands WHERE command_id = ?",
+                    ("held-1",),
+                ).fetchone()
+            finally:
+                source_connection.close()
+            self.assertEqual(held_row, ("held-1", "held"))
+
+    def test_runtime_import_include_all_skips_causal_aggregate_with_typed_gap_before_postgres(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            db_path = runtime_dir / "sourcing_agent.db"
+            connection = sqlite3.connect(db_path)
+            connection.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("CREATE TABLE workflow_commands (command_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+            connection.execute("INSERT INTO jobs (job_id, status) VALUES (?, ?)", ("job-1", "completed"))
+            connection.execute(
+                "INSERT INTO workflow_commands (command_id, status) VALUES (?, ?)",
+                ("held-1", "held"),
+            )
+            connection.commit()
+            connection.close()
+
+            for direct_stream in (False, True):
+                with self.subTest(direct_stream=direct_stream):
+                    fake_connections: list[_FakeConnection] = []
+
+                    def _connect(dsn: str) -> _FakeConnection:
+                        connection = _FakeConnection(dsn, row_counts={"jobs": 1})
+                        fake_connections.append(connection)
+                        return connection
+
+                    fake_psycopg = SimpleNamespace(connect=_connect)
+                    with mock.patch(
+                        "sourcing_agent.control_plane_postgres._import_psycopg",
+                        return_value=fake_psycopg,
+                    ):
+                        result = sync_runtime_control_plane_to_postgres(
+                            runtime_dir=runtime_dir,
+                            sqlite_path=db_path,
+                            dsn="postgresql://user:pass@localhost:5432/sourcing",
+                            truncate_first=True,
+                            include_all_sqlite_tables=True,
+                            direct_stream=direct_stream,
+                            force=True,
+                        )
+                    self.assertEqual(result["status"], "synced")
+                    self.assertEqual(set(result["tables"]), {"jobs"})
+                    self.assertEqual(
+                        result["excluded_pg_only_durable_runtime_tables"],
+                        sorted(GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES),
+                    )
 
             source_connection = sqlite3.connect(db_path)
             try:

@@ -56,6 +56,54 @@ class D1nS1e2bRawSqlWorkflowCommandFenceUnitTest(unittest.TestCase):
                             getattr(self.adapter, public_name)(sql, ())
                         delegate.assert_not_called()
 
+    def test_public_raw_sql_methods_reject_opaque_and_executing_wrappers_before_delegate(self) -> None:
+        mutations = (
+            # Dollar-quoted DO bodies are opaque and execute with write privileges.
+            "DO $$BEGIN UPDATE workflow_commands SET not_before_at=''; END$$",
+            "DO $body$BEGIN DELETE FROM workflow_commands; END$body$",
+            "DO $$BEGIN RAISE NOTICE 'probe'; END$$",
+            # EXPLAIN ANALYZE executes its inner statement.
+            "EXPLAIN ANALYZE UPDATE workflow_commands SET not_before_at='' RETURNING *",
+            "EXPLAIN (ANALYZE, FORMAT JSON) DELETE FROM workflow_commands",
+            "EXPLAIN ANALYZE WITH removed AS (DELETE FROM workflow_commands RETURNING *) SELECT * FROM removed",
+            "EXPLAIN VERBOSE ANALYZE INSERT INTO workflow_commands (command_id) VALUES ('cmd_new')",
+            # Stored procedure bodies are opaque to the fence.
+            "CALL release_held_commands()",
+            # Prepared/dynamic SQL: the mutating body or the opaque EXECUTE name.
+            "PREPARE release_hold AS UPDATE workflow_commands SET not_before_at=''",
+            "PREPARE release_hold(text) AS DELETE FROM workflow_commands WHERE command_id = $1",
+            "EXECUTE release_hold",
+            "PREPARE diagnostic AS SELECT 1; EXECUTE diagnostic",
+            # SELECT INTO creates and fills a table.
+            "SELECT * INTO workflow_commands FROM workflow_commands_archive",
+            "SELECT command_id INTO TEMP TABLE workflow_commands FROM staging_commands",
+            # Function/procedure bodies are dollar-quoted and opaque; a later
+            # SELECT/CALL would execute the mutation.
+            "CREATE FUNCTION release_holds() RETURNS void AS $$ BEGIN UPDATE workflow_commands SET not_before_at=''; END $$ LANGUAGE plpgsql",
+            "CREATE OR REPLACE PROCEDURE drop_holds() AS $$ BEGIN DELETE FROM workflow_commands; END $$ LANGUAGE plpgsql",
+            # DROP OWNED BY drops every object the role owns, including the table.
+            "DROP OWNED BY current_user",
+            # Parenthesized ONLY targets and unicode-escape identifier spelling
+            # cannot hide the command table.
+            "UPDATE ONLY (workflow_commands) SET not_before_at=''",
+            "DELETE FROM ONLY (public.workflow_commands) WHERE command_id = 'cmd_held'",
+            "TRUNCATE ONLY (workflow_commands)",
+            "UPDATE u&\"workflow_commands\" SET not_before_at=''",
+            "UPDATE u&\"workflow\\005fcommands\" SET not_before_at=''",
+            "UPDATE u&\"workflow!005fcommands\" UESCAPE '!' SET not_before_at=''",
+        )
+        public_methods = (
+            ("execute_non_query", "_execute_non_query", 1),
+            ("execute_returning_one", "_execute_returning_one", {"command_id": "cmd_held"}),
+        )
+        for public_name, private_name, delegate_result in public_methods:
+            for sql in mutations:
+                with self.subTest(public_method=public_name, sql=sql):
+                    with mock.patch.object(self.adapter, private_name, return_value=delegate_result) as delegate:
+                        with self.assertRaisesRegex(ValueError, "dedicated workflow command writer"):
+                            getattr(self.adapter, public_name)(sql, ())
+                        delegate.assert_not_called()
+
     def test_public_raw_sql_methods_preserve_read_probes_literals_and_other_tables(self) -> None:
         allowed_sql = (
             "SELECT * FROM workflow_commands WHERE command_id = %s",
@@ -71,6 +119,58 @@ class D1nS1e2bRawSqlWorkflowCommandFenceUnitTest(unittest.TestCase):
             "ALTER TABLE other_table RENAME COLUMN command_id TO workflow_commands",
             "COPY workflow_commands TO STDOUT",
             "UPDATE \"WORKFLOW_COMMANDS\" SET status = 'cancelled'",
+        )
+        public_methods = (
+            ("execute_non_query", "_execute_non_query", 7),
+            ("execute_returning_one", "_execute_returning_one", {"marker": 1}),
+        )
+        for public_name, private_name, delegate_result in public_methods:
+            for sql in allowed_sql:
+                with self.subTest(public_method=public_name, sql=sql):
+                    with mock.patch.object(self.adapter, private_name, return_value=delegate_result) as delegate:
+                        result = getattr(self.adapter, public_name)(sql, ("parameter",))
+                        self.assertEqual(result, delegate_result)
+                        delegate.assert_called_once_with(sql, ("parameter",))
+
+    def test_public_raw_sql_methods_prove_remaining_utility_commands_non_mutating(self) -> None:
+        allowed_sql = (
+            # Read-only explain forms: planning a SELECT never executes DML.
+            "EXPLAIN SELECT * FROM workflow_commands",
+            "EXPLAIN (COSTS OFF) SELECT command_id FROM workflow_commands",
+            "EXPLAIN ANALYZE SELECT count(*) FROM workflow_commands",
+            "EXPLAIN ANALYZE UPDATE workflow_commands_archive SET status = 'x'",
+            # Preparing a read-only statement is itself harmless; EXECUTE and
+            # PREPARE of a mutating body are fenced separately above.
+            "PREPARE read_probe AS SELECT * FROM workflow_commands",
+            "DEALLOCATE read_probe",
+            "DEALLOCATE ALL",
+            # SELECT INTO another table does not touch the command table.
+            "SELECT * INTO workflow_commands_archive FROM workflow_commands",
+            # Utility statements that cannot change command-table row content.
+            "SHOW search_path",
+            "SET statement_timeout = '5s'",
+            "RESET statement_timeout",
+            "BEGIN",
+            "COMMIT",
+            "ROLLBACK",
+            "LISTEN control_plane_probe",
+            "UNLISTEN control_plane_probe",
+            "NOTIFY control_plane_probe",
+            "DISCARD ALL",
+            "VACUUM workflow_commands",
+            "ANALYZE workflow_commands",
+            "REINDEX TABLE workflow_commands",
+            "CLUSTER workflow_commands USING workflow_commands_pkey",
+            "LOCK TABLE workflow_commands IN ACCESS EXCLUSIVE MODE",
+            "COMMENT ON TABLE workflow_commands IS 'probe'",
+            "GRANT SELECT ON workflow_commands TO PUBLIC",
+            "REVOKE SELECT ON workflow_commands FROM PUBLIC",
+            "SECURITY LABEL ON TABLE workflow_commands IS 'probe'",
+            "CHECKPOINT",
+            # The bitwise-and operator keeps word/quoted-identifier adjacency
+            # from being misread as a U& unicode identifier.
+            'SELECT u & "workflow_commands" FROM diagnostics',
+            "SELECT u&'d\\0061ta' AS diagnostic",
         )
         public_methods = (
             ("execute_non_query", "_execute_non_query", 7),
@@ -169,6 +269,80 @@ class D1nS1e2bRawSqlWorkflowCommandFencePGTest(PGControlPlaneStoreTestMixin, uni
         self.assertEqual(row["command_id"], self.command_id)
         self.assertEqual(row["status"], "queued")
         self.assertEqual(str(row["not_before_at"]), "9999-12-31 23:59:59")
+
+    def test_public_raw_sql_opaque_and_executing_wrappers_preserve_held_command_table(self) -> None:
+        fixture = self._pg_store_fixture
+        self.assertIsNotNone(fixture)
+        assert fixture is not None
+        assert psycopg is not None
+        quoted_schema = quote_control_plane_postgres_identifier(fixture.schema)
+        quoted_table = quote_control_plane_postgres_identifier("workflow_commands")
+        qualified_table = f"{quoted_schema}.{quoted_table}"
+        quoted_procedure = quote_control_plane_postgres_identifier("s1e2b_fence_release_holds")
+        with psycopg.connect(fixture.dsn, client_encoding="utf8") as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"CREATE PROCEDURE {quoted_schema}.{quoted_procedure}() "
+                    "LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE 'must never run'; END $$"
+                )
+            connection.commit()
+
+        baseline = self._workflow_command_snapshot()
+        attempts = (
+            (
+                "execute_non_query",
+                f"DO $$BEGIN UPDATE {qualified_table} SET not_before_at = ''; END$$",
+            ),
+            (
+                "execute_returning_one",
+                f"EXPLAIN ANALYZE UPDATE {qualified_table} SET not_before_at = '' WHERE command_id = %s RETURNING *",
+            ),
+            (
+                "execute_non_query",
+                f"CALL {quoted_schema}.{quoted_procedure}()",
+            ),
+            (
+                "execute_non_query",
+                f"PREPARE s1e2b_release AS UPDATE {qualified_table} SET not_before_at = ''",
+            ),
+            (
+                "execute_non_query",
+                "EXECUTE s1e2b_release",
+            ),
+            (
+                "execute_non_query",
+                f"SELECT * INTO {qualified_table} FROM {qualified_table}",
+            ),
+            (
+                "execute_non_query",
+                f"UPDATE ONLY ({qualified_table}) SET not_before_at = ''",
+            ),
+            (
+                "execute_non_query",
+                f"UPDATE {quoted_schema}.u&\"workflow_commands\" SET not_before_at = ''",
+            ),
+            (
+                "execute_non_query",
+                f"CREATE PROCEDURE {quoted_schema}.{quoted_procedure}() "
+                f"LANGUAGE plpgsql AS $$ BEGIN UPDATE {qualified_table} SET not_before_at = ''; END $$",
+            ),
+        )
+        for public_method, sql in attempts:
+            with self.subTest(public_method=public_method, sql=sql):
+                params = (self.command_id,) if "%s" in sql else ()
+                with self.assertRaisesRegex(ValueError, "dedicated workflow command writer"):
+                    getattr(self.adapter, public_method)(sql, params)
+                self.assertEqual(self._workflow_command_snapshot(), baseline)
+
+        read_only = (
+            f"EXPLAIN ANALYZE SELECT count(*) FROM {qualified_table}",
+            f"PREPARE s1e2b_read_probe AS SELECT command_id FROM {qualified_table}",
+        )
+        for sql in read_only:
+            with self.subTest(sql=sql):
+                result = self.adapter.execute_non_query(sql, ())
+                self.assertIsInstance(result, int)
+                self.assertEqual(self._workflow_command_snapshot(), baseline)
 
 
 if __name__ == "__main__":
