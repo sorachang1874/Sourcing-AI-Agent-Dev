@@ -48,6 +48,27 @@ registration creates retained history only; the current tool alias remains V2
 and the public/default served population remains zero.  Lookup is exact
 version plus contract/result digest; shape inference, lexicographic latest,
 mutable current alias, and auto-upgrade are forbidden.
+
+Beyond closed shape and checksum validation, the terminal parser exact-compares
+every field shared between the enclosing terminal and its nested
+freshness/readiness refs (terminal id, route identity, membership revision,
+candidate-set digest, counts, and the acyclic core digest), and requires
+``row_ready_count == visible_member_count == candidate_count`` for ready
+records.  The V3 result parser enforces the model-visible equations: the
+canonical ``cohort_selection_digest(cohort_selection)`` of the sibling closed
+selection object (computed by the owning ``cohort_selection`` module, never
+retyped), the exact registry pin, the manifest ``v3_page_equations``
+(``returned_count == len(candidates) == min(limit, max(0, total_count -
+offset))`` and ``truncated == (offset + returned_count < total_count)``),
+freshness/readiness parity with the root candidate-set digest and shared
+terminal core, and the status-dependent requested-target shape (stale-only
+terminal fields present exactly when ``status == "stale"``).
+
+Decode boundary: all parsers require the decoder-typed
+``CanonicalJsonObject`` produced solely by the shared strict decoder in
+``agent_runtime_namespace_ref`` (``strict_json_loads`` /
+``canonical_json_object``); duplicate keys are rejected at decode, never
+collapsed.
 """
 
 from __future__ import annotations
@@ -56,14 +77,16 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
-from copy import deepcopy
 from typing import Any
 
 from .agent_runtime_namespace_ref import (
     AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST,
     AGENT_RUNTIME_NAMESPACE_REF_SCHEMA_VERSION,
+    CanonicalJsonObject,
+    canonical_json_object,
     parse_agent_runtime_namespace_ref,
 )
+from .cohort_selection import cohort_selection_digest, cohort_selection_registry_digest
 
 RETAINED_FILTER_PROJECTION_HISTORY_LITERALS = (
     "filter_projection_result_v2",
@@ -222,7 +245,7 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
         if value is not None:
             _fail(label, "expected null")
     elif declared == "object":
-        if type(value) is not dict:
+        if not isinstance(value, dict):
             _fail(label, "expected object")
         ref = descriptor.get("ref")
         if ref is not None:
@@ -261,7 +284,7 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
 
 
 def _validate_object(record: Any, fields: list[dict[str, Any]], label: str) -> None:
-    if type(record) is not dict:
+    if not isinstance(record, dict):
         _fail(label, "expected object")
     declared = {field["name"]: field for field in fields}
     required = {name for name, field in declared.items() if field.get("required") is True}
@@ -279,7 +302,7 @@ def _validate_object(record: Any, fields: list[dict[str, Any]], label: str) -> N
 def _record_digest(record: Any, digest_field: str) -> str:
     """SHA-256 over the canonical record bytes with exactly ``digest_field`` excluded."""
 
-    if type(record) is not dict:
+    if not isinstance(record, dict):
         _fail(digest_field, "digest input must be an object")
     covered = {key: value for key, value in record.items() if key != digest_field}
     return hashlib.sha256(canonical_json(covered).encode("utf-8")).hexdigest()
@@ -1468,7 +1491,7 @@ _TERMINAL_CORE_FIELDS = FILTER_PROJECTION_PRODUCT_TERMINAL_V1_ORDERED_FIELDS[:23
 def compute_filter_projection_product_terminal_core_digest(record: dict[str, Any]) -> str:
     """Recompute ``terminal_core_digest`` over canonical fields 1-23 (the acyclic terminal core)."""
 
-    if type(record) is not dict:
+    if not isinstance(record, dict):
         _fail("terminal_core_digest", "digest input must be an object")
     covered = {field: record[field] for field in _TERMINAL_CORE_FIELDS if field in record}
     return hashlib.sha256(canonical_json(covered).encode("utf-8")).hexdigest()
@@ -1504,14 +1527,25 @@ def compute_filter_projection_readiness_prerequisite_set_digest() -> str:
     return hashlib.sha256(canonical_json(list(FILTER_PROJECTION_READINESS_PREREQUISITE_SET)).encode("utf-8")).hexdigest()
 
 
-def parse_filter_projection_freshness_ref(value: Any) -> dict[str, Any]:
+def _require_decoder_typed(value: Any, label: str) -> CanonicalJsonObject:
+    if not isinstance(value, CanonicalJsonObject):
+        _fail(
+            label,
+            "record must be produced by strict_json_loads or canonical_json_object;"
+            " plain dictionaries are not a decode boundary",
+        )
+    return value
+
+
+def parse_filter_projection_freshness_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_freshness_ref.v1`` record and return it in manifest field order."""
 
-    _validate_object(value, FILTER_PROJECTION_FRESHNESS_REF_V1_SCHEMA["fields"], "filter_projection_freshness_ref")
-    record = {field: deepcopy(value[field]) for field in FILTER_PROJECTION_FRESHNESS_REF_V1_ORDERED_FIELDS}
-    if record["freshness_ref_digest"] != compute_filter_projection_freshness_ref_digest(record):
+    record = _require_decoder_typed(value, "filter_projection_freshness_ref")
+    _validate_object(record, FILTER_PROJECTION_FRESHNESS_REF_V1_SCHEMA["fields"], "filter_projection_freshness_ref")
+    ordered = {field: record[field] for field in FILTER_PROJECTION_FRESHNESS_REF_V1_ORDERED_FIELDS}
+    if ordered["freshness_ref_digest"] != compute_filter_projection_freshness_ref_digest(ordered):
         _fail("freshness_ref_digest", "does not recompute over all preceding fields")
-    return record
+    return canonical_json_object(ordered)
 
 
 def validate_filter_projection_freshness_ref(value: Any) -> None:
@@ -1520,20 +1554,21 @@ def validate_filter_projection_freshness_ref(value: Any) -> None:
     parse_filter_projection_freshness_ref(value)
 
 
-def parse_filter_projection_readiness_ref(value: Any) -> dict[str, Any]:
+def parse_filter_projection_readiness_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_readiness_ref.v1`` record and return it in manifest field order.
 
     ``prerequisite_set_digest`` must bind the exact eight-item prerequisite
     set; ``readiness_ref_digest`` must recompute over all preceding fields.
     """
 
-    _validate_object(value, FILTER_PROJECTION_READINESS_REF_V1_SCHEMA["fields"], "filter_projection_readiness_ref")
-    record = {field: deepcopy(value[field]) for field in FILTER_PROJECTION_READINESS_REF_V1_ORDERED_FIELDS}
-    if record["prerequisite_set_digest"] != compute_filter_projection_readiness_prerequisite_set_digest():
+    record = _require_decoder_typed(value, "filter_projection_readiness_ref")
+    _validate_object(record, FILTER_PROJECTION_READINESS_REF_V1_SCHEMA["fields"], "filter_projection_readiness_ref")
+    ordered = {field: record[field] for field in FILTER_PROJECTION_READINESS_REF_V1_ORDERED_FIELDS}
+    if ordered["prerequisite_set_digest"] != compute_filter_projection_readiness_prerequisite_set_digest():
         _fail("prerequisite_set_digest", "must bind the exact eight-item prerequisite set")
-    if record["readiness_ref_digest"] != compute_filter_projection_readiness_ref_digest(record):
+    if ordered["readiness_ref_digest"] != compute_filter_projection_readiness_ref_digest(ordered):
         _fail("readiness_ref_digest", "does not recompute over all preceding fields")
-    return record
+    return canonical_json_object(ordered)
 
 
 def validate_filter_projection_readiness_ref(value: Any) -> None:
@@ -1542,33 +1577,56 @@ def validate_filter_projection_readiness_ref(value: Any) -> None:
     parse_filter_projection_readiness_ref(value)
 
 
-def parse_filter_projection_product_terminal(value: Any) -> dict[str, Any]:
+def parse_filter_projection_product_terminal(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_product_terminal.v1`` record and return it in manifest field order.
 
     Beyond closed structural validation this proves the terminal digest
-    equalities: ``terminal_core_digest`` recomputes over canonical fields
-    1-23, both nested refs carry that exact core digest, and the envelope
-    ``terminal_digest`` recomputes over every preceding field.
+    equalities and the nested ref field binding: ``terminal_core_digest``
+    recomputes over canonical fields 1-23, every field shared with the nested
+    freshness/readiness refs exact-compares against the terminal core
+    (terminal id, route identity, membership revision, candidate-set digest,
+    counts), ``row_ready_count == visible_member_count == candidate_count``
+    holds for ready records, and the envelope ``terminal_digest`` recomputes
+    over every preceding field.
     """
 
-    _validate_object(value, FILTER_PROJECTION_PRODUCT_TERMINAL_V1_SCHEMA["fields"], "filter_projection_product_terminal")
-    record = {
-        field: deepcopy(value[field])
-        for field in FILTER_PROJECTION_PRODUCT_TERMINAL_V1_ORDERED_FIELDS
-        if field in value
+    record = _require_decoder_typed(value, "filter_projection_product_terminal")
+    _validate_object(record, FILTER_PROJECTION_PRODUCT_TERMINAL_V1_SCHEMA["fields"], "filter_projection_product_terminal")
+    ordered = {
+        field: record[field] for field in FILTER_PROJECTION_PRODUCT_TERMINAL_V1_ORDERED_FIELDS if field in record
     }
-    core_digest = compute_filter_projection_product_terminal_core_digest(record)
-    if record["terminal_core_digest"] != core_digest:
+    core_digest = compute_filter_projection_product_terminal_core_digest(ordered)
+    if ordered["terminal_core_digest"] != core_digest:
         _fail("terminal_core_digest", "does not recompute over canonical fields 1-23")
-    freshness_ref = parse_filter_projection_freshness_ref(record["freshness_ref"])
-    readiness_ref = parse_filter_projection_readiness_ref(record["readiness_ref"])
-    if freshness_ref["terminal_core_digest"] != core_digest or readiness_ref["terminal_core_digest"] != core_digest:
-        _fail("terminal_core_digest", "nested freshness/readiness refs must carry the exact terminal core digest")
-    if record["visible_member_count"] != record["candidate_count"]:
+    freshness_ref = parse_filter_projection_freshness_ref(ordered["freshness_ref"])
+    readiness_ref = parse_filter_projection_readiness_ref(ordered["readiness_ref"])
+    # The nested refs are field-bound to the enclosing terminal core, not only
+    # to the copied core digest: every shared field must exact-compare.
+    for shared in (
+        "product_terminal_id",
+        "terminal_core_digest",
+        "route_kind",
+        "route_key",
+        "route_revision_token",
+        "membership_revision",
+        "candidate_set_digest",
+    ):
+        if freshness_ref[shared] != ordered[shared]:
+            _fail(f"freshness_ref.{shared}", "must equal the enclosing terminal value")
+    for shared in ("product_terminal_id", "terminal_core_digest", "membership_revision", "candidate_set_digest"):
+        if readiness_ref[shared] != ordered[shared]:
+            _fail(f"readiness_ref.{shared}", "must equal the enclosing terminal value")
+    if ordered["visible_member_count"] != ordered["candidate_count"]:
         _fail("visible_member_count", "must equal candidate_count")
-    if record["terminal_digest"] != compute_filter_projection_product_terminal_digest(record):
+    if readiness_ref["candidate_count"] != ordered["candidate_count"]:
+        _fail("readiness_ref.candidate_count", "must equal the enclosing terminal candidate_count")
+    if readiness_ref["visible_member_count"] != ordered["visible_member_count"]:
+        _fail("readiness_ref.visible_member_count", "must equal the enclosing terminal visible_member_count")
+    if readiness_ref["row_ready_count"] != readiness_ref["visible_member_count"]:
+        _fail("readiness_ref.row_ready_count", "must equal visible_member_count for status=ready")
+    if ordered["terminal_digest"] != compute_filter_projection_product_terminal_digest(ordered):
         _fail("terminal_digest", "does not recompute over every preceding field")
-    return record
+    return canonical_json_object(ordered)
 
 
 def validate_filter_projection_product_terminal(value: Any) -> None:
@@ -1577,11 +1635,13 @@ def validate_filter_projection_product_terminal(value: Any) -> None:
     parse_filter_projection_product_terminal(value)
 
 
-def parse_filter_projection_product_ref(value: Any) -> dict[str, Any]:
+def parse_filter_projection_product_ref(value: Any) -> CanonicalJsonObject:
     """Validate one referenced ``filter_projection_product_ref.v1`` record and return it in manifest field order."""
 
-    _validate_object(value, FILTER_PROJECTION_PRODUCT_REF_V1_SCHEMA["fields"], "filter_projection_product_ref")
-    return {field: deepcopy(value[field]) for field in FILTER_PROJECTION_PRODUCT_REF_V1_ORDERED_FIELDS}
+    record = _require_decoder_typed(value, "filter_projection_product_ref")
+    _validate_object(record, FILTER_PROJECTION_PRODUCT_REF_V1_SCHEMA["fields"], "filter_projection_product_ref")
+    ordered = {field: record[field] for field in FILTER_PROJECTION_PRODUCT_REF_V1_ORDERED_FIELDS}
+    return canonical_json_object(ordered)
 
 
 def validate_filter_projection_product_ref(value: Any) -> None:
@@ -1590,22 +1650,23 @@ def validate_filter_projection_product_ref(value: Any) -> None:
     parse_filter_projection_product_ref(value)
 
 
-def _parse_owner_ref(value: Any, schema: dict[str, Any], ordered_fields: tuple[str, ...], label: str) -> dict[str, Any]:
-    _validate_object(value, schema["fields"], label)
-    record = {field: deepcopy(value[field]) for field in ordered_fields}
-    if record["result_contract_digest"] != FILTER_PROJECTION_RESULT_V3_CONTRACT_DIGEST:
+def _parse_owner_ref(value: Any, schema: dict[str, Any], ordered_fields: tuple[str, ...], label: str) -> CanonicalJsonObject:
+    record = _require_decoder_typed(value, label)
+    _validate_object(record, schema["fields"], label)
+    ordered = {field: record[field] for field in ordered_fields}
+    if ordered["result_contract_digest"] != FILTER_PROJECTION_RESULT_V3_CONTRACT_DIGEST:
         _fail(f"{label}.result_contract_digest", "must equal the filter_projection_result_v3 contract_digest")
-    if record["serializer_contract_digest"] != FILTER_PROJECTION_RESULT_SERIALIZER_V3_CONTRACT_DIGEST:
+    if ordered["serializer_contract_digest"] != FILTER_PROJECTION_RESULT_SERIALIZER_V3_CONTRACT_DIGEST:
         _fail(
             f"{label}.serializer_contract_digest",
             "must equal the filter_projection_result_serializer_v3 contract_digest",
         )
-    if record["owner_ref_digest"] != compute_filter_projection_owner_ref_digest(record):
+    if ordered["owner_ref_digest"] != compute_filter_projection_owner_ref_digest(ordered):
         _fail(f"{label}.owner_ref_digest", "does not recompute over the complete owner ref except itself")
-    return record
+    return canonical_json_object(ordered)
 
 
-def parse_filter_projection_success_owner_ref(value: Any) -> dict[str, Any]:
+def parse_filter_projection_success_owner_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_success_owner_ref.v1`` record and return it in manifest field order."""
 
     return _parse_owner_ref(
@@ -1622,7 +1683,7 @@ def validate_filter_projection_success_owner_ref(value: Any) -> None:
     parse_filter_projection_success_owner_ref(value)
 
 
-def parse_filter_projection_stale_owner_ref(value: Any) -> dict[str, Any]:
+def parse_filter_projection_stale_owner_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_stale_owner_ref.v1`` record and return it in manifest field order."""
 
     return _parse_owner_ref(
@@ -1639,7 +1700,7 @@ def validate_filter_projection_stale_owner_ref(value: Any) -> None:
     parse_filter_projection_stale_owner_ref(value)
 
 
-def parse_filter_projection_not_ready_owner_ref(value: Any) -> dict[str, Any]:
+def parse_filter_projection_not_ready_owner_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_not_ready_owner_ref.v1`` record and return it in manifest field order."""
 
     return _parse_owner_ref(
@@ -1656,7 +1717,7 @@ def validate_filter_projection_not_ready_owner_ref(value: Any) -> None:
     parse_filter_projection_not_ready_owner_ref(value)
 
 
-def parse_filter_projection_masked_absence_owner_ref(value: Any) -> dict[str, Any]:
+def parse_filter_projection_masked_absence_owner_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ``filter_projection_masked_absence_owner_ref.v1`` record and return it in manifest field order.
 
     The masked absence ref carries no target id/workspace/existence/foreign
@@ -1689,23 +1750,86 @@ def filter_projection_result_v3_variant_fields(variant: str) -> list[dict[str, A
     ]
 
 
-def parse_filter_projection_result_v3(value: Any, *, variant: str | None = None) -> dict[str, Any]:
+def parse_filter_projection_result_v3(value: Any, *, variant: str | None = None) -> CanonicalJsonObject:
     """Validate one ``filter_projection_result_v3`` root and return it in manifest field order.
 
     The variant is exact: when ``variant`` is omitted it is taken from the
     record's ``variant`` discriminator, and the record is then validated
-    closed against exactly that variant's field set.
+    closed against exactly that variant's field set.  Success roots must also
+    satisfy the model-visible equations (canonical sibling
+    ``cohort_selection_digest`` and registry pin, ``v3_page_equations``,
+    freshness/readiness parity); deferred roots must carry the
+    status-dependent requested-target shape (stale-only terminal fields
+    present exactly when ``status == "stale"``).
     """
 
+    record = _require_decoder_typed(value, "filter_projection_result_v3")
     if variant is None:
-        if type(value) is not dict or value.get("variant") not in FILTER_PROJECTION_RESULT_V3_VARIANTS:
+        if record.get("variant") not in FILTER_PROJECTION_RESULT_V3_VARIANTS:
             _fail("variant", "missing or unknown result variant discriminator")
-        variant = value["variant"]
+        variant = record["variant"]
     fields = filter_projection_result_v3_variant_fields(variant)
-    _validate_object(value, fields, f"filter_projection_result_v3[{variant}]")
-    return {
-        field: deepcopy(value[field]) for field in FILTER_PROJECTION_RESULT_V3_ORDERED_FIELDS if field in value
-    }
+    _validate_object(record, fields, f"filter_projection_result_v3[{variant}]")
+    ordered = {field: record[field] for field in FILTER_PROJECTION_RESULT_V3_ORDERED_FIELDS if field in record}
+    if variant == "success":
+        _enforce_success_equations(ordered)
+    elif variant == "deferred":
+        _enforce_deferred_target_shape(ordered)
+    return canonical_json_object(ordered)
+
+
+def _enforce_success_equations(record: dict[str, Any]) -> None:
+    # The sibling cohort_selection_digest equals the canonical
+    # cohort_selection_digest(cohort_selection) computed by the owning
+    # cohort_selection module over the registry-pinned selection record; the
+    # model-visible selection and the execution commitment can never diverge.
+    try:
+        selection_digest = cohort_selection_digest(record["cohort_selection"])
+    except ValueError as exc:
+        raise FilterProjectionTerminalContractError(
+            "filter projection terminal contract cohort_selection invalid: not a canonical selection"
+        ) from exc
+    if record["cohort_selection_digest"] != selection_digest:
+        _fail("cohort_selection_digest", "must equal cohort_selection_digest(cohort_selection)")
+    if record["cohort_selection_registry_digest"] != cohort_selection_registry_digest():
+        _fail("cohort_selection_registry_digest", "must equal the exact pinned cohort selection registry digest")
+    # v3_page_equations.
+    if record["returned_count"] != len(record["candidates"]):
+        _fail("returned_count", "must equal len(candidates)")
+    expected_returned = min(record["limit"], max(0, record["total_count"] - record["offset"]))
+    if record["returned_count"] != expected_returned:
+        _fail("returned_count", "must equal min(limit, max(0, total_count - offset))")
+    if record["truncated"] != (record["offset"] + record["returned_count"] < record["total_count"]):
+        _fail("truncated", "must equal (offset + returned_count < total_count)")
+    # Freshness/readiness parity with the root and with each other.
+    freshness = parse_filter_projection_freshness_ref(record["freshness"])
+    readiness = parse_filter_projection_readiness_ref(record["readiness"])
+    if freshness["candidate_set_digest"] != record["candidate_set_digest"]:
+        _fail("freshness.candidate_set_digest", "must equal the root candidate_set_digest")
+    if readiness["candidate_set_digest"] != record["candidate_set_digest"]:
+        _fail("readiness.candidate_set_digest", "must equal the root candidate_set_digest")
+    if freshness["terminal_core_digest"] != readiness["terminal_core_digest"]:
+        _fail("terminal_core_digest", "freshness and readiness refs must share the exact terminal core digest")
+    if freshness["product_terminal_id"] != readiness["product_terminal_id"]:
+        _fail("product_terminal_id", "freshness and readiness refs must share the exact product terminal id")
+    if (
+        freshness["membership_revision"] != readiness["membership_revision"]
+        or freshness["membership_revision"] != record["projection_ref"]["membership_revision"]
+    ):
+        _fail("membership_revision", "freshness, readiness, and projection ref must share the exact membership revision")
+
+
+def _enforce_deferred_target_shape(record: dict[str, Any]) -> None:
+    stale_only_fields = {"requested_terminal_id", "requested_terminal_digest", "route_revision_token"}
+    target = record["requested_target_ref"]
+    if record["status"] == "stale":
+        missing = stale_only_fields - set(target)
+        if missing:
+            _fail("requested_target_ref", f"status=stale requires fields {sorted(missing)}")
+    else:
+        present = set(target) & stale_only_fields
+        if present:
+            _fail("requested_target_ref", f"stale-only fields {sorted(present)} are absent for not_ready")
 
 
 def validate_filter_projection_result_v3(value: Any, *, variant: str | None = None) -> None:

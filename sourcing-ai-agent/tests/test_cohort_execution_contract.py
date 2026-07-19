@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +19,11 @@ import pytest
 
 from sourcing_agent.agent_runtime_namespace_ref import (
     AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST,
+    AgentRuntimeNamespaceRefError,
+    canonical_json,
+    canonical_json_object,
     mint_agent_runtime_namespace_ref,
+    strict_json_loads,
 )
 from sourcing_agent.cohort_execution_contract import (
     COHORT_CANDIDATE_MEMBER_V1_CONTRACT_DIGEST,
@@ -214,7 +217,7 @@ def _capability() -> dict[str, Any]:
         "execution_generation": 1,
     }
     record["capability_digest"] = compute_cohort_execution_capability_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _lane_result(ordinal: int, *, lane_id: str | None = None) -> dict[str, Any]:
@@ -236,7 +239,7 @@ def _lane_result(ordinal: int, *, lane_id: str | None = None) -> dict[str, Any]:
         "ordered_accepted_occurrence_digests": [_digest(f"occurrence-{lane}-0"), _digest(f"occurrence-{lane}-1")],
     }
     record["lane_result_digest"] = compute_cohort_execution_lane_result_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _envelope() -> dict[str, Any]:
@@ -258,7 +261,7 @@ def _envelope() -> dict[str, Any]:
         "execution_generation": 1,
     }
     record["envelope_digest"] = compute_cohort_execution_envelope_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _member(*, with_url: bool = True) -> dict[str, Any]:
@@ -280,7 +283,7 @@ def _member(*, with_url: bool = True) -> dict[str, Any]:
     if with_url:
         record["public_profile_url"] = "https://example.com/profile/candidate-1"
     record["member_digest"] = compute_cohort_candidate_member_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _candidate_set() -> dict[str, Any]:
@@ -296,7 +299,7 @@ def _candidate_set() -> dict[str, Any]:
         "ordered_member_digests": digests,
     }
     record["candidate_set_digest"] = compute_cohort_candidate_set_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _execution_result() -> dict[str, Any]:
@@ -327,7 +330,7 @@ def _execution_result() -> dict[str, Any]:
         "candidate_set_digest": candidate_set["candidate_set_digest"],
     }
     record["result_digest"] = compute_cohort_execution_result_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _commit() -> dict[str, Any]:
@@ -354,7 +357,7 @@ def _commit() -> dict[str, Any]:
         "commit_contract_digest": COHORT_EXECUTION_COMMIT_V1_CONTRACT_DIGEST,
     }
     record["commit_digest"] = compute_cohort_execution_commit_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _expect_invalid(parser: Any, record: Any) -> None:
@@ -423,21 +426,23 @@ def test_namespace_ref_pin_is_exact_version_and_digest() -> None:
         assert descriptor["ref_digest"] == AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST
 
 
+
 def test_parse_round_trips() -> None:
+    candidate_set = _candidate_set()
     fixtures = [
-        (parse_cohort_execution_capability, _capability()),
-        (parse_cohort_execution_envelope, _envelope()),
-        (parse_cohort_execution_lane_result, _lane_result(0)),
-        (parse_cohort_candidate_member, _member()),
-        (parse_cohort_candidate_member, _member(with_url=False)),
-        (parse_cohort_candidate_set, _candidate_set()),
-        (parse_cohort_execution_result, _execution_result()),
-        (parse_cohort_execution_commit, _commit()),
+        (parse_cohort_execution_capability, _capability(), {}),
+        (parse_cohort_execution_envelope, _envelope(), {}),
+        (parse_cohort_execution_lane_result, _lane_result(0), {}),
+        (parse_cohort_candidate_member, _member(), {}),
+        (parse_cohort_candidate_member, _member(with_url=False), {}),
+        (parse_cohort_candidate_set, candidate_set, {}),
+        (parse_cohort_execution_result, _execution_result(), {"candidate_set": candidate_set}),
+        (parse_cohort_execution_commit, _commit(), {"candidate_set": candidate_set}),
     ]
-    for parser, record in fixtures:
-        parsed = parser(record)
+    for parser, record, kwargs in fixtures:
+        parsed = parser(record, **kwargs)
         assert parsed == record
-        assert parser(deepcopy(parsed)) == record
+        assert parser(canonical_json_object(parsed), **kwargs) == record
         assert json.dumps(parsed, sort_keys=True) == json.dumps(record, sort_keys=True)
 
 
@@ -473,15 +478,29 @@ def test_capability_fail_closed() -> None:
         {**capability, "execution_generation": 0},
         {**capability, "planning_manifest_digest": "not-a-digest"},
         {**capability, "capability_digest": "0" * 64},
-        {**capability, "policy_revision": "policy-rev-2"},  # copied digest is never proof
         {**capability, "runtime_namespace_ref": {**capability["runtime_namespace_ref"], "ref_digest": "0" * 64}},
         {**capability, "runtime_namespace_ref": {"namespace_ref_id": "ns-1"}},
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_execution_capability, record)
+        _expect_invalid(parse_cohort_execution_capability, canonical_json_object(record))
     boundary = {**capability, "max_output_candidates": 1000}
     boundary["capability_digest"] = compute_cohort_execution_capability_digest(boundary)
-    assert parse_cohort_execution_capability(boundary) == boundary
+    assert parse_cohort_execution_capability(canonical_json_object(boundary)) == boundary
+
+
+def test_capability_namespace_identity_equations() -> None:
+    """F2: capability values must equal their nested runtime namespace ref (re-digested probes)."""
+
+    capability = _capability()
+    for drifted, wrong in (
+        ("workspace_id", "ws-2"),
+        ("provider_mode", "scripted"),
+        ("policy_revision", "policy-rev-2"),
+    ):
+        hostile = {**capability, drifted: wrong}
+        hostile["capability_digest"] = compute_cohort_execution_capability_digest(hostile)
+        _expect_invalid(parse_cohort_execution_capability, canonical_json_object(hostile))
+    assert parse_cohort_execution_capability(_capability()) == _capability()
 
 
 def test_envelope_fail_closed() -> None:
@@ -501,7 +520,42 @@ def test_envelope_fail_closed() -> None:
         {**envelope, "ordered_planned_lane_refs": "lane-0"},
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_execution_envelope, record)
+        _expect_invalid(parse_cohort_execution_envelope, canonical_json_object(record))
+
+
+def test_envelope_capability_identity_equations() -> None:
+    """F2: envelope values must equal their nested capability; planned-lane ordinals are the exact zero-based order."""
+
+    envelope = _envelope()
+    for drifted, wrong in (
+        ("workspace_id", "ws-2"),
+        ("acquisition_run_id", "run-2"),
+        ("planning_manifest_digest", _digest("other-manifest")),
+        ("provider_mode", "scripted"),
+        ("execution_generation", 2),
+    ):
+        hostile = {**envelope, drifted: wrong}
+        hostile["envelope_digest"] = compute_cohort_execution_envelope_digest(hostile)
+        _expect_invalid(parse_cohort_execution_envelope, canonical_json_object(hostile))
+    other_ref = mint_agent_runtime_namespace_ref(
+        namespace_ref_id="ns-2",
+        workspace_id="ws-1",
+        provider_mode="simulate",
+        policy_revision="policy-rev-1",
+        generation=2,
+    )
+    hostile = {**envelope, "runtime_namespace_ref": other_ref}
+    hostile["envelope_digest"] = compute_cohort_execution_envelope_digest(hostile)
+    _expect_invalid(parse_cohort_execution_envelope, canonical_json_object(hostile))
+    lane_refs = envelope["ordered_planned_lane_refs"]
+    for refs in (
+        [dict(lane_refs[0]), dict(lane_refs[0])],  # duplicate ordinals [0, 0]
+        [dict(lane_refs[0]), {**lane_refs[1], "ordinal": 2}],  # sparse ordinals [0, 2]
+    ):
+        hostile = {**envelope, "ordered_planned_lane_refs": refs}
+        hostile["envelope_digest"] = compute_cohort_execution_envelope_digest(hostile)
+        _expect_invalid(parse_cohort_execution_envelope, canonical_json_object(hostile))
+    assert parse_cohort_execution_envelope(_envelope()) == _envelope()
 
 
 def test_lane_result_fail_closed() -> None:
@@ -520,13 +574,27 @@ def test_lane_result_fail_closed() -> None:
         {**lane, "ordered_accepted_occurrence_digests": ["bad"]},
         {**lane, "ordered_accepted_occurrence_digests": "digest"},
         {**lane, "lane_result_digest": "0" * 64},
-        {**lane, "rejected_occurrence_count": 2},  # copied digest is never proof
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_execution_lane_result, record)
-    empty = {**lane, "ordered_accepted_occurrence_digests": [], "accepted_occurrence_count": 0}
-    empty["lane_result_digest"] = compute_cohort_execution_lane_result_digest(empty)
-    assert parse_cohort_execution_lane_result(empty) == empty
+        _expect_invalid(parse_cohort_execution_lane_result, canonical_json_object(record))
+
+
+def test_lane_occurrence_partition_equations() -> None:
+    """F2: |O_i| = |A_i|+|R_i|+|T_i| and the accepted count equals the accepted digest enumeration."""
+
+    lane = _lane_result(0)
+    hostile = {**lane, "raw_occurrence_count": 99}
+    hostile["lane_result_digest"] = compute_cohort_execution_lane_result_digest(hostile)
+    _expect_invalid(parse_cohort_execution_lane_result, canonical_json_object(hostile))
+    hostile = {**lane, "ordered_accepted_occurrence_digests": lane["ordered_accepted_occurrence_digests"][:1]}
+    hostile["lane_result_digest"] = compute_cohort_execution_lane_result_digest(hostile)
+    _expect_invalid(parse_cohort_execution_lane_result, canonical_json_object(hostile))
+    hostile = {**lane, "accepted_occurrence_count": 3}  # partition 3+1+0 != raw 3 and != len(digests)
+    hostile["lane_result_digest"] = compute_cohort_execution_lane_result_digest(hostile)
+    _expect_invalid(parse_cohort_execution_lane_result, canonical_json_object(hostile))
+    zero = {**lane, "raw_occurrence_count": 1, "accepted_occurrence_count": 0, "ordered_accepted_occurrence_digests": []}
+    zero["lane_result_digest"] = compute_cohort_execution_lane_result_digest(zero)
+    assert parse_cohort_execution_lane_result(canonical_json_object(zero)) == zero
 
 
 def test_candidate_member_fail_closed() -> None:
@@ -546,7 +614,7 @@ def test_candidate_member_fail_closed() -> None:
         {**member, "headline": "Principal"},  # copied digest is never proof
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_candidate_member, record)
+        _expect_invalid(parse_cohort_candidate_member, canonical_json_object(record))
     # absent public_profile_url is the closed variant; it parses cleanly.
     without_url = _member(with_url=False)
     assert "public_profile_url" not in without_url
@@ -568,7 +636,7 @@ def test_candidate_set_fail_closed() -> None:
         {**candidate_set, "workspace_id": "ws-2"},  # copied digest is never proof
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_candidate_set, record)
+        _expect_invalid(parse_cohort_candidate_set, canonical_json_object(record))
     # empty headers are structurally valid; product publication bounds are a terminal concern.
     empty = {
         **candidate_set,
@@ -576,17 +644,22 @@ def test_candidate_set_fail_closed() -> None:
         "ordered_member_digests": [],
     }
     empty["candidate_set_digest"] = compute_cohort_candidate_set_digest(empty)
-    assert parse_cohort_candidate_set(empty) == empty
+    assert parse_cohort_candidate_set(canonical_json_object(empty)) == empty
+
+
+def _expect_invalid_result(record: Any, candidate_set: Any) -> None:
+    _expect_invalid(
+        lambda value: parse_cohort_execution_result(value, candidate_set=candidate_set),
+        canonical_json_object(record),
+    )
 
 
 def test_execution_result_fail_closed() -> None:
+    candidate_set = _candidate_set()
     result = _execution_result()
-    swapped = deepcopy(result)
-    swapped["ordered_lane_results"] = [result["ordered_lane_results"][1], result["ordered_lane_results"][0]]
+    swapped = {**result, "ordered_lane_results": [result["ordered_lane_results"][1], result["ordered_lane_results"][0]]}
     swapped["result_digest"] = compute_cohort_execution_result_digest(swapped)
-    missing_lane = deepcopy(result)
-    missing_lane["ordered_lane_results"] = [result["ordered_lane_results"][0]]
-    missing_lane["executed_lane_count"] = 1
+    missing_lane = {**result, "ordered_lane_results": [result["ordered_lane_results"][0]], "executed_lane_count": 1}
     missing_lane["result_digest"] = compute_cohort_execution_result_digest(missing_lane)
     hostile = [
         {**result, "unexpected": "field"},
@@ -602,10 +675,50 @@ def test_execution_result_fail_closed() -> None:
         missing_lane,  # lane completeness is exact, never a missing-count substitution
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_execution_result, record)
+        _expect_invalid_result(record, candidate_set)
+
+
+def test_result_aggregate_and_member_set_equations() -> None:
+    """F2: result aggregates equal the exact lane sums; the candidate-set owner pin binds member count and digest."""
+
+    candidate_set = _candidate_set()
+    result = _execution_result()
+    for drifted, wrong in (
+        ("raw_occurrence_count", 999),
+        ("accepted_occurrence_count", 999),
+        ("truncated_count", 7),
+        ("rejected_unverified_count", 999),
+        ("unique_candidate_count", 3),  # != candidate_set.member_count 2
+    ):
+        hostile = {**result, drifted: wrong}
+        hostile["result_digest"] = compute_cohort_execution_result_digest(hostile)
+        _expect_invalid_result(hostile, candidate_set)
+    # the explicit owner pin is required
+    _expect_invalid_result(result, None)
+    # pin digest mismatch: a drifted header is not the bound candidate set
+    wrong_set = {**candidate_set, "workspace_id": "ws-2"}
+    wrong_set["candidate_set_digest"] = compute_cohort_candidate_set_digest(wrong_set)
+    _expect_invalid_result(result, canonical_json_object(wrong_set))
+    # pin member-count mismatch: unique_candidate_count = |M| = candidate_set.member_count
+    more_members = {
+        **candidate_set,
+        "member_count": 3,
+        "ordered_member_digests": [*candidate_set["ordered_member_digests"], _digest("member-3")],
+    }
+    more_members["candidate_set_digest"] = compute_cohort_candidate_set_digest(more_members)
+    _expect_invalid_result(result, canonical_json_object(more_members))
+    assert parse_cohort_execution_result(result, candidate_set=candidate_set) == result
+
+
+def _expect_invalid_commit(record: Any, candidate_set: Any) -> None:
+    _expect_invalid(
+        lambda value: parse_cohort_execution_commit(value, candidate_set=candidate_set),
+        canonical_json_object(record),
+    )
 
 
 def test_execution_commit_fail_closed() -> None:
+    candidate_set = _candidate_set()
     commit = _commit()
     hostile = [
         {**commit, "unexpected": "field"},
@@ -621,7 +734,63 @@ def test_execution_commit_fail_closed() -> None:
         {**commit, "execution_result_json": {**commit["execution_result_json"], "result_digest": "0" * 64}},
     ]
     for record in hostile:
-        _expect_invalid(parse_cohort_execution_commit, record)
+        _expect_invalid_commit(record, candidate_set)
+
+
+def test_commit_cross_surface_equations() -> None:
+    """F2: commit values must equal the nested result; candidate_count binds the nested result and the owner pin."""
+
+    candidate_set = _candidate_set()
+    commit = _commit()
+    for drifted, wrong in (
+        ("workspace_id", "ws-2"),
+        ("acquisition_run_id", "run-2"),
+        ("execution_attempt_id", "attempt-2"),
+        ("execution_generation", 2),
+        ("planning_manifest_digest", _digest("other-manifest")),
+        ("capability_digest", _digest("other-capability")),
+        ("execution_envelope_digest", _digest("other-envelope")),
+        ("candidate_set_digest", _digest("other-set")),
+        ("candidate_count", 999),  # != nested unique_candidate_count 2
+        ("candidate_count", 3),  # != candidate_set.member_count 2
+    ):
+        hostile = {**commit, drifted: wrong}
+        hostile["commit_digest"] = compute_cohort_execution_commit_digest(hostile)
+        _expect_invalid_commit(hostile, candidate_set)
+    _expect_invalid_commit(commit, None)  # the explicit owner pin is required
+    assert parse_cohort_execution_commit(commit, candidate_set=candidate_set) == commit
+
+
+def test_decode_boundary_duplicate_keys_and_plain_dicts() -> None:
+    """F5: duplicate keys are rejected at decode; plain dicts never reach validation."""
+
+    lane = _lane_result(0)
+    canonical = canonical_json(lane)
+    duplicated = canonical.replace('"ordinal":0', '"ordinal":true,"ordinal":0', 1)
+    assert duplicated != canonical
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads(duplicated)
+    nested = canonical_json(_envelope()).replace(
+        '"policy_revision":"policy-rev-1"', '"policy_revision":"a","policy_revision":"policy-rev-1"', 1
+    )
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads(nested)
+    # decode then parse succeeds for clean bytes
+    assert parse_cohort_execution_lane_result(strict_json_loads(canonical)) == lane
+    # plain dictionaries are not a decode boundary for any family parser
+    for parser, record in (
+        (parse_cohort_execution_capability, _capability()),
+        (parse_cohort_execution_envelope, _envelope()),
+        (parse_cohort_execution_lane_result, _lane_result(0)),
+        (parse_cohort_candidate_member, _member()),
+        (parse_cohort_candidate_set, _candidate_set()),
+    ):
+        with pytest.raises(CohortExecutionContractError):
+            parser(dict(record))
+    with pytest.raises(CohortExecutionContractError):
+        parse_cohort_execution_result(dict(_execution_result()), candidate_set=_candidate_set())
+    with pytest.raises(CohortExecutionContractError):
+        parse_cohort_execution_commit(dict(_commit()), candidate_set=_candidate_set())
 
 
 def test_retained_v1_history_never_retyped() -> None:

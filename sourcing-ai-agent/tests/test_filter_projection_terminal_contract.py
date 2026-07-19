@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -20,9 +19,14 @@ import pytest
 
 from sourcing_agent.agent_runtime_namespace_ref import (
     AGENT_RUNTIME_NAMESPACE_REF_CONTRACT_DIGEST,
+    AgentRuntimeNamespaceRefError,
     agent_runtime_namespace_ref_public_record,
+    canonical_json,
+    canonical_json_object,
     mint_agent_runtime_namespace_ref,
+    strict_json_loads,
 )
+from sourcing_agent.cohort_selection import cohort_selection_digest, cohort_selection_registry_digest
 from sourcing_agent.filter_projection_terminal_contract import (
     CONTRACT_SCHEMAS,
     FILTER_PROJECTION_DEFERRED_REASON_PRECEDENCE,
@@ -275,7 +279,7 @@ def _freshness_ref(core: dict[str, Any], core_digest: str) -> dict[str, Any]:
         "candidate_set_digest": core["candidate_set_digest"],
     }
     record["freshness_ref_digest"] = compute_filter_projection_freshness_ref_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _readiness_ref(core: dict[str, Any], core_digest: str) -> dict[str, Any]:
@@ -295,7 +299,7 @@ def _readiness_ref(core: dict[str, Any], core_digest: str) -> dict[str, Any]:
         "prerequisite_set_digest": compute_filter_projection_readiness_prerequisite_set_digest(),
     }
     record["readiness_ref_digest"] = compute_filter_projection_readiness_ref_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _terminal() -> dict[str, Any]:
@@ -308,7 +312,7 @@ def _terminal() -> dict[str, Any]:
         "readiness_ref": _readiness_ref(core, core_digest),
     }
     record["terminal_digest"] = compute_filter_projection_product_terminal_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _owner_ref_pins() -> dict[str, Any]:
@@ -340,7 +344,7 @@ def _success_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _stale_owner_ref() -> dict[str, Any]:
@@ -358,7 +362,7 @@ def _stale_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _not_ready_owner_ref() -> dict[str, Any]:
@@ -379,7 +383,7 @@ def _not_ready_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _masked_absence_owner_ref() -> dict[str, Any]:
@@ -392,97 +396,132 @@ def _masked_absence_owner_ref() -> dict[str, Any]:
         **_owner_ref_pins(),
     }
     record["owner_ref_digest"] = compute_filter_projection_owner_ref_digest(record)
-    return record
+    return canonical_json_object(record)
 
 
 def _product_ref() -> dict[str, Any]:
     terminal = _terminal()
+    return canonical_json_object(
+        {
+            "schema_version": "filter_projection_product_ref.v1",
+            "projection_id": terminal["projection_id"],
+            "membership_revision": terminal["membership_revision"],
+            "terminal_digest": terminal["terminal_digest"],
+        }
+    )
+
+
+def _cohort_selection() -> dict[str, Any]:
     return {
-        "schema_version": "filter_projection_product_ref.v1",
-        "projection_id": terminal["projection_id"],
-        "membership_revision": terminal["membership_revision"],
-        "terminal_digest": terminal["terminal_digest"],
+        "schema_version": "cohort_selection.v1",
+        "role_bucket_ids": ["engineering"],
+        "employment_statuses": ["current"],
+        "role_match": "any",
+        "source": "user_explicit",
+    }
+
+
+def _candidate_item(index: int) -> dict[str, Any]:
+    return {
+        "candidate_ref": _digest(f"candidate-{index}"),
+        "display_name": f"Candidate {index}",
+        "headline": "Staff Engineer",
+        "public_profile_url": f"https://example.com/profile/candidate-{index}",
+        "employment_statuses": ["current"],
+        "role_bucket_ids": ["engineering"],
     }
 
 
 def _success_root() -> dict[str, Any]:
     terminal = _terminal()
-    return {
-        "variant": "success",
-        "status": "ready",
-        "projection_ref": _product_ref(),
-        "cohort_selection": {
-            "schema_version": "cohort_selection.v1",
-            "role_bucket_ids": ["engineering"],
-            "employment_statuses": ["current"],
-            "role_match": "any",
-            "source": "user_explicit",
-        },
-        "cohort_selection_registry_version": "cohort_selection.registry.v1",
-        "cohort_selection_registry_digest": _digest("registry"),
-        "cohort_selection_digest": _digest("selection"),
-        "execution_commit_digest": terminal["execution_commit_digest"],
-        "candidate_set_digest": terminal["candidate_set_digest"],
-        "freshness": terminal["freshness_ref"],
-        "readiness": terminal["readiness_ref"],
-        "provider_mode": "simulate",
-        "runtime_namespace_ref": agent_runtime_namespace_ref_public_record(terminal["runtime_namespace_ref"]),
-        "requested_lane_coverage": {
-            "status": "complete",
-            "requested_lane_count": 2,
-            "completed_lane_count": 2,
-            "missing_lane_count": 0,
-        },
-        "lane_summaries": [
-            {
-                "lane_id": "lane-0",
-                "employment_status": "current",
-                "role_bucket_id": "engineering",
-                "coverage_status": "complete",
-                "result_count": 2,
-            }
-        ],
-        "offset": 0,
-        "limit": 250,
-        "total_count": 2,
-        "returned_count": 2,
-        "truncated": False,
-        "candidates": [
-            {
-                "candidate_ref": _digest("candidate-1"),
-                "display_name": "Candidate One",
-                "headline": "Staff Engineer",
-                "public_profile_url": "https://example.com/profile/candidate-1",
-                "employment_statuses": ["current"],
-                "role_bucket_ids": ["engineering"],
-            }
-        ],
-    }
+    selection = _cohort_selection()
+    return canonical_json_object(
+        {
+            "variant": "success",
+            "status": "ready",
+            "projection_ref": _product_ref(),
+            "cohort_selection": selection,
+            "cohort_selection_registry_version": "cohort_selection.registry.v1",
+            "cohort_selection_registry_digest": cohort_selection_registry_digest(),
+            "cohort_selection_digest": cohort_selection_digest(selection),
+            "execution_commit_digest": terminal["execution_commit_digest"],
+            "candidate_set_digest": terminal["candidate_set_digest"],
+            "freshness": terminal["freshness_ref"],
+            "readiness": terminal["readiness_ref"],
+            "provider_mode": "simulate",
+            "runtime_namespace_ref": agent_runtime_namespace_ref_public_record(terminal["runtime_namespace_ref"]),
+            "requested_lane_coverage": {
+                "status": "complete",
+                "requested_lane_count": 2,
+                "completed_lane_count": 2,
+                "missing_lane_count": 0,
+            },
+            "lane_summaries": [
+                {
+                    "lane_id": "lane-0",
+                    "employment_status": "current",
+                    "role_bucket_id": "engineering",
+                    "coverage_status": "complete",
+                    "result_count": 2,
+                }
+            ],
+            "offset": 0,
+            "limit": 250,
+            "total_count": 2,
+            "returned_count": 2,
+            "truncated": False,
+            "candidates": [_candidate_item(1), _candidate_item(2)],
+        }
+    )
 
 
 def _deferred_root() -> dict[str, Any]:
-    return {
-        "variant": "deferred",
-        "status": "not_ready",
-        "reason": "projection_candidate_set_empty",
-        "retryable": False,
-        "reselection_required": True,
-        "requested_target_ref": {
-            "projection_id": "proj-1",
-            "membership_revision": "membership-rev-1",
-        },
-        "decision_ref": _digest("decision"),
-    }
+    return canonical_json_object(
+        {
+            "variant": "deferred",
+            "status": "not_ready",
+            "reason": "projection_candidate_set_empty",
+            "retryable": False,
+            "reselection_required": True,
+            "requested_target_ref": {
+                "projection_id": "proj-1",
+                "membership_revision": "membership-rev-1",
+            },
+            "decision_ref": _digest("decision"),
+        }
+    )
+
+
+def _stale_deferred_root() -> dict[str, Any]:
+    return canonical_json_object(
+        {
+            "variant": "deferred",
+            "status": "stale",
+            "reason": "projection_state_not_serving",
+            "retryable": True,
+            "reselection_required": False,
+            "requested_target_ref": {
+                "projection_id": "proj-1",
+                "membership_revision": "membership-rev-1",
+                "requested_terminal_id": "terminal-0",
+                "requested_terminal_digest": _digest("requested-terminal"),
+                "route_revision_token": "route-token-0",
+            },
+            "decision_ref": _digest("decision"),
+        }
+    )
 
 
 def _masked_root() -> dict[str, Any]:
-    return {
-        "variant": "error",
-        "status": "failed",
-        "reason": "projection_not_found",
-        "retryable": False,
-        "decision_ref": _digest("decision"),
-    }
+    return canonical_json_object(
+        {
+            "variant": "error",
+            "status": "failed",
+            "reason": "projection_not_found",
+            "retryable": False,
+            "decision_ref": _digest("decision"),
+        }
+    )
 
 
 def _expect_invalid(parser: Any, record: Any, **kwargs: Any) -> None:
@@ -580,6 +619,7 @@ def test_namespace_and_family_ref_pins_are_exact() -> None:
     assert v3_projection_ref["ref_digest"] == FILTER_PROJECTION_PRODUCT_REF_V1_CONTRACT_DIGEST
 
 
+
 def test_parse_round_trips() -> None:
     fixtures = [
         (parse_filter_projection_freshness_ref, _terminal()["freshness_ref"], {}),
@@ -592,6 +632,7 @@ def test_parse_round_trips() -> None:
         (parse_filter_projection_product_ref, _product_ref(), {}),
         (parse_filter_projection_result_v3, _success_root(), {}),
         (parse_filter_projection_result_v3, _deferred_root(), {}),
+        (parse_filter_projection_result_v3, _stale_deferred_root(), {}),
         (parse_filter_projection_result_v3, _masked_root(), {}),
         (parse_filter_projection_result_v3, _success_root(), {"variant": "success"}),
         (parse_filter_projection_result_v3, _deferred_root(), {"variant": "deferred"}),
@@ -600,7 +641,7 @@ def test_parse_round_trips() -> None:
     for parser, record, kwargs in fixtures:
         parsed = parser(record, **kwargs)
         assert parsed == record
-        assert parser(deepcopy(parsed), **kwargs) == record
+        assert parser(canonical_json_object(parsed), **kwargs) == record
 
 
 def test_terminal_digest_chain_matches_manifest_equalities() -> None:
@@ -638,6 +679,14 @@ def test_readiness_prerequisite_set_digest_matches_independent_recomputation() -
     assert compute_filter_projection_freshness_ref_digest(freshness) == freshness["freshness_ref_digest"]
 
 
+def _reteminal(terminal: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    """Rebuild a terminal with fully recomputed nested and envelope digests after mutation."""
+
+    record = {**terminal, **overrides}
+    record["terminal_digest"] = compute_filter_projection_product_terminal_digest(record)
+    return canonical_json_object(record)
+
+
 def test_product_terminal_fail_closed() -> None:
     terminal = _terminal()
     hostile = [
@@ -659,10 +708,9 @@ def test_product_terminal_fail_closed() -> None:
         {**terminal, "terminal_digest": "0" * 64},
         {**terminal, "freshness_ref": {**terminal["freshness_ref"], "terminal_core_digest": "0" * 64}},
         {**terminal, "readiness_ref": {**terminal["readiness_ref"], "status": "not_ready"}},
-        {**terminal, "route_key": "route-2"},  # copied digest is never proof
     ]
     for record in hostile:
-        _expect_invalid(parse_filter_projection_product_terminal, record)
+        _expect_invalid(parse_filter_projection_product_terminal, canonical_json_object(record))
     # a successor terminal binds the exact predecessor digest.
     successor = {**_terminal_core(), "predecessor_terminal_digest": terminal["terminal_digest"], "terminal_generation": 2}
     core_digest = compute_filter_projection_product_terminal_core_digest(successor)
@@ -673,30 +721,76 @@ def test_product_terminal_fail_closed() -> None:
         "readiness_ref": _readiness_ref(successor, core_digest),
     }
     successor["terminal_digest"] = compute_filter_projection_product_terminal_digest(successor)
-    assert parse_filter_projection_product_terminal(successor) == successor
+    assert parse_filter_projection_product_terminal(canonical_json_object(successor)) == successor
+
+
+def test_terminal_nested_ref_field_binding() -> None:
+    """F3: nested freshness/readiness refs are field-bound to the enclosing terminal (fully re-digested probes)."""
+
+    terminal = _terminal()
+    freshness = terminal["freshness_ref"]
+    readiness = terminal["readiness_ref"]
+    for drifted, wrong in (
+        ("route_key", "route-2"),
+        ("route_revision_token", "route-token-2"),
+        ("membership_revision", "membership-rev-2"),
+        ("candidate_set_digest", _digest("other-set")),
+        ("product_terminal_id", "terminal-2"),
+    ):
+        mutated_freshness = {**freshness, drifted: wrong}
+        mutated_freshness["freshness_ref_digest"] = compute_filter_projection_freshness_ref_digest(mutated_freshness)
+        _expect_invalid(
+            parse_filter_projection_product_terminal,
+            _reteminal(terminal, freshness_ref=mutated_freshness),
+        )
+    for drifted, wrong in (
+        ("membership_revision", "membership-rev-2"),
+        ("candidate_set_digest", _digest("other-set")),
+        ("product_terminal_id", "terminal-2"),
+        ("candidate_count", 1),
+        ("visible_member_count", 1),
+        ("row_ready_count", 0),  # status=ready requires row_ready_count == visible_member_count
+    ):
+        mutated_readiness = {**readiness, drifted: wrong}
+        mutated_readiness["readiness_ref_digest"] = compute_filter_projection_readiness_ref_digest(mutated_readiness)
+        _expect_invalid(
+            parse_filter_projection_product_terminal,
+            _reteminal(terminal, readiness_ref=mutated_readiness),
+        )
+    # terminal-side count drift is rejected even when the readiness ref matches its own core copy
+    drifted_core = {**_terminal_core(), "candidate_count": 3, "visible_member_count": 3}
+    core_digest = compute_filter_projection_product_terminal_core_digest(drifted_core)
+    drifted = {
+        **drifted_core,
+        "terminal_core_digest": core_digest,
+        "freshness_ref": _freshness_ref(drifted_core, core_digest),
+        "readiness_ref": _readiness_ref(drifted_core, core_digest),
+    }
+    drifted["terminal_digest"] = compute_filter_projection_product_terminal_digest(drifted)
+    assert parse_filter_projection_product_terminal(canonical_json_object(drifted)) == drifted
+    assert parse_filter_projection_product_terminal(_terminal()) == _terminal()
 
 
 def test_freshness_and_readiness_refs_fail_closed() -> None:
     terminal = _terminal()
     freshness = terminal["freshness_ref"]
     readiness = terminal["readiness_ref"]
-    for record in (
-        {**freshness, "unexpected": "field"},
-        {**freshness, "status": "stale"},
-        {**freshness, "route_kind": "global"},
-        {**freshness, "freshness_ref_digest": "0" * 64},
-        {**freshness, "route_revision_token": ""},
-        {**readiness, "unexpected": "field"},
-        {**readiness, "status": "not_ready"},
-        {**readiness, "reason": "projection_members_not_ready"},  # exact empty-string constant
-        {**readiness, "projection_state": "building"},
-        {**readiness, "candidate_count": 0},
-        {**readiness, "row_ready_count": -1},
-        {**readiness, "prerequisite_set_digest": "0" * 64},
-        {**readiness, "readiness_ref_digest": "0" * 64},
+    for record, parser in (
+        ({**freshness, "unexpected": "field"}, parse_filter_projection_freshness_ref),
+        ({**freshness, "status": "stale"}, parse_filter_projection_freshness_ref),
+        ({**freshness, "route_kind": "global"}, parse_filter_projection_freshness_ref),
+        ({**freshness, "freshness_ref_digest": "0" * 64}, parse_filter_projection_freshness_ref),
+        ({**freshness, "route_revision_token": ""}, parse_filter_projection_freshness_ref),
+        ({**readiness, "unexpected": "field"}, parse_filter_projection_readiness_ref),
+        ({**readiness, "status": "not_ready"}, parse_filter_projection_readiness_ref),
+        ({**readiness, "reason": "projection_members_not_ready"}, parse_filter_projection_readiness_ref),
+        ({**readiness, "projection_state": "building"}, parse_filter_projection_readiness_ref),
+        ({**readiness, "candidate_count": 0}, parse_filter_projection_readiness_ref),
+        ({**readiness, "row_ready_count": -1}, parse_filter_projection_readiness_ref),
+        ({**readiness, "prerequisite_set_digest": "0" * 64}, parse_filter_projection_readiness_ref),
+        ({**readiness, "readiness_ref_digest": "0" * 64}, parse_filter_projection_readiness_ref),
     ):
-        parser = parse_filter_projection_freshness_ref if "freshness_ref_digest" in record else parse_filter_projection_readiness_ref
-        _expect_invalid(parser, record)
+        _expect_invalid(parser, canonical_json_object(record))
 
 
 def test_owner_refs_fail_closed() -> None:
@@ -721,12 +815,12 @@ def test_owner_refs_fail_closed() -> None:
         (parse_filter_projection_not_ready_owner_ref, {**not_ready, "reason": "projection_members_not_ready", "retryable": "yes"}),
         (parse_filter_projection_not_ready_owner_ref, {**not_ready, "projection_version": 0}),
         (parse_filter_projection_not_ready_owner_ref, {**not_ready, "reselection_required": 1}),
-        (parse_filter_projection_masked_absence_owner_ref, {**masked, "product_terminal_id": "terminal-1"}),  # no target bytes
-        (parse_filter_projection_masked_absence_owner_ref, {**masked, "workspace_id": "ws-1"}),  # no workspace bytes
+        (parse_filter_projection_masked_absence_owner_ref, {**masked, "product_terminal_id": "terminal-1"}),
+        (parse_filter_projection_masked_absence_owner_ref, {**masked, "workspace_id": "ws-1"}),
         (parse_filter_projection_masked_absence_owner_ref, {**masked, "reason": "projection_members_not_ready"}),
         (parse_filter_projection_masked_absence_owner_ref, {**masked, "owner_ref_digest": "0" * 64}),
     ):
-        _expect_invalid(parser, record)
+        _expect_invalid(parser, canonical_json_object(record))
 
 
 def test_result_v3_variant_discrimination_fail_closed() -> None:
@@ -736,6 +830,7 @@ def test_result_v3_variant_discrimination_fail_closed() -> None:
     # each root validates exactly under its own variant.
     assert parse_filter_projection_result_v3(success, variant="success") == success
     assert parse_filter_projection_result_v3(deferred, variant="deferred") == deferred
+    assert parse_filter_projection_result_v3(_stale_deferred_root(), variant="deferred") == _stale_deferred_root()
     assert parse_filter_projection_result_v3(masked, variant="error") == masked
     hostile = [
         ({**success, "reason": "projection_not_found"}, {}),  # success root is closed: no deferred field
@@ -760,11 +855,11 @@ def test_result_v3_variant_discrimination_fail_closed() -> None:
         ({**masked, "decision_ref": "bad"}, {}),
         ({**success, "variant": "unknown"}, {}),
         ({"variant": "success"}, {}),
-        ("success", {}),
         (success, {"variant": "deferred"}),  # explicit variant must match the record
     ]
     for record, kwargs in hostile:
-        _expect_invalid(parse_filter_projection_result_v3, record, **kwargs)
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(record), **kwargs)
+    _expect_invalid(parse_filter_projection_result_v3, "success")
     with pytest.raises(FilterProjectionTerminalContractError):
         filter_projection_result_v3_variant_fields("unknown")
 
@@ -781,24 +876,143 @@ def test_result_v3_nested_objects_fail_closed() -> None:
         {**success, "cohort_selection": {**success["cohort_selection"], "extra": "key"}},
         {**success, "freshness": {**success["freshness"], "freshness_ref_digest": "0" * 64}},
         {**success, "readiness": {**success["readiness"], "status": "not_ready"}},
-        {**success, "runtime_namespace_ref": {**success["runtime_namespace_ref"], "workspace_id": "ws-1"}},  # public subset only
+        {**success, "runtime_namespace_ref": {**success["runtime_namespace_ref"], "workspace_id": "ws-1"}},
         {**success, "runtime_namespace_ref": {**success["runtime_namespace_ref"], "ref_digest": "bad"}},
         {**success, "requested_lane_coverage": {**success["requested_lane_coverage"], "status": "missing"}},
         {**success, "requested_lane_coverage": {**success["requested_lane_coverage"], "requested_lane_count": 0}},
         {**success, "lane_summaries": [{**lane_summary, "coverage_status": "unknown"}]},
         {**success, "lane_summaries": [{**lane_summary, "lane_id": "x" * 201}]},
-        {**success, "candidates": [{**candidate, "display_name": ""}]},
-        {**success, "candidates": [{**candidate, "public_profile_url": "http://example.com/x"}]},
-        {**success, "candidates": [{**candidate, "employment_statuses": []}]},
-        {**success, "candidates": [{**candidate, "role_bucket_ids": ["sales"]}]},
-        {**success, "candidates": [{key: value for key, value in candidate.items() if key != "headline"}]},
+        {**success, "candidates": [{**candidate, "display_name": ""}, success["candidates"][1]]},
+        {**success, "candidates": [{**candidate, "public_profile_url": "http://example.com/x"}, success["candidates"][1]]},
+        {**success, "candidates": [{**candidate, "employment_statuses": []}, success["candidates"][1]]},
+        {**success, "candidates": [{**candidate, "role_bucket_ids": ["sales"]}, success["candidates"][1]]},
+        {
+            **success,
+            "candidates": [
+                {key: value for key, value in candidate.items() if key != "headline"},
+                success["candidates"][1],
+            ],
+        },
     ]
     for record in hostile:
-        _expect_invalid(parse_filter_projection_result_v3, record)
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(record))
     # candidate public_profile_url is optional; absence is the closed variant.
-    without_url = deepcopy(success)
+    without_url = _success_root()
     del without_url["candidates"][0]["public_profile_url"]
     assert parse_filter_projection_result_v3(without_url) == without_url
+
+
+def test_result_v3_page_and_selection_equations() -> None:
+    """F4: canonical selection digest, registry pin, v3_page_equations, and freshness/readiness parity."""
+
+    success = _success_root()
+    # returned_count = len(candidates) = min(limit, max(0, total_count - offset)); truncated equation
+    for drifted, wrong in (
+        ("returned_count", 1),
+        ("returned_count", 0),
+        ("offset", 1),  # min(250, max(0, 2-1)) = 1 != returned 2
+        ("total_count", 3),  # min(250, max(0, 3-0)) = 3 != returned 2
+        ("truncated", True),  # 0 + 2 < 2 is False
+        ("limit", 1),  # min(1, 2) = 1 != returned 2
+    ):
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object({**success, drifted: wrong}))
+    # the sibling cohort_selection_digest equals cohort_selection_digest(cohort_selection)
+    mutated_selection = {**success["cohort_selection"], "role_match": "all"}
+    _expect_invalid(
+        parse_filter_projection_result_v3,
+        canonical_json_object({**success, "cohort_selection": mutated_selection}),
+    )
+    other_digest = _sha256_canonical(success["cohort_selection"])
+    _expect_invalid(
+        parse_filter_projection_result_v3,
+        canonical_json_object({**success, "cohort_selection_digest": other_digest}),
+    )
+    _expect_invalid(
+        parse_filter_projection_result_v3,
+        canonical_json_object({**success, "cohort_selection_registry_digest": "0" * 64}),
+    )
+    # freshness/readiness parity with the root and with each other
+    freshness = success["freshness"]
+    readiness = success["readiness"]
+    for mutated_ref, key in (
+        ({**freshness, "candidate_set_digest": _digest("other-set")}, "freshness"),
+        ({**readiness, "candidate_set_digest": _digest("other-set")}, "readiness"),
+        ({**freshness, "terminal_core_digest": _digest("other-core")}, "freshness"),
+        ({**readiness, "product_terminal_id": "terminal-2"}, "readiness"),
+        ({**freshness, "membership_revision": "membership-rev-2"}, "freshness"),
+        ({**readiness, "membership_revision": "membership-rev-2"}, "readiness"),
+    ):
+        digest_field = "freshness_ref_digest" if key == "freshness" else "readiness_ref_digest"
+        compute = (
+            compute_filter_projection_freshness_ref_digest
+            if key == "freshness"
+            else compute_filter_projection_readiness_ref_digest
+        )
+        mutated_ref[digest_field] = compute(mutated_ref)
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object({**success, key: mutated_ref}))
+    # the corrected positive fixture is itself equation-exact
+    assert success["returned_count"] == len(success["candidates"]) == 2
+    assert success["cohort_selection_digest"] == cohort_selection_digest(success["cohort_selection"])
+    assert parse_filter_projection_result_v3(success) == success
+
+
+def test_deferred_requested_target_shape() -> None:
+    """F4: stale-only terminal fields are present exactly when status=stale and absent for not_ready."""
+
+    stale = _stale_deferred_root()
+    target = stale["requested_target_ref"]
+    for missing in ("requested_terminal_id", "requested_terminal_digest", "route_revision_token"):
+        hostile = {
+            **stale,
+            "requested_target_ref": {key: value for key, value in target.items() if key != missing},
+        }
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(hostile))
+    not_ready = _deferred_root()
+    for extra, wrong in (
+        ("requested_terminal_id", "terminal-0"),
+        ("requested_terminal_digest", _digest("requested-terminal")),
+        ("route_revision_token", "route-token-0"),
+    ):
+        hostile = {
+            **not_ready,
+            "requested_target_ref": {**not_ready["requested_target_ref"], extra: wrong},
+        }
+        _expect_invalid(parse_filter_projection_result_v3, canonical_json_object(hostile))
+    assert parse_filter_projection_result_v3(stale) == stale
+    assert parse_filter_projection_result_v3(not_ready) == not_ready
+
+
+def test_decode_boundary_duplicate_keys_and_plain_dicts() -> None:
+    """F5: duplicate keys are rejected at decode; plain dicts never reach validation."""
+
+    terminal = _terminal()
+    canonical = canonical_json(terminal)
+    duplicated = canonical.replace('"candidate_count":2', '"candidate_count":2,"candidate_count":3', 1)
+    assert duplicated != canonical
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads(duplicated)
+    nested = canonical_json(_success_root()).replace(
+        '"role_match":"any"', '"role_match":"any","role_match":"all"', 1
+    )
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads(nested)
+    assert parse_filter_projection_product_terminal(strict_json_loads(canonical)) == terminal
+    for parser, record in (
+        (parse_filter_projection_freshness_ref, _terminal()["freshness_ref"]),
+        (parse_filter_projection_readiness_ref, _terminal()["readiness_ref"]),
+        (parse_filter_projection_product_terminal, _terminal()),
+        (parse_filter_projection_success_owner_ref, _success_owner_ref()),
+        (parse_filter_projection_stale_owner_ref, _stale_owner_ref()),
+        (parse_filter_projection_not_ready_owner_ref, _not_ready_owner_ref()),
+        (parse_filter_projection_masked_absence_owner_ref, _masked_absence_owner_ref()),
+        (parse_filter_projection_product_ref, _product_ref()),
+    ):
+        with pytest.raises(FilterProjectionTerminalContractError):
+            parser(dict(record))
+    with pytest.raises(FilterProjectionTerminalContractError):
+        parse_filter_projection_result_v3(dict(_success_root()))
+    with pytest.raises(FilterProjectionTerminalContractError):
+        parse_filter_projection_result_v3(json.loads(canonical_json(_masked_root())))
 
 
 def test_retained_v2_history_never_retyped() -> None:

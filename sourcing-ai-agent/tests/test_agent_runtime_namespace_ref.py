@@ -30,13 +30,16 @@ from sourcing_agent.agent_runtime_namespace_ref import (
     RETAINED_PATH_BEARING_HISTORY_LITERALS,
     RETAINED_V1_CAPABILITY_LITERAL,
     AgentRuntimeNamespaceRefError,
+    CanonicalJsonObject,
     agent_runtime_namespace_ref_public_record,
     assert_not_retained_path_bearing_history,
     canonical_json,
+    canonical_json_object,
     compute_agent_runtime_namespace_ref_digest,
     contract_digest,
     mint_agent_runtime_namespace_ref,
     parse_agent_runtime_namespace_ref,
+    strict_json_loads,
     validate_agent_runtime_namespace_ref,
 )
 
@@ -224,12 +227,61 @@ def test_parse_fail_closed_on_hostile_mutations() -> None:
         {**record, "ref_digest": "g" * 64},
         {**record, "ref_digest": "0" * 64},  # well-formed but does not recompute
         {**record, "policy_revision": "policy-rev-2"},  # copied digest is never proof
-        "ns-1",
-        None,
-        ["ns-1"],
     ]
     for hostile in mutations:
+        _expect_invalid(canonical_json_object(hostile))
+    for hostile in ("ns-1", None, ["ns-1"], 1, True):
         _expect_invalid(hostile)
+
+
+def test_decode_boundary_rejects_duplicates_and_collapsed_decodes() -> None:
+    record = _valid_ref_record()
+    canonical = canonical_json(record)
+    # duplicate keys are rejected at decode at any depth (manifest canonical-JSON rule)
+    duplicate_generation = canonical.replace(
+        '"generation":1', '"generation":true,"generation":1', 1
+    )
+    assert '"generation":true,"generation":1' in duplicate_generation
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads(duplicate_generation)
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads(canonical.replace('"owner":"agent_runtime_namespace_registry"', '"owner":"a","owner":"b"', 1))
+    # non-JSON constants are rejected
+    for payload in ('{"x": NaN}', '{"x": Infinity}', '{"x": -Infinity}'):
+        with pytest.raises(AgentRuntimeNamespaceRefError):
+            strict_json_loads(payload)
+    # a standard decode collapses duplicates; the collapsed plain dict never reaches validation
+    collapsed = json.loads('{"generation": true, "generation": 1, "schema_version": "agent_runtime_namespace_ref.v1"}')
+    assert collapsed["generation"] == 1
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        parse_agent_runtime_namespace_ref(collapsed)
+    # plain dictionaries are never a decode boundary, even when fully valid
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        parse_agent_runtime_namespace_ref(dict(record))
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        parse_agent_runtime_namespace_ref(json.loads(canonical))
+    # the typed boundary accepts str and UTF-8 bytes, and rejects other payloads
+    assert strict_json_loads(canonical) == record
+    assert strict_json_loads(canonical.encode("utf-8")) == record
+    assert strict_json_loads(bytearray(canonical.encode("utf-8"))) == record
+    for bad_payload in (b"\xff\xfe{}", 1, None, ["x"]):
+        with pytest.raises(AgentRuntimeNamespaceRefError):
+            strict_json_loads(bad_payload)
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        strict_json_loads("{not json")
+    # the decoder type cannot be constructed outside the decoder
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        CanonicalJsonObject({"a": 1})
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        CanonicalJsonObject(_token=object(), a=1)
+    # canonical_json_object preserves field order and rejects non-objects
+    ordered = canonical_json_object({"b": 1, "a": 2})
+    assert list(ordered) == ["b", "a"]
+    assert isinstance(ordered, CanonicalJsonObject)
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        canonical_json_object([1, 2])
+    with pytest.raises(AgentRuntimeNamespaceRefError):
+        canonical_json_object({"x": float("nan")})
 
 
 def test_retained_v1_path_bearing_history_fence() -> None:
@@ -255,7 +307,7 @@ def test_retained_v1_path_bearing_history_fence() -> None:
     assert retained_v1_capability["runtime_namespace"].startswith("/")
     with pytest.raises(AgentRuntimeNamespaceRefError):
         assert_not_retained_path_bearing_history(retained_v1_capability)
-    _expect_invalid(retained_v1_capability)
+    _expect_invalid(canonical_json_object(retained_v1_capability))
     assert_not_retained_path_bearing_history(_valid_ref_record())
 
 

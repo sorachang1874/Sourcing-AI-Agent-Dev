@@ -25,6 +25,13 @@ Retained-v1 path-bearing history fence: the retained
 version plus contract digest, and is never re-minted, mutated, or
 auto-upgraded into a namespace ref.  This module mints and parses only the
 opaque v1 ref and fails closed on any retained path-bearing shape.
+
+Decode boundary (manifest canonical-JSON rule "duplicate keys rejected at
+decode"): this module owns the one shared strict JSON decoder for all three
+FF-SCHEMA contract families.  ``strict_json_loads`` rejects duplicate object
+keys and non-JSON constants (``NaN``/``Infinity``) at any depth and produces
+the decoder-typed ``CanonicalJsonObject``; contract parsers require that type
+so an already-collapsed standard-library decode can never reach validation.
 """
 
 from __future__ import annotations
@@ -72,6 +79,82 @@ def contract_digest(schema: dict[str, Any]) -> str:
     """Manifest-pinned digest equation: ``SHA256(UTF8(canonical_json(schema)))``."""
 
     return hashlib.sha256(canonical_json(schema).encode("utf-8")).hexdigest()
+
+
+_DECODE_TOKEN = object()
+
+
+class CanonicalJsonObject(dict):
+    """Decoder-typed JSON object: duplicate-free and non-finite-free by construction.
+
+    Instances are produced solely by ``strict_json_loads`` (every text/bytes
+    boundary) and ``canonical_json_object`` (programmatic construction); the
+    constructor itself is token-guarded, and every FF-SCHEMA contract parser
+    requires this type so no caller can feed an already-collapsed
+    standard-library decode into validation.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, *args: Any, _token: object | None = None, **kwargs: Any) -> None:
+        if _token is not _DECODE_TOKEN:
+            raise AgentRuntimeNamespaceRefError(
+                "canonical JSON objects are produced only by strict_json_loads or canonical_json_object"
+            )
+        super().__init__(*args, **kwargs)
+
+
+def strict_json_loads(payload: str | bytes | bytearray) -> Any:
+    """The one shared strict JSON decoder for the FF-SCHEMA contract families.
+
+    Manifest canonical-JSON rules made executable at the decode boundary:
+    duplicate object keys are rejected at every depth, and non-JSON constants
+    (``NaN``, ``Infinity``, ``-Infinity``) are rejected.  Every JSON object in
+    the decoded value is a ``CanonicalJsonObject``.
+    """
+
+    if isinstance(payload, (bytes, bytearray)):
+        try:
+            text = bytes(payload).decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise AgentRuntimeNamespaceRefError("contract JSON payload is not UTF-8") from exc
+    elif type(payload) is str:
+        text = payload
+    else:
+        raise AgentRuntimeNamespaceRefError("contract JSON payload must be str or UTF-8 bytes")
+
+    def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> CanonicalJsonObject:
+        result = CanonicalJsonObject(_token=_DECODE_TOKEN)
+        for key, value in pairs:
+            if key in result:
+                raise AgentRuntimeNamespaceRefError(f"contract JSON duplicate key {key!r} at decode")
+            result[key] = value
+        return result
+
+    def _no_non_json_constant(token: str) -> Any:
+        raise AgentRuntimeNamespaceRefError(f"contract JSON non-finite constant {token!r} at decode")
+
+    try:
+        return json.loads(text, object_pairs_hook=_no_duplicate_keys, parse_constant=_no_non_json_constant)
+    except json.JSONDecodeError as exc:
+        raise AgentRuntimeNamespaceRefError("contract JSON payload is not valid JSON") from exc
+
+
+def canonical_json_object(value: Any) -> CanonicalJsonObject:
+    """Return the decoder-typed object for one JSON object value, preserving field order.
+
+    The value is re-encoded with ``allow_nan=False`` and strict-decoded, so
+    the result is duplicate-free and non-finite-free at every depth.
+    """
+
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError, OverflowError, UnicodeError) as exc:
+        raise AgentRuntimeNamespaceRefError("contract JSON value invalid") from exc
+    result = strict_json_loads(encoded)
+    if not isinstance(result, CanonicalJsonObject):
+        raise AgentRuntimeNamespaceRefError("contract JSON value must be an object")
+    return result
 
 
 def _fail(label: str, reason: str) -> None:
@@ -123,7 +206,7 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
         if value is not None:
             _fail(label, "expected null")
     elif declared == "object":
-        if type(value) is not dict:
+        if not isinstance(value, dict):
             _fail(label, "expected object")
         fields = descriptor.get("fields")
         if fields is None:
@@ -148,7 +231,7 @@ def _validate_value(value: Any, descriptor: dict[str, Any], label: str) -> None:
 
 
 def _validate_object(record: Any, fields: list[dict[str, Any]], label: str) -> None:
-    if type(record) is not dict:
+    if not isinstance(record, dict):
         _fail(label, "expected object")
     declared = {field["name"]: field for field in fields}
     required = {name for name, field in declared.items() if field.get("required") is True}
@@ -208,7 +291,7 @@ _REF_DIGEST_INPUT_FIELDS = AGENT_RUNTIME_NAMESPACE_REF_ORDERED_FIELDS[:-1]
 def compute_agent_runtime_namespace_ref_digest(record: dict[str, Any]) -> str:
     """Recompute ``ref_digest`` over the canonical first seven fields of one ref record."""
 
-    if type(record) is not dict:
+    if not isinstance(record, dict):
         _fail("ref_digest input", "expected object")
     try:
         covered = {field: record[field] for field in _REF_DIGEST_INPUT_FIELDS}
@@ -224,27 +307,41 @@ def assert_not_retained_path_bearing_history(value: Any) -> None:
         _fail("schema_version", "retained v1 path-bearing history is never re-minted as a namespace ref")
 
 
+def _require_decoder_typed(value: Any, label: str) -> CanonicalJsonObject:
+    if not isinstance(value, CanonicalJsonObject):
+        _fail(
+            label,
+            "record must be produced by strict_json_loads or canonical_json_object;"
+            " plain dictionaries are not a decode boundary",
+        )
+    return value
+
+
 def validate_agent_runtime_namespace_ref(value: Any) -> None:
     """Fail closed unless ``value`` is one exact ``agent_runtime_namespace_ref.v1`` record."""
 
     parse_agent_runtime_namespace_ref(value)
 
 
-def parse_agent_runtime_namespace_ref(value: Any) -> dict[str, Any]:
+def parse_agent_runtime_namespace_ref(value: Any) -> CanonicalJsonObject:
     """Validate one ref record and return it canonicalized in manifest field order.
 
-    Parse is closed: unknown or missing fields, type/enum/format/bound
-    violations, retained path-bearing history shapes, and any ``ref_digest``
-    that does not recompute from the first seven fields all fail closed (a
-    copied digest is never proof without rebuilding its source object).
+    Parse is closed: the record must be decoder-typed
+    (``CanonicalJsonObject`` from ``strict_json_loads`` or
+    ``canonical_json_object``), and unknown or missing fields,
+    type/enum/format/bound violations, retained path-bearing history shapes,
+    and any ``ref_digest`` that does not recompute from the first seven
+    fields all fail closed (a copied digest is never proof without rebuilding
+    its source object).
     """
 
-    assert_not_retained_path_bearing_history(value)
-    _validate_object(value, AGENT_RUNTIME_NAMESPACE_REF_SCHEMA["fields"], "agent_runtime_namespace_ref")
-    record = {field: value[field] for field in AGENT_RUNTIME_NAMESPACE_REF_ORDERED_FIELDS}
-    if record["ref_digest"] != compute_agent_runtime_namespace_ref_digest(record):
+    record = _require_decoder_typed(value, "agent_runtime_namespace_ref")
+    assert_not_retained_path_bearing_history(record)
+    _validate_object(record, AGENT_RUNTIME_NAMESPACE_REF_SCHEMA["fields"], "agent_runtime_namespace_ref")
+    ordered = {field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_ORDERED_FIELDS}
+    if ordered["ref_digest"] != compute_agent_runtime_namespace_ref_digest(ordered):
         _fail("ref_digest", "does not recompute from the first seven fields")
-    return record
+    return canonical_json_object(ordered)
 
 
 def mint_agent_runtime_namespace_ref(
@@ -254,7 +351,7 @@ def mint_agent_runtime_namespace_ref(
     provider_mode: Any,
     policy_revision: Any,
     generation: Any,
-) -> dict[str, Any]:
+) -> CanonicalJsonObject:
     """Mint one opaque ``agent_runtime_namespace_ref.v1`` record.
 
     Only ``agent_runtime_namespace_registry`` may mint; this pure contract
@@ -273,14 +370,14 @@ def mint_agent_runtime_namespace_ref(
         "generation": generation,
     }
     candidate["ref_digest"] = compute_agent_runtime_namespace_ref_digest(candidate)
-    return parse_agent_runtime_namespace_ref(candidate)
+    return parse_agent_runtime_namespace_ref(canonical_json_object(candidate))
 
 
-def agent_runtime_namespace_ref_public_record(value: Any) -> dict[str, Any]:
+def agent_runtime_namespace_ref_public_record(value: Any) -> CanonicalJsonObject:
     """Project one validated ref to its exact public V3 subset; workspace/path/lifecycle never leave the server."""
 
     record = parse_agent_runtime_namespace_ref(value)
-    return {field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS}
+    return canonical_json_object({field: record[field] for field in AGENT_RUNTIME_NAMESPACE_REF_PUBLIC_FIELDS})
 
 
 __all__ = [
@@ -295,12 +392,15 @@ __all__ = [
     "RETAINED_PATH_BEARING_HISTORY_LITERALS",
     "RETAINED_V1_CAPABILITY_LITERAL",
     "AgentRuntimeNamespaceRefError",
+    "CanonicalJsonObject",
     "agent_runtime_namespace_ref_public_record",
     "assert_not_retained_path_bearing_history",
     "canonical_json",
+    "canonical_json_object",
     "compute_agent_runtime_namespace_ref_digest",
     "contract_digest",
     "mint_agent_runtime_namespace_ref",
     "parse_agent_runtime_namespace_ref",
+    "strict_json_loads",
     "validate_agent_runtime_namespace_ref",
 ]
