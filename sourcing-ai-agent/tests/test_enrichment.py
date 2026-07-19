@@ -10891,6 +10891,19 @@ class ProfileFetchWindowPolicyTest(unittest.TestCase):
                 inner = _recommended_harvest_profile_live_fetch_window(80, source_shards_by_url=shards)
         self.assertEqual(inner["max_workers"], 1)
 
+    def test_tail_wave_dispatches_promptly_without_coalescing_idle(self) -> None:
+        """A sub-50 tail after a closed wave must dispatch as a final small
+        batch now, never idle in a coalescing wait — slot-free means dispatch.
+        """
+        shards = {f"https://www.linkedin.com/in/u{i}": ["company_roster"] for i in range(26)}
+        with mock.patch("sourcing_agent.enrichment._external_provider_mode", return_value="live"):
+            with mock.patch.dict("os.environ", self._SPLIT_ENV, clear=False):
+                inner = _recommended_harvest_profile_live_fetch_window(26, source_shards_by_url=shards)
+                outer = _recommended_harvest_profile_prefetch_dispatch_window(26, priority=False, source_shards_by_url=shards)
+        self.assertGreaterEqual(inner["batch_count"], 1)
+        self.assertGreaterEqual(inner["max_workers"], 1)
+        self.assertEqual(outer["batch_count"], inner["batch_count"])
+
 
 if __name__ == "__main__":
     unittest.main()
