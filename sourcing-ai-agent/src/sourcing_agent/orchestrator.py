@@ -542,6 +542,10 @@ from .request_normalization import (
 from .request_normalization import (
     supplement_request_query_signals as _shared_supplement_request_query_signals,
 )
+from .request_normalization import (
+    _suppress_dedicated_field_keyword_terms as _shared_suppress_dedicated_field_keyword_terms,
+)
+from .query_signal_knowledge import role_buckets_from_text as _shared_role_buckets_from_text
 from .request_ownership import exact_job_owner_matches as _exact_job_owner_matches
 from .rerun_policy import decide_rerun_policy
 from .result_diff import build_result_diff
@@ -60489,6 +60493,21 @@ class SourcingOrchestrator:
             include_raw_keyword_extraction=not _shared_has_structured_request_signals(normalized_patch),
         )
         merged_payload = apply_user_explicit_cohort_authority(fallback_request, merged_payload)
+        # One-owner rule for every keyword source (model normalize patch,
+        # deterministic extraction, merged fallbacks): terms already owned by
+        # the dedicated location/role dimensions never ride the keyword lane.
+        merged_payload["keywords"] = _shared_suppress_dedicated_field_keyword_terms(
+            list(merged_payload.get("keywords") or []),
+            target_locations=list(merged_payload.get("target_locations") or []),
+            exclude_target_locations=list(merged_payload.get("exclude_target_locations") or []),
+            inferred_role_buckets=_shared_role_buckets_from_text(raw_user_request),
+        )
+        merged_payload["must_have_keywords"] = _shared_suppress_dedicated_field_keyword_terms(
+            list(merged_payload.get("must_have_keywords") or []),
+            target_locations=list(merged_payload.get("target_locations") or []),
+            exclude_target_locations=list(merged_payload.get("exclude_target_locations") or []),
+            inferred_role_buckets=_shared_role_buckets_from_text(raw_user_request),
+        )
         breakdown_ms["deterministic_signal_supplement"] = round((time.perf_counter() - step_started_at) * 1000, 2)
 
         step_started_at = time.perf_counter()
