@@ -12,18 +12,14 @@ from .company_registry import normalize_company_key
 from .company_shard_planning import (
     REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
     build_default_company_employee_shard_policy,
-    build_large_org_keyword_probe_shard_policy,
     build_request_scoped_company_employee_query_plan,
-    request_scoped_roster_function_ids,
+    resolve_roster_lane_function_ids,
 )
 from .domain import JobRequest, SourcingPlan
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
-from .organization_execution_profile import organization_execution_profile_full_roster_max_pages
 from .planning import (
-    FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
-    FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS,
-    FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
     FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+    FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES,
     _build_provider_execution_manifest,
     hydrate_sourcing_plan,
 )
@@ -53,13 +49,11 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         "precision_recall_bias",
         "acquisition_strategy_override",
         "use_company_employees_lane",
-        "keyword_priority_only",
         "former_keyword_queries_only",
         "provider_people_search_query_strategy",
         "provider_people_search_max_queries",
         "provider_people_search_pages",
         "provider_people_search_scale_chunk_pages",
-        "large_org_keyword_probe_mode",
         "force_fresh_run",
         "reuse_existing_roster",
         "run_former_search_seed",
@@ -208,6 +202,9 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
                 ),
                 "partition_rules": partition_rules,
                 "keyword_shards": keyword_shards,
+                "request_function_ids": [
+                    str(item).strip() for item in list(policy.get("request_function_ids") or []) if str(item).strip()
+                ],
                 "max_pages": int(policy.get("max_pages") or 0),
                 "page_limit": int(policy.get("page_limit") or 0),
                 "provider_result_cap": int(policy.get("provider_result_cap") or 0),
@@ -601,7 +598,10 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
         # drops or distorts explicit location/functionID wiring.
         request_roster_plan = build_request_scoped_company_employee_query_plan(
             target_locations=dict(request_payload or {}).get("target_locations"),
-            function_ids=request_scoped_roster_function_ids(request_payload),
+            function_ids=resolve_roster_lane_function_ids(
+                request_payload,
+                planning_mode=str(dict(request_payload or {}).get("planning_mode") or ""),
+            ),
             max_pages=max_pages,
             page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
             exclude_target_locations=dict(request_payload or {}).get("exclude_target_locations"),
@@ -665,19 +665,9 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
 
 
 def _default_review_full_roster_max_pages(target_company: str, plan: SourcingPlan | dict[str, Any]) -> int:
-    if isinstance(plan, SourcingPlan):
-        profile = dict(plan.organization_execution_profile or plan.acquisition_strategy.organization_execution_profile or {})
-    else:
-        acquisition_strategy = dict(plan.get("acquisition_strategy") or {})
-        profile = dict(plan.get("organization_execution_profile") or acquisition_strategy.get("organization_execution_profile") or {})
-    if not profile and normalize_company_key(target_company) in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
-        profile = {"org_scale_band": "large"}
-    return organization_execution_profile_full_roster_max_pages(
-        profile,
-        default_small=FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
-        default_medium=max(FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES, 50),
-        default_large=FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
-    )
+    # Unified roster contract: one paging budget for every company (no
+    # org-size bands), matching the planner's roster max-pages rule.
+    return FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES
 
 
 def _build_review_company_shard_policy(
@@ -695,23 +685,8 @@ def _build_review_company_shard_policy(
 ) -> dict[str, Any]:
     if strategy_type != "full_company_roster":
         return {}
-    company_key = normalize_company_key(target_company)
-    if bool(cost_policy.get("large_org_keyword_probe_mode")):
-        keyword_policy = build_large_org_keyword_probe_shard_policy(
-            company_key,
-            company_scope=list(company_scope or []),
-            keyword_hints=[str(item).strip() for item in list(filter_hints.get("keywords") or []) if str(item).strip()],
-            function_ids=[str(item).strip() for item in list(filter_hints.get("function_ids") or []) if str(item).strip()],
-            max_pages=max_pages,
-            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-            locations=locations,
-            exclude_locations=exclude_locations,
-            request_function_ids=request_function_ids,
-        )
-        if keyword_policy:
-            return keyword_policy
     return build_default_company_employee_shard_policy(
-        company_key,
+        normalize_company_key(target_company),
         max_pages=max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
         organization_execution_profile=organization_execution_profile,
@@ -888,8 +863,6 @@ def _apply_acquisition_review_preferences(
         cost_policy["allow_cached_roster_fallback"] = False
         cost_policy["allow_historical_profile_inheritance"] = False
         cost_policy["allow_shared_provider_cache"] = False
-    if "keyword_priority_only" in preferences:
-        cost_policy["keyword_priority_only"] = bool(preferences.get("keyword_priority_only"))
     if "former_keyword_queries_only" in preferences:
         cost_policy["former_keyword_queries_only"] = bool(preferences.get("former_keyword_queries_only"))
     if "provider_people_search_query_strategy" in preferences:
@@ -902,8 +875,6 @@ def _apply_acquisition_review_preferences(
         cost_policy["provider_people_search_scale_chunk_pages"] = int(
             preferences.get("provider_people_search_scale_chunk_pages") or 0
         )
-    if "large_org_keyword_probe_mode" in preferences:
-        cost_policy["large_org_keyword_probe_mode"] = bool(preferences.get("large_org_keyword_probe_mode"))
     strategy_for_provider = str(acquisition_strategy.get("strategy_type") or desired_strategy or current_strategy).strip().lower()
     if strategy_for_provider == "scoped_search_roster":
         if "former_keyword_queries_only" not in preferences:
@@ -936,10 +907,6 @@ def _apply_acquisition_review_preferences(
             reasoning.append(note)
     if force_fresh_run_present and force_fresh_run:
         note = "Plan review requested a fresh live acquisition instead of falling back to cached roster snapshots."
-        if note not in reasoning:
-            reasoning.append(note)
-    if bool(preferences.get("keyword_priority_only")):
-        note = "Plan review prioritized keyword-first acquisition over broad roster expansion."
         if note not in reasoning:
             reasoning.append(note)
     if str(preferences.get("provider_people_search_query_strategy") or "").strip().lower() == "all_queries_union":

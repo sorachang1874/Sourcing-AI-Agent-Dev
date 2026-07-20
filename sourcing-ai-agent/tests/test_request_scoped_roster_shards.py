@@ -383,7 +383,11 @@ class RosterLanePlanningTest(unittest.TestCase):
         policy = dict(acquire_task.metadata["company_employee_shard_policy"] or {})
         self.assertEqual(str(policy.get("strategy_id") or ""), "adaptive_us_technical_partition")
         self.assertEqual(policy.get("root_filters", {}).get("locations"), ["Germany"])
-        self.assertNotIn("request_function_ids", policy)
+        # The generic technical default now also owns its partition axis through
+        # request_function_ids: engineering/research are ALWAYS planned as
+        # separate per-function shard roots (operator directive 2026-07-20), so
+        # the field is present even without a user-explicit cohort selection.
+        self.assertEqual(policy.get("request_function_ids"), ["8", "24"])
 
     def test_large_org_policy_carries_explicit_function_selection_for_probe_expansion(self) -> None:
         request = JobRequest.from_payload(

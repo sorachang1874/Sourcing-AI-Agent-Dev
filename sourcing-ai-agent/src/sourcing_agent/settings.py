@@ -27,6 +27,11 @@ class ModelProviderSettings:
     model: str = ""
     api_style: str = "openai_chat_completions"
     timeout_seconds: int = 45
+    # Floor applied to every text-prompt max_tokens budget.  Reasoning-served
+    # models (e.g. DeepSeek's served deepseek-v4-flash) spend part of the
+    # budget on reasoning before emitting content, so the caller's small
+    # budgets (500-1400) starve the actual answer; 0 keeps caller budgets.
+    min_max_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +225,13 @@ def load_settings(project_root: str | Path) -> AppSettings:
         model_provider_timeout_seconds = int(model_provider_timeout)
     except (TypeError, ValueError):
         model_provider_timeout_seconds = 45
+    model_provider_min_max_tokens_raw = os.getenv("MODEL_PROVIDER_MIN_MAX_TOKENS") or model_provider_payload.get(
+        "min_max_tokens", 0
+    )
+    try:
+        model_provider_min_max_tokens = max(0, int(model_provider_min_max_tokens_raw or 0))
+    except (TypeError, ValueError):
+        model_provider_min_max_tokens = 0
 
     semantic_enabled = _coerce_bool(
         os.getenv("SOURCING_SEMANTIC_PROVIDER_ENABLED"),
@@ -620,6 +632,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
             model=model_provider_model,
             api_style=model_provider_api_style or "openai_chat_completions",
             timeout_seconds=model_provider_timeout_seconds,
+            min_max_tokens=model_provider_min_max_tokens,
         ),
     )
 

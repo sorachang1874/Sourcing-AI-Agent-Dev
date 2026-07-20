@@ -6264,6 +6264,19 @@ def _apply_harvest_company_employee_filters(payload: dict[str, Any], company_fil
 def _apply_harvest_search_filters(
     payload: dict[str, Any], filter_hints: dict[str, list[str]], employment_status: str
 ) -> None:
+    query_text = str(payload.get("searchQuery") or "").strip()
+    # A broad former past-company probe (former + pastCompanies + no query
+    # text) is deliberately unrestricted: it exists to recall the full former
+    # population.  Planner-inferred or defaulted function ids must NEVER
+    # narrow it (a text-inferred functionIds ["19"] silently turned the GDM
+    # former probe into a product-management-only query).  Explicit function
+    # selections run through the cohort compiler's own lanes, not this probe.
+    broad_former_past_company_probe = (
+        str(employment_status or "").strip().lower() == "former"
+        and bool(list(filter_hints.get("past_companies") or []))
+        and not query_text
+    )
+    function_filter_keys = {"function_ids", "exclude_function_ids"} if broad_former_past_company_probe else set()
     mapping = {
         "current_companies": "currentCompanies",
         "past_companies": "pastCompanies",
@@ -6276,12 +6289,13 @@ def _apply_harvest_search_filters(
         "exclude_function_ids": "excludeFunctionIds",
     }
     for source_key, target_key in mapping.items():
+        if source_key in function_filter_keys:
+            continue
         values = [str(item).strip() for item in filter_hints.get(source_key) or [] if str(item).strip()]
         if values:
             payload[target_key] = values
     scope_keywords = [str(item).strip() for item in filter_hints.get("scope_keywords") or [] if str(item).strip()]
     keyword_values = [str(item).strip() for item in filter_hints.get("keywords") or [] if str(item).strip()]
-    query_text = str(payload.get("searchQuery") or "").strip()
     if not query_text:
         # Keep former past-company probes broad by default. When caller passes an
         # explicit query_text, payload already carries searchQuery and this branch

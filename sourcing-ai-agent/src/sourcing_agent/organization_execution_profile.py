@@ -28,8 +28,6 @@ _HARD_LARGE_COMPANY_KEYS = {
     "xai",
 }
 
-FALLBACK_LARGE_COMPANY_KEYS = set(_HARD_LARGE_COMPANY_KEYS) | {"anthropic"}
-
 _SMALL_ORG_MAX_PAGES = 20
 _MEDIUM_ORG_MAX_PAGES = 50
 _LARGE_ORG_MAX_PAGES = 100
@@ -572,22 +570,6 @@ def warmup_existing_organization_execution_profiles(
         "results": results,
     }
 
-
-def organization_execution_profile_full_roster_max_pages(
-    profile: dict[str, Any] | None,
-    *,
-    default_small: int = _SMALL_ORG_MAX_PAGES,
-    default_medium: int = _MEDIUM_ORG_MAX_PAGES,
-    default_large: int = _LARGE_ORG_MAX_PAGES,
-) -> int:
-    payload = dict(profile or {})
-    scale_band = _normalize_text(payload.get("org_scale_band")).lower()
-    default_mode = _normalize_text(payload.get("default_acquisition_mode")).lower()
-    if scale_band == "large" or default_mode == "scoped_search_roster":
-        return default_large
-    if scale_band == "medium" or default_mode == "hybrid":
-        return default_medium
-    return default_small
 
 
 def organization_execution_profile_snapshot_reuse_limit(profile: dict[str, Any] | None) -> int:

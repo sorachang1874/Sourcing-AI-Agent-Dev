@@ -37,11 +37,10 @@ from .cohort_selection import explicit_cohort_selection
 from .company_registry import upsert_company_identity_registry_entry
 from .company_shard_planning import (
     TRUNCATED_ROSTER_STOP_REASONS,
-    _compose_request_roster_policy_axes,
     build_request_scoped_company_employee_query_plan,
     normalize_company_employee_shard_policy,
     plan_company_employee_shards_from_policy,
-    request_scoped_roster_function_ids,
+    resolve_roster_lane_function_ids,
     resolve_segmented_roster_completion,
 )
 from .connectors import (
@@ -2088,7 +2087,10 @@ class AcquisitionEngine:
         company_employee_shard_policy = self._task_company_employee_shard_policy(task, job_request)
         request_roster_plan = build_request_scoped_company_employee_query_plan(
             target_locations=job_request.target_locations,
-            function_ids=request_scoped_roster_function_ids(job_request.to_record()),
+            function_ids=resolve_roster_lane_function_ids(
+                job_request.to_record(),
+                planning_mode=str(getattr(job_request, "planning_mode", "") or ""),
+            ),
             max_pages=max_pages,
             page_limit=page_limit,
             exclude_target_locations=job_request.exclude_target_locations,
@@ -2100,20 +2102,27 @@ class AcquisitionEngine:
         ):
             # The request-owned location/function contract is enforced at
             # execution time too (single-writer: the request wins), so legacy
-            # or restored policies cannot bypass it.  Explicit functions expand
-            # into per-function shard roots during probe planning.
-            company_employee_shard_policy = _compose_request_roster_policy_axes(
-                dict(company_employee_shard_policy),
-                locations=list(request_roster_plan.get("locations") or []),
-                exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
-                request_function_ids=request_roster_function_ids
-                or list(company_employee_shard_policy.get("request_function_ids") or []),
+            # or restored policies cannot bypass it.  The selected functions
+            # expand into per-function shard roots during probe planning.
+            enforced_policy = dict(company_employee_shard_policy)
+            enforced_root_filters = dict(enforced_policy.get("root_filters") or {})
+            enforced_root_filters.pop("locations", None)
+            if list(request_roster_plan.get("locations") or []):
+                enforced_root_filters["locations"] = list(request_roster_plan.get("locations") or [])
+            enforced_root_filters.pop("exclude_locations", None)
+            if list(request_roster_plan.get("exclude_locations") or []):
+                enforced_root_filters["exclude_locations"] = list(request_roster_plan.get("exclude_locations") or [])
+            enforced_policy["root_filters"] = enforced_root_filters
+            enforced_function_ids = request_roster_function_ids or list(
+                company_employee_shard_policy.get("request_function_ids") or []
             )
+            if enforced_function_ids:
+                enforced_policy["request_function_ids"] = list(enforced_function_ids)
+            company_employee_shard_policy = enforced_policy
         if not company_employee_shards and not company_employee_shard_policy:
-            # Small-company lane (no adaptive policy): an explicit request
-            # function selection still owns the roster lane and expands into
-            # one shard per function id.  Large-org/keyword policies carry the
-            # same request axes and expand per function during probe planning.
+            # Legacy tasks planned before the unified policy existed: the
+            # request-scoped plan still owns the lane and expands into one
+            # shard per selected function id.
             company_employee_shards = list(request_roster_plan.get("shards") or [])
             if company_employee_shards:
                 shard_plan_reason = "request_scoped_shards"
@@ -4565,8 +4574,7 @@ class AcquisitionEngine:
         }
         former_search_seed_queries: list[str] = []
         should_preserve_former_keywords = (
-            bool(former_cost_policy.get("large_org_keyword_probe_mode"))
-            or bool(former_cost_policy.get("former_keyword_queries_only"))
+            bool(former_cost_policy.get("former_keyword_queries_only"))
             or self._task_strategy_type(task, job_request) == "scoped_search_roster"
         )
         if should_preserve_former_keywords:

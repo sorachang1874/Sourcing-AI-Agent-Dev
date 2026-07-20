@@ -12,13 +12,11 @@ from .domain import (
     normalize_requested_role_bucket,
     normalize_requested_role_buckets,
 )
-from .organization_execution_profile import FALLBACK_LARGE_COMPANY_KEYS
 from .query_signal_knowledge import (
     ALPHABET_COMPANY_URL,
     DEEPMIND_COMPANY_URL,
     GOOGLE_COMPANY_URL,
     canonicalize_scope_signal_label,
-    default_large_org_priority_function_ids,
     match_scope_signals,
     related_company_scope_labels,
     related_company_scope_urls,
@@ -37,9 +35,7 @@ LARGE_ORG_SCOPE_COMPANY_URLS = {
     "deepmind": DEEPMIND_COMPANY_URL,
 }
 
-LARGE_ORG_PRIORITY_FUNCTION_IDS = default_large_org_priority_function_ids()
 DEFAULT_PRIMARY_LOCATION = "United States"
-FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS = role_bucket_function_ids(("engineering", "research"))
 
 KEYWORD_CANONICAL_ALIASES = {
     "coding": "Coding",
@@ -589,7 +585,7 @@ def _infer_strategy_type(
     if company_key in {"google", "alphabet"}:
         if related_company_scope_labels(target_company, scope_hints):
             return "full_company_roster"
-    if company_key in FALLBACK_LARGE_COMPANY_KEYS or len(scope_hints) >= 2:
+    if len(scope_hints) >= 2:
         return "scoped_search_roster"
     return "full_company_roster"
 
@@ -853,6 +849,22 @@ def _determine_strategy_decision(
             "strategy_type": "full_company_roster",
             "decision_source": "organization_execution_profile",
             "reason_codes": ["org_profile_default_full_roster"],
+            "directional_query": directional_query,
+            "requested_population_boundary": requested_population_boundary,
+            "organization_execution_profile": normalized_profile,
+        }
+    google_scope_roster_preferred = target_company.strip().lower() in {"google", "alphabet"} and bool(
+        related_company_scope_labels(target_company, scope_hints)
+    )
+    if directional_query and not google_scope_roster_preferred:
+        # Size-agnostic fallback (operator directive 2026-07-20): a directional
+        # or role/keyword-constrained query stays a scoped search regardless of
+        # org size; org-size keys never steer strategy choice.  The Google
+        # sub-org scope rule (a scope preference, not a size fork) still wins.
+        return {
+            "strategy_type": "scoped_search_roster",
+            "decision_source": "fallback_rules",
+            "reason_codes": ["fallback_rule_directional_scoped"],
             "directional_query": directional_query,
             "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
@@ -1168,10 +1180,10 @@ def _stage1_search_seed_queries_enabled(
 ) -> bool:
     normalized_strategy = str(strategy_type or "").strip().lower()
     if normalized_strategy == "full_company_roster":
-        # A normal full-roster lane is driven by company-employees/provider filters,
-        # not generic "Company Employee" seed text. Keep keyword seed queries only
-        # for explicit large-org probe shards where they are provider-facing.
-        return bool(cost_policy.get("large_org_keyword_probe_mode"))
+        # The full-roster lane is driven by the unified company-employees shard
+        # contract (per-function roots, provider filters), never by generic
+        # "Company Employee" seed text.
+        return False
     return True
 
 
@@ -1189,17 +1201,11 @@ def _build_filter_hints(
     target_locations: list[str] | None = None,
     exclude_target_locations: list[str] | None = None,
 ) -> dict[str, list[str]]:
-    large_org_keyword_probe_mode = bool(cost_policy.get("large_org_keyword_probe_mode"))
     prefer_known_scope_company_urls = bool(
-        large_org_keyword_probe_mode
-        or related_company_scope_urls(target_company, company_scope)
+        related_company_scope_urls(target_company, company_scope)
         or normalize_company_key(target_company) in LARGE_ORG_SCOPE_COMPANY_URLS
     )
     effective_function_ids = list(function_ids or [])
-    if not effective_function_ids and strategy_type == "full_company_roster" and not explicit_role_authority:
-        company_key = normalize_company_key(target_company)
-        if company_key in FALLBACK_LARGE_COMPANY_KEYS:
-            effective_function_ids = list(FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS)
     if strategy_type == "full_company_roster":
         company_values = _company_scope_company_filters(
             target_company=target_company,
@@ -1224,13 +1230,15 @@ def _build_filter_hints(
         target_locations=target_locations,
         exclude_target_locations=exclude_target_locations,
     )
-    if large_org_keyword_probe_mode and not explicit_role_authority:
-        filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *effective_function_ids]))
-    elif effective_function_ids:
+    # Paid function filters carry only explicitly resolved ids (structured
+    # request buckets / explicit cohort via the caller).  There is no
+    # org-size-based defaulting and no priority-list merging — the roster
+    # lane's function coverage is owned by the per-function shard contract.
+    if effective_function_ids:
         filters["function_ids"] = list(effective_function_ids)
     if company_scope[1:]:
         filters["scope_keywords"] = company_scope[1:]
-    if role_hints and not effective_function_ids and not (large_org_keyword_probe_mode and keyword_hints):
+    if role_hints and not effective_function_ids:
         filters["job_titles"] = role_hints
     if keyword_hints:
         filters["keywords"] = keyword_hints
@@ -1294,9 +1302,10 @@ def _full_company_roster_defaults_to_primary_location(
     target_company: str,
     cost_policy: dict[str, object],
 ) -> bool:
-    if bool(cost_policy.get("large_org_keyword_probe_mode")):
-        return True
-    return normalize_company_key(target_company) in FALLBACK_LARGE_COMPANY_KEYS
+    # Unified roster contract (operator directive 2026-07-20): every full
+    # roster defaults to the primary location (United States) unless the
+    # request explicitly overrides or opts out — no org-size forks.
+    return True
 
 
 def _company_scope_company_filters(
@@ -1505,12 +1514,6 @@ def _build_cost_policy(
     company_scope: list[str],
     keyword_hints: list[str],
 ) -> dict[str, object]:
-    large_org_keyword_probe_mode = _should_enable_large_org_keyword_probe_mode(
-        strategy_type=strategy_type,
-        target_company=target_company,
-        company_scope=company_scope,
-        keyword_hints=keyword_hints,
-    )
     policy = {
         "default_route_when_url_known": "linkedin_profile_scraper",
         "profile_scraper_mode": "full",
@@ -1539,13 +1542,12 @@ def _build_cost_policy(
         "public_media_worker_unit_budget": 6,
         "exploration_worker_unit_budget": 5,
         "worker_retry_limit": 2,
-        "large_org_member_threshold": 10000,
-        "large_org_keyword_probe_mode": large_org_keyword_probe_mode,
-        "keyword_priority_only": large_org_keyword_probe_mode
-        or (strategy_type == "scoped_search_roster" and bool(keyword_hints)),
-        "former_keyword_queries_only": large_org_keyword_probe_mode,
+        # Scoped-search query shaping (not an org-size knob): keyword-led
+        # scoped rosters prioritize their keyword queries.
+        "keyword_priority_only": strategy_type == "scoped_search_roster" and bool(keyword_hints),
+        "former_keyword_queries_only": False,
         "former_broad_past_company_only": (
-            (strategy_type == "full_company_roster" and not large_org_keyword_probe_mode)
+            strategy_type == "full_company_roster"
             or (strategy_type == "former_employee_search" and not keyword_hints)
         ),
     }
@@ -1563,10 +1565,6 @@ def _build_cost_policy(
         policy["precision_recall_bias"] = str(execution_preferences.get("precision_recall_bias") or "").strip().lower()
     if bool(execution_preferences.get("use_company_employees_lane")):
         policy["allow_company_employee_api"] = True
-    if "large_org_keyword_probe_mode" in execution_preferences:
-        policy["large_org_keyword_probe_mode"] = bool(execution_preferences.get("large_org_keyword_probe_mode"))
-    if "keyword_priority_only" in execution_preferences:
-        policy["keyword_priority_only"] = bool(execution_preferences.get("keyword_priority_only"))
     if "former_keyword_queries_only" in execution_preferences:
         policy["former_keyword_queries_only"] = bool(execution_preferences.get("former_keyword_queries_only"))
     if "former_broad_past_company_only" in execution_preferences:
@@ -1632,30 +1630,6 @@ def _apply_scoped_search_provider_policy(
         current_pages = 0
     policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
     policy["provider_people_search_pages"] = max(current_pages, 2)
-
-
-def _should_enable_large_org_keyword_probe_mode(
-    *,
-    strategy_type: str,
-    target_company: str,
-    company_scope: list[str],
-    keyword_hints: list[str],
-) -> bool:
-    if strategy_type != "full_company_roster":
-        return False
-    if not keyword_hints:
-        return False
-    scope_tokens = {normalize_company_key(item) for item in company_scope if item}
-    keyword_tokens = {normalize_company_key(item) for item in keyword_hints if item}
-    related_scope_urls = related_company_scope_urls(target_company, company_scope)
-    if len(keyword_tokens) < 2:
-        return False
-    if related_scope_urls:
-        return True
-    non_root_scope_tokens = {
-        token for token in scope_tokens if token and token != normalize_company_key(target_company)
-    }
-    return bool(non_root_scope_tokens)
 
 
 def _build_reasoning(

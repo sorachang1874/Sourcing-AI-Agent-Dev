@@ -343,11 +343,9 @@ def _execution_preferences_schema_prompt() -> str:
         "execution_preferences must be an object and may contain only "
         "acquisition_strategy_override, "
         "use_company_employees_lane, "
-        "keyword_priority_only, "
         "former_keyword_queries_only, "
         "provider_people_search_query_strategy, "
         "provider_people_search_max_queries, "
-        "large_org_keyword_probe_mode, "
         "force_fresh_run, "
         "precision_recall_bias, "
         "confirmed_company_scope, "
@@ -358,6 +356,10 @@ def _execution_preferences_schema_prompt() -> str:
         "(full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster). "
         "Do not misuse acquisition_strategy_override as a proxy for keyword priority, company-employees lane choice, "
         "former coverage, or people-search union strategy. "
+        "There are no org-size or keyword-probe lane knobs: the company-employees roster lane always uses one "
+        "unified method for every company — per-function shard queries (one request per selected function id) "
+        "with the request location axes. Express function targeting (researcher / engineer / product manager) "
+        "through must_have_primary_role_buckets, never through lane switches. "
         "provider_people_search_query_strategy must be all_queries_union or first_hit. "
         "provider_people_search_max_queries must be a small positive integer. "
         "Omit uncertain fields from execution_preferences. "
@@ -382,7 +384,6 @@ def _build_review_instruction_system_prompt() -> str:
         + _execution_preferences_schema_prompt()
         + "Only include fields directly supported by the instruction and editable_fields. "
         "Examples: "
-        "'keyword-first' -> keyword_priority_only=true. "
         "'不要 company-employees' -> use_company_employees_lane=false. "
         "'former 也要' -> run_former_search_seed=true when applicable. "
         "'多 query 并集' -> provider_people_search_query_strategy=all_queries_union. "
@@ -404,7 +405,7 @@ def _build_request_normalization_system_prompt() -> str:
         "Represent the user's real intent with four orthogonal dimensions whenever possible: "
         "population boundary (categories + employment_statuses), "
         "scope boundary (target_company + organization_keywords + scope_disambiguation + confirmed_company_scope), "
-        "acquisition lane policy (acquisition_strategy_override + use_company_employees_lane + keyword_priority_only + former_keyword_queries_only + large_org_keyword_probe_mode), "
+        "acquisition lane policy (acquisition_strategy_override + use_company_employees_lane + former_keyword_queries_only), "
         "and fallback policy (force_fresh_run + provider_people_search_query_strategy + provider_people_search_max_queries + reuse_existing_roster + run_former_search_seed). "
         + _execution_preferences_schema_prompt()
         + "scope_disambiguation must be an object and may contain only inferred_scope,sub_org_candidates,confidence,rationale. "
@@ -458,7 +459,7 @@ def _build_request_normalization_system_prompt() -> str:
         "\"organization_keywords\":[\"Google DeepMind\",\"Veo\",\"Nano Banana\"],"
         "\"keywords\":[\"multimodal\",\"Veo\",\"Nano Banana\"],"
         "\"must_have_facets\":[\"multimodal\"],"
-        "\"execution_preferences\":{\"keyword_priority_only\":true,\"provider_people_search_query_strategy\":\"all_queries_union\"},"
+        "\"execution_preferences\":{\"provider_people_search_query_strategy\":\"all_queries_union\"},"
         "\"scope_disambiguation\":{\"inferred_scope\":\"both\",\"sub_org_candidates\":[\"Google DeepMind\",\"Veo\",\"Nano Banana\"],\"confidence\":0.8}}. "
         "Example 2 input: 我想找OpenAI在ChatGPT项目，做Reasoning的人. "
         "Example 2 output: "
@@ -1768,13 +1769,14 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         *,
         max_tokens: int,
     ) -> OpenAIModelCallResult:
+        effective_max_tokens = max(int(max_tokens or 0), int(getattr(self.settings, "min_max_tokens", 0) or 0))
         return self._require_business_model_identity(
             self._call_prompt_result(
                 [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=max_tokens,
+                max_tokens=effective_max_tokens,
             )
         )
 

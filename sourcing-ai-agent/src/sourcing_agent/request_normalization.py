@@ -88,9 +88,7 @@ _INTENT_AXIS_EXECUTION_PREFERENCE_KEYS = {
     "use_company_employees_lane",
     "allow_stage1_web_seed_fallback",
     "allow_public_web_seed_fallback",
-    "keyword_priority_only",
     "former_keyword_queries_only",
-    "large_org_keyword_probe_mode",
     "force_fresh_run",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
@@ -1396,9 +1394,7 @@ def build_request_intent_axes_payload(
     acquisition_lane_policy = {
         "acquisition_strategy_override": str(execution_preferences.get("acquisition_strategy_override") or "").strip(),
         "use_company_employees_lane": execution_preferences.get("use_company_employees_lane"),
-        "keyword_priority_only": execution_preferences.get("keyword_priority_only"),
         "former_keyword_queries_only": execution_preferences.get("former_keyword_queries_only"),
-        "large_org_keyword_probe_mode": execution_preferences.get("large_org_keyword_probe_mode"),
     }
     fallback_policy = {
         "force_fresh_run": execution_preferences.get("force_fresh_run"),

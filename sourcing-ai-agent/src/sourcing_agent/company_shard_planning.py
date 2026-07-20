@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-import re
-from copy import deepcopy
 from typing import Any, Callable, Iterable
 
 from .cohort_selection import explicit_cohort_selection
-from .organization_execution_profile import FALLBACK_LARGE_COMPANY_KEYS
 from .query_signal_knowledge import (
-    ALPHABET_COMPANY_URL,
-    GOOGLE_COMPANY_URL,
-    default_large_org_priority_function_ids,
     function_id_selectable_labels,
-    related_company_scope_urls,
     role_bucket_function_ids,
-    scope_signal_search_query_aliases,
 )
 
 FULL_COMPANY_EMPLOYEE_RESULT_CAP = 2500
@@ -30,24 +22,6 @@ COMPANY_FILTER_LIST_KEYS = (
     "schools",
 )
 
-LARGE_ORG_SCOPE_COMPANY_URLS: dict[str, str] = {
-    "google": GOOGLE_COMPANY_URL,
-    "alphabet": ALPHABET_COMPANY_URL,
-}
-
-KEYWORD_PROBE_QUERY_ALIASES: dict[str, list[str]] = {
-    "multimodal": ["Multimodal", "Multimodality"],
-    "multimodality": ["Multimodal", "Multimodality"],
-    "visionlanguage": ["Vision-language"],
-    "videogeneration": ["Video generation"],
-}
-KEYWORD_PROBE_SKIP_TOKENS = {
-    "research",
-    "researcher",
-    "engineering",
-    "engineer",
-}
-
 SEARCH_QUERY_CANONICAL_ALIASES: dict[str, str] = {
     "vision language": "Vision-language",
     "vision-language": "Vision-language",
@@ -56,11 +30,9 @@ SEARCH_QUERY_CANONICAL_ALIASES: dict[str, str] = {
     "nano-banana": "Nano Banana",
 }
 
-# Registry-derived function-id sets (never hand-maintained duplicates of
-# ROLE_BUCKET_KNOWLEDGE): engineering/founding/product_management/research and
-# the technical (engineering+research) subset.
-LARGE_ORG_PRIORITY_FUNCTION_IDS = default_large_org_priority_function_ids()
-LARGE_ORG_TECHNICAL_FUNCTION_IDS = role_bucket_function_ids(("engineering", "research"))
+# Registry-derived function-id set (never a hand-maintained duplicate of
+# ROLE_BUCKET_KNOWLEDGE): the engineering+research technical subset.
+TECHNICAL_ROSTER_FUNCTION_IDS = role_bucket_function_ids(("engineering", "research"))
 
 # The company-employees roster lane's default location scope.  Every roster
 # query plan (adaptive partition, keyword probe, or request-scoped function
@@ -242,95 +214,47 @@ def resolve_segmented_roster_completion(
     }
 
 
-def _generic_large_org_technical_partition_policy(
+# Planning modes whose role buckets are AI-authored.  Mirrors the planner's
+# model-written modes; defined here so the roster-lane resolver stays the
+# single owner of function-selection authority.
+MODEL_WRITTEN_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
+
+
+def resolve_roster_lane_function_ids(
+    request_payload: dict[str, Any] | None,
     *,
-    scope_note: str = "",
-    locations: list[str] | None = None,
-    exclude_locations: list[str] | None = None,
-) -> dict[str, Any]:
-    effective_locations = (
-        list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS) if locations is None else list(locations or [])
-    )
-    root_filters: dict[str, Any] = {}
-    if effective_locations:
-        root_filters["locations"] = list(effective_locations)
-    if exclude_locations:
-        root_filters["exclude_locations"] = list(exclude_locations)
-    root_filters["function_ids"] = list(LARGE_ORG_TECHNICAL_FUNCTION_IDS)
-    location_title = ", ".join(effective_locations) if effective_locations else "All locations"
-    return {
-        "strategy_id": "adaptive_us_technical_partition",
-        "scope_note": scope_note
-        or (
-            f"Probe-driven {location_title} technical roster partition. Start from engineering+research, "
-            "split engineering and research explicitly, and keep capped shard metadata when a live shard still exceeds the provider cap."
-        ),
-        "root_title": location_title,
-        "root_filters": root_filters,
-        "allow_overflow_partial": True,
-        "partition_rules": [
-            {
-                "rule_id": "engineering",
-                "title": "Engineering",
-                "include_patch": {"function_ids": ["8"]},
-                "remainder_exclude_patch": {"exclude_function_ids": ["8"]},
-            },
-            {
-                "rule_id": "research",
-                "title": "Research",
-                "include_patch": {"function_ids": ["24"]},
-                "remainder_exclude_patch": {"exclude_function_ids": ["24"]},
-            },
-        ],
-    }
+    resolved_role_buckets: Iterable[str] = (),
+    planning_mode: str = "",
+) -> list[str]:
+    """Single owner for the roster lane's paid function selection.
 
-ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES: dict[str, dict[str, Any]] = {}
+    Authority order (highest first):
 
-
-def _should_use_generic_large_org_partition(
-    company_key: str,
-    organization_execution_profile: dict[str, Any] | None = None,
-) -> bool:
-    normalized_company_key = str(company_key or "").strip().lower()
-    normalized_profile = dict(organization_execution_profile or {})
-    scale_band = str(normalized_profile.get("org_scale_band") or "").strip().lower()
-    default_mode = str(normalized_profile.get("default_acquisition_mode") or "").strip().lower()
-    if scale_band == "large":
-        return True
-    if default_mode == "scoped_search_roster":
-        return True
-    return normalized_company_key in FALLBACK_LARGE_COMPANY_KEYS
-
-
-def _compose_request_roster_policy_axes(
-    base: dict[str, Any],
-    *,
-    locations: list[str] | None,
-    exclude_locations: list[str] | None,
-    request_function_ids: list[str] | None,
-) -> dict[str, Any]:
-    """Compose request-owned location/function axes into an adaptive roster policy.
-
-    ``locations=None`` keeps the policy's own default; an explicit list
-    (including ``[]``) replaces it so a requested region is never silently
-    re-defaulted to the United States.  ``request_function_ids`` marks the
-    explicit function selection the probe planner must expand into separate
-    per-function shard roots BEFORE any keyword/partition subdivision.
+    1. user-explicit cohort role buckets (``request_scoped_roster_function_ids``);
+    2. AI-authored role buckets, only in a model-written planning mode
+       (``resolved_role_buckets`` — the effective request's buckets, which the
+       planning model wrote).  Heuristic-mode request fields NEVER count:
+       request normalization materializes role buckets from free text at
+       ``JobRequest.from_payload`` time, making them indistinguishable from
+       operator-supplied values — and a text match once silently narrowed a
+       paid roster query to functionIds ["19"] because "DeepMind" embeds the
+       alias "pm" (GDM incident, operator directive 2026-07-20);
+    3. the technical default (engineering + research) — the operator-directed
+       default for lab member rosters.
     """
 
-    root_filters = dict(base.get("root_filters") or {})
-    if locations is not None:
-        if locations:
-            root_filters["locations"] = list(locations)
-        else:
-            root_filters.pop("locations", None)
-        base["root_title"] = ", ".join(locations) if locations else "All locations"
-    if exclude_locations:
-        root_filters["exclude_locations"] = list(exclude_locations)
-    base["root_filters"] = root_filters
-    if request_function_ids:
-        base["request_function_ids"] = list(request_function_ids)
-    return base
+    explicit = request_scoped_roster_function_ids(request_payload)
+    if explicit:
+        return explicit
+    payload = dict(request_payload or {})
+    mode = str(planning_mode or payload.get("planning_mode") or "").strip().lower()
+    if mode in MODEL_WRITTEN_PLANNING_MODES:
+        structured = role_bucket_function_ids(
+            list(resolved_role_buckets or payload.get("must_have_primary_role_buckets") or [])
+        )
+        if structured:
+            return structured
+    return list(TECHNICAL_ROSTER_FUNCTION_IDS)
 
 
 def build_default_company_employee_shard_policy(
@@ -343,84 +267,54 @@ def build_default_company_employee_shard_policy(
     exclude_locations: list[str] | None = None,
     request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    normalized_company_key = str(company_key or "").strip().lower()
-    base = deepcopy(ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES.get(normalized_company_key) or {})
-    if not base and _should_use_generic_large_org_partition(
-        normalized_company_key,
-        organization_execution_profile=organization_execution_profile,
-    ):
-        base = _generic_large_org_technical_partition_policy(
-            locations=locations,
-            exclude_locations=exclude_locations,
-        )
-    if not base:
-        return {}
-    base["max_pages"] = max(1, int(max_pages or 1))
-    base["page_limit"] = max(1, int(page_limit or 25))
-    base["provider_result_cap"] = FULL_COMPANY_EMPLOYEE_RESULT_CAP
-    base["probe_max_pages"] = 1
-    base["probe_page_limit"] = 25
-    base = _compose_request_roster_policy_axes(
-        base,
-        locations=locations,
-        exclude_locations=exclude_locations,
-        request_function_ids=request_function_ids,
-    )
-    return normalize_company_employee_shard_policy(base)
+    """THE roster shard policy — one unified contract for every company.
 
+    There is no large/small-org fork (operator directive 2026-07-20): every
+    company gets the same probe-driven, per-function shard policy.  Each
+    selected function id becomes its own probe root (never one combined
+    multi-function query); a root that still exceeds the provider cap stays a
+    capped shard with explicit overflow metadata (``allow_overflow_partial``)
+    so capped coverage is never reported as complete.
 
-def build_large_org_keyword_probe_shard_policy(
-    company_key: str,
-    *,
-    company_scope: list[str],
-    keyword_hints: list[str],
-    function_ids: list[str] | None = None,
-    max_pages: int,
-    page_limit: int,
-    locations: list[str] | None = None,
-    exclude_locations: list[str] | None = None,
-    request_function_ids: list[str] | None = None,
-) -> dict[str, Any]:
-    normalized_company_key = str(company_key or "").strip().lower()
-    scope_companies = _resolve_large_org_scope_companies(normalized_company_key, company_scope)
-    if not scope_companies:
-        return {}
-    keyword_shards = _build_keyword_probe_shards(keyword_hints)
-    if not keyword_shards:
-        return {}
+    ``locations=None`` defaults to the United States; an explicit list
+    (including ``[]``) is the single-writer request value and is never merged
+    with the default.  ``company_key`` / ``organization_execution_profile``
+    are retained for caller compatibility and no longer alter the policy.
+    """
 
     effective_locations = (
         list(DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS) if locations is None else list(locations or [])
     )
-    location_title = ", ".join(effective_locations) if effective_locations else "All locations"
-    root_filters: dict[str, Any] = {"companies": scope_companies}
+    root_filters: dict[str, Any] = {}
     if effective_locations:
         root_filters["locations"] = list(effective_locations)
     if exclude_locations:
         root_filters["exclude_locations"] = list(exclude_locations)
-    root_filters["function_ids"] = list(function_ids or LARGE_ORG_PRIORITY_FUNCTION_IDS)
-
-    return normalize_company_employee_shard_policy(
-        {
-            "strategy_id": "adaptive_large_org_keyword_probe",
-            "mode": "keyword_union",
-            "force_keyword_shards": True,
-            "allow_overflow_partial": True,
-            "scope_note": (
-                f"Related-scope keyword probe mode. First probe the broad {location_title} scope, then run keyword shards "
-                "and union+dedupe downstream if the root scope exceeds the provider cap."
-            ),
-            "root_title": location_title,
-            "root_filters": root_filters,
-            "keyword_shards": keyword_shards,
-            "request_function_ids": list(request_function_ids or []),
-            "max_pages": max(1, int(max_pages or 1)),
-            "page_limit": max(1, int(page_limit or 25)),
-            "probe_max_pages": 1,
-            "probe_page_limit": 25,
-            "provider_result_cap": FULL_COMPANY_EMPLOYEE_RESULT_CAP,
-        }
-    )
+    location_title = ", ".join(effective_locations) if effective_locations else "All locations"
+    effective_function_ids = list(
+        dict.fromkeys(str(item).strip() for item in list(request_function_ids or []) if str(item).strip())
+    ) or list(TECHNICAL_ROSTER_FUNCTION_IDS)
+    base = {
+        # Legacy strategy identifier retained so stored baselines, delta
+        # coverage rows, and review display mappings keep matching; the policy
+        # shape itself is the unified per-function contract above.
+        "strategy_id": "adaptive_us_technical_partition",
+        "scope_note": (
+            f"Unified probe-driven {location_title} roster partition. Each selected function id "
+            "is probed and fetched as its own shard root — never one combined multi-function query — "
+            "and capped shard metadata is kept when a live shard still exceeds the provider cap."
+        ),
+        "root_title": location_title,
+        "root_filters": root_filters,
+        "allow_overflow_partial": True,
+        "request_function_ids": effective_function_ids,
+        "max_pages": max(1, int(max_pages or 1)),
+        "page_limit": max(1, int(page_limit or 25)),
+        "probe_max_pages": 1,
+        "probe_page_limit": 25,
+        "provider_result_cap": FULL_COMPANY_EMPLOYEE_RESULT_CAP,
+    }
+    return normalize_company_employee_shard_policy(base)
 
 
 def normalize_company_employee_shard_policy(value: Any) -> dict[str, Any]:
@@ -434,15 +328,18 @@ def normalize_company_employee_shard_policy(value: Any) -> dict[str, Any]:
     mode = str(value.get("mode") or "").strip().lower()
     if mode not in {"partition_mece", "keyword_union"}:
         mode = "partition_mece"
-    if not root_filters:
-        return {}
-    if mode == "partition_mece" and not partition_rules and keyword_shards:
-        mode = "keyword_union"
     request_function_ids = [
         str(item).strip()
         for item in list(value.get("request_function_ids") or [])
         if str(item).strip()
     ]
+    # An explicit per-function selection is itself a valid root scope: each
+    # function id becomes its own probe root, so the policy stays meaningful
+    # even when no location/filter axis is present (e.g. location opt-out).
+    if not root_filters and not request_function_ids:
+        return {}
+    if mode == "partition_mece" and not partition_rules and keyword_shards:
+        mode = "keyword_union"
     normalized = {
         "strategy_id": str(value.get("strategy_id") or "").strip(),
         "mode": mode,
@@ -1273,61 +1170,6 @@ def _normalize_keyword_shard(value: Any) -> dict[str, Any]:
     }
 
 
-def _resolve_large_org_scope_companies(company_key: str, company_scope: list[str]) -> list[str]:
-    resolved: list[str] = []
-    normalized_scope = [str(item or "").strip() for item in company_scope if str(item or "").strip()]
-    for item in [company_key, *normalized_scope]:
-        token = _normalize_keyword_token(item)
-        if not token:
-            continue
-        company_url = LARGE_ORG_SCOPE_COMPANY_URLS.get(token)
-        if company_url and company_url not in resolved:
-            resolved.append(company_url)
-    for item in related_company_scope_urls(company_key, normalized_scope):
-        if item not in resolved:
-            resolved.append(item)
-
-    if company_key in {"google", "alphabet"}:
-        if LARGE_ORG_SCOPE_COMPANY_URLS["google"] not in resolved:
-            resolved.insert(0, LARGE_ORG_SCOPE_COMPANY_URLS["google"])
-    return resolved
-
-
-def _build_keyword_probe_shards(keyword_hints: list[str]) -> list[dict[str, Any]]:
-    shards: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    seen_queries: set[str] = set()
-    for item in keyword_hints:
-        token = _normalize_keyword_token(item)
-        if not token:
-            continue
-        if token in KEYWORD_PROBE_SKIP_TOKENS:
-            continue
-        query_terms = scope_signal_search_query_aliases(str(item or "")) or KEYWORD_PROBE_QUERY_ALIASES.get(token) or [str(item).strip()]
-        search_query = _canonicalize_search_query(" ".join(term for term in query_terms if str(term).strip()).strip())
-        if not search_query:
-            continue
-        query_signature = _search_query_signature(search_query)
-        if query_signature in seen_queries:
-            continue
-        seen_queries.add(query_signature)
-        shard_id = f"kw_{_normalize_shard_id(token)}"
-        if shard_id in seen:
-            continue
-        seen.add(shard_id)
-        shards.append(
-            {
-                "rule_id": shard_id,
-                "title": search_query,
-                "include_patch": {"search_query": search_query},
-            }
-        )
-    return shards
-
-
-def _normalize_keyword_token(value: str) -> str:
-    return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
-
 
 def _canonicalize_search_query(value: str) -> str:
     normalized = " ".join(str(value or "").split()).strip()
@@ -1336,14 +1178,6 @@ def _canonicalize_search_query(value: str) -> str:
     lower_key = normalized.lower()
     return SEARCH_QUERY_CANONICAL_ALIASES.get(lower_key, normalized)
 
-
-def _search_query_signature(value: str) -> str:
-    normalized = " ".join(str(value or "").lower().split()).strip()
-    if not normalized:
-        return ""
-    compact = re.sub(r"[\s\-_]+", "", normalized)
-    alnum = re.sub(r"[^0-9a-z]+", "", compact)
-    return alnum or compact
 
 
 def _normalize_probe_summary(

@@ -569,7 +569,13 @@ class CohortSelectionContractTest(unittest.TestCase):
             "record": "3ec594d3a9d20acd0df1252d3a16e8230110cd1cbfdd6aaa348cf4ab4d8e76df",
             "effective": "af5ad8c1f45c9a0606444172bd425554d7d2a2e18990589a5b315ef57e9a3e76",
             "matching": "f612b022f2935f8e6eaf4f8c7aa78838b01060ae6b8172a947ac7e86cf1f4eef",
-            "strategy": "68106cecfaa0660a9b7228fd2293d5d01691fbfd336d8864cabcbd2313b6bd99",
+            # Updated 2026-07-20 (operator directive): the strategy payload
+            # legitimately changed — cost_policy no longer carries the retired
+            # org-size/keyword-probe knobs (large_org_keyword_probe_mode,
+            # keyword_priority_only, large_org_member_threshold) and
+            # filter_hints no longer receives size-based function defaults.
+            # record/effective/matching remain byte-identical to e04faf8.
+            "strategy": "4a6f8c418362a536202c50a79f9db9e2f0a8198d42e7084db9e12dbc2a0dcbe4",
         }
 
         self.assertEqual(

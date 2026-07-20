@@ -46,15 +46,17 @@ class SearchPlanningTest(unittest.TestCase):
 
     def test_scoped_search_plan_keeps_paid_people_search_as_fallback(self) -> None:
         request = JobRequest(
-            raw_user_request="给我 Gemini Team 的 Post-train 方向 Researcher",
-            query="Gemini post-train researcher",
-            target_company="Google",
+            raw_user_request="给我 OpenAI 的 Post-train 方向 Researcher",
+            query="OpenAI post-train researcher",
+            target_company="OpenAI",
+            keywords=["Post-train"],
         )
         retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
         strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
         publication = compile_publication_coverage_plan(request, strategy)
         search_plan = compile_search_strategy(request, strategy, publication, DeterministicModelClient())
 
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
         fallback_bundle = next(item for item in search_plan.query_bundles if item.bundle_id == "targeted_people_search")
         self.assertEqual(fallback_bundle.execution_mode, "paid_fallback")
         self.assertTrue(

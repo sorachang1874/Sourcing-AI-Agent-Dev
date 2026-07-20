@@ -347,7 +347,7 @@ class PlanningModulesTest(unittest.TestCase):
                         "confirmed_company_scope": ["Google", "Google DeepMind"],
                     },
                     "acquisition_lane_policy": {
-                        "keyword_priority_only": True,
+                        "use_company_employees_lane": True,
                     },
                     "fallback_policy": {
                         "provider_people_search_query_strategy": "all_queries_union",
@@ -369,7 +369,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(intent_view["employment_statuses"], ["current", "former"])
         self.assertEqual(intent_view["organization_keywords"], ["Google DeepMind", "Gemini"])
         self.assertEqual(intent_view["must_have_primary_role_buckets"], ["product_management"])
-        self.assertTrue(intent_view["execution_preferences"]["keyword_priority_only"])
+        self.assertTrue(intent_view["execution_preferences"]["use_company_employees_lane"])
         self.assertTrue(intent_view["execution_preferences"]["run_former_search_seed"])
         self.assertTrue(intent_view["execution_preferences"]["allow_stage1_web_seed_fallback"])
         self.assertEqual(
@@ -395,7 +395,7 @@ class PlanningModulesTest(unittest.TestCase):
                         "organization_keywords": ["Google DeepMind", "Gemini"],
                     },
                     "acquisition_lane_policy": {
-                        "keyword_priority_only": True,
+                        "use_company_employees_lane": True,
                     },
                     "fallback_policy": {
                         "provider_people_search_query_strategy": "all_queries_union",
@@ -412,7 +412,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(request.employment_statuses, ["current", "former"])
         self.assertEqual(request.must_have_primary_role_buckets, ["product_management"])
         self.assertEqual(request.organization_keywords, ["Google DeepMind", "Gemini"])
-        self.assertTrue(request.execution_preferences["keyword_priority_only"])
+        self.assertTrue(request.execution_preferences["use_company_employees_lane"])
         self.assertEqual(
             request.execution_preferences["provider_people_search_query_strategy"],
             "all_queries_union",
@@ -470,7 +470,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(updated_plan["acquisition_strategy"]["company_scope"][0], "LangChain")
         self.assertEqual(updated_plan["acquisition_strategy"]["filter_hints"]["current_companies"][0], "LangChain")
 
-    def test_plan_review_decision_applies_keyword_first_lane_preferences(self) -> None:
+    def test_plan_review_decision_applies_lane_and_fallback_preferences(self) -> None:
         request_payload = {
             "raw_user_request": "给我 Google 做多模态的人",
             "target_company": "Google",
@@ -494,7 +494,6 @@ class PlanningModulesTest(unittest.TestCase):
             request_payload,
             plan_payload,
             {
-                "keyword_priority_only": True,
                 "use_company_employees_lane": False,
                 "run_former_search_seed": True,
                 "provider_people_search_query_strategy": "all_queries_union",
@@ -506,11 +505,9 @@ class PlanningModulesTest(unittest.TestCase):
 
         prefs = updated_request["execution_preferences"]
         cost_policy = updated_plan["acquisition_strategy"]["cost_policy"]
-        self.assertTrue(prefs["keyword_priority_only"])
         self.assertFalse(prefs["use_company_employees_lane"])
         self.assertTrue(prefs["run_former_search_seed"])
         self.assertEqual(prefs["provider_people_search_query_strategy"], "all_queries_union")
-        self.assertEqual(cost_policy["keyword_priority_only"], True)
         self.assertEqual(cost_policy["allow_company_employee_api"], False)
         self.assertEqual(cost_policy["provider_people_search_query_strategy"], "all_queries_union")
         self.assertEqual(cost_policy["provider_people_search_max_queries"], 6)
@@ -876,9 +873,14 @@ class PlanningModulesTest(unittest.TestCase):
             ["harvest_company_employees", "harvest_profile_search", "profile_detail_api"],
         )
         self.assertEqual(strategy.roster_sources, ["harvest_company_employees", "company_directory_pages", "the_org"])
-        self.assertEqual(strategy.filter_hints.get("function_ids"), ["8", "9", "19", "24"])
+        # Text-inferred directional functions still annotate filter_hints for
+        # the scoped/profile-search lanes; the roster lane's function coverage
+        # is owned by the per-function shard contract, and there is no
+        # large-org priority-list merging (operator directive 2026-07-20).
+        self.assertEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
         self.assertNotIn("job_titles", strategy.filter_hints)
-        self.assertTrue(any("Gemini" in query for query in strategy.search_seed_queries))
+        # The unified full-roster lane never emits generic stage-1 seed text.
+        self.assertEqual(strategy.search_seed_queries, [])
         self.assertTrue(strategy.cost_policy.get("allow_company_employee_api"))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_mode"), "fallback_only")
         self.assertFalse(strategy.cost_policy.get("collect_email"))
@@ -1191,7 +1193,10 @@ class PlanningModulesTest(unittest.TestCase):
         )
         self.assertEqual(strategy.filter_hints.get("function_ids"), ["19"])
         self.assertIn("Gemini", strategy.filter_hints.get("keywords") or [])
-        self.assertTrue(any("Google" in query for query in strategy.search_seed_queries))
+        # Unified roster contract: the full-roster lane never emits generic
+        # stage-1 seed text (updated 2026-07-20 — the old expectation assumed
+        # keyword-probe seed queries, a retired lane shape).
+        self.assertEqual(strategy.search_seed_queries, [])
 
     def test_publication_and_search_planning_use_intent_view_scope_and_keywords(self) -> None:
         request = JobRequest.from_payload(
@@ -1687,7 +1692,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(gate["scope_disambiguation"]["source"], "llm")
         self.assertFalse(gate["scope_disambiguation"]["requires_confirmation"])
 
-    def test_plan_review_gate_exposes_keyword_first_controls(self) -> None:
+    def test_plan_review_gate_exposes_lane_controls(self) -> None:
         request = JobRequest(
             raw_user_request="给我 Google 做多模态的人",
             query="Google multimodal people",
@@ -1698,11 +1703,15 @@ class PlanningModulesTest(unittest.TestCase):
         plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
         gate = build_plan_review_gate(request, plan)
 
-        self.assertIn("keyword_priority_only", gate["editable_fields"])
+        self.assertIn("use_company_employees_lane", gate["editable_fields"])
         self.assertIn("former_keyword_queries_only", gate["editable_fields"])
         self.assertIn("provider_people_search_query_strategy", gate["editable_fields"])
         self.assertIn("provider_people_search_max_queries", gate["editable_fields"])
-        self.assertIn("large_org_keyword_probe_mode", gate["editable_fields"])
+        # Retired org-size/keyword-probe knobs (operator directive 2026-07-20):
+        # the roster lane has one unified per-function method, so there is
+        # nothing size- or keyword-probe-specific left to edit.
+        self.assertNotIn("keyword_priority_only", gate["editable_fields"])
+        self.assertNotIn("large_org_keyword_probe_mode", gate["editable_fields"])
 
     def test_full_company_preferences_surface_in_plan_without_extra_review(self) -> None:
         request = JobRequest.from_payload(
@@ -1772,15 +1781,19 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
         self.assertEqual(
             acquire_task.metadata["company_employee_shard_policy"]["root_filters"],
-            {"locations": ["United States"], "function_ids": ["8", "24"]},
+            {"locations": ["United States"]},
         )
         self.assertEqual(
-            acquire_task.metadata["company_employee_shard_policy"]["partition_rules"][0]["include_patch"]["exclude_function_ids"],
-            ["24"],
+            acquire_task.metadata["company_employee_shard_policy"]["request_function_ids"],
+            ["8", "24"],
         )
+        self.assertEqual(acquire_task.metadata["company_employee_shard_policy"]["partition_rules"], [])
         self.assertTrue(acquire_task.metadata["include_former_search_seed"])
 
-    def test_small_org_full_company_roster_does_not_force_us_location_on_former_seed(self) -> None:
+    def test_unified_full_company_roster_defaults_us_location_on_former_seed(self) -> None:
+        # Unified roster contract (operator directive 2026-07-20): location is
+        # a uniform request axis — every full roster defaults to the United
+        # States regardless of org size unless the request opts out.
         request = JobRequest.from_payload(
             {
                 "raw_user_request": "帮我找 MiroMind.ai 的全部成员",
@@ -1793,8 +1806,8 @@ class PlanningModulesTest(unittest.TestCase):
         former_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_former_search_seed")
 
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
-        self.assertNotIn("locations", plan.acquisition_strategy.filter_hints)
-        self.assertNotIn("locations", former_task.metadata["filter_hints"])
+        self.assertEqual(plan.acquisition_strategy.filter_hints.get("locations"), ["United States"])
+        self.assertEqual(former_task.metadata["filter_hints"].get("locations"), ["United States"])
 
     def test_small_org_full_company_roster_does_not_emit_generic_stage1_seed_queries(self) -> None:
         request = JobRequest.from_payload(
@@ -1893,17 +1906,19 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertTrue(acquire_task.metadata["include_former_search_seed"])
         self.assertEqual(
             shard_policy.get("root_filters"),
-            {"locations": ["United States"], "function_ids": ["8", "24"]},
+            {"locations": ["United States"]},
         )
-        self.assertEqual(
-            plan.acquisition_strategy.filter_hints.get("function_ids"),
-            ["8", "24"],
+        self.assertEqual(shard_policy.get("request_function_ids"), ["8", "24"])
+        self.assertEqual(shard_policy.get("partition_rules"), [])
+        # filter_hints stays free of paid function filters: roster function
+        # coverage is owned by the shard policy's request_function_ids, and
+        # profile-search fallback lanes stay broad (operator directive
+        # 2026-07-20 — no org-size-based defaulting).
+        self.assertNotIn(
+            "function_ids",
+            plan.acquisition_strategy.filter_hints,
         )
         self.assertTrue(shard_policy.get("allow_overflow_partial"))
-        self.assertEqual(
-            [item.get("include_patch", {}).get("exclude_function_ids") for item in list(shard_policy.get("partition_rules") or [])],
-            [["24"], ["8"]],
-        )
 
     def test_scoped_search_roster_with_current_and_former_adds_former_seed_task(self) -> None:
         request = JobRequest.from_payload(
@@ -1944,7 +1959,11 @@ class PlanningModulesTest(unittest.TestCase):
         )
         self.assertTrue(all(lane.get("provider_facing_query") for lane in manifest_lanes))
 
-    def test_google_full_roster_enables_large_org_keyword_probe_mode(self) -> None:
+    def test_google_full_roster_uses_unified_per_function_shard_contract(self) -> None:
+        # Unified roster contract (operator directive 2026-07-20): even a
+        # Google-scope keyword-heavy request runs the SAME per-function shard
+        # policy as every other company — no keyword-probe mode, no org-size
+        # forks, no priority function lists.
         request = JobRequest.from_payload(
             {
                 "raw_user_request": "给我 Google 负责多模态和 Veo 的研究员，全量跑 roster。",
@@ -1962,43 +1981,30 @@ class PlanningModulesTest(unittest.TestCase):
         shard_policy = dict(acquire_task.metadata.get("company_employee_shard_policy") or {})
 
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
-        self.assertTrue(plan.acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode"))
-        self.assertTrue(plan.acquisition_strategy.cost_policy.get("keyword_priority_only"))
-        self.assertTrue(plan.acquisition_strategy.cost_policy.get("former_keyword_queries_only"))
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_large_org_keyword_probe")
-        self.assertEqual(shard_policy.get("mode"), "keyword_union")
-        self.assertTrue(shard_policy.get("force_keyword_shards"))
-        self.assertEqual(
-            shard_policy.get("root_filters", {}).get("companies"),
-            [
-                "https://www.linkedin.com/company/google/",
-                "https://www.linkedin.com/company/deepmind/",
-            ],
-        )
-        self.assertEqual(
-            shard_policy.get("root_filters", {}).get("function_ids"),
-            ["8", "9", "19", "24"],
-        )
+        self.assertNotIn("large_org_keyword_probe_mode", plan.acquisition_strategy.cost_policy)
+        self.assertFalse(plan.acquisition_strategy.cost_policy.get("keyword_priority_only"))
+        self.assertFalse(plan.acquisition_strategy.cost_policy.get("former_keyword_queries_only"))
+        self.assertTrue(plan.acquisition_strategy.cost_policy.get("former_broad_past_company_only"))
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertEqual(shard_policy.get("request_function_ids"), ["8", "24"])
+        self.assertEqual(shard_policy.get("keyword_shards"), [])
+        self.assertEqual(shard_policy.get("partition_rules"), [])
+        self.assertNotIn("function_ids", shard_policy.get("root_filters", {}))
+        self.assertEqual(shard_policy.get("root_filters", {}).get("locations"), ["United States"])
         self.assertEqual(
             plan.acquisition_strategy.filter_hints.get("locations"),
             ["United States"],
         )
-        self.assertEqual(
-            plan.acquisition_strategy.filter_hints.get("function_ids"),
-            ["8", "9", "19", "24"],
-        )
-        self.assertTrue(
-            any("Multimodal" in item["include_patch"]["search_query"] for item in list(shard_policy.get("keyword_shards") or []))
-        )
-        self.assertTrue(any("Nano Banana" in query for query in acquire_task.metadata.get("search_seed_queries", [])))
-        self.assertFalse(any("Researcher" in query for query in acquire_task.metadata.get("search_seed_queries", [])))
+        # The unified full-roster lane never emits generic stage-1 seed text.
+        self.assertEqual(acquire_task.metadata.get("search_seed_queries"), [])
         manifest_lanes = list(dict(plan.acquisition_strategy.provider_execution_manifest or {}).get("lanes") or [])
         current_lane = next(lane for lane in manifest_lanes if lane.get("lane_id") == "current_company_employees")
         self.assertEqual(current_lane.get("provider"), "harvest_company_employees")
-        self.assertTrue(current_lane.get("provider_facing_query"))
-        self.assertTrue(any("Nano Banana" in query for query in list(current_lane.get("query_texts") or [])))
+        self.assertEqual(current_lane.get("reason"), "adaptive_shard_probe_pending")
+        self.assertEqual(current_lane.get("request_function_ids"), ["8", "24"])
+        self.assertFalse(current_lane.get("provider_facing_query"))
 
-    def test_plan_review_sync_keeps_large_org_keyword_shard_policy(self) -> None:
+    def test_plan_review_sync_keeps_unified_shard_policy(self) -> None:
         request_payload = {
             "raw_user_request": "给我 Google 多模态研究员",
             "target_company": "Google",
@@ -2015,11 +2021,8 @@ class PlanningModulesTest(unittest.TestCase):
                 "filter_hints": {
                     "keywords": ["multimodal", "Veo", "Nano Banana"],
                     "locations": ["United States"],
-                    "function_ids": ["8", "9", "19", "24"],
                 },
-                "cost_policy": {
-                    "large_org_keyword_probe_mode": True,
-                },
+                "cost_policy": {},
                 "search_channel_order": ["provider_people_search_api"],
                 "search_seed_queries": ["Google multimodal researcher"],
             },
@@ -2037,13 +2040,11 @@ class PlanningModulesTest(unittest.TestCase):
         acquire_task = updated_plan["acquisition_tasks"][0]
         shard_policy = dict(acquire_task["metadata"].get("company_employee_shard_policy") or {})
 
-        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "adaptive_large_org_keyword_probe")
-        self.assertEqual(shard_policy.get("mode"), "keyword_union")
-        self.assertTrue(shard_policy.get("force_keyword_shards"))
-        self.assertEqual(
-            shard_policy.get("root_filters", {}).get("function_ids"),
-            ["8", "9", "19", "24"],
-        )
+        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertEqual(shard_policy.get("request_function_ids"), ["8", "24"])
+        self.assertEqual(shard_policy.get("keyword_shards"), [])
+        self.assertNotIn("function_ids", shard_policy.get("root_filters", {}))
+        self.assertEqual(shard_policy.get("root_filters", {}).get("locations"), ["United States"])
 
     def test_open_questions_require_confirmation_for_ambiguous_new_terms(self) -> None:
         request = JobRequest.from_payload(

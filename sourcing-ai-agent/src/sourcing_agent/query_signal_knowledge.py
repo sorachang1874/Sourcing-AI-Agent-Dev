@@ -801,7 +801,14 @@ def _alias_matches_text(
         return True
     if compact_alias and len(compact_alias) >= 4 and compact_alias in compact_text:
         return True
-    return normalized_alias in normalized_text
+    # Raw substring fallback is only safe for non-ASCII aliases (CJK phrases
+    # embed legitimately) or aliases long enough that accidental embedding is
+    # unlikely.  Short ASCII aliases (e.g. "pm") must match as standalone
+    # tokens via the boundary rule above — otherwise "DeepMind" false-matches
+    # product_management via the embedded "pm".
+    if not normalized_alias.isascii() or len(normalized_alias) >= 4:
+        return normalized_alias in normalized_text
+    return False
 
 
 def _dedupe_strings(values: Iterable[str]) -> list[str]:

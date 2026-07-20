@@ -1189,9 +1189,11 @@ class ModelProviderTest(unittest.TestCase):
         )
         system_prompt = str(captured.get("system_prompt") or "")
         self.assertIn("four orthogonal dimensions", system_prompt)
-        self.assertIn("keyword_priority_only", system_prompt)
+        self.assertNotIn("keyword_priority_only", system_prompt)
+        self.assertNotIn("large_org_keyword_probe_mode", system_prompt)
         self.assertIn("provider_people_search_query_strategy", system_prompt)
         self.assertIn("acquisition_strategy_override is only the base roster strategy axis", system_prompt)
+        self.assertIn("per-function shard queries", system_prompt)
         self.assertIn("prefer categories=['researcher','engineer']", system_prompt)
         multimodal = next(
             item
@@ -1239,9 +1241,8 @@ class ModelProviderTest(unittest.TestCase):
         client = _Client(QwenSettings(enabled=True, api_key="sk-qwen"))
         client.normalize_review_instruction(
             {
-                "instruction": "只用 search API 做 keyword-first acquisition，不要 company-employees，former 也要，多 query 并集。",
+                "instruction": "只用 search API 做 acquisition，不要 company-employees，former 也要，多 query 并集。",
                 "editable_fields": [
-                    "keyword_priority_only",
                     "use_company_employees_lane",
                     "run_former_search_seed",
                     "provider_people_search_query_strategy",
@@ -1251,7 +1252,8 @@ class ModelProviderTest(unittest.TestCase):
 
         system_prompt = str(captured.get("system_prompt") or "")
         self.assertIn("four orthogonal control axes", system_prompt)
-        self.assertIn("keyword_priority_only", system_prompt)
+        self.assertNotIn("keyword_priority_only", system_prompt)
+        self.assertNotIn("large_org_keyword_probe_mode", system_prompt)
         self.assertIn("use_company_employees_lane=false", system_prompt)
         self.assertIn("provider_people_search_query_strategy=all_queries_union", system_prompt)
 

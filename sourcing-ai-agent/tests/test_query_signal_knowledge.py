@@ -45,6 +45,23 @@ class QuerySignalKnowledgeTest(unittest.TestCase):
         self.assertEqual(role_bucket_matched_terms("Applied Scientist", "research"), ["applied scientist"])
         self.assertEqual(default_large_org_priority_function_ids(), ["8", "9", "19", "24"])
 
+    def test_short_ascii_role_alias_never_matches_inside_a_company_name(self) -> None:
+        # Regression (GDM live incident 2026-07-20): "DeepMind" embeds the
+        # product_management alias "pm"; a raw substring fallback silently
+        # inferred functionIds ["19"] into paid provider queries.  Short ASCII
+        # aliases must match as standalone tokens only.
+        self.assertEqual(
+            role_buckets_from_text("获取 Google DeepMind 全部成员（美国地区，current+former）"),
+            [],
+        )
+        self.assertEqual(
+            role_buckets_from_text("Google DeepMind members in the United States (current and former)"),
+            [],
+        )
+        # The standalone token still matches.
+        self.assertEqual(role_buckets_from_text("looking for a PM"), ["product_management"])
+        self.assertEqual(role_buckets_from_text("PM hiring plan"), ["product_management"])
+
     def test_thematic_signal_knowledge_matches_common_ai_directions(self) -> None:
         matches = match_thematic_signals("给我Anthropic做Coding、Math、Audio、Vision和Text方向的人")
         self.assertEqual(

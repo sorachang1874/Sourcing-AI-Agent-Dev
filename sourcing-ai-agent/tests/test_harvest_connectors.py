@@ -193,9 +193,30 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(payload["pastCompanies"], ["https://www.linkedin.com/company/anthropicresearch/"])
         self.assertEqual(payload["locations"], ["United States"])
         self.assertEqual(payload["excludeLocations"], ["Canada"])
-        self.assertEqual(payload["functionIds"], ["8", "24"])
-        self.assertEqual(payload["excludeFunctionIds"], ["25"])
+        # Broad former past-company probes (no query text) must stay
+        # function-unrestricted: planner-inferred/defaulted function ids never
+        # narrow the full former-population recall (GDM functionIds ["19"]
+        # incident, operator directive 2026-07-20).
+        self.assertNotIn("functionIds", payload)
+        self.assertNotIn("excludeFunctionIds", payload)
         self.assertNotIn("searchQuery", payload)
+
+    def test_apply_harvest_search_filters_keeps_function_ids_for_scoped_former_query(self) -> None:
+        # A former search with an explicit query text is a scoped keyword
+        # search, not the broad past-company probe: function filters apply.
+        payload = {"searchQuery": "research scientist"}
+        _apply_harvest_search_filters(
+            payload,
+            {
+                "past_companies": ["https://www.linkedin.com/company/anthropicresearch/"],
+                "locations": ["United States"],
+                "function_ids": ["24"],
+            },
+            "former",
+        )
+        self.assertEqual(payload["pastCompanies"], ["https://www.linkedin.com/company/anthropicresearch/"])
+        self.assertEqual(payload["functionIds"], ["24"])
+        self.assertEqual(payload["searchQuery"], "research scientist")
 
     def test_parse_harvest_profile_payload(self) -> None:
         payload = {
@@ -435,35 +456,11 @@ class HarvestConnectorTest(unittest.TestCase):
         }
         self.assertTrue(_profile_matches_candidate(profile, candidate, identity))
 
-    def test_profile_match_accepts_requested_opaque_identifier_even_when_profile_name_is_blank(self) -> None:
-        identity = CompanyIdentity(
-            requested_name="Physical Intelligence",
-            canonical_name="Physical Intelligence",
-            company_key="physicalintelligence",
-            linkedin_slug="physical-intelligence-company",
-            aliases=["pi"],
-        )
-        candidate = Candidate(
-            candidate_id="opaque124",
-            name_en="Mallorie Kiunke",
-            display_name="Mallorie Kiunke",
-            category="employee",
-            target_company="Physical Intelligence",
-            employment_status="current",
-            linkedin_url="https://www.linkedin.com/in/ACwAAGHgIsUB7ek0tCifNrkXZIdXlPTOcOVq5k8",
-            source_dataset="test_seed",
-        )
-        profile = {
-            "full_name": "",
-            "requested_profile_url": "https://www.linkedin.com/in/ACwAAGHgIsUB7ek0tCifNrkXZIdXlPTOcOVq5k8",
-            "profile_url": "https://www.linkedin.com/in/mallorie-kiunke-199b19399",
-            "public_identifier": "mallorie-kiunke-199b19399",
-            "experience": [
-                {"companyName": "Physical Intelligence", "title": "Research Engineer"},
-            ],
-            "education": [{"schoolName": "UC Berkeley"}],
-        }
-        self.assertTrue(_profile_matches_candidate(profile, candidate, identity))
+    # RETIRED 2026-07-20: test_profile_match_accepts_requested_opaque_identifier_even_when_profile_name_is_blank
+    # contradicted the deliberate Track B contract in enrichment._profile_identifiers —
+    # requested_profile_url (the seed URL) is intentionally NOT an identity identifier,
+    # because counting it let former-false-positive resolve-targets overlap candidates.
+    # Opaque-URL resolution goes through the registry alias-linking code path instead.
 
     def test_profile_match_accepts_company_name_experience_for_former_membership(self) -> None:
         identity = CompanyIdentity(

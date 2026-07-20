@@ -65,18 +65,21 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
         self.assertTrue(decision["reuse_existing_roster"])
         self.assertTrue(decision["run_former_search_seed"])
 
-    def test_parse_instruction_supports_keyword_first_without_company_employees(self) -> None:
+    def test_parse_instruction_supports_search_only_lane_without_company_employees(self) -> None:
         decision = parse_review_instruction(
-            "只用 search API 做 keyword-first acquisition，不要 company-employees，former 也要，多 query 并集。",
+            "只用 search API 做 acquisition，不要 company-employees，former 也要，多 query 并集。",
             target_company="Google",
         )
 
         self.assertEqual(decision["acquisition_strategy_override"], "scoped_search_roster")
-        self.assertTrue(decision["keyword_priority_only"])
         self.assertFalse(decision["use_company_employees_lane"])
         self.assertTrue(decision["run_former_search_seed"])
         self.assertEqual(decision["provider_people_search_query_strategy"], "all_queries_union")
         self.assertNotIn("reuse_existing_roster", decision)
+        # Retired org-size/keyword-probe knobs never re-enter a decision
+        # (operator directive 2026-07-20).
+        self.assertNotIn("keyword_priority_only", decision)
+        self.assertNotIn("large_org_keyword_probe_mode", decision)
 
     def test_parse_instruction_supports_explicit_scoped_search_roster(self) -> None:
         decision = parse_review_instruction(
@@ -125,41 +128,35 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
             },
         )
 
-    def test_normalize_review_decision_accepts_keyword_first_lane_controls(self) -> None:
+    def test_normalize_review_decision_accepts_lane_controls(self) -> None:
         decision = normalize_review_decision(
             {
                 "decision": {
-                    "keyword_priority_only": "true",
                     "use_company_employees_lane": "false",
                     "provider_people_search_query_strategy": "union",
                     "provider_people_search_max_queries": "6",
                     "provider_people_search_pages": "95",
                     "provider_people_search_scale_chunk_pages": "4",
-                    "large_org_keyword_probe_mode": "yes",
                 }
             },
             target_company="Google",
             allowed_fields={
-                "keyword_priority_only",
                 "use_company_employees_lane",
                 "provider_people_search_query_strategy",
                 "provider_people_search_max_queries",
                 "provider_people_search_pages",
                 "provider_people_search_scale_chunk_pages",
-                "large_org_keyword_probe_mode",
             },
         )
 
         self.assertEqual(
             decision,
             {
-                "keyword_priority_only": True,
                 "use_company_employees_lane": False,
                 "provider_people_search_query_strategy": "all_queries_union",
                 "provider_people_search_max_queries": 6,
                 "provider_people_search_pages": 95,
                 "provider_people_search_scale_chunk_pages": 4,
-                "large_org_keyword_probe_mode": True,
             },
         )
 
@@ -290,16 +287,15 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
         self.assertTrue(decision["reuse_existing_roster"])
         self.assertTrue(decision["run_former_search_seed"])
 
-    def test_compile_review_payload_preserves_keyword_first_axes(self) -> None:
+    def test_compile_review_payload_preserves_lane_axes(self) -> None:
         compiled = compile_review_payload_from_instruction(
             review_id=13,
-            instruction="只用 search API 做 keyword-first acquisition，不要 company-employees，former 也要，多 query 并集。",
+            instruction="只用 search API 做 acquisition，不要 company-employees，former 也要，多 query 并集。",
             reviewer="tester",
             target_company="Google",
             gate_payload={
                 "editable_fields": [
                     "acquisition_strategy_override",
-                    "keyword_priority_only",
                     "use_company_employees_lane",
                     "run_former_search_seed",
                     "provider_people_search_query_strategy",
@@ -309,10 +305,11 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
 
         decision = compiled["review_payload"]["decision"]
         self.assertEqual(decision["acquisition_strategy_override"], "scoped_search_roster")
-        self.assertTrue(decision["keyword_priority_only"])
         self.assertFalse(decision["use_company_employees_lane"])
         self.assertTrue(decision["run_former_search_seed"])
         self.assertEqual(decision["provider_people_search_query_strategy"], "all_queries_union")
+        self.assertNotIn("keyword_priority_only", decision)
+        self.assertNotIn("large_org_keyword_probe_mode", decision)
 
     def test_compile_review_payload_falls_back_when_model_raises(self) -> None:
         compiled = compile_review_payload_from_instruction(

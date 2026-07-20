@@ -8,11 +8,10 @@ from .cohort_provider_compiler import CohortProviderCompiler
 from .cohort_selection import explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
-    REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
+    MODEL_WRITTEN_PLANNING_MODES,
     build_default_company_employee_shard_policy,
-    build_large_org_keyword_probe_shard_policy,
     build_request_scoped_company_employee_query_plan,
-    request_scoped_roster_function_ids,
+    resolve_roster_lane_function_ids,
 )
 from .domain import (
     AcquisitionStrategyPlan,
@@ -27,7 +26,6 @@ from .domain import (
     SourcingPlan,
 )
 from .model_provider import DeterministicModelClient, ModelClient
-from .organization_execution_profile import organization_execution_profile_full_roster_max_pages
 from .provider_execution_policy import normalize_former_member_search_contract
 from .publication_planning import compile_publication_coverage_plan
 from .query_intent_rewrite import summarize_query_intent_rewrite
@@ -40,24 +38,10 @@ from .request_normalization import (
 )
 from .search_planning import compile_search_strategy
 
-MODEL_WRITTEN_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
 FULL_COMPANY_EMPLOYEES_PAGE_LIMIT = 25
-FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES = 20
-FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES = 100
-FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS = {
-    "anthropic",
-    "openai",
-    "xai",
-    "meta",
-    "facebook",
-    "google",
-    "alphabet",
-    "microsoft",
-    "amazon",
-    "apple",
-    "bytedance",
-    "tiktok",
-}
+# One unified roster paging budget for every company (no org-size bands);
+# per-function shard roots and the provider result cap bound the paid volume.
+FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES = 100
 
 FULL_PROFILE_PREFETCH_STRATEGY_TYPES = {
     "full_company_roster",
@@ -99,6 +83,16 @@ def build_sourcing_plan(
     search_strategy = compile_search_strategy(
         effective_request, acquisition_strategy, publication_coverage, model_client
     )
+    # Roster function selection is resolved ONCE from the submitted (raw)
+    # request record — the effective request may carry deterministic
+    # text-materialized buckets, which never narrow a paid roster query
+    # (operator directive 2026-07-20).  In model-written planning modes the
+    # effective request's buckets are AI-authored and do count.
+    roster_function_ids = resolve_roster_lane_function_ids(
+        request.to_record(),
+        resolved_role_buckets=list(effective_request.must_have_primary_role_buckets or []),
+        planning_mode=request.planning_mode,
+    )
     acquisition_tasks = _build_acquisition_tasks(
         effective_request,
         categories,
@@ -107,6 +101,7 @@ def build_sourcing_plan(
         publication_coverage,
         search_strategy,
         intent_view=intent_view,
+        roster_function_ids=roster_function_ids,
     )
     legacy_provider_execution_manifest = _build_provider_execution_manifest(
         acquisition_strategy=acquisition_strategy,
@@ -588,6 +583,7 @@ def _build_acquisition_tasks(
     search_strategy: SearchStrategyPlan,
     *,
     intent_view: dict[str, Any] | None = None,
+    roster_function_ids: list[str] | None = None,
 ) -> list[AcquisitionTask]:
     intent_view = dict(intent_view or resolve_request_intent_view(request))
     effective_execution_preferences = dict(intent_view.get("execution_preferences") or {})
@@ -619,12 +615,13 @@ def _build_acquisition_tasks(
     request_roster_plan: dict[str, Any] = {"shards": [], "company_filters": {}, "function_ids": [], "locations": [], "exclude_locations": []}
     if acquisition_strategy.strategy_type == "full_company_roster":
         # Request-scoped roster parameters (location, functionIDs) are one
-        # unified contract for every company — no company-name branches.  The
-        # same plan drives task shards/policies, the provider manifest lanes,
-        # and (at execution) the actual provider calls.
+        # unified contract for every company — no company-name branches, no
+        # org-size forks.  The function selection was resolved once from the
+        # submitted request by ``resolve_roster_lane_function_ids`` (explicit
+        # cohort > operator/AI-authored buckets > technical default).
         request_roster_plan = build_request_scoped_company_employee_query_plan(
             target_locations=request.target_locations,
-            function_ids=request_scoped_roster_function_ids(request.to_record()),
+            function_ids=list(roster_function_ids or []),
             max_pages=roster_max_pages,
             page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
             exclude_target_locations=request.exclude_target_locations,
@@ -639,22 +636,10 @@ def _build_acquisition_tasks(
         exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
         request_function_ids=request_roster_function_ids,
     )
-    request_roster_shards: list[dict[str, Any]] = []
-    if request_roster_function_ids and not company_employee_shard_policy:
-        # Small-company lane (no adaptive policy): concrete per-function shards
-        # run directly.  Large-org/keyword policies carry the same request axes
-        # and expand into per-function shard roots during probe planning.
-        request_roster_shards = list(request_roster_plan.get("shards") or [])
-    company_employee_base_filters = (
-        dict(request_roster_plan.get("company_filters") or {})
-        if acquisition_strategy.strategy_type == "full_company_roster"
-        else {}
-    )
-    if request_roster_shards:
-        company_employee_shard_policy = {}
-        company_employee_shard_strategy = REQUEST_FUNCTION_PARTITION_STRATEGY_ID
-    else:
-        company_employee_shard_strategy = str(company_employee_shard_policy.get("strategy_id") or "").strip()
+    # One lane shape for every company: the unified policy expands into
+    # per-function probe roots during shard planning; there is no separate
+    # small-company unsharded path.
+    company_employee_shard_strategy = str(company_employee_shard_policy.get("strategy_id") or "").strip()
     linkedin_stage_metadata = {
         "acquisition_phase": "linkedin_stage_1",
         "acquisition_phase_title": "LinkedIn Stage 1",
@@ -699,8 +684,8 @@ def _build_acquisition_tasks(
                 "cost_policy": acquisition_strategy.cost_policy,
                 "max_pages": roster_max_pages,
                 "page_limit": FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-                "company_employee_base_filters": company_employee_base_filters,
-                "company_employee_shards": request_roster_shards,
+                "company_employee_base_filters": dict(request_roster_plan.get("company_filters") or {}),
+                "company_employee_shards": [],
                 "company_employee_shard_policy": company_employee_shard_policy,
                 "company_employee_shard_strategy": company_employee_shard_strategy,
                 "include_former_search_seed": include_former_search_seed,
@@ -708,8 +693,8 @@ def _build_acquisition_tasks(
                     task_intent_view,
                     max_pages=roster_max_pages,
                     page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-                    company_employee_base_filters=company_employee_base_filters,
-                    company_employee_shards=request_roster_shards,
+                    company_employee_base_filters=dict(request_roster_plan.get("company_filters") or {}),
+                    company_employee_shards=[],
                     company_employee_shard_policy=company_employee_shard_policy,
                     company_employee_shard_strategy=company_employee_shard_strategy,
                     include_former_search_seed=include_former_search_seed,
@@ -967,7 +952,6 @@ def _build_provider_execution_manifest(
         for key, value in dict(acquisition_strategy.filter_hints or {}).items()
         if str(key).strip()
     }
-    cost_policy = dict(acquisition_strategy.cost_policy or {})
 
     def _add_lane(
         *,
@@ -1014,83 +998,30 @@ def _build_provider_execution_manifest(
     if strategy_type == "full_company_roster":
         acquire_metadata = dict(getattr(acquire_task, "metadata", {}) or {})
         shard_policy = dict(acquire_metadata.get("company_employee_shard_policy") or {})
-        request_roster_shards = [
-            dict(item) for item in list(acquire_metadata.get("company_employee_shards") or []) if isinstance(item, dict)
-        ]
-        roster_base_filters = dict(acquire_metadata.get("company_employee_base_filters") or {})
-        keyword_shards = [
-            str(dict(dict(item or {}).get("include_patch") or {}).get("search_query") or "").strip()
-            for item in list(shard_policy.get("keyword_shards") or [])
-            if str(dict(dict(item or {}).get("include_patch") or {}).get("search_query") or "").strip()
-        ]
         current_companies = list(filter_hints.get("current_companies") or filter_hints.get("companies") or [])
         roster_task_id = str(getattr(acquire_task, "task_id", "") or "")
         roster_max_pages = int(acquire_metadata.get("max_pages") or 0) or None
         roster_page_limit = int(acquire_metadata.get("page_limit") or 0) or None
-        if request_roster_shards:
-            # Manifest lanes mirror the canonical roster query plan one-to-one:
-            # one exact lane per request-function shard (never a combined
-            # multi-function lane), with the same filters and paging limits the
-            # worker will submit.
-            for shard in request_roster_shards:
-                shard_id = str(shard.get("shard_id") or "shard").strip() or "shard"
-                _add_lane(
-                    lane_id=f"current_company_employees::{shard_id}",
-                    employment_status="current",
-                    provider="harvest_company_employees",
-                    operation="company_employees",
-                    company_filters={
-                        "current_companies": current_companies,
-                        **dict(shard.get("company_filters") or {}),
-                    },
-                    display_label=f"Harvest company employees / {str(shard.get('title') or shard_id).strip()}",
-                    reason="request_function_partition",
-                    task_id=roster_task_id,
-                    max_pages=int(shard.get("max_pages") or 0) or roster_max_pages,
-                    page_limit=int(shard.get("page_limit") or 0) or roster_page_limit,
-                )
-        elif shard_policy:
-            # Probe-driven lane: execution subdivides this planned root scope
-            # (per function first when the request explicitly selected
-            # functions); the manifest records the exact planned scope.
-            _add_lane(
-                lane_id="current_company_employees",
-                employment_status="current",
-                provider="harvest_company_employees",
-                operation="company_employees",
-                query_texts=keyword_shards if bool(cost_policy.get("large_org_keyword_probe_mode")) else [],
-                company_filters={
-                    "current_companies": current_companies,
-                    **dict(shard_policy.get("root_filters") or {}),
-                },
-                provider_facing_query=bool(keyword_shards and cost_policy.get("large_org_keyword_probe_mode")),
-                display_label="Harvest company employees",
-                reason=(
-                    "large_org_keyword_probe"
-                    if bool(cost_policy.get("large_org_keyword_probe_mode"))
-                    else "adaptive_shard_probe_pending"
-                ),
-                task_id=roster_task_id,
-                max_pages=roster_max_pages,
-                page_limit=roster_page_limit,
-                request_function_ids=list(shard_policy.get("request_function_ids") or []),
-            )
-        else:
-            _add_lane(
-                lane_id="current_company_employees",
-                employment_status="current",
-                provider="harvest_company_employees",
-                operation="company_employees",
-                company_filters={
-                    "current_companies": current_companies,
-                    **roster_base_filters,
-                },
-                display_label="Harvest company employees",
-                reason="full_company_roster_company_filter",
-                task_id=roster_task_id,
-                max_pages=roster_max_pages,
-                page_limit=roster_page_limit,
-            )
+        # Unified probe-driven lane for every company: execution expands this
+        # planned scope into per-function shard roots (the policy always
+        # carries request_function_ids); the manifest records the exact
+        # planned scope.  No keyword-probe or unsharded small-company lanes.
+        _add_lane(
+            lane_id="current_company_employees",
+            employment_status="current",
+            provider="harvest_company_employees",
+            operation="company_employees",
+            company_filters={
+                "current_companies": current_companies,
+                **dict(shard_policy.get("root_filters") or {}),
+            },
+            display_label="Harvest company employees",
+            reason="adaptive_shard_probe_pending",
+            task_id=roster_task_id,
+            max_pages=roster_max_pages,
+            page_limit=roster_page_limit,
+            request_function_ids=list(shard_policy.get("request_function_ids") or []),
+        )
         if former_task is not None:
             former_keywords = [
                 str(item).strip()
@@ -1173,15 +1104,10 @@ def _default_full_company_roster_max_pages(
 ) -> int:
     if acquisition_strategy.strategy_type != "full_company_roster":
         return 10
-    profile = dict(acquisition_strategy.organization_execution_profile or {})
-    if not profile and normalize_company_key(target_company) in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
-        profile = {"org_scale_band": "large"}
-    return organization_execution_profile_full_roster_max_pages(
-        profile,
-        default_small=FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
-        default_medium=max(FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES, 50),
-        default_large=FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
-    )
+    # Unified roster contract (operator directive 2026-07-20): one paging
+    # budget for every company — no org-size bands.  Per-function shard roots
+    # and the provider result cap bound the actual paid volume.
+    return FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES
 
 
 def _default_full_company_roster_shard_policy(
@@ -1196,23 +1122,8 @@ def _default_full_company_roster_shard_policy(
 ) -> dict[str, Any]:
     if acquisition_strategy.strategy_type != "full_company_roster":
         return {}
-    company_key = normalize_company_key(target_company)
-    if bool(acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode")):
-        large_org_policy = build_large_org_keyword_probe_shard_policy(
-            company_key,
-            company_scope=list(acquisition_strategy.company_scope or []),
-            keyword_hints=list(acquisition_strategy.filter_hints.get("keywords") or []),
-            function_ids=list(acquisition_strategy.filter_hints.get("function_ids") or []),
-            max_pages=max_pages,
-            page_limit=page_limit,
-            locations=locations,
-            exclude_locations=exclude_locations,
-            request_function_ids=request_function_ids,
-        )
-        if large_org_policy:
-            return large_org_policy
     return build_default_company_employee_shard_policy(
-        company_key,
+        normalize_company_key(target_company),
         max_pages=max_pages,
         page_limit=page_limit,
         organization_execution_profile=acquisition_strategy.organization_execution_profile,

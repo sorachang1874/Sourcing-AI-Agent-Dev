@@ -15,13 +15,11 @@ EXECUTION_PREFERENCE_FIELDS = {
     "precision_recall_bias",
     "acquisition_strategy_override",
     "use_company_employees_lane",
-    "keyword_priority_only",
     "former_keyword_queries_only",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
     "provider_people_search_pages",
     "provider_people_search_scale_chunk_pages",
-    "large_org_keyword_probe_mode",
     "force_fresh_run",
     "reuse_existing_roster",
     "run_former_search_seed",
@@ -111,8 +109,6 @@ EXECUTION_PREFERENCE_ALIASES = {
     "wait_for_stage2_approval": "require_stage2_confirmation",
     "force_company_employees": "use_company_employees_lane",
     "allow_company_employee_api": "use_company_employees_lane",
-    "keyword_first": "keyword_priority_only",
-    "keyword_priority": "keyword_priority_only",
     "former_search_queries_only": "former_keyword_queries_only",
     "former_keyword_only": "former_keyword_queries_only",
     "people_search_query_strategy": "provider_people_search_query_strategy",
@@ -123,7 +119,6 @@ EXECUTION_PREFERENCE_ALIASES = {
     "provider_people_query_pages": "provider_people_search_pages",
     "people_search_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
     "provider_people_query_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
-    "large_org_keyword_probe": "large_org_keyword_probe_mode",
     "require_fresh_snapshot": "force_fresh_run",
     "disable_cached_roster_fallback": "force_fresh_run",
     "reuse_cached_roster": "reuse_existing_roster",
@@ -191,9 +186,7 @@ def normalize_execution_preferences(
             "allow_stage1_web_seed_fallback",
             "require_stage2_confirmation",
             "use_company_employees_lane",
-            "keyword_priority_only",
             "former_keyword_queries_only",
-            "large_org_keyword_probe_mode",
             "force_fresh_run",
             "reuse_existing_roster",
             "run_former_search_seed",
@@ -310,9 +303,6 @@ def infer_execution_preferences_from_text(
     use_company_employees_lane = _infer_company_employees_lane(lower)
     if use_company_employees_lane is not None:
         prefs["use_company_employees_lane"] = use_company_employees_lane
-    keyword_priority_only = _infer_keyword_priority_only(lower)
-    if keyword_priority_only is not None:
-        prefs["keyword_priority_only"] = keyword_priority_only
     former_keyword_queries_only = _infer_former_keyword_queries_only(lower)
     if former_keyword_queries_only is not None:
         prefs["former_keyword_queries_only"] = former_keyword_queries_only
@@ -322,9 +312,6 @@ def infer_execution_preferences_from_text(
     provider_people_search_max_queries = _infer_provider_people_search_max_queries(normalized_text)
     if provider_people_search_max_queries is not None:
         prefs["provider_people_search_max_queries"] = provider_people_search_max_queries
-    large_org_keyword_probe_mode = _infer_large_org_keyword_probe_mode(lower)
-    if large_org_keyword_probe_mode is not None:
-        prefs["large_org_keyword_probe_mode"] = large_org_keyword_probe_mode
     return prefs
 
 
@@ -828,31 +815,6 @@ def _infer_company_employees_lane(lower: str) -> bool | None:
     return None
 
 
-def _infer_keyword_priority_only(lower: str) -> bool | None:
-    deny_patterns = [
-        "不要 keyword-first",
-        "不用 keyword-first",
-        "不要关键词优先",
-        "not keyword first",
-    ]
-    allow_patterns = [
-        "keyword-first",
-        "keyword first",
-        "关键词优先",
-        "关键词先行",
-        "先用关键词",
-        "先走关键词",
-        "只走关键词",
-        "只用 search api",
-        "search-first",
-        "search first",
-    ]
-    if any(token in lower for token in deny_patterns):
-        return False
-    if any(token in lower for token in allow_patterns):
-        return True
-    return None
-
 
 def _infer_former_keyword_queries_only(lower: str) -> bool | None:
     deny_patterns = [
@@ -909,24 +871,6 @@ def _infer_provider_people_search_max_queries(text: str) -> int | None:
         return None
     return _coerce_small_positive_int(match.group(1), maximum=32)
 
-
-def _infer_large_org_keyword_probe_mode(lower: str) -> bool | None:
-    deny_patterns = [
-        "不要 large-org keyword probe",
-        "关闭 keyword probe",
-    ]
-    allow_patterns = [
-        "large-org keyword probe",
-        "large org keyword probe",
-        "keyword shard",
-        "关键词分片",
-        "关键词 probe",
-    ]
-    if any(token in lower for token in deny_patterns):
-        return False
-    if any(token in lower for token in allow_patterns):
-        return True
-    return None
 
 
 def _should_infer_company_employees_lane(
