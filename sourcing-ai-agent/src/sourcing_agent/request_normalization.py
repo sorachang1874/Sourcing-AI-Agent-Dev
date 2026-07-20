@@ -325,6 +325,81 @@ def materialize_request_payload(
     return materialized
 
 
+def _casefold_text(value: str) -> str:
+    return " ".join(str(value or "").split()).casefold()
+
+
+def _location_term_alias_set(target_locations: list[str] | None, exclude_target_locations: list[str] | None) -> set[str]:
+    """Location terms already owned by the dedicated location parameters.
+
+    A term covered by `target_locations`/`exclude_target_locations` must not
+    ALSO become a content keyword (operator directive 2026-07-20: the
+    location parameter is the one owner).  Built from the explicit values
+    plus a small alias lexicon for the common regions.
+    """
+
+    aliases: set[str] = set()
+    for value in [*(target_locations or []), *(exclude_target_locations or [])]:
+        folded = _casefold_text(value)
+        if folded:
+            aliases.add(folded)
+            aliases.add(folded.replace(" ", "_"))
+    if "united states" in aliases or "united_states" in aliases:
+        aliases.update({"us", "usa", "u.s.", "u.s.a.", "america", "美国", "美国地区", "united states"})
+    if "germany" in aliases:
+        aliases.update({"deutschland", "德国"})
+    if "china" in aliases:
+        aliases.update({"中国"})
+    return aliases
+
+
+_ROLE_TERM_LEXICON = {
+    "research",
+    "researcher",
+    "research scientist",
+    "engineer",
+    "engineering",
+    "software engineer",
+    "research engineer",
+    "product manager",
+    "product_management",
+}
+
+
+def _suppress_dedicated_field_keyword_terms(
+    keywords: list[str],
+    *,
+    target_locations: list[str] | None,
+    exclude_target_locations: list[str] | None,
+    inferred_role_buckets: list[str],
+) -> list[str]:
+    """Drop extracted keywords that duplicate dedicated parameter dimensions.
+
+    Location terms covered by the location parameters and role terms that the
+    planner already maps to role buckets from the same raw text must not also
+    ride the keyword lane (double-duty distorts text matching and burns
+    provider keyword shards).  Topical terms (research directions like
+    Pre-train/Multimodal) are never role-bucket terms and pass through.
+    """
+
+    if not keywords:
+        return []
+    location_aliases = _location_term_alias_set(target_locations, exclude_target_locations)
+    buckets = {str(item or "").strip() for item in inferred_role_buckets if str(item or "").strip()}
+    kept: list[str] = []
+    for term in keywords:
+        folded = _casefold_text(term)
+        if folded and folded in location_aliases:
+            continue
+        if buckets:
+            if set(role_buckets_from_text(term)) & buckets:
+                continue
+            if folded in _ROLE_TERM_LEXICON:
+                continue
+        kept.append(term)
+    return kept
+
+
 def supplement_request_query_signals(
     payload: dict[str, Any],
     *,
@@ -336,6 +411,12 @@ def supplement_request_query_signals(
     target_company = str(updated.get("target_company") or "").strip()
     if include_raw_keyword_extraction:
         extracted = extract_query_signal_terms(raw_text, target_company=target_company)
+        extracted["keywords"] = _suppress_dedicated_field_keyword_terms(
+            list(extracted.get("keywords") or []),
+            target_locations=list(updated.get("target_locations") or []),
+            exclude_target_locations=list(updated.get("exclude_target_locations") or []),
+            inferred_role_buckets=role_buckets_from_text(raw_text),
+        )
         had_scope_disambiguation = bool(updated.get("scope_disambiguation"))
         if extracted["organization_keywords"]:
             updated["organization_keywords"] = merge_unique_request_string_values(

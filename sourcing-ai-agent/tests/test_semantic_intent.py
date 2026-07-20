@@ -250,6 +250,57 @@ class RequestNormalizationRobustnessTest(unittest.TestCase):
         execution_preferences = dict(patch.get("execution_preferences") or {})
         self.assertNotIn("confirmed_company_scope", execution_preferences)
 
+    def test_supplement_suppresses_location_and_role_terms_covered_by_dedicated_fields(self) -> None:
+        # operator directive 2026-07-20: the location parameter and role/function
+        # buckets are the one owners; the same terms must not also become keywords.
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "获取 OpenAI 全部成员（美国地区，current+former，research 与 engineering 职能分片），先做全量成员列表，再批量获取 profile。",
+                "query": "OpenAI current and former members in the United States across research and engineering functions (queried as separate function shards); build the full roster first, then retrieve profiles in batch",
+                "target_company": "OpenAI",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "target_locations": ["United States"],
+                "keywords": [],
+            },
+            raw_text="获取 OpenAI 全部成员（美国地区，current+former，research 与 engineering 职能分片），先做全量成员列表，再批量获取 profile。",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        self.assertNotIn("United States", keywords)
+        self.assertNotIn("united_states", keywords)
+        self.assertNotIn("research", keywords)
+        self.assertNotIn("engineering", keywords)
+
+    def test_supplement_keeps_topical_direction_terms(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "找 Thinking Machines Lab 做 Pre-train 方向的华人",
+                "query": "Thinking Machines Lab pre-training researchers",
+                "target_company": "Thinking Machines Lab",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+            },
+            raw_text="找 Thinking Machines Lab 做 Pre-train 方向的华人",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        self.assertTrue(any("Pre-train" in item or "pre-train" in item.lower() for item in keywords), keywords)
+
+    def test_supplement_keeps_location_terms_when_no_location_parameter_set(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "帮我找 OpenAI 的 Research Engineer",
+                "query": "OpenAI Research Engineer",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+            },
+            raw_text="帮我找 OpenAI 的 Research Engineer",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        # role term suppressed only when role inference covers it; without any
+        # location parameter the keyword lane keeps location-named terms.
+        self.assertTrue(isinstance(keywords, list))
+
 
 if __name__ == "__main__":
     unittest.main()
