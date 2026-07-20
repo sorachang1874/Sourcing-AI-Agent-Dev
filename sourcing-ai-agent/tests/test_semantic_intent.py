@@ -301,6 +301,38 @@ class RequestNormalizationRobustnessTest(unittest.TestCase):
         # location parameter the keyword lane keeps location-named terms.
         self.assertTrue(isinstance(keywords, list))
 
+    def test_suppress_compound_location_terms(self) -> None:
+        # GDM case 2026-07-20: compound location+status duplicates the
+        # dedicated location parameter and must not become a keyword.
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "获取 Google DeepMind 全部成员（美国地区，current+former），先做全量成员列表。只要 DeepMind，不要 Google 本体。",
+                "query": "Google DeepMind (DeepMind only, NOT Google) members in the United States",
+                "target_company": "Google DeepMind",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "target_locations": ["United States"],
+            },
+            raw_text="获取 Google DeepMind 全部成员（美国地区，current+former），先做全量成员列表。只要 DeepMind，不要 Google 本体。",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        self.assertNotIn("美国地区，current+former", keywords)
+
+    def test_negation_scope_is_ai_native_prompt_contract_not_regex(self) -> None:
+        # operator directive 2026-07-20: negation/exclusion scope ('NOT X',
+        # '不要X') belongs to the AI-native plan/review layer (the model
+        # normalize prompt + scope_disambiguation + review gate), never to a
+        # case-by-case regex list in request_normalization.
+        from sourcing_agent.model_provider import _build_request_normalization_system_prompt
+        from sourcing_agent.request_normalization import _suppress_dedicated_field_keyword_terms
+        import inspect
+
+        prompt = _build_request_normalization_system_prompt()
+        self.assertIn("NOT X", prompt)
+        self.assertIn("scope signals, never keywords", prompt)
+        source = inspect.getsource(_suppress_dedicated_field_keyword_terms)
+        self.assertNotIn("NEGATION", source, "no negation-marker regex list may live in request_normalization")
+
 
 if __name__ == "__main__":
     unittest.main()

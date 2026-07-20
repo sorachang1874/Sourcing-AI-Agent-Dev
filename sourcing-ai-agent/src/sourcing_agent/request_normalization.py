@@ -365,6 +365,28 @@ _ROLE_TERM_LEXICON = {
     "product_management",
 }
 
+_FRAGMENT_SEPARATORS_RE = re.compile(r"[,，、/+|]")
+
+
+def _term_matches_location(term: str, aliases: set[str]) -> bool:
+    """Exact or fragment-level location match.
+
+    A compound like `美国地区，current+former` duplicates the location
+    parameter just as much as a bare `United States` — match the whole term
+    and every fragment split on common separators.
+    """
+
+    folded = _casefold_text(term)
+    if not folded:
+        return False
+    if folded in aliases:
+        return True
+    for fragment in _FRAGMENT_SEPARATORS_RE.split(folded):
+        fragment = fragment.strip()
+        if fragment and fragment in aliases:
+            return True
+    return False
+
 
 def _suppress_dedicated_field_keyword_terms(
     keywords: list[str],
@@ -389,7 +411,7 @@ def _suppress_dedicated_field_keyword_terms(
     kept: list[str] = []
     for term in keywords:
         folded = _casefold_text(term)
-        if folded and folded in location_aliases:
+        if _term_matches_location(term, location_aliases):
             continue
         if buckets:
             if set(role_buckets_from_text(term)) & buckets:
