@@ -132,7 +132,7 @@ class LunaBatchRunnerTest(unittest.TestCase):
         tampered = copy.deepcopy(prompt)
         tampered["developer_instructions"] += " Rank candidates by region."
         errors = lbr.validate_prompt(tampered)
-        self.assertTrue(any("pinned" in error for error in errors))
+        self.assertTrue(any("bound candidate-review prompt" in error for error in errors))
         wrong_model = copy.deepcopy(prompt)
         wrong_model["model_id"] = "gpt-other"
         self.assertTrue(any("gpt-5.6-luna" in error for error in lbr.validate_prompt(wrong_model)))
@@ -458,6 +458,52 @@ class LunaBatchRunnerTest(unittest.TestCase):
         self.assertIsNone(failed["review"])
         self.assertEqual(failed["execution_receipt"]["outcome"], "failed")
         self.assertEqual(failed["execution_receipt"]["error_code"], "luna_transport_boom")
+
+    # ------------------------------------------------------------------
+    # Judgment-model binding (model-agnostic judge layer).
+    # ------------------------------------------------------------------
+
+    def test_substitute_judgment_binding_end_to_end(self) -> None:
+        binding = lbr.judgment_binding_for_model(
+            provider_id="deepseek_test_relay",
+            endpoint="https://example.test/v1/chat/completions",
+            model_id="deepseek-v4-flash",
+        )
+        transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs, model_id="deepseek-v4-flash")
+        result, _ = self._run_batch(transport=transport, binding=binding)
+
+        self.assertEqual(result["completed_count"], len(self.refs))
+        self.assertEqual(result["prompt_sha256"], binding.prompt_sha256)
+        self.assertNotEqual(result["prompt_sha256"], lbr.CANONICAL_PROMPT_SHA256)
+        for call in transport.calls:
+            self.assertEqual(call["payload"]["model"], "deepseek-v4-flash")
+            self.assertEqual(call["payload"]["metadata"]["prompt_sha256"], binding.prompt_sha256)
+        for row in result["results"]:
+            receipt = row["execution_receipt"]
+            self.assertEqual(receipt["provider"], "deepseek_test_relay")
+            self.assertEqual(receipt["endpoint"], "https://example.test/v1/chat/completions")
+            self.assertEqual(receipt["requested_model"], "deepseek-v4-flash")
+            self.assertEqual(receipt["returned_model"], "deepseek-v4-flash")
+            self.assertTrue(receipt["exact_model_match"])
+            self.assertEqual(receipt["prompt_sha256"], binding.prompt_sha256)
+
+    def test_binding_prompt_hash_mismatch_fails_closed_before_any_call(self) -> None:
+        binding = lbr.JudgmentModelBinding(
+            provider_id="deepseek_test_relay",
+            endpoint="https://example.test/v1/chat/completions",
+            model_id="deepseek-v4-flash",
+            prompt_sha256="0" * 64,
+            prompt_asset={
+                "schema_version": lbr.PROMPT_SCHEMA_VERSION,
+                "prompt_version": lbr.PROMPT_VERSION,
+                "model_id": "deepseek-v4-flash",
+                "developer_instructions": "x" * 120,
+            },
+        )
+        transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs, model_id="deepseek-v4-flash")
+        with self.assertRaisesRegex(lbr.LunaBatchRunnerError, "luna_candidate_review_prompt_invalid"):
+            self._run_batch(transport=transport, binding=binding)
+        self.assertEqual(transport.calls, [])
 
     # ------------------------------------------------------------------
     # Approval-receipt gate.

@@ -143,6 +143,55 @@ class LunaBatchRunnerError(ValueError):
     """Raised when a Luna batch-runner contract, binding, or gate check fails."""
 
 
+@dataclass(frozen=True)
+class JudgmentModelBinding:
+    """Model/provider binding for the candidate-judgment layer.
+
+    The judge step after Grok collection is model-agnostic (operator directive
+    2026-07-20): any provider that can honor the judged-output contract may be
+    bound here.  The default is the pinned chshapi Luna binding; substitutes
+    (e.g. DeepSeek) carry their own provider/endpoint/model identity and a
+    prompt asset whose ``model_id`` matches ``model_id`` — every receipt then
+    records the ACTUAL serving provider/model instead of the default's.
+    ``prompt_sha256`` is the sha256 of the canonical-JSON prompt asset and is
+    validated fail-closed on load.
+    """
+
+    provider_id: str
+    endpoint: str
+    model_id: str
+    prompt_sha256: str
+    prompt_path: str = PROMPT_PATH
+    prompt_asset: Mapping[str, Any] | None = None
+
+
+DEFAULT_JUDGMENT_BINDING = JudgmentModelBinding(
+    provider_id=PROVIDER_ID,
+    endpoint=RESPONSES_URL,
+    model_id=MODEL_ID,
+    prompt_sha256=CANONICAL_PROMPT_SHA256,
+)
+
+
+def judgment_binding_for_model(*, provider_id: str, endpoint: str, model_id: str) -> JudgmentModelBinding:
+    """Derive a substitute binding: canonical instructions with only ``model_id`` rebound.
+
+    The prompt asset keeps every other byte of the pinned candidate-review
+    prompt (same schema_version/prompt_version/developer_instructions); its
+    sha256 is recomputed so receipts stay hash-auditable.
+    """
+
+    prompt = dict(load_json(project_root() / PROMPT_PATH))
+    prompt["model_id"] = model_id
+    return JudgmentModelBinding(
+        provider_id=provider_id,
+        endpoint=endpoint,
+        model_id=model_id,
+        prompt_sha256=canonical_sha256(prompt),
+        prompt_asset=json.loads(canonical_json(prompt)),
+    )
+
+
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -245,7 +294,7 @@ def _bounded_text(value: Any, *, minimum: int, maximum: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def validate_prompt(prompt: Any) -> list[str]:
+def validate_prompt(prompt: Any, *, binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING) -> list[str]:
     errors: list[str] = []
     traversal = _scan_json(prompt)
     if traversal:
@@ -256,8 +305,8 @@ def validate_prompt(prompt: Any) -> list[str]:
         errors.append("$.schema_version: unsupported")
     if prompt["prompt_version"] != PROMPT_VERSION:
         errors.append("$.prompt_version: unsupported")
-    if prompt["model_id"] != MODEL_ID:
-        errors.append("$.model_id: must equal gpt-5.6-luna")
+    if prompt["model_id"] != binding.model_id:
+        errors.append(f"$.model_id: must equal {binding.model_id}")
     if not _bounded_text(prompt["developer_instructions"], minimum=100, maximum=4000):
         errors.append("$.developer_instructions: must be a bounded non-empty string")
     try:
@@ -265,14 +314,18 @@ def validate_prompt(prompt: Any) -> list[str]:
     except (TypeError, ValueError, RecursionError):
         errors.append("$: must be canonical JSON")
     else:
-        if digest != CANONICAL_PROMPT_SHA256:
-            errors.append("$: must exactly match the pinned candidate-review prompt")
+        if digest != binding.prompt_sha256:
+            errors.append("$: must exactly match the bound candidate-review prompt")
     return errors
 
 
-def load_prompt() -> dict[str, Any]:
-    prompt = load_json(project_root() / PROMPT_PATH)
-    errors = validate_prompt(prompt)
+def load_prompt(*, binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING) -> dict[str, Any]:
+    prompt = (
+        json.loads(canonical_json(binding.prompt_asset))
+        if binding.prompt_asset is not None
+        else load_json(project_root() / binding.prompt_path)
+    )
+    errors = validate_prompt(prompt, binding=binding)
     if errors:
         raise LunaBatchRunnerError(f"luna_candidate_review_prompt_invalid:{errors[0]}")
     return prompt
@@ -927,14 +980,15 @@ def build_luna_responses_payload(
     prompt: Mapping[str, Any],
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
 ) -> dict[str, Any]:
-    """Build the chshapi-relay Responses payload (canary transport shape)."""
+    """Build the bound provider's Responses payload (canary transport shape)."""
 
     checked_seed = validate_seed_input(seed)
     checked_bundle = validate_candidate_bundle(bundle, seed=checked_seed)
     source_payload = build_luna_source_payload(checked_seed, checked_bundle)
     return {
-        "model": MODEL_ID,
+        "model": binding.model_id,
         "reasoning": {"effort": reasoning_effort},
         "instructions": prompt["developer_instructions"],
         "input": [
@@ -958,7 +1012,7 @@ def build_luna_responses_payload(
         "metadata": {
             "candidate_ref": checked_seed["seed_ref"],
             "judged_bundle_sha256": source_payload["judged_bundle_sha256"],
-            "prompt_sha256": CANONICAL_PROMPT_SHA256,
+            "prompt_sha256": binding.prompt_sha256,
         },
     }
 
@@ -984,13 +1038,17 @@ def validate_judged_model_output(output: Any, *, manifest_items: Sequence[Mappin
     return json.loads(canonical_json(output))
 
 
-def extract_judged_output(response_body: Any) -> tuple[dict[str, Any], str | None]:
+def extract_judged_output(
+    response_body: Any,
+    *,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
+) -> tuple[dict[str, Any], str | None]:
     """Extract the judged fields from a Responses body; exact returned-model check."""
 
     if not isinstance(response_body, dict) or response_body.get("status") != "completed":
         raise LunaBatchRunnerError("luna_response_invalid")
     returned_model = response_body.get("model")
-    if returned_model != MODEL_ID:
+    if returned_model != binding.model_id:
         raise LunaBatchRunnerError("luna_response_model_mismatch")
     output_items = response_body.get("output")
     if not isinstance(output_items, list):
@@ -1179,17 +1237,18 @@ def _failed_execution_receipt(
     completed_at: str | None,
     elapsed_ms: int | None,
     error_code: str,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
 ) -> dict[str, Any]:
     return {
         "schema_version": EXECUTION_RECEIPT_SCHEMA_VERSION,
         "candidate_ref": candidate_ref,
-        "provider": PROVIDER_ID,
-        "endpoint": RESPONSES_URL,
-        "requested_model": MODEL_ID,
+        "provider": binding.provider_id,
+        "endpoint": binding.endpoint,
+        "requested_model": binding.model_id,
         "returned_model": None,
         "exact_model_match": False,
         "request_payload_sha256": request_payload_sha256,
-        "prompt_sha256": CANONICAL_PROMPT_SHA256,
+        "prompt_sha256": binding.prompt_sha256,
         "started_at": started_at,
         "completed_at": completed_at,
         "elapsed_ms": elapsed_ms,
@@ -1208,8 +1267,9 @@ def review_one_candidate(
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Run the single Luna judgment call for one candidate bundle (§3.2)."""
+    """Run the single judgment call for one candidate bundle (§3.2)."""
 
     now = wall_clock or (lambda: datetime.now(UTC))
     clock = monotonic or time.monotonic
@@ -1218,13 +1278,14 @@ def review_one_candidate(
         bundle,
         prompt=prompt,
         reasoning_effort=reasoning_effort,
+        binding=binding,
     )
     encoded_payload = canonical_json(payload).encode("utf-8")
     payload_sha256 = hashlib.sha256(encoded_payload).hexdigest()
     started_at = _timestamp(now())
     started = clock()
     response_body = transport.complete(payload=payload, timeout_ms=timeout_ms)
-    judged_raw, returned_model = extract_judged_output(response_body)
+    judged_raw, returned_model = extract_judged_output(response_body, binding=binding)
     review = build_candidate_review(seed, bundle, judged_raw)
     if review["judged_bundle_sha256"] != payload["metadata"]["judged_bundle_sha256"]:
         raise LunaBatchRunnerError("luna_bundle_mutated_in_flight")
@@ -1232,13 +1293,13 @@ def review_one_candidate(
     receipt = {
         "schema_version": EXECUTION_RECEIPT_SCHEMA_VERSION,
         "candidate_ref": review["candidate_ref"],
-        "provider": PROVIDER_ID,
-        "endpoint": RESPONSES_URL,
-        "requested_model": MODEL_ID,
+        "provider": binding.provider_id,
+        "endpoint": binding.endpoint,
+        "requested_model": binding.model_id,
         "returned_model": returned_model,
-        "exact_model_match": returned_model == MODEL_ID,
+        "exact_model_match": returned_model == binding.model_id,
         "request_payload_sha256": payload_sha256,
-        "prompt_sha256": CANONICAL_PROMPT_SHA256,
+        "prompt_sha256": binding.prompt_sha256,
         "started_at": started_at,
         "completed_at": _timestamp(now()),
         "elapsed_ms": elapsed_ms,
@@ -1259,12 +1320,15 @@ def run_luna_batch(
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
 ) -> dict[str, Any]:
-    """Judge every candidate bundle with one Luna call each (§3.2).
+    """Judge every candidate bundle with one bound-model call each (§3.2).
 
     The approval receipt is validated BEFORE any provider-costing call: no
     receipt, no adjudication.  Per-candidate failures stay isolated in failed
-    rows; results are re-ordered by seed ordinal.
+    rows; results are re-ordered by seed ordinal.  ``binding`` selects the
+    serving provider/model/prompt asset (default: pinned Luna) and is recorded
+    in every execution receipt.
     """
 
     workers = _check_worker_count(worker_count)
@@ -1272,7 +1336,7 @@ def run_luna_batch(
     if approval is None:
         raise PermissionError("luna_approval_receipt_required")
     checked_approval = validate_approval_receipt(approval, candidate_refs=candidate_refs)
-    prompt = load_prompt()
+    prompt = load_prompt(binding=binding)
 
     def work(ordinal: int) -> dict[str, Any]:
         row: dict[str, Any] = {"candidate_ref": candidate_refs[ordinal], "seed_ordinal": ordinal}
@@ -1288,6 +1352,7 @@ def run_luna_batch(
                 reasoning_effort=reasoning_effort,
                 wall_clock=wall_clock,
                 monotonic=monotonic,
+                binding=binding,
             )
         except Exception as exc:  # noqa: BLE001 - failure isolation: one candidate never aborts the batch
             code = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "luna_review_failed"
@@ -1303,6 +1368,7 @@ def run_luna_batch(
                         completed_at=None,
                         elapsed_ms=None,
                         error_code=code,
+                        binding=binding,
                     ),
                 }
             )
@@ -1316,7 +1382,7 @@ def run_luna_batch(
         "schema_version": LUNA_BATCH_RESULT_SCHEMA_VERSION,
         "approval_receipt": checked_approval,
         "prompt_version": PROMPT_VERSION,
-        "prompt_sha256": CANONICAL_PROMPT_SHA256,
+        "prompt_sha256": binding.prompt_sha256,
         "worker_count": workers,
         "candidate_count": len(results),
         "completed_count": completed,
@@ -1344,8 +1410,9 @@ def run_streaming_pipeline(
     grok_binary: str = "grok",
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
 ) -> dict[str, Any]:
-    """Fuse Grok collection and Luna judgment per candidate (operator directive 2026-07-20).
+    """Fuse Grok collection and bound-model judgment per candidate (operator directive 2026-07-20).
 
     No global stage barrier: a candidate's Luna call starts the moment its own
     bundle validates, so at 1000+ candidate scale a slow collection never idles
@@ -1361,7 +1428,7 @@ def run_streaming_pipeline(
     if approval is None:
         raise PermissionError("luna_approval_receipt_required")
     checked_approval = validate_approval_receipt(approval, candidate_refs=candidate_refs)
-    prompt = load_prompt()
+    prompt = load_prompt(binding=binding)
 
     def work(ordinal: int) -> dict[str, Any]:
         row: dict[str, Any] = {"candidate_ref": candidate_refs[ordinal], "seed_ordinal": ordinal}
@@ -1415,6 +1482,7 @@ def run_streaming_pipeline(
                 reasoning_effort=reasoning_effort,
                 wall_clock=wall_clock,
                 monotonic=monotonic,
+                binding=binding,
             )
         except Exception as exc:  # noqa: BLE001 - failure isolation: judgment loss never discards the bundle
             code = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "luna_review_failed"
@@ -1429,6 +1497,7 @@ def run_streaming_pipeline(
                     completed_at=None,
                     elapsed_ms=None,
                     error_code=code,
+                    binding=binding,
                 ),
             }
             return row
@@ -1442,7 +1511,7 @@ def run_streaming_pipeline(
         "schema_version": PIPELINE_RESULT_SCHEMA_VERSION,
         "approval_receipt": checked_approval,
         "prompt_version": PROMPT_VERSION,
-        "prompt_sha256": CANONICAL_PROMPT_SHA256,
+        "prompt_sha256": binding.prompt_sha256,
         "worker_count": workers,
         "candidate_count": len(results),
         "grok_completed_count": grok_completed,
