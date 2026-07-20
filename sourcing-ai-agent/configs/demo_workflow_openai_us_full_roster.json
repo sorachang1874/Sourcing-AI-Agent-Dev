@@ -40,5 +40,6 @@
   "slug_resolution_limit": 50,
   "profile_detail_limit": 20,
   "publication_lead_limit": 12,
-  "exploration_limit": 6
+  "exploration_limit": 6,
+  "keywords": []
 }
