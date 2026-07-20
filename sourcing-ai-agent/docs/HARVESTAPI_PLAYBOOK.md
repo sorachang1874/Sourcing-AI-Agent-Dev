@@ -525,3 +525,29 @@ Anthropic 当前 snapshot 的 former enrich 已验证：
   - 超过阈值（默认 `0.9`）则直接标记 `skipped_high_overlap`，不再跑 full fetch。
 
 结果：在 Google 这类大组织上，能明显减少“语义近似 query 重复抓取”。
+
+## 已验证的 actor 输入契约与现场纪律（2026-07-20，事故付费）
+
+以下为生产事故换来的事实，优先于记忆使用。
+
+### linkedin-company-employees（成员列表）
+
+- 输入：`{profileScraperMode: "Short ($4 per 1k)", companies, takePages, maxItems, locations, functionIds, excludeFunctionIds, companyBatchMode}`。单次调用硬上限 ≈2500 条；超 cap 的 function 必须在该 function 内部做 keyword/title 子分片，同形状重跑 ≈97% 重复（实测三次重复 run 只多 80/2500）。
+- **function 分片必须是纯单 function 载荷**：engineering=`functionIds ["8"]`、research=`functionIds ["24"]`、product=`["19"]`。禁止 root∖other 形式（`functionIds ["8","24"] + excludeFunctionIds ["24"]`）——单值 function 下冗余，双分类成员会从所有 function 分片掉落。exclude 只属于 remainder 域。
+- 成员项是不透明 `ACwA…` URL + 成员级字段（无完整履历）；完整履历由 profile-scraper 阶段补齐。
+
+### linkedin-profile-scraper（完整 profile）
+
+- 输入：`{urls: [...], profileScraperMode: "Profile details no email ($4 per 1k)", findEmail: false}`。模式仅两种（无 email $4/1k、含 email $10/1k），**没有 "Full" 模式**——no-email 模式已返回富载荷（完整 experience/education/skills/languages 等）。
+- **批次几何：400–800 url/run、4–8 并发、slot 空即填**。禁止拆几十个小批（64×48 是实测反例：run 开销与失败面放大）。
+- item 的 `linkedinUrl` 可能是解析后的 slug（即使提交的是 ACwA id）：文件键/判重必须兼容两种形态。
+
+### 现场纪律（每次都付费学过）
+
+- 任何提交前先盘点：已有 dataset/已下载/已合并且打印 delta；delta=0 不提交。
+- 已付 dataset 是收据：先 salvage 下载采纳 + union 再考虑重抓；只有语义变化或证明过期才允许重抓并记录原因。
+- 客户端超时≠未提交：先查询再重试（否则双写 job 并自锁 limiter）。
+- kill driver ≠ abort run：driver 必须记录 run id，停止时调 `/v2/actor-runs/{id}/abort`；杀 driver 前先列并 abort 其 run（实测被杀 driver 已发出 5×400 重复抓取）。
+- cancel 不清 lease、不杀 queued worker：cancel 后必须手动清 `runtime_provider_limiter_leases`（owner 前缀匹配）并取消其 worker（实测被取消 job 一小时后又提交了一个重复 run）。
+- ACwA（成员 dataset）→slug（profile item）的 join 顺序：resolved-url 直查 → 精确 (first,last) → currentCompany 消歧 → 规范化（音符/括号/CJK 语序）→ 姓末 token 变体；同名冲突保持未合并（错合并比缺 profile 更糟）。
+- driver 判重用文档的 `profile_fetched` 标志，禁止用 url 哈希（slug 双形态会让哈希判重静默失效导致全量重抓）。
