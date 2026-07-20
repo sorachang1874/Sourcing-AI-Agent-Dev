@@ -3,6 +3,7 @@ import unittest
 from sourcing_agent.company_shard_planning import (
     build_default_company_employee_shard_policy,
     build_large_org_keyword_probe_shard_policy,
+    merge_company_filters,
     plan_company_employee_shards_from_policy,
 )
 
@@ -33,8 +34,8 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertEqual(policy["root_filters"], {"locations": ["United States"], "function_ids": ["8", "24"]})
         self.assertTrue(policy["allow_overflow_partial"])
         self.assertEqual(
-            [item["include_patch"]["exclude_function_ids"] for item in policy["partition_rules"]],
-            [["24"], ["8"]],
+            [item["include_patch"]["function_ids"] for item in policy["partition_rules"]],
+            [["8"], ["24"]],
         )
 
     def test_build_default_company_employee_shard_policy_for_openai_uses_large_org_technical_default(self) -> None:
@@ -48,9 +49,30 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertEqual(policy["root_filters"], {"locations": ["United States"], "function_ids": ["8", "24"]})
         self.assertTrue(policy["allow_overflow_partial"])
         self.assertEqual(
-            [item["include_patch"]["exclude_function_ids"] for item in policy["partition_rules"]],
-            [["24"], ["8"]],
+            [item["include_patch"]["function_ids"] for item in policy["partition_rules"]],
+            [["8"], ["24"]],
         )
+
+    def test_technical_partition_emits_plain_single_function_payloads(self) -> None:
+        # operator directive 2026-07-20: function shards must be plain
+        # functionIds ["8"] / ["24"] — never the redundant root∖other form
+        # functionIds ["8","24"] + excludeFunctionIds, which also drops
+        # dual-classified members from every function shard.
+        policy = build_default_company_employee_shard_policy(
+            "openai",
+            max_pages=100,
+            page_limit=25,
+        )
+        engineering = merge_company_filters(policy["root_filters"], policy["partition_rules"][0]["include_patch"])
+        research = merge_company_filters(policy["root_filters"], policy["partition_rules"][1]["include_patch"])
+        self.assertEqual(engineering["function_ids"], ["8"])
+        self.assertNotIn("exclude_function_ids", engineering)
+        self.assertEqual(research["function_ids"], ["24"])
+        self.assertNotIn("exclude_function_ids", research)
+        remaining = merge_company_filters(policy["root_filters"], policy["partition_rules"][0]["remainder_exclude_patch"])
+        self.assertEqual(remaining["exclude_function_ids"], ["8"])
+        remaining = merge_company_filters(remaining, policy["partition_rules"][1]["remainder_exclude_patch"])
+        self.assertEqual(remaining["exclude_function_ids"], ["8", "24"])
 
     def test_plan_company_employee_shards_from_policy_probes_until_remaining_scope_is_within_cap(self) -> None:
         policy = build_default_company_employee_shard_policy(
@@ -62,11 +84,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
         counts = {
             (("function_ids", ("8", "24")), ("locations", ("United States",))): 3124,
-            (
-                ("exclude_function_ids", ("24",)),
-                ("function_ids", ("8", "24")),
-                ("locations", ("United States",)),
-            ): 1100,
+            (("function_ids", ("8",)), ("locations", ("United States",))): 1100,
             (
                 ("exclude_function_ids", ("8",)),
                 ("function_ids", ("8", "24")),
@@ -87,9 +105,11 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertEqual(plan["status"], "planned")
         self.assertEqual(len(plan["shards"]), 2)
         self.assertEqual(plan["shards"][0]["title"], "United States / Engineering")
-        self.assertEqual(plan["shards"][0]["company_filters"]["exclude_function_ids"], ["24"])
+        self.assertEqual(plan["shards"][0]["company_filters"]["function_ids"], ["8"])
+        self.assertNotIn("exclude_function_ids", plan["shards"][0]["company_filters"])
         self.assertEqual(plan["shards"][1]["title"], "United States / Remaining after Engineering")
-        self.assertEqual(plan["shards"][1]["company_filters"]["exclude_function_ids"], ["8"])
+        self.assertEqual(plan["shards"][1]["company_filters"]["function_ids"], ["24"])
+        self.assertNotIn("exclude_function_ids", plan["shards"][1]["company_filters"])
 
     def test_plan_company_employee_shards_from_policy_blocks_when_branch_stays_over_cap(self) -> None:
         policy = build_default_company_employee_shard_policy(
@@ -101,11 +121,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
         counts = {
             (("function_ids", ("8", "24")), ("locations", ("United States",))): 5000,
-            (
-                ("exclude_function_ids", ("24",)),
-                ("function_ids", ("8", "24")),
-                ("locations", ("United States",)),
-            ): 3200,
+            (("function_ids", ("8",)), ("locations", ("United States",))): 3200,
         }
 
         def probe_fn(filters, context):  # noqa: ANN001, ANN202
@@ -131,16 +147,13 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
         counts = {
             (("function_ids", ("8", "24")), ("locations", ("United States",))): 5600,
-            (
-                ("exclude_function_ids", ("24",)),
-                ("function_ids", ("8", "24")),
-                ("locations", ("United States",)),
-            ): 3100,
+            (("function_ids", ("8",)), ("locations", ("United States",))): 3100,
             (
                 ("exclude_function_ids", ("8",)),
                 ("function_ids", ("8", "24")),
                 ("locations", ("United States",)),
             ): 2600,
+            (("function_ids", ("24",)), ("locations", ("United States",))): 2600,
             (
                 ("exclude_function_ids", ("8", "24")),
                 ("function_ids", ("8", "24")),

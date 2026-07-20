@@ -272,13 +272,13 @@ def _generic_large_org_technical_partition_policy(
             {
                 "rule_id": "engineering",
                 "title": "Engineering",
-                "include_patch": {"exclude_function_ids": ["24"]},
+                "include_patch": {"function_ids": ["8"]},
                 "remainder_exclude_patch": {"exclude_function_ids": ["8"]},
             },
             {
                 "rule_id": "research",
                 "title": "Research",
-                "include_patch": {"exclude_function_ids": ["8"]},
+                "include_patch": {"function_ids": ["24"]},
                 "remainder_exclude_patch": {"exclude_function_ids": ["24"]},
             },
         ],
@@ -596,7 +596,12 @@ def plan_company_employee_shards_from_policy(
     consumed_titles: list[str] = []
     for rule in partition_rules:
         branch_title = f"{root_title} / {str(rule.get('title') or rule.get('rule_id') or 'Shard').strip()}".strip()
-        branch_filters = merge_company_filters(remaining_filters, rule.get("include_patch"))
+        # Branch from the ROOT, not the evolving remainder: a function partition's
+        # shard must emit its plain include filter (functionIds ["8"] / ["24"]),
+        # never the root∖other mixed form. Remainder excludes accumulate only for
+        # the trailing "rest" scope; any dual-classified member fetched in two
+        # function shards is merged downstream by union-dedupe (d2d9fb6).
+        branch_filters = merge_company_filters(root_filters, rule.get("include_patch"))
         branch_probe = probe_fn(
             branch_filters,
             {
@@ -1205,17 +1210,35 @@ def _plan_request_function_shards(
 
 
 def merge_company_filters(base: Any, patch: Any) -> dict[str, Any]:
+    """Merge a partition patch into the base filters.
+
+    Include-side keys (companies/locations/function_ids/job_titles/
+    seniority_level_ids/schools) are PATCH-WINS: a partition rule that names
+    a function id means THAT function, not the union with the root's broader
+    set — root `function_ids: ["8", "24"]` + engineering include `["8"]` must
+    emit `functionIds: ["8"]`, never the redundant/lossy
+    `functionIds: ["8", "24"] + excludeFunctionIds: ["24"]` form.
+    Exclude-side keys (exclude_locations/exclude_function_ids/
+    exclude_job_titles/exclude_seniority_level_ids) UNION-ACCUMULATE so
+    remainder shards keep every previously consumed partition's exclusion.
+    """
+
     merged = normalize_company_filters(base)
     patch_filters = normalize_company_filters(patch)
     for key in COMPANY_FILTER_LIST_KEYS:
-        values = list(merged.get(key) or [])
-        for item in list(patch_filters.get(key) or []):
-            if item not in values:
-                values.append(item)
-        if values:
-            merged[key] = values
-        elif key in merged:
-            merged.pop(key, None)
+        patch_values = list(patch_filters.get(key) or [])
+        if patch_values:
+            if key.startswith("exclude_"):
+                values = list(merged.get(key) or [])
+                for item in patch_values:
+                    if item not in values:
+                        values.append(item)
+                merged[key] = values
+            else:
+                merged[key] = patch_values
+        elif key in merged and not key.startswith("exclude_"):
+            # include-side key absent from the patch keeps the base value
+            continue
     search_query = str(patch_filters.get("search_query") or "").strip()
     if search_query:
         merged["search_query"] = search_query
@@ -1349,6 +1372,33 @@ def _normalize_probe_summary(
     }
 
 
+def _simplify_function_partition_filters(filters: dict[str, Any]) -> dict[str, Any]:
+    """Collapse `functionIds − excludeFunctionIds` to a plain single-function filter.
+
+    Partitions express "engineering minus research" as
+    `functionIds [8,24] + excludeFunctionIds [24]`; every provider call should
+    instead carry the plain `functionIds [8]` (operator directive 2026-07-20).
+    Only when the effective set is a NON-EMPTY strict subset do we rewrite;
+    an empty effective set (the "neither" remainder) keeps its excludes.
+    """
+
+    normalized = normalize_company_filters(filters)
+    function_ids = [str(item) for item in list(normalized.get("function_ids") or [])]
+    exclude_ids = [str(item) for item in list(normalized.get("exclude_function_ids") or [])]
+    if not function_ids or not exclude_ids:
+        return normalized
+    effective = [item for item in function_ids if item not in set(exclude_ids)]
+    if not effective or set(effective) == set(function_ids):
+        return normalized
+    normalized["function_ids"] = effective
+    remaining_excludes = [item for item in exclude_ids if item not in set(function_ids)]
+    if remaining_excludes:
+        normalized["exclude_function_ids"] = remaining_excludes
+    else:
+        normalized.pop("exclude_function_ids", None)
+    return normalized
+
+
 def _build_shard_record(
     *,
     strategy_id: str,
@@ -1367,7 +1417,7 @@ def _build_shard_record(
         "scope_note": scope_note,
         "max_pages": max_pages,
         "page_limit": page_limit,
-        "company_filters": normalize_company_filters(company_filters),
+        "company_filters": _simplify_function_partition_filters(company_filters),
         "estimated_total_count": int(probe_summary.get("estimated_total_count") or 0),
         "probe_summary": dict(probe_summary),
     }
