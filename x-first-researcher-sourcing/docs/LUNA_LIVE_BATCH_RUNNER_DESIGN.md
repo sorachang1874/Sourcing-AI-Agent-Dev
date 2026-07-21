@@ -129,6 +129,70 @@ recall on exactly the evidence that decides the axes.
   (route/model/payload/timing/HTTP-or-failure), retention + deletion journal/receipt.
   No receipt, no adjudication.
 
+### 3.2a Committed substitute judge transports (operator directive 2026-07-20)
+
+The judge layer is model-agnostic: `JudgmentModelBinding` +
+`judgment_binding_for_model(provider_id, endpoint, model_id)` rebind only the
+prompt asset's `model_id` (canonical sha256 recomputed, receipts hash-auditable),
+and `run_luna_batch(binding=...)` records the ACTUAL serving provider/model in
+every execution receipt. The first committed substitute binding is DeepSeek,
+replacing the ad-hoc `/tmp` driver that ran the OpenAI Layer1-3 batch
+(943/947 first pass; 947/947 after the tail retry round, 2026-07-20) — the
+third batch run must not be ad-hoc:
+
+- Binding: `deepseek_judgment_binding()` in
+  `src/x_first/deepseek_luna_transport.py` — provider
+  `deepseek_chat_completions_translated`, endpoint
+  `https://api.deepseek.com/chat/completions`, served model `deepseek-v4-flash`
+  (the exact returned-model check binds DeepSeek's served `model` field to the
+  binding fail-closed).
+- Transport: `DeepSeekChatCompletionsLunaTransport` (same module) translates the
+  Responses payload onto DeepSeek's OpenAI-compatible chat-completions API
+  (system = pinned instructions + strict-schema output-contract addendum, user =
+  the runner-built bundle payload, `response_format: json_object`,
+  `max_tokens: 8192`; requested via the `deepseek-reasoner` reasoning alias) and
+  re-envelopes the one-choice response into the Responses shape. It owns no
+  judged-output validator: strict JSON decode, exact returned-model check,
+  citation closure, and the v1 review-schema assertion stay in the runner.
+- Auth: `DEEPSEEK_API_KEY` env var (or constructor injection), shape-validated
+  fail-closed at construction before any provider-costing call; never logged,
+  receipted, or written to artifacts.
+- Retries/failure surface: transport errors, HTTP 429/5xx, and undecodable 200
+  bodies retry up to `max_attempts` (default 3) with linear backoff, exhausting
+  to `luna_transport_retry_exhausted`; other non-200 statuses fail immediately
+  (`luna_http_status_rejected:<status>`); envelope-shape violations fail
+  immediately (`luna_response_invalid`). Every attempt appends a sanitized
+  receipt to the lock-guarded `attempts` log; the transport is stateless per
+  call and safe for the runner's worker pool.
+- Operator entrypoint: `run_luna_batch_from_files(seeds_path, collection_path,
+  out_dir, transport, approval_id, binding=...)` in `luna_batch_runner.py` —
+  filters seeds to candidates with completed collected bundles, mints the
+  approval receipt bound to exactly that ref set (passing `approval_id` is the
+  operator's approval act), runs the batch, and writes
+  `<out_dir>/luna_batch.json`.
+
+#### 3.2a.1 Supporting-context hook (raw LinkedIn profile comprehension context)
+
+Operator directive 2026-07-20: the judge input must carry the COMPLETE raw
+LinkedIn profile plus a field dictionary — people describe their concrete
+projects in Bio/About/experience/education, which the distilled
+`professional_facts` do not capture. `run_luna_batch`,
+`run_luna_batch_from_files`, `run_streaming_pipeline`, and the payload builders
+accept `extra_source_context` (a dict block, or a per-seed callable so a driver
+can attach each candidate's own raw profile envelope). The resolved block is
+attached to the judged source payload as `supporting_context` (omitted when
+empty; anything not JSON-serializable fails closed with
+`supporting_context_not_json_serializable` before any provider call).
+
+The v1 citation contract is UNCHANGED: citations stay anchored to the distilled
+`seed_fact:<ref>`, `x_bio`, `post:<id>` judged items, and
+`judged_bundle_sha256` stays bound to the v1 bundle items exactly — the block
+never enters that digest. Instead the canonical sha256 of the normalized block
+is recorded separately as `supporting_context_sha256` in the request metadata
+and in every completed execution receipt (`null` when no block was attached),
+so the judged input remains fully reconstructible from receipts while the
+reducer, pins, and review schema stay untouched.
+
 ### 3.3 Prompt (new versioned prompt, closed output)
 
 - Output schema per candidate: the two axis states over

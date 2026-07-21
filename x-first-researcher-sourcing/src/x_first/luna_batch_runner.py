@@ -951,14 +951,52 @@ def judged_output_schema() -> dict[str, Any]:
     }
 
 
+ExtraSourceContext = Mapping[str, Any] | Callable[[Mapping[str, Any]], "Mapping[str, Any] | None"]
+
+
+def _resolve_supporting_context(
+    extra_source_context: ExtraSourceContext | None,
+    seed: Mapping[str, Any],
+) -> Any | None:
+    """Resolve the caller-attached supporting context block to canonical JSON form.
+
+    A dict block is used as-is; a callable is invoked with the validated seed
+    (per-candidate context, e.g. that candidate's raw LinkedIn profile
+    envelope).  Anything not JSON-serializable fails closed; an empty or
+    ``None`` resolution attaches nothing.
+    """
+
+    if extra_source_context is None:
+        return None
+    block = extra_source_context(seed) if callable(extra_source_context) else extra_source_context
+    if block is None:
+        return None
+    try:
+        normalized = json.loads(canonical_json(block))
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise LunaBatchRunnerError("supporting_context_not_json_serializable") from exc
+    return normalized or None
+
+
 def build_luna_source_payload(
     seed: Mapping[str, Any],
     bundle: Mapping[str, Any],
+    *,
+    extra_source_context: ExtraSourceContext | None = None,
 ) -> dict[str, Any]:
-    """Assemble the judged input: identity context + manifest + FULL bundle."""
+    """Assemble the judged input: identity context + manifest + FULL bundle.
+
+    ``extra_source_context`` (operator directive 2026-07-20: the judge must see
+    the COMPLETE raw LinkedIn profile, not only the distilled
+    ``professional_facts``) is attached as ``supporting_context`` when it
+    resolves non-empty.  It is comprehension context ONLY: it is not a
+    citation anchor (the v1 citation contract stays ``seed_fact:``/``x_bio``/
+    ``post:``) and it never enters ``judged_bundle_sha256``, which stays bound
+    to the v1 bundle items exactly.
+    """
 
     manifest_items, judged_bundle_sha256 = build_judged_bundle_manifest(bundle, seed=seed)
-    return {
+    payload: dict[str, Any] = {
         "task": "luna_candidate_review",
         "candidate_ref": seed["seed_ref"],
         "identity_context": _identity_context(seed),
@@ -971,6 +1009,10 @@ def build_luna_source_payload(
             "items": list(bundle["items"]),
         },
     }
+    supporting_context = _resolve_supporting_context(extra_source_context, seed)
+    if supporting_context is not None:
+        payload["supporting_context"] = supporting_context
+    return payload
 
 
 def build_luna_responses_payload(
@@ -981,12 +1023,25 @@ def build_luna_responses_payload(
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
     binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
+    extra_source_context: ExtraSourceContext | None = None,
 ) -> dict[str, Any]:
     """Build the bound provider's Responses payload (canary transport shape)."""
 
     checked_seed = validate_seed_input(seed)
     checked_bundle = validate_candidate_bundle(bundle, seed=checked_seed)
-    source_payload = build_luna_source_payload(checked_seed, checked_bundle)
+    source_payload = build_luna_source_payload(
+        checked_seed, checked_bundle, extra_source_context=extra_source_context
+    )
+    metadata = {
+        "candidate_ref": checked_seed["seed_ref"],
+        "judged_bundle_sha256": source_payload["judged_bundle_sha256"],
+        "prompt_sha256": binding.prompt_sha256,
+    }
+    supporting_context = source_payload.get("supporting_context")
+    if supporting_context is not None:
+        # Bound into the request metadata so the judged input stays fully
+        # reconstructible from receipts without touching judged_bundle_sha256.
+        metadata["supporting_context_sha256"] = canonical_sha256(supporting_context)
     return {
         "model": binding.model_id,
         "reasoning": {"effort": reasoning_effort},
@@ -1009,11 +1064,7 @@ def build_luna_responses_payload(
         "max_output_tokens": max_output_tokens,
         "truncation": "disabled",
         "store": False,
-        "metadata": {
-            "candidate_ref": checked_seed["seed_ref"],
-            "judged_bundle_sha256": source_payload["judged_bundle_sha256"],
-            "prompt_sha256": binding.prompt_sha256,
-        },
+        "metadata": metadata,
     }
 
 
@@ -1249,6 +1300,7 @@ def _failed_execution_receipt(
         "exact_model_match": False,
         "request_payload_sha256": request_payload_sha256,
         "prompt_sha256": binding.prompt_sha256,
+        "supporting_context_sha256": None,
         "started_at": started_at,
         "completed_at": completed_at,
         "elapsed_ms": elapsed_ms,
@@ -1268,6 +1320,7 @@ def review_one_candidate(
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
     binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
+    extra_source_context: ExtraSourceContext | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the single judgment call for one candidate bundle (§3.2)."""
 
@@ -1279,6 +1332,7 @@ def review_one_candidate(
         prompt=prompt,
         reasoning_effort=reasoning_effort,
         binding=binding,
+        extra_source_context=extra_source_context,
     )
     encoded_payload = canonical_json(payload).encode("utf-8")
     payload_sha256 = hashlib.sha256(encoded_payload).hexdigest()
@@ -1300,6 +1354,7 @@ def review_one_candidate(
         "exact_model_match": returned_model == binding.model_id,
         "request_payload_sha256": payload_sha256,
         "prompt_sha256": binding.prompt_sha256,
+        "supporting_context_sha256": payload["metadata"].get("supporting_context_sha256"),
         "started_at": started_at,
         "completed_at": _timestamp(now()),
         "elapsed_ms": elapsed_ms,
@@ -1321,6 +1376,7 @@ def run_luna_batch(
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
     binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
+    extra_source_context: ExtraSourceContext | None = None,
 ) -> dict[str, Any]:
     """Judge every candidate bundle with one bound-model call each (§3.2).
 
@@ -1328,7 +1384,9 @@ def run_luna_batch(
     receipt, no adjudication.  Per-candidate failures stay isolated in failed
     rows; results are re-ordered by seed ordinal.  ``binding`` selects the
     serving provider/model/prompt asset (default: pinned Luna) and is recorded
-    in every execution receipt.
+    in every execution receipt.  ``extra_source_context`` attaches
+    caller-supplied comprehension context (e.g. the raw LinkedIn profile) to
+    every judged payload; see ``build_luna_source_payload``.
     """
 
     workers = _check_worker_count(worker_count)
@@ -1353,6 +1411,7 @@ def run_luna_batch(
                 wall_clock=wall_clock,
                 monotonic=monotonic,
                 binding=binding,
+                extra_source_context=extra_source_context,
             )
         except Exception as exc:  # noqa: BLE001 - failure isolation: one candidate never aborts the batch
             code = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "luna_review_failed"
@@ -1391,6 +1450,89 @@ def run_luna_batch(
     }
 
 
+def run_luna_batch_from_files(
+    *,
+    seeds_path: str | Path,
+    collection_path: str | Path,
+    out_dir: str | Path,
+    transport: LunaTransport,
+    approval_id: str,
+    worker_count: int = DEFAULT_WORKER_COUNT,
+    timeout_ms: int = TOTAL_TIMEOUT_MS,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+    binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
+    wall_clock: Callable[[], datetime] | None = None,
+    extra_source_context: ExtraSourceContext | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Drive ``run_luna_batch`` from a seeds file + a Grok collection result file.
+
+    Committed operator entrypoint replacing the ad-hoc ``/tmp`` drivers
+    (operator directive 2026-07-20: the third batch run must not be ad-hoc).
+    ``seeds_path`` is a ``{"seeds": [...]}`` document (portable-campaign seed
+    inputs); ``collection_path`` is a ``run_grok_collection`` result whose
+    completed rows supply the judged bundles.  Seeds are filtered to candidates
+    with a completed bundle, seed order preserved.  ``limit`` truncates the
+    filtered seed list (smoke-first runs); the approval receipt binds to
+    exactly the truncated ref set, so a smoke approval never authorizes the
+    full batch.
+
+    Passing ``approval_id`` IS the operator's approval act for the run: the
+    receipt is minted here bound to exactly the filtered candidate-ref set and
+    re-validated by ``run_luna_batch`` before any provider-costing call.  The
+    batch result is written to ``<out_dir>/luna_batch.json`` and returned.
+    ``extra_source_context`` is threaded through to every judged payload (a
+    callable receives the validated seed, so per-candidate raw profile
+    envelopes can be attached by ``seed_ref``).
+    """
+
+    now = wall_clock or (lambda: datetime.now(UTC))
+    seeds_document = load_json(Path(seeds_path))
+    collection = load_json(Path(collection_path))
+    if not isinstance(seeds_document, dict) or not isinstance(seeds_document.get("seeds"), list):
+        raise LunaBatchRunnerError("seeds_file_invalid")
+    if not isinstance(collection, dict) or not isinstance(collection.get("results"), list):
+        raise LunaBatchRunnerError("collection_file_invalid")
+    bundles: dict[str, Any] = {}
+    for row in collection["results"]:
+        completed_row = isinstance(row, Mapping) and row.get("status") == "completed"
+        if not completed_row or not isinstance(row.get("bundle"), Mapping):
+            continue
+        ref = row.get("candidate_ref")
+        if isinstance(ref, str) and ref not in bundles:
+            bundles[ref] = row["bundle"]
+    seeds = [
+        seed for seed in seeds_document["seeds"] if isinstance(seed, Mapping) and seed.get("seed_ref") in bundles
+    ]
+    if limit is not None:
+        if int(limit) < 1:
+            raise LunaBatchRunnerError("limit_invalid")
+        seeds = seeds[: int(limit)]
+    approval = {
+        "schema_version": APPROVAL_RECEIPT_SCHEMA_VERSION,
+        "approval_id": approval_id,
+        "approved_at": _timestamp(now()),
+        "candidate_refs_sha256": canonical_sha256([seed["seed_ref"] for seed in seeds]),
+    }
+    batch = run_luna_batch(
+        seeds=seeds,
+        bundles={seed["seed_ref"]: bundles[seed["seed_ref"]] for seed in seeds},
+        transport=transport,
+        approval=approval,
+        worker_count=worker_count,
+        timeout_ms=timeout_ms,
+        reasoning_effort=reasoning_effort,
+        binding=binding,
+        wall_clock=wall_clock,
+        extra_source_context=extra_source_context,
+    )
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    with (out_path / "luna_batch.json").open("w", encoding="utf-8") as stream:
+        json.dump(batch, stream, ensure_ascii=False, indent=1)
+    return batch
+
+
 # ---------------------------------------------------------------------------
 # Event-level streaming pipeline: per candidate, collect -> judge fused.
 # ---------------------------------------------------------------------------
@@ -1411,6 +1553,7 @@ def run_streaming_pipeline(
     wall_clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] | None = None,
     binding: JudgmentModelBinding = DEFAULT_JUDGMENT_BINDING,
+    extra_source_context: ExtraSourceContext | None = None,
 ) -> dict[str, Any]:
     """Fuse Grok collection and bound-model judgment per candidate (operator directive 2026-07-20).
 
@@ -1420,7 +1563,9 @@ def run_streaming_pipeline(
     BEFORE any transport call (no receipt, no calls at all).  Failures stay
     per-candidate: a failed collection marks judgment ``not_attempted``; a
     failed judgment never discards the collected bundle.  Rows are re-ordered
-    by seed ordinal.
+    by seed ordinal.  ``extra_source_context`` attaches caller-supplied
+    comprehension context to every judged payload; see
+    ``build_luna_source_payload``.
     """
 
     workers = _check_worker_count(worker_count)
@@ -1483,6 +1628,7 @@ def run_streaming_pipeline(
                 wall_clock=wall_clock,
                 monotonic=monotonic,
                 binding=binding,
+                extra_source_context=extra_source_context,
             )
         except Exception as exc:  # noqa: BLE001 - failure isolation: judgment loss never discards the bundle
             code = exc.args[0] if exc.args and isinstance(exc.args[0], str) else "luna_review_failed"

@@ -4,9 +4,11 @@ import copy
 import hashlib
 import json
 import sys
+import tempfile
 import threading
 import time
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from x_first import luna_batch_runner as lbr  # noqa: E402
-from x_first.profile_bio_semantic_v2 import canonical_sha256  # noqa: E402
+from x_first.profile_bio_semantic_v2 import canonical_json, canonical_sha256  # noqa: E402
 from x_first.recall_pool_schema import MiniDraft202012Error, assert_schema_valid  # noqa: E402
 from x_first.source_neutral_mapping import (  # noqa: E402
     LUNA_AXIS_REDUCTION_SCHEMA_FILE,
@@ -713,6 +715,296 @@ class LunaBatchRunnerTest(unittest.TestCase):
         bundle, receipt = lbr.collect_candidate_bundle(seed, transport=NarrationTransport())
         self.assertEqual(bundle["candidate_ref"], seed["seed_ref"])
         self.assertEqual(receipt["session_id"], "cli-minted-session")
+
+    # ------------------------------------------------------------------
+    # Committed file driver (run_luna_batch_from_files).
+    # ------------------------------------------------------------------
+
+    def _write_driver_files(self, tmp_path: Path, results: list[dict[str, Any]]) -> tuple[Path, Path]:
+        seeds_path = tmp_path / "seeds.json"
+        collection_path = tmp_path / "collection.json"
+        seeds_path.write_text(json.dumps({"seeds": self.seeds}), encoding="utf-8")
+        collection_path.write_text(json.dumps({"results": results}), encoding="utf-8")
+        return seeds_path, collection_path
+
+    def test_run_luna_batch_from_files_filters_bundled_seeds_and_writes_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            seeds_path, collection_path = self._write_driver_files(
+                tmp_path,
+                [
+                    {"candidate_ref": self.refs[0], "status": "completed", "bundle": self.bundles[self.refs[0]]},
+                    {"candidate_ref": self.refs[1], "status": "failed", "bundle": None},
+                ],
+            )
+            out_dir = tmp_path / "out"
+            transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+            batch = lbr.run_luna_batch_from_files(
+                seeds_path=seeds_path,
+                collection_path=collection_path,
+                out_dir=out_dir,
+                transport=transport,
+                approval_id="driver_test_approval_v1",
+                wall_clock=lambda: datetime(2026, 7, 20, tzinfo=UTC),
+            )
+            # Only the candidate with a completed bundle is judged; the approval
+            # receipt minted by the driver binds exactly that filtered ref set.
+            self.assertEqual(batch["candidate_count"], 1)
+            self.assertEqual(batch["completed_count"], 1)
+            self.assertEqual(batch["results"][0]["candidate_ref"], self.refs[0])
+            approval = batch["approval_receipt"]
+            self.assertEqual(approval["approval_id"], "driver_test_approval_v1")
+            self.assertEqual(approval["approved_at"], "2026-07-20T00:00:00.000Z")
+            self.assertEqual(approval["candidate_refs_sha256"], canonical_sha256([self.refs[0]]))
+            self.assertEqual(len(transport.calls), 1)
+            written = json.loads((out_dir / "luna_batch.json").read_text(encoding="utf-8"))
+            self.assertEqual(written, batch)
+
+    def test_run_luna_batch_from_files_limit_truncates_and_binds_approval_to_smoke_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            seeds_path, collection_path = self._write_driver_files(
+                tmp_path,
+                [
+                    {"candidate_ref": ref, "status": "completed", "bundle": self.bundles[ref]}
+                    for ref in self.refs
+                ],
+            )
+            transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+            batch = lbr.run_luna_batch_from_files(
+                seeds_path=seeds_path,
+                collection_path=collection_path,
+                out_dir=tmp_path / "out",
+                transport=transport,
+                approval_id="driver_smoke_approval_v1",
+                wall_clock=lambda: datetime(2026, 7, 20, tzinfo=UTC),
+                limit=1,
+            )
+            # Smoke-first: only the first bundled seed is judged, and the minted
+            # approval receipt binds the TRUNCATED ref set — a smoke approval
+            # never authorizes the full batch.
+            self.assertEqual(batch["candidate_count"], 1)
+            self.assertEqual(batch["results"][0]["candidate_ref"], self.refs[0])
+            self.assertEqual(
+                batch["approval_receipt"]["candidate_refs_sha256"],
+                canonical_sha256([self.refs[0]]),
+            )
+            self.assertEqual(len(transport.calls), 1)
+            # A non-positive limit is a driver-usage error, closed before any call.
+            with self.assertRaisesRegex(lbr.LunaBatchRunnerError, "limit_invalid"):
+                lbr.run_luna_batch_from_files(
+                    seeds_path=seeds_path,
+                    collection_path=collection_path,
+                    out_dir=tmp_path / "out",
+                    transport=lbr.OfflineFakeLunaTransport(outputs=self.outputs),
+                    approval_id="driver_smoke_approval_v1",
+                    limit=0,
+                )
+
+    def test_run_luna_batch_from_files_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+            # No completed collections -> no judgeable seeds -> closed before any call.
+            seeds_path, collection_path = self._write_driver_files(
+                tmp_path,
+                [{"candidate_ref": self.refs[0], "status": "failed", "bundle": None}],
+            )
+            with self.assertRaisesRegex(lbr.LunaBatchRunnerError, "seed_queue_empty"):
+                lbr.run_luna_batch_from_files(
+                    seeds_path=seeds_path,
+                    collection_path=collection_path,
+                    out_dir=tmp_path / "out",
+                    transport=transport,
+                    approval_id="driver_test_approval_v1",
+                )
+            # A malformed approval id is rejected by the approval gate.
+            seeds_path, collection_path = self._write_driver_files(
+                tmp_path,
+                [{"candidate_ref": self.refs[0], "status": "completed", "bundle": self.bundles[self.refs[0]]}],
+            )
+            with self.assertRaisesRegex(PermissionError, "luna_approval_receipt_invalid"):
+                lbr.run_luna_batch_from_files(
+                    seeds_path=seeds_path,
+                    collection_path=collection_path,
+                    out_dir=tmp_path / "out",
+                    transport=transport,
+                    approval_id="BAD APPROVAL ID",
+                )
+            # Malformed input documents fail closed.
+            bad_seeds = tmp_path / "bad_seeds.json"
+            bad_seeds.write_text(json.dumps({"not_seeds": []}), encoding="utf-8")
+            with self.assertRaisesRegex(lbr.LunaBatchRunnerError, "seeds_file_invalid"):
+                lbr.run_luna_batch_from_files(
+                    seeds_path=bad_seeds,
+                    collection_path=collection_path,
+                    out_dir=tmp_path / "out",
+                    transport=transport,
+                    approval_id="driver_test_approval_v1",
+                )
+            with self.assertRaisesRegex(lbr.LunaBatchRunnerError, "collection_file_invalid"):
+                lbr.run_luna_batch_from_files(
+                    seeds_path=seeds_path,
+                    collection_path=bad_seeds,
+                    out_dir=tmp_path / "out",
+                    transport=transport,
+                    approval_id="driver_test_approval_v1",
+                )
+            self.assertEqual(transport.calls, [])
+
+    # ------------------------------------------------------------------
+    # Supporting context hook (extra_source_context): raw LinkedIn profile
+    # comprehension context; NOT a citation anchor (v1 contract untouched).
+    # ------------------------------------------------------------------
+
+    def _profile_envelope(self, ref: str) -> dict[str, Any]:
+        return {
+            "source": "linkedin_raw_profile_envelope_v1",
+            "candidate_ref": ref,
+            "field_dictionary": {
+                "about": "candidate-authored About text",
+                "experience": "role/project history entries",
+                "education": "education entries",
+            },
+            "raw_profile": {
+                "about": f"raw about text for {ref}",
+                "experience": [{"title": "Research Engineer", "project": "pretraining data pipeline"}],
+            },
+        }
+
+    def test_supporting_context_absent_keeps_payload_byte_identical(self) -> None:
+        prompt = lbr.load_prompt()
+        for ref in self.refs:
+            seed = self.seed_by_ref[ref]
+            baseline = lbr.build_luna_responses_payload(seed, self.bundles[ref], prompt=prompt)
+            explicit_none = lbr.build_luna_responses_payload(
+                seed, self.bundles[ref], prompt=prompt, extra_source_context=None
+            )
+            self.assertEqual(canonical_json(baseline), canonical_json(explicit_none))
+            source = json.loads(baseline["input"][0]["content"][0]["text"])
+            self.assertNotIn("supporting_context", source)
+            self.assertNotIn("supporting_context_sha256", baseline["metadata"])
+
+    def test_supporting_context_dict_attached_with_sha_receipt(self) -> None:
+        block = self._profile_envelope(self.refs[0])
+        transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        hooked, _ = self._run_batch(transport=transport, extra_source_context=block)
+        unhooked, _ = self._run_batch()
+        expected_sha = canonical_sha256(block)
+        self.assertEqual(hooked["completed_count"], len(self.refs))
+        for row, plain_row in zip(hooked["results"], unhooked["results"], strict=True):
+            self.assertEqual(row["execution_receipt"]["supporting_context_sha256"], expected_sha)
+            self.assertIsNone(plain_row["execution_receipt"]["supporting_context_sha256"])
+            # judged_bundle_sha256 stays bound to the v1 bundle items only.
+            self.assertEqual(
+                row["review"]["judged_bundle_sha256"], plain_row["review"]["judged_bundle_sha256"]
+            )
+            # ...while the request payload itself did change (context went in).
+            self.assertNotEqual(
+                row["execution_receipt"]["request_payload_sha256"],
+                plain_row["execution_receipt"]["request_payload_sha256"],
+            )
+        for call in transport.calls:
+            source = json.loads(call["payload"]["input"][0]["content"][0]["text"])
+            self.assertEqual(source["supporting_context"], json.loads(canonical_json(block)))
+            self.assertEqual(call["payload"]["metadata"]["supporting_context_sha256"], expected_sha)
+
+    def test_supporting_context_callable_resolves_per_seed(self) -> None:
+        def hook(seed: Any) -> dict[str, Any] | None:
+            if seed["seed_ref"] == self.refs[1]:
+                return None  # no envelope collected for this candidate
+            return self._profile_envelope(seed["seed_ref"])
+
+        transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        result, _ = self._run_batch(transport=transport, extra_source_context=hook)
+        by_ref = {row["candidate_ref"]: row for row in result["results"]}
+        expected = canonical_sha256(self._profile_envelope(self.refs[0]))
+        self.assertEqual(by_ref[self.refs[0]]["execution_receipt"]["supporting_context_sha256"], expected)
+        self.assertIsNone(by_ref[self.refs[1]]["execution_receipt"]["supporting_context_sha256"])
+        payloads = {
+            json.loads(call["payload"]["input"][0]["content"][0]["text"])["candidate_ref"]: json.loads(
+                call["payload"]["input"][0]["content"][0]["text"]
+            )
+            for call in transport.calls
+        }
+        attached = payloads[self.refs[0]]["supporting_context"]
+        self.assertEqual(attached["candidate_ref"], self.refs[0])
+        self.assertIn("field_dictionary", attached)
+        self.assertNotIn("supporting_context", payloads[self.refs[1]])
+
+    def test_supporting_context_empty_block_omitted(self) -> None:
+        transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        result, _ = self._run_batch(transport=transport, extra_source_context={})
+        self.assertEqual(result["completed_count"], len(self.refs))
+        for row in result["results"]:
+            self.assertIsNone(row["execution_receipt"]["supporting_context_sha256"])
+        for call in transport.calls:
+            source = json.loads(call["payload"]["input"][0]["content"][0]["text"])
+            self.assertNotIn("supporting_context", source)
+
+    def test_supporting_context_not_serializable_fails_closed(self) -> None:
+        for bad_block in ({"raw": {"a", "b"}}, {"raw": float("nan")}):
+            transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+            result, _ = self._run_batch(transport=transport, extra_source_context=bad_block)
+            self.assertEqual(result["completed_count"], 0)
+            for row in result["results"]:
+                self.assertEqual(row["status"], "failed")
+                self.assertEqual(row["error_code"], "supporting_context_not_json_serializable")
+                self.assertIsNone(row["review"])
+                self.assertIsNone(row["execution_receipt"]["supporting_context_sha256"])
+            # The failure happens while building the payload, before any provider call.
+            self.assertEqual(transport.calls, [])
+
+    def test_supporting_context_threads_through_streaming_pipeline(self) -> None:
+        block = self._profile_envelope("shared")
+        grok = lbr.OfflineFakeGrokTransport(bundles=self.bundles)
+        luna = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+        result = lbr.run_streaming_pipeline(
+            seeds=self.seeds,
+            grok_transport=grok,
+            luna_transport=luna,
+            approval=self._approval(),
+            extra_source_context=block,
+        )
+        expected_sha = canonical_sha256(block)
+        for row in result["results"]:
+            self.assertEqual(row["luna"]["status"], "completed")
+            self.assertEqual(row["luna"]["execution_receipt"]["supporting_context_sha256"], expected_sha)
+        for call in luna.calls:
+            source = json.loads(call["payload"]["input"][0]["content"][0]["text"])
+            self.assertIn("supporting_context", source)
+
+    def test_run_luna_batch_from_files_with_supporting_context(self) -> None:
+        block_by_ref = {ref: self._profile_envelope(ref) for ref in self.refs}
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            seeds_path, collection_path = self._write_driver_files(
+                tmp_path,
+                [
+                    {"candidate_ref": ref, "status": "completed", "bundle": self.bundles[ref]}
+                    for ref in self.refs
+                ],
+            )
+            out_dir = tmp_path / "out"
+            transport = lbr.OfflineFakeLunaTransport(outputs=self.outputs)
+            batch = lbr.run_luna_batch_from_files(
+                seeds_path=seeds_path,
+                collection_path=collection_path,
+                out_dir=out_dir,
+                transport=transport,
+                approval_id="driver_context_test_v1",
+                extra_source_context=lambda seed: block_by_ref[seed["seed_ref"]],
+                wall_clock=lambda: datetime(2026, 7, 20, tzinfo=UTC),
+            )
+            self.assertEqual(batch["completed_count"], len(self.refs))
+            for row in batch["results"]:
+                ref = row["candidate_ref"]
+                self.assertEqual(
+                    row["execution_receipt"]["supporting_context_sha256"],
+                    canonical_sha256(block_by_ref[ref]),
+                )
+            written = json.loads((out_dir / "luna_batch.json").read_text(encoding="utf-8"))
+            self.assertEqual(written, batch)
 
 
 if __name__ == "__main__":
