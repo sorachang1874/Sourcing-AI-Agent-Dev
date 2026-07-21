@@ -40,6 +40,7 @@ from sourcing_agent.harvest_connectors import (
     _profile_scraper_mode,
     _recommended_harvest_company_timeout_seconds,
     _recommended_harvest_profile_charge_cap_usd,
+    _recommended_harvest_profile_search_timeout_seconds,
     _recommended_harvest_profile_timeout_seconds,
     _run_harvest_actor_via_async_dataset,
     _runtime_dir_from_path,
@@ -759,7 +760,17 @@ class HarvestConnectorTest(unittest.TestCase):
 
     def test_large_harvest_company_timeout_is_more_conservative(self) -> None:
         self.assertEqual(_recommended_harvest_company_timeout_seconds(25), 300)
-        self.assertEqual(_recommended_harvest_company_timeout_seconds(2500), 1500)
+        # 100 pages × 40s/page headroom (raised from 15s/page after the xAI f8
+        # paid truncation at 500/675 on a 405s ceiling, 2026-07-21).
+        self.assertEqual(_recommended_harvest_company_timeout_seconds(2500), 4000)
+
+    def test_profile_search_timeout_uses_same_per_page_headroom(self) -> None:
+        # 40s/page capped at 5400s (was 20s/page capped at 1800): observed
+        # profile-search pace reaches ~20-24s/page on 40+ page scans.
+        self.assertEqual(_recommended_harvest_profile_search_timeout_seconds(1), 300)
+        self.assertEqual(_recommended_harvest_profile_search_timeout_seconds(25), 1000)
+        self.assertEqual(_recommended_harvest_profile_search_timeout_seconds(100), 4000)
+        self.assertEqual(_recommended_harvest_profile_search_timeout_seconds(200), 5400)
 
     def test_fetch_profiles_by_urls_emits_batch_result_callback_after_provider_response(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")

@@ -3762,7 +3762,11 @@ def _company_employees_take_pages_for_items(item_count: int, page_limit: int) ->
 
 def _recommended_harvest_company_timeout_seconds(requested_items: int) -> int:
     estimated_pages = max(1, (max(1, int(requested_items or 0)) + 24) // 25)
-    return max(300, min(1800, estimated_pages * 15))
+    # 40s/page with a 5400s ceiling: observed company-employees pace is
+    # 9-24s/page across labs, worst ~24s; 40s gives >65% headroom even at the
+    # 100-page provider cap (4000s) so Meta-scale shards never truncate
+    # (xAI f8 truncated at 500/675 on the old 15s/page headroom, 2026-07-21).
+    return max(300, min(5400, estimated_pages * 40))
 
 
 def _recommended_harvest_profile_timeout_seconds(requested_items: int, *, collect_email: bool) -> int:
@@ -3775,7 +3779,10 @@ def _recommended_harvest_profile_timeout_seconds(requested_items: int, *, collec
 
 def _recommended_harvest_profile_search_timeout_seconds(requested_pages: int) -> int:
     page_count = max(1, int(requested_pages or 0))
-    return max(300, min(1800, page_count * 20))
+    # 40s/page with a 5400s ceiling (was 20s/page capped at 1800): observed
+    # profile-search pace reaches ~20-24s/page on 40+ page scans; Meta-scale
+    # scans (100 pages) get 4000s of headroom.
+    return max(300, min(5400, page_count * 40))
 
 
 def _recommended_harvest_dataset_page_size(logical_name: str, *, request_context: dict[str, Any] | None = None) -> int:
