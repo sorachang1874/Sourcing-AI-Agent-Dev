@@ -9,8 +9,10 @@ from unittest import mock
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, JobRequest
+from sourcing_agent.local_postgres import quote_control_plane_postgres_identifier
 from sourcing_agent.storage import ControlPlaneStore
 from sourcing_agent.worker_daemon import PersistentWorkerRecoveryDaemon
+from tests.pg_durable_runtime import psycopg
 from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
@@ -625,6 +627,205 @@ class PersistentWorkerRecoveryDaemonTest(PGControlPlaneStoreTestMixin, unittest.
         self.assertEqual(summary["executed_count"], 1)
         self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
         self.assertEqual(worker["status"], "completed")
+
+    # -- orphaned remote-wait safety net (2026-07-20 production gap) ----------
+    #
+    # A submitted remote-wait worker is terminal-event owned (provider webhook
+    # or in-process long-poll watcher) and is deliberately NOT re-polled by the
+    # recovery daemon. After a serve restart the watcher thread is dead and,
+    # without a webhook, no terminal event ever arrives: the worker must become
+    # eligible for one bounded status re-poll once it is older than
+    # remote_wait_orphan_seconds, or its terminal dataset is never collected
+    # and the blocked job never resumes.
+
+    def _begin_company_roster_remote_wait_worker(
+        self,
+        job_id: str,
+        *,
+        worker_key_suffix: str = "",
+        run_id: str = "run-orphan",
+        dataset_id: str = "dataset-orphan",
+    ):
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / f"snapshot-orphan{worker_key_suffix}"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="acquisition_specialist",
+            worker_key=f"harvest_company_employees::xai{worker_key_suffix}",
+            stage="acquiring",
+            span_name=f"harvest_company_employees:xai{worker_key_suffix}",
+            budget_payload={"max_pages": 1, "page_limit": 25},
+            input_payload={"company_identity": {"company_key": "xai"}},
+            metadata={
+                "recovery_kind": "harvest_company_employees",
+                "identity": {
+                    "requested_name": "xAI",
+                    "canonical_name": "xAI",
+                    "company_key": "xai",
+                    "linkedin_slug": "xai",
+                    "linkedin_company_url": "https://www.linkedin.com/company/xai/",
+                },
+                "snapshot_dir": str(snapshot_dir),
+                "root_snapshot_dir": str(snapshot_dir),
+                "max_pages": 1,
+                "page_limit": 25,
+                "company_filters": {},
+                "worker_key_suffix": worker_key_suffix,
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+                "allow_shared_provider_cache": True,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.controller_store.complete_agent_worker(
+            handle.worker_id,
+            status="queued",
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+                "recovery_kind": "harvest_company_employees",
+            },
+            output_payload={"summary": {"status": "queued", "run_id": run_id, "dataset_id": dataset_id}},
+        )
+        return handle
+
+    def _age_worker_updated_at(self, worker_id: int, *, age_seconds: int) -> None:
+        fixture = self._pg_store_fixture
+        assert fixture is not None and psycopg is not None
+        aged = (datetime.now(timezone.utc) - timedelta(seconds=age_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+        quoted_schema = quote_control_plane_postgres_identifier(fixture.schema)
+        with psycopg.connect(fixture.dsn, autocommit=True, connect_timeout=5, client_encoding="utf8") as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"UPDATE {quoted_schema}.agent_worker_runs SET updated_at = %s WHERE worker_id = %s",
+                    (aged, int(worker_id)),
+                )
+
+    def _orphan_daemon(self, job_id: str, **overrides) -> PersistentWorkerRecoveryDaemon:
+        return PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="orphan-recovery",
+            total_limit=8,
+            stale_after_seconds=0,
+            job_id=job_id,
+            **overrides,
+        )
+
+    def test_orphaned_submitted_remote_wait_worker_is_admitted_and_collected(self) -> None:
+        job_id = "job_orphan_remote_wait_collected"
+        self._save_job(job_id)
+        handle = self._begin_company_roster_remote_wait_worker(job_id)
+        self._age_worker_updated_at(handle.worker_id, age_seconds=3600)
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=900, remote_wait_orphan_limit=4)
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 1)
+        self.assertEqual(summary["remote_wait_orphan_admitted_worker_ids"], [handle.worker_id])
+        self.assertEqual(summary["remote_wait_skipped_count"], 0)
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_company_calls), 1)
+        self.assertEqual(worker["status"], "completed")
+
+    def test_fresh_submitted_remote_wait_worker_is_not_orphan_admitted(self) -> None:
+        job_id = "job_fresh_remote_wait_not_orphan"
+        self._save_job(job_id)
+        handle = self._begin_company_roster_remote_wait_worker(job_id)
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=900, remote_wait_orphan_limit=4)
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        # The event-owner contract is preserved for fresh remote-wait workers:
+        # no eager re-poll while a webhook/watcher can still deliver.
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 0)
+        self.assertEqual(summary["remote_wait_skipped_count"], 1)
+        self.assertEqual(summary["remote_wait_skipped_worker_ids"], [handle.worker_id])
+        self.assertEqual(summary["claimed_count"], 0)
+        self.assertEqual(self.fake_engine.harvest_company_calls, [])
+        self.assertEqual(worker["status"], "queued")
+
+    def test_orphan_admission_is_bounded_by_per_tick_limit(self) -> None:
+        job_id = "job_orphan_admission_limit"
+        self._save_job(job_id)
+        handles = [
+            self._begin_company_roster_remote_wait_worker(
+                job_id,
+                worker_key_suffix=f"::shard{index}",
+                run_id=f"run-orphan-{index}",
+                dataset_id=f"dataset-orphan-{index}",
+            )
+            for index in range(3)
+        ]
+        for handle in handles:
+            self._age_worker_updated_at(handle.worker_id, age_seconds=3600)
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=900, remote_wait_orphan_limit=2)
+        summary = daemon.run_once()
+
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 2)
+        self.assertEqual(summary["remote_wait_skipped_count"], 1)
+        admitted_ids = set(summary["remote_wait_orphan_admitted_worker_ids"])
+        skipped_ids = set(summary["remote_wait_skipped_worker_ids"])
+        self.assertEqual(admitted_ids | skipped_ids, {int(handle.worker_id) for handle in handles})
+        self.assertEqual(summary["claimed_count"], 2)
+
+    def test_orphan_admission_disabled_preserves_event_owner_skip(self) -> None:
+        job_id = "job_orphan_admission_disabled"
+        self._save_job(job_id)
+        handle = self._begin_company_roster_remote_wait_worker(job_id)
+        self._age_worker_updated_at(handle.worker_id, age_seconds=86400)
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=0, remote_wait_orphan_limit=4)
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 0)
+        self.assertEqual(summary["remote_wait_skipped_count"], 1)
+        self.assertEqual(summary["claimed_count"], 0)
+        self.assertEqual(self.fake_engine.harvest_company_calls, [])
+        self.assertEqual(worker["status"], "queued")
+
+    def test_orphaned_remote_wait_worker_with_terminal_marker_still_uses_event_path(self) -> None:
+        job_id = "job_orphan_with_terminal_marker"
+        self._save_job(job_id)
+        handle = self._begin_company_roster_remote_wait_worker(job_id)
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "run_id": "run-orphan",
+                "dataset_id": "dataset-orphan",
+                "recovery_kind": "harvest_company_employees",
+                "remote_provider_terminal_event": {
+                    "event_type": "ACTOR.RUN.SUCCEEDED",
+                    "status": "succeeded",
+                    "run_id": "run-orphan",
+                    "dataset_id": "dataset-orphan",
+                },
+                "remote_provider_terminal_event_seen_at": "2026-07-20T19:00:00+00:00",
+            },
+            output_payload={"summary": {"status": "queued"}},
+            status="queued",
+        )
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=900, remote_wait_orphan_limit=4)
+        summary = daemon.run_once()
+
+        # Terminal-event-marked workers are not remote-wait at all: they take the
+        # normal event-driven claim path, not the orphan safety net.
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 0)
+        self.assertEqual(summary["remote_wait_skipped_count"], 0)
+        self.assertEqual(summary["claimed_count"], 1)
 
     def test_terminal_profile_persist_stage_is_immediately_recoverable_after_partial_yield(self) -> None:
         job_id = "job_terminal_persist_recoverable"

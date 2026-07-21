@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import inspect
+import os
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -109,6 +111,29 @@ def _worker_is_already_submitted_remote_wait(worker: dict[str, Any]) -> bool:
         summary.get("dataset_id"),
     )
     return any(str(value or "").strip() for value in remote_refs)
+
+
+def _parse_worker_timestamp(value: Any) -> datetime | None:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    for candidate in (normalized, normalized.replace("Z", "+00:00")):
+        try:
+            parsed = datetime.fromisoformat(candidate)
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            # PG SQL timestamps are naive UTC; ISO payloads may carry a zone.
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    return None
+
+
+def _worker_updated_at_age_seconds(worker: dict[str, Any]) -> float | None:
+    parsed = _parse_worker_timestamp(dict(worker or {}).get("updated_at"))
+    if parsed is None:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds())
 
 
 class AutonomousWorkerDaemon:
@@ -308,6 +333,8 @@ class PersistentWorkerRecoveryDaemon:
         runtime_dir: str | Path | None = None,
         phase_budget_ms: int = 0,
         candidate_limit: int = 0,
+        remote_wait_orphan_seconds: int | None = None,
+        remote_wait_orphan_limit: int | None = None,
     ) -> None:
         self.store = store
         self.agent_runtime = agent_runtime
@@ -330,6 +357,34 @@ class PersistentWorkerRecoveryDaemon:
         self.runtime_dir = Path(runtime_dir).expanduser().resolve() if str(runtime_dir or "").strip() else None
         self.phase_budget_ms = max(0, int(phase_budget_ms or 0))
         self.candidate_limit = max(0, int(candidate_limit or 0))
+        # Orphaned remote-wait safety net. A submitted remote-wait worker is
+        # normally terminal-event owned (provider webhook or in-process long-poll
+        # watcher) and must NOT be re-polled by this daemon. After a serve
+        # restart the watcher thread is dead and, without a webhook, no terminal
+        # event ever arrives — the worker would be skipped forever and its
+        # terminal dataset never collected. Once the worker's updated_at is
+        # older than remote_wait_orphan_seconds the event owner is presumed
+        # gone, and the daemon admits up to remote_wait_orphan_limit such
+        # orphans per tick through the normal claim/resume path (one bounded
+        # provider status poll per claim; still-in-flight runs are re-queued,
+        # which refreshes updated_at and self-rate-limits the next poll).
+        # remote_wait_orphan_seconds <= 0 disables orphan admission.
+        if remote_wait_orphan_seconds is None:
+            remote_wait_orphan_seconds = _coerce_int(
+                os.environ.get("WORKER_RECOVERY_REMOTE_WAIT_ORPHAN_SECONDS"), 900
+            )
+        if remote_wait_orphan_limit is None:
+            remote_wait_orphan_limit = _coerce_int(os.environ.get("WORKER_RECOVERY_REMOTE_WAIT_ORPHAN_LIMIT"), 4)
+        self.remote_wait_orphan_seconds = max(0, int(remote_wait_orphan_seconds or 0))
+        self.remote_wait_orphan_limit = max(0, int(remote_wait_orphan_limit or 0))
+
+    def _remote_wait_orphan_admitted(self, worker: dict[str, Any], *, admitted_count: int) -> bool:
+        if self.remote_wait_orphan_seconds <= 0 or self.remote_wait_orphan_limit <= 0:
+            return False
+        if admitted_count >= self.remote_wait_orphan_limit:
+            return False
+        age_seconds = _worker_updated_at_age_seconds(worker)
+        return age_seconds is not None and age_seconds >= self.remote_wait_orphan_seconds
 
     def _runtime_namespace_matches_path(self, value: Any) -> bool:
         return runtime_namespace_matches_path(value, configured_runtime_dir=self.runtime_dir)
@@ -414,12 +469,20 @@ class PersistentWorkerRecoveryDaemon:
         recoverable = list(recoverable_by_id.values())
         runtime_namespace_skipped_count = 0
         remote_wait_skipped_workers: list[dict[str, Any]] = []
+        remote_wait_orphan_admitted_workers: list[dict[str, Any]] = []
         if recoverable:
             filtered_recoverable: list[dict[str, Any]] = []
             explicit_ids = set(explicit_recoverable_by_id)
             for worker in recoverable:
                 worker_id = int(worker.get("worker_id") or 0)
                 if worker_id not in explicit_ids and _worker_is_already_submitted_remote_wait(dict(worker)):
+                    if self._remote_wait_orphan_admitted(
+                        dict(worker),
+                        admitted_count=len(remote_wait_orphan_admitted_workers),
+                    ):
+                        remote_wait_orphan_admitted_workers.append(dict(worker))
+                        filtered_recoverable.append(dict(worker))
+                        continue
                     remote_wait_skipped_workers.append(dict(worker))
                     continue
                 filtered_recoverable.append(dict(worker))
@@ -640,6 +703,14 @@ class PersistentWorkerRecoveryDaemon:
                 for worker in remote_wait_skipped_workers
                 if int(worker.get("worker_id") or 0) > 0
             ],
+            "remote_wait_orphan_admitted_count": len(remote_wait_orphan_admitted_workers),
+            "remote_wait_orphan_admitted_worker_ids": [
+                int(worker.get("worker_id") or 0)
+                for worker in remote_wait_orphan_admitted_workers
+                if int(worker.get("worker_id") or 0) > 0
+            ],
+            "remote_wait_orphan_seconds": self.remote_wait_orphan_seconds,
+            "remote_wait_orphan_limit": self.remote_wait_orphan_limit,
             "claimed_count": total_claimed,
             "executed_count": total_executed,
             "candidate_count": total_candidate_count,

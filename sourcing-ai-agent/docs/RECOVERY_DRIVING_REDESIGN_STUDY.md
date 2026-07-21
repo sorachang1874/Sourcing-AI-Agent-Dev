@@ -51,6 +51,8 @@ daemon 本体 `WorkerDaemonService.run_forever`（`service_daemon.py:866/902`）
 
 并且 Audit B 的发现要记牢：`runtime_outbox` 是一个**半成品 durable wakeup 通道**——producer（`enqueue_runtime_outbox`，`storage.py:15321`）+ dispatch-marker（`mark_runtime_outbox_dispatched`，`:15381`）+ 索引（`control_plane_live_postgres.py:5624`）都在，**但没有任何 `list_`/`claim_` consumer**（全仓 grep 确认）。事件骨架已铺一半，缺的只是消费者。
 
+> **2026-07-20 事故补记（§2(b) 第三类 "stuck-state without triggering event" 已落地 backstop）**：serve 重启后，in-process long-poll watcher 线程随之死亡；在无 webhook 的环境下，`waiting_remote_harvest` 的 segmented `harvest_company_employees` shard worker 永远不会再收到 terminal event，而 worker recovery daemon 的 remote-wait skip（`worker_daemon.py` `_worker_is_already_submitted_remote_wait`）假设 event owner 存在，导致两个 full-roster job 永久停在 `blocked acquiring`（shard queue summary 永远 `queued`，dataset 无人下载）。修复语义：**terminal-event first, orphan-poll second**——fresh remote-wait worker 仍严格归 event owner 所有（daemon 不得主动轮询）；但 `updated_at` 超过 `WORKER_RECOVERY_REMOTE_WAIT_ORPHAN_SECONDS`（默认 900s）的 worker 被判定为 orphan，经正常 claim/resume 路径获得**每次 tick 至多 `WORKER_RECOVERY_REMOTE_WAIT_ORPHAN_LIMIT`（默认 4）个**的有界重 poll：remote 已 terminal 则下载 dataset 并完成 worker（queue summary 翻 `completed`，blocked job 的 readiness 就绪后由 workflow_resume 恢复），仍在运行则 re-queue 并刷新 `updated_at` 自我限速。这正是本节"poll 降级为只兜底 (b)"原则对"事件源本身不耐久"这一盲点的补全。
+
 ---
 
 ## 3. 设计选项

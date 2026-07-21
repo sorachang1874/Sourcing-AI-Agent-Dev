@@ -44309,6 +44309,16 @@ class SourcingOrchestrator:
                     _env_int("WORKER_RECOVERY_CANDIDATE_LIMIT", 256),
                 ),
             ),
+            remote_wait_orphan_seconds=(
+                None
+                if payload.get("remote_wait_orphan_seconds") is None
+                else _coerce_int(payload.get("remote_wait_orphan_seconds"), 0)
+            ),
+            remote_wait_orphan_limit=(
+                None
+                if payload.get("remote_wait_orphan_limit") is None
+                else _coerce_int(payload.get("remote_wait_orphan_limit"), 0)
+            ),
         )
 
     def _build_worker_daemon_service(self, payload: dict[str, Any]) -> WorkerDaemonService:
