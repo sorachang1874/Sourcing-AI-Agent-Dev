@@ -27,6 +27,7 @@ from sourcing_agent.asset_reuse_planning import (
 )
 from sourcing_agent.cli import run_server_runtime_watchdog_once
 from sourcing_agent.company_registry import normalize_company_key
+from sourcing_agent.company_shard_planning import FORMER_FUNCTION_SHARD_PLAN_MARKER
 from sourcing_agent.connectors import CompanyIdentity, CompanyRosterSnapshot
 from sourcing_agent.domain import AcquisitionTask, Candidate, EvidenceRecord, JobRequest, make_evidence_id
 from sourcing_agent.durable_runtime import (
@@ -16600,6 +16601,284 @@ class PipelineTest(unittest.TestCase):
         metadata = dict(captured_task["metadata"])
         self.assertEqual(metadata["search_seed_queries"], ["Gemini"])
         self.assertEqual(dict(metadata["intent_view"])["search_seed_queries"], ["Gemini"])
+
+    def test_default_former_search_seed_runs_per_function_shards_and_merges_provenance(self) -> None:
+        # operator directive 2026-07-20: with a plan-derived function
+        # selection the former lane runs ONE independent shard task per
+        # function id (never a merged multi-function query), each carrying the
+        # plan-derived marker, and the shard executions union-merge on stable
+        # person identity with every shard's function provenance preserved.
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "google" / "snapshot-former-function-shards"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        captured_tasks: list[dict[str, object]] = []
+        shard_entries = {
+            "8": [
+                {
+                    "seed_key": "alice-former",
+                    "full_name": "Alice Former",
+                    "profile_url": "https://www.linkedin.com/in/alice-former/",
+                    "employment_status": "former",
+                },
+                {
+                    "seed_key": "xavier-shared",
+                    "full_name": "Xavier Shared",
+                    "profile_url": "https://www.linkedin.com/in/xavier-shared/",
+                    "employment_status": "former",
+                },
+            ],
+            "24": [
+                {
+                    "seed_key": "bob-former",
+                    "full_name": "Bob Former",
+                    "profile_url": "https://www.linkedin.com/in/bob-former/",
+                    "employment_status": "former",
+                },
+                {
+                    "seed_key": "xavier-shared",
+                    "full_name": "Xavier Shared",
+                    "profile_url": "https://www.linkedin.com/in/xavier-shared/",
+                    "employment_status": "former",
+                },
+            ],
+        }
+
+        def _fake_acquire(task, state, job_request):  # noqa: ANN001
+            metadata = dict(task.metadata or {})
+            captured_tasks.append({"task_id": task.task_id, "metadata": metadata})
+            function_id = str(list(dict(metadata.get("filter_hints") or {}).get("function_ids") or [""])[0])
+            summary_path = snapshot_dir / "search_seed_discovery" / "former" / "summary.json"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            summary_path.write_text("{}", encoding="utf-8")
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail="Former search seed ready.",
+                payload={"entry_count": len(shard_entries[function_id])},
+                state_updates={
+                    "search_seed_snapshot": SearchSeedSnapshot(
+                        snapshot_id=snapshot_dir.name,
+                        target_company="Google",
+                        company_identity=identity,
+                        snapshot_dir=snapshot_dir,
+                        entries=[dict(entry) for entry in shard_entries[function_id]],
+                        query_summaries=[],
+                        accounts_used=["harvest_profile_search"],
+                        errors=[],
+                        stop_reason="completed",
+                        summary_path=summary_path,
+                    )
+                },
+            )
+
+        task = AcquisitionTask(
+            task_id="acquire-search-seed-pool",
+            task_type="acquire_search_seed_pool",
+            title="Acquire scoped search seeds",
+            description="Acquire current and former search lanes.",
+            status="ready",
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "include_former_search_seed": True,
+                "search_seed_queries": ["Gemini"],
+                "employment_statuses": ["current", "former"],
+                "company_employee_shard_policy": {"request_function_ids": ["8", "24"]},
+            },
+        )
+        with unittest.mock.patch.object(self.acquisition_engine, "_acquire_search_seed_pool", side_effect=_fake_acquire):
+            execution = self.acquisition_engine._acquire_default_former_search_seed(
+                task,
+                {
+                    "company_identity": identity,
+                    "snapshot_dir": snapshot_dir,
+                    "job_id": "job_former_function_shards",
+                    "plan_payload": {},
+                    "runtime_mode": "workflow",
+                },
+                JobRequest(
+                    raw_user_request="Find Google Gemini people",
+                    target_company="Google",
+                    categories=["researcher", "engineer"],
+                    employment_statuses=["current", "former"],
+                ),
+                identity,
+            )
+
+        self.assertEqual(
+            [str(item.get("task_id") or "") for item in captured_tasks],
+            [
+                "acquire-search-seed-pool-former-function-8",
+                "acquire-search-seed-pool-former-function-24",
+            ],
+        )
+        for captured, function_id in zip(captured_tasks, ["8", "24"]):
+            metadata = dict(captured["metadata"])
+            self.assertEqual(metadata["strategy_type"], "former_employee_search")
+            self.assertEqual(metadata["employment_statuses"], ["former"])
+            filter_hints = dict(metadata["filter_hints"])
+            self.assertEqual(filter_hints["function_ids"], [function_id])
+            self.assertTrue(filter_hints[FORMER_FUNCTION_SHARD_PLAN_MARKER])
+            self.assertEqual(filter_hints["past_companies"], ["https://www.linkedin.com/company/google/"])
+            self.assertEqual(filter_hints["locations"], ["United States"])
+            intent_view = dict(metadata["intent_view"])
+            self.assertTrue(dict(intent_view["filter_hints"])[FORMER_FUNCTION_SHARD_PLAN_MARKER])
+            self.assertEqual(intent_view["function_ids"], [function_id])
+            cost_policy = dict(metadata["cost_policy"])
+            self.assertEqual(cost_policy.get("provider_people_search_mode"), "fallback_only")
+
+        self.assertEqual(execution.status, "completed")
+        snapshot = execution.state_updates.get("search_seed_snapshot")
+        self.assertIsInstance(snapshot, SearchSeedSnapshot)
+        self.assertEqual(len(snapshot.entries), 3)
+        shared = next(
+            entry for entry in snapshot.entries if entry.get("seed_key") == "xavier-shared"
+        )
+        self.assertEqual(shared["function_ids"], ["8", "24"])
+        self.assertEqual(shared["source_shard_ids"], ["former_function_8", "former_function_24"])
+        payload = dict(execution.payload or {})
+        self.assertEqual(payload.get("stop_reason"), "completed")
+        self.assertEqual(len(list(payload.get("former_function_shard_plan", {}).get("shards") or [])), 2)
+        summaries = list(payload.get("former_function_shard_summaries") or [])
+        self.assertEqual(
+            {str(item.get("shard_id") or ""): str(item.get("status") or "") for item in summaries},
+            {"former_function_8": "completed", "former_function_24": "completed"},
+        )
+
+    def test_default_former_search_seed_reports_partial_when_one_shard_fails(self) -> None:
+        # A blocked/failed shard must keep the merged result honestly partial:
+        # blocked status, the failed shard id listed, and the other shard's
+        # recovered candidates still unioned into the snapshot.
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "google" / "snapshot-former-function-partial"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        def _fake_acquire(task, state, job_request):  # noqa: ANN001
+            metadata = dict(task.metadata or {})
+            function_id = str(list(dict(metadata.get("filter_hints") or {}).get("function_ids") or [""])[0])
+            if function_id == "24":
+                raise RuntimeError("boom-24")
+            summary_path = snapshot_dir / "search_seed_discovery" / "former" / "summary.json"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            summary_path.write_text("{}", encoding="utf-8")
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail="Former search seed ready.",
+                payload={"entry_count": 1},
+                state_updates={
+                    "search_seed_snapshot": SearchSeedSnapshot(
+                        snapshot_id=snapshot_dir.name,
+                        target_company="Google",
+                        company_identity=identity,
+                        snapshot_dir=snapshot_dir,
+                        entries=[
+                            {
+                                "seed_key": "alice-former",
+                                "full_name": "Alice Former",
+                                "profile_url": "https://www.linkedin.com/in/alice-former/",
+                                "employment_status": "former",
+                            }
+                        ],
+                        query_summaries=[],
+                        accounts_used=["harvest_profile_search"],
+                        errors=[],
+                        stop_reason="completed",
+                        summary_path=summary_path,
+                    )
+                },
+            )
+
+        task = AcquisitionTask(
+            task_id="acquire-search-seed-pool",
+            task_type="acquire_search_seed_pool",
+            title="Acquire scoped search seeds",
+            description="Acquire current and former search lanes.",
+            status="ready",
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "include_former_search_seed": True,
+                "employment_statuses": ["current", "former"],
+                "company_employee_shard_policy": {"request_function_ids": ["8", "24"]},
+            },
+        )
+        with unittest.mock.patch.object(self.acquisition_engine, "_acquire_search_seed_pool", side_effect=_fake_acquire):
+            execution = self.acquisition_engine._acquire_default_former_search_seed(
+                task,
+                {
+                    "company_identity": identity,
+                    "snapshot_dir": snapshot_dir,
+                    "job_id": "job_former_function_partial",
+                    "plan_payload": {},
+                    "runtime_mode": "workflow",
+                },
+                JobRequest(
+                    raw_user_request="Find Google Gemini people",
+                    target_company="Google",
+                    categories=["researcher", "engineer"],
+                    employment_statuses=["current", "former"],
+                ),
+                identity,
+            )
+
+        self.assertEqual(execution.status, "blocked")
+        self.assertIn("former_function_24", execution.detail)
+        payload = dict(execution.payload or {})
+        self.assertEqual(payload.get("failed_former_function_shard_ids"), ["former_function_24"])
+        self.assertEqual(payload.get("stop_reason"), "former_function_shards_incomplete")
+        summaries = {
+            str(item.get("shard_id") or ""): dict(item)
+            for item in list(payload.get("former_function_shard_summaries") or [])
+        }
+        self.assertEqual(summaries["former_function_8"]["status"], "completed")
+        self.assertEqual(summaries["former_function_24"]["status"], "failed")
+        self.assertIn("boom-24", str(summaries["former_function_24"].get("error") or ""))
+        snapshot = execution.state_updates.get("search_seed_snapshot")
+        self.assertIsInstance(snapshot, SearchSeedSnapshot)
+        self.assertEqual([entry.get("seed_key") for entry in snapshot.entries], ["alice-former"])
+        self.assertEqual(snapshot.entries[0]["function_ids"], ["8"])
+        self.assertEqual(snapshot.stop_reason, "former_function_shards_incomplete")
+
+    def test_merged_former_shard_stop_reason_is_single_consumer_legal_value(self) -> None:
+        # Downstream gates compare stop_reason by exact equality/membership, so
+        # the union must NEVER emit a "+"-joined composite; mixed per-shard
+        # reasons collapse worst-wins (queued > incomplete > unknown >
+        # completed > no_results) with per-shard detail kept elsewhere.
+        from sourcing_agent.acquisition import _merged_former_shard_stop_reason
+
+        self.assertEqual(_merged_former_shard_stop_reason([]), "")
+        self.assertEqual(_merged_former_shard_stop_reason(["completed"]), "completed")
+        self.assertEqual(
+            _merged_former_shard_stop_reason(["completed", "cohort_provider_no_results"]),
+            "completed",
+        )
+        self.assertEqual(
+            _merged_former_shard_stop_reason(["cohort_provider_no_results"]),
+            "cohort_provider_no_results",
+        )
+        self.assertEqual(
+            _merged_former_shard_stop_reason(["completed", "provider_people_search_incomplete"]),
+            "provider_people_search_incomplete",
+        )
+        self.assertEqual(
+            _merged_former_shard_stop_reason(["provider_people_search_incomplete", "queued_background_search"]),
+            "queued_background_search",
+        )
+        self.assertEqual(
+            _merged_former_shard_stop_reason(["completed", "provider_cap_reached"]),
+            "provider_cap_reached",
+        )
 
     def test_acquire_former_search_seed_reuses_existing_durable_former_lane(self) -> None:
         identity = CompanyIdentity(

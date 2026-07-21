@@ -38,6 +38,7 @@ from .company_registry import upsert_company_identity_registry_entry
 from .company_shard_planning import (
     TRUNCATED_ROSTER_STOP_REASONS,
     build_request_scoped_company_employee_query_plan,
+    build_request_scoped_former_search_shard_plan,
     normalize_company_employee_shard_policy,
     plan_company_employee_shards_from_policy,
     resolve_roster_lane_function_ids,
@@ -4547,6 +4548,107 @@ class AcquisitionEngine:
             state_updates=queued_state_updates,
         )
 
+    def _former_search_shard_function_ids(self, task: AcquisitionTask, job_request: JobRequest) -> list[str]:
+        """Plan-derived function selection for the former-member recall lane.
+
+        Prefers the selection planning recorded on the roster task
+        (``company_employee_shard_policy.request_function_ids``); otherwise
+        re-resolves from the effective request through the single owner
+        ``resolve_roster_lane_function_ids`` (explicit cohort > AI-authored
+        buckets in model-written modes > technical default — never
+        text-inferred).
+        """
+
+        shard_policy = self._task_execution_dict(task, job_request, "company_employee_shard_policy")
+        selected = [
+            str(item).strip()
+            for item in list(shard_policy.get("request_function_ids") or [])
+            if str(item).strip()
+        ]
+        if selected:
+            return list(dict.fromkeys(selected))
+        return resolve_roster_lane_function_ids(
+            _effective_request_payload(job_request),
+            planning_mode=str(getattr(job_request, "planning_mode", "") or ""),
+        )
+
+    def _acquire_former_function_shard_plan(
+        self,
+        task: AcquisitionTask,
+        state: dict[str, Any],
+        job_request: JobRequest,
+        *,
+        shard_plan: dict[str, Any],
+        task_view: dict[str, Any],
+        former_cost_policy: dict[str, Any],
+        former_search_seed_queries: list[str],
+    ) -> AcquisitionExecution:
+        """Run the former recall lane as one independent shard per function id.
+
+        Operator directive 2026-07-20: shards are NEVER merged into one
+        multi-function query; each shard task carries the shard plan's filter
+        hints (including the plan-derived marker) so exactly its single
+        function id reaches the provider payload.  Per-shard executions are
+        then union-merged on stable person identity with every shard's
+        function provenance preserved (same union semantics as the segmented
+        current-roster merge), and any blocked/failed shard keeps the merged
+        result honestly partial instead of reporting full completion.
+        """
+
+        shard_results: list[dict[str, Any]] = []
+        for shard in list(shard_plan.get("shards") or []):
+            shard_id = str(shard.get("shard_id") or "").strip() or "former_function_shard"
+            shard_function_ids = [str(item).strip() for item in list(shard.get("function_ids") or []) if str(item).strip()]
+            function_id = shard_function_ids[0] if shard_function_ids else ""
+            shard_filter_hints = dict(shard.get("filter_hints") or {})
+            shard_intent_view = {
+                **task_view,
+                "strategy_type": "former_employee_search",
+                "employment_statuses": ["former"],
+                "search_seed_queries": list(former_search_seed_queries),
+                "search_query_bundles": [],
+                "filter_hints": shard_filter_hints,
+                "filter_keywords": list(shard_filter_hints.get("keywords") or []),
+                "function_ids": list(shard_filter_hints.get("function_ids") or []),
+                "cost_policy": former_cost_policy,
+            }
+            shard_task = AcquisitionTask(
+                task_id=f"{task.task_id}-former-function-{function_id or shard_id}",
+                task_type="acquire_search_seed_pool",
+                title="Acquire former-member search seeds",
+                description="Run a provider former-member recall pass after the current roster baseline is available.",
+                source_hint="Harvest profile search (past company filter)",
+                status="ready",
+                blocking=False,
+                metadata={
+                    "strategy_type": "former_employee_search",
+                    "employment_statuses": ["former"],
+                    "search_seed_queries": list(former_search_seed_queries),
+                    "search_query_bundles": [],
+                    "filter_hints": shard_filter_hints,
+                    "cost_policy": former_cost_policy,
+                    "intent_view": shard_intent_view,
+                },
+            )
+            try:
+                execution = self._normalize_zero_result_search_seed_execution(
+                    self._acquire_search_seed_pool(shard_task, state, job_request),
+                    detail="Former-member search completed but did not add any new candidates.",
+                )
+                shard_results.append({"shard": dict(shard), "execution": execution, "error": ""})
+            except Exception as exc:  # one failed shard must not discard the other shards' coverage
+                shard_results.append({"shard": dict(shard), "execution": None, "error": str(exc)})
+        merged_execution = _merge_former_function_shard_executions(
+            f"{task.task_id}-former-search-seed",
+            shard_results,
+            shard_plan=shard_plan,
+            cost_policy=former_cost_policy,
+        )
+        return self._normalize_zero_result_search_seed_execution(
+            merged_execution,
+            detail="Former-member search completed but did not add any new candidates.",
+        )
+
     def _acquire_default_former_search_seed(
         self,
         task: AcquisitionTask,
@@ -4584,6 +4686,26 @@ class AcquisitionEngine:
                 if str(item).strip()
             ]
             former_search_seed_queries = list(dict.fromkeys(former_search_seed_queries))
+        # Operator directive 2026-07-20: a plan-derived function selection
+        # shards the former recall lane into one independent past-company
+        # query per function id (never merged, ids reach the provider
+        # payload).  No selection keeps the legacy single broad probe below.
+        shard_plan = build_request_scoped_former_search_shard_plan(
+            function_ids=self._former_search_shard_function_ids(task, job_request),
+            past_companies=list(filter_hints.get("past_companies") or []),
+            locations=filter_hints.get("locations"),
+            exclude_locations=filter_hints.get("exclude_locations"),
+        )
+        if list(shard_plan.get("function_ids") or []):
+            return self._acquire_former_function_shard_plan(
+                task,
+                state,
+                job_request,
+                shard_plan=shard_plan,
+                task_view=task_view,
+                former_cost_policy=former_cost_policy,
+                former_search_seed_queries=former_search_seed_queries,
+            )
         former_intent_view = {
             **task_view,
             "strategy_type": "former_employee_search",
@@ -7078,16 +7200,52 @@ def _build_former_filter_hints(
     }
     company_reference = str(identity.linkedin_company_url or identity.canonical_name or identity.requested_name).strip()
     former_filter_hints: dict[str, list[str]] = {}
+
+    def _identity_company_url() -> str:
+        explicit = str(identity.linkedin_company_url or "").strip()
+        if explicit:
+            return explicit
+        slug = str(identity.linkedin_slug or "").strip().strip("/").lower()
+        return f"https://www.linkedin.com/company/{slug}/" if slug else ""
+
+    def _is_identity_reference(value: str) -> bool:
+        normalized = value.strip().lower().rstrip("/")
+        if not normalized:
+            return False
+        candidates = {
+            str(identity.linkedin_slug or "").strip().lower().rstrip("/"),
+            str(identity.canonical_name or "").strip().lower(),
+            str(identity.requested_name or "").strip().lower(),
+            str(identity.company_key or "").strip().lower(),
+        }
+        candidates.update(str(alias or "").strip().lower() for alias in list(identity.aliases or []))
+        return normalized in {item for item in candidates if item}
+
     company_candidates: list[str] = []
+    dropped_non_url: list[str] = []
     for key in ["past_companies", "current_companies"]:
         for item in list(base.get(key) or []):
             normalized = str(item).strip()
-            if normalized and normalized not in company_candidates:
-                company_candidates.append(normalized)
+            if not normalized:
+                continue
+            # The provider requires LinkedIn company URLs for past-company
+            # lanes; plan-level hints may carry the bare slug/name for
+            # slug-only registry identities (dry-run finding, xAI 2026-07-21).
+            if "linkedin.com/company/" in normalized.lower():
+                candidate = normalized
+            elif _is_identity_reference(normalized) and _identity_company_url():
+                candidate = _identity_company_url()
+            else:
+                dropped_non_url.append(normalized)
+                continue
+            if candidate not in company_candidates:
+                company_candidates.append(candidate)
     if not company_candidates and company_reference:
         company_candidates = [company_reference]
     if company_candidates:
         former_filter_hints["past_companies"] = company_candidates
+    if dropped_non_url:
+        former_filter_hints["_dropped_non_url_company_references"] = dropped_non_url
     for key in [
         "scope_keywords",
         "job_titles",
@@ -7101,6 +7259,253 @@ def _build_former_filter_hints(
         if values:
             former_filter_hints[key] = values
     return former_filter_hints
+
+
+def _former_shard_company_filters(shard: dict[str, Any]) -> dict[str, Any]:
+    """Provider-facing filter view of one former shard for provenance annotation.
+
+    Internal underscore-prefixed marker keys (e.g. the plan-derived marker)
+    are never copied into entry provenance.
+    """
+
+    return {
+        str(key): [str(item).strip() for item in list(values or []) if str(item).strip()]
+        for key, values in dict(shard.get("filter_hints") or {}).items()
+        if isinstance(values, list) and not str(key).startswith("_")
+    }
+
+
+def _merged_former_shard_stop_reason(stop_reasons: list[str]) -> str:
+    """Collapse distinct per-shard stop reasons into ONE consumer-legal value.
+
+    Downstream gates compare stop_reason by exact equality/membership
+    (``in {"completed", "cohort_provider_no_results"}``,
+    ``== "queued_background_search"``, ``== "provider_people_search_incomplete"``),
+    so a joined composite such as ``completed+provider_people_search_incomplete``
+    would bypass every one of them. Worst-wins precedence keeps the union
+    honest: any shard still queued or incomplete makes the merged snapshot
+    queued/incomplete; per-shard detail survives in
+    ``former_function_shard_summaries``/``former_function_shard_stop_reasons``.
+    """
+
+    for reason in ("queued_background_search", "provider_people_search_incomplete"):
+        if reason in stop_reasons:
+            return reason
+    benign = {"completed", "cohort_provider_no_results"}
+    unknown = [reason for reason in stop_reasons if reason not in benign]
+    if unknown:
+        return unknown[0]
+    if "completed" in stop_reasons:
+        return "completed"
+    return stop_reasons[0] if stop_reasons else ""
+
+
+def _merge_former_function_shard_snapshots(
+    shard_snapshots: list[tuple[dict[str, Any], SearchSeedSnapshot]],
+    *,
+    stop_reason_override: str = "",
+) -> SearchSeedSnapshot | None:
+    """Union per-function former shard snapshots into one search-seed snapshot.
+
+    Entries dedupe on stable person identity only (``roster_merge_dedupe_key``
+    — profile/member identity, shard-scoped displayed-tuple fallback); a
+    duplicate keeps BOTH shards' function/provenance evidence via
+    ``union_roster_entry_provenance`` (the segmented roster merge's union
+    semantics).  Every shard's query summaries, accounts, and errors are kept
+    with shard attribution.
+    """
+
+    if not shard_snapshots:
+        return None
+    base = shard_snapshots[0][1]
+    merged_entries: list[dict[str, Any]] = []
+    entry_index_by_key: dict[str, int] = {}
+    query_summaries: list[dict[str, Any]] = []
+    accounts_used: list[str] = []
+    errors: list[str] = []
+    stop_reasons: list[str] = []
+    shard_ids: list[str] = []
+    for shard, snapshot in shard_snapshots:
+        shard_id = str(shard.get("shard_id") or "").strip() or "former_function_shard"
+        shard_ids.append(shard_id)
+        shard_filters = _former_shard_company_filters(shard)
+        for entry in list(snapshot.entries or []):
+            if not isinstance(entry, dict):
+                continue
+            annotated_entry = annotate_roster_entry_shard_provenance(
+                dict(entry),
+                shard_id=shard_id,
+                shard_title=str(shard.get("title") or "").strip(),
+                company_filters=shard_filters,
+            )
+            # Cross-shard dedupe only on stable person identity; a duplicate
+            # keeps BOTH shards' function/provenance evidence (union), and
+            # lookalike rows without stable identity never collapse.
+            member_key = roster_merge_dedupe_key(annotated_entry, shard_id=shard_id)
+            existing_index = entry_index_by_key.get(member_key)
+            if existing_index is None:
+                entry_index_by_key[member_key] = len(merged_entries)
+                merged_entries.append(annotated_entry)
+            else:
+                merged_entries[existing_index] = union_roster_entry_provenance(
+                    merged_entries[existing_index],
+                    annotated_entry,
+                )
+        for summary in list(snapshot.query_summaries or []):
+            if isinstance(summary, dict):
+                query_summaries.append({**dict(summary), "former_function_shard_id": shard_id})
+        accounts_used.extend(str(item).strip() for item in list(snapshot.accounts_used or []) if str(item).strip())
+        errors.extend(f"{shard_id}: {error}" for error in list(snapshot.errors or []) if str(error or "").strip())
+        stop_reason = str(snapshot.stop_reason or "").strip()
+        if stop_reason and stop_reason not in stop_reasons:
+            stop_reasons.append(stop_reason)
+    merged = SearchSeedSnapshot(
+        snapshot_id=f"{base.snapshot_id}-former-function-shards",
+        target_company=base.target_company,
+        company_identity=base.company_identity,
+        snapshot_dir=base.snapshot_dir,
+        entries=merged_entries,
+        query_summaries=_registry_dedupe_search_seed_records(query_summaries),
+        accounts_used=list(dict.fromkeys(accounts_used)),
+        errors=list(dict.fromkeys(errors)),
+        stop_reason=str(stop_reason_override or "").strip() or _merged_former_shard_stop_reason(stop_reasons),
+        summary_path=base.summary_path,
+        entries_path=base.entries_path,
+        summary_payload={
+            **dict(base.summary_payload or {}),
+            "former_function_shard_ids": shard_ids,
+            "former_function_shard_stop_reasons": stop_reasons,
+        },
+    )
+    return _persist_search_seed_snapshot(merged)
+
+
+def _merge_former_function_shard_executions(
+    task_id: str,
+    shard_results: list[dict[str, Any]],
+    *,
+    shard_plan: dict[str, Any],
+    cost_policy: dict[str, Any],
+) -> AcquisitionExecution:
+    """Merge per-function former shard executions into one honest result.
+
+    ``completed`` only when EVERY shard completed; any blocked/failed shard
+    yields ``blocked`` with the failed shard ids listed (never reported as
+    full coverage), while candidates recovered by the other shards are still
+    union-merged into the snapshot.
+    """
+
+    shard_snapshots: list[tuple[dict[str, Any], SearchSeedSnapshot]] = []
+    shard_summaries: list[dict[str, Any]] = []
+    failed_shard_ids: list[str] = []
+    failed_shard_details: list[str] = []
+    queued_query_count = 0
+    prefetch_summaries: list[dict[str, Any]] = []
+    for result in list(shard_results or []):
+        shard = dict(result.get("shard") or {})
+        shard_id = str(shard.get("shard_id") or "").strip() or "former_function_shard"
+        execution = result.get("execution")
+        error = str(result.get("error") or "").strip()
+        status = str(getattr(execution, "status", "") or "").strip()
+        detail = error or str(getattr(execution, "detail", "") or "").strip()
+        payload = dict(getattr(execution, "payload", {}) or {})
+        state_updates = dict(getattr(execution, "state_updates", {}) or {})
+        snapshot = state_updates.get("search_seed_snapshot")
+        if execution is None or status != "completed":
+            failed_shard_ids.append(shard_id)
+            failed_shard_details.append(f"{shard_id}: {detail or 'shard execution failed'}")
+        if isinstance(snapshot, SearchSeedSnapshot):
+            shard_snapshots.append((shard, snapshot))
+        queued_query_count += int(payload.get("queued_query_count") or 0)
+        prefetch = dict(payload.get("profile_prefetch") or {})
+        if prefetch:
+            prefetch_summaries.append(prefetch)
+        shard_summaries.append(
+            {
+                "shard_id": shard_id,
+                "function_ids": [
+                    str(item).strip() for item in list(shard.get("function_ids") or []) if str(item).strip()
+                ],
+                "status": status or "failed",
+                "detail": detail,
+                **({"error": error} if error else {}),
+                "entry_count": (
+                    len(snapshot.entries)
+                    if isinstance(snapshot, SearchSeedSnapshot)
+                    else int(payload.get("entry_count") or 0)
+                ),
+                "stop_reason": (
+                    str(snapshot.stop_reason or "").strip()
+                    if isinstance(snapshot, SearchSeedSnapshot)
+                    else str(payload.get("stop_reason") or "").strip()
+                ),
+            }
+        )
+
+    all_completed = not failed_shard_ids
+    merged_snapshot = _merge_former_function_shard_snapshots(
+        shard_snapshots,
+        stop_reason_override="" if all_completed else "former_function_shards_incomplete",
+    )
+    entry_count = len(merged_snapshot.entries) if isinstance(merged_snapshot, SearchSeedSnapshot) else 0
+    requested_profile_urls = (
+        {
+            str(dict(entry or {}).get("profile_url") or "").strip()
+            for entry in list(merged_snapshot.entries or [])
+            if str(dict(entry or {}).get("profile_url") or "").strip()
+        }
+        if isinstance(merged_snapshot, SearchSeedSnapshot)
+        else set()
+    )
+    profile_prefetch = _merge_profile_prefetch_dispatch_summaries(
+        prefetch_summaries,
+        requested_profile_urls=requested_profile_urls,
+    )
+    provider_retry_items = (
+        collect_search_seed_provider_retry_items(merged_snapshot)
+        if isinstance(merged_snapshot, SearchSeedSnapshot)
+        else []
+    )
+    payload: dict[str, Any] = {
+        **(merged_snapshot.to_record() if isinstance(merged_snapshot, SearchSeedSnapshot) else {}),
+        "strategy_type": "former_employee_search",
+        "cost_policy": cost_policy,
+        "stop_reason": str(merged_snapshot.stop_reason or "").strip()
+        if isinstance(merged_snapshot, SearchSeedSnapshot)
+        else ("former_function_shards_incomplete" if failed_shard_ids else ""),
+        "queued_query_count": queued_query_count,
+        "profile_prefetch": profile_prefetch,
+        "provider_retry_items": provider_retry_items,
+        "provider_retry_item_count": len(provider_retry_items),
+        "former_function_shard_plan": shard_plan,
+        "former_function_shard_summaries": shard_summaries,
+    }
+    if failed_shard_ids:
+        payload["failed_former_function_shard_ids"] = list(failed_shard_ids)
+    if all_completed:
+        status = "completed"
+        detail = (
+            f"Recovered {entry_count} former-member search-seed candidates across "
+            f"{len(shard_results)} per-function shard(s)."
+            if entry_count
+            else "Former-member search completed but did not add any new candidates."
+        )
+    else:
+        status = "blocked"
+        detail = (
+            f"Former-member function shard(s) {', '.join(failed_shard_ids)} did not complete "
+            f"({'; '.join(failed_shard_details)}); recovered {entry_count} candidate(s) from "
+            f"{len(shard_results) - len(failed_shard_ids)}/{len(shard_results)} shard(s)."
+        )
+    return AcquisitionExecution(
+        task_id=task_id,
+        status=status,
+        detail=detail,
+        payload=payload,
+        state_updates=(
+            {"search_seed_snapshot": merged_snapshot} if isinstance(merged_snapshot, SearchSeedSnapshot) else {}
+        ),
+    )
 
 
 def _normalize_company_employee_shards(value: Any) -> list[dict[str, Any]]:

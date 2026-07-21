@@ -1,7 +1,9 @@
 import unittest
 
 from sourcing_agent.company_shard_planning import (
+    FORMER_FUNCTION_SHARD_PLAN_MARKER,
     build_default_company_employee_shard_policy,
+    build_request_scoped_former_search_shard_plan,
     plan_company_employee_shards_from_policy,
 )
 
@@ -171,6 +173,154 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertEqual(capped[0]["company_filters"]["function_ids"], ["8"])
         self.assertEqual(capped[0]["estimated_total_count_before_cap"], 3100)
         self.assertTrue(any("Engineer" in str(item.get("title") or "") for item in plan["overflow_scopes"]))
+
+
+class FormerSearchShardPlanTest(unittest.TestCase):
+    def test_former_shard_plan_builds_one_marked_shard_per_function_id(self) -> None:
+        # operator directive 2026-07-20: the former-member recall lane runs
+        # per-function independent shards — never one merged multi-function
+        # query — and each shard stamps the plan-derived marker so its single
+        # function id may reach the provider payload.
+        plan = build_request_scoped_former_search_shard_plan(
+            function_ids=["8", "24", "8", " 24 "],
+            past_companies=["Anthropic", "Anthropic"],
+            locations=None,
+        )
+
+        self.assertEqual(plan["strategy_id"], "request_function_partition")
+        self.assertEqual(plan["function_ids"], ["8", "24"])
+        self.assertEqual(plan["past_companies"], ["Anthropic"])
+        self.assertEqual(plan["locations"], ["United States"])
+        self.assertEqual(len(plan["shards"]), 2)
+        self.assertEqual(
+            [str(shard.get("shard_id") or "") for shard in plan["shards"]],
+            ["former_function_8", "former_function_24"],
+        )
+        for shard, function_id in zip(plan["shards"], ["8", "24"]):
+            self.assertEqual(shard["strategy_id"], "request_function_partition")
+            self.assertEqual(shard["function_ids"], [function_id])
+            filter_hints = dict(shard["filter_hints"])
+            self.assertEqual(filter_hints["past_companies"], ["Anthropic"])
+            self.assertEqual(filter_hints["function_ids"], [function_id])
+            self.assertTrue(filter_hints[FORMER_FUNCTION_SHARD_PLAN_MARKER])
+            self.assertEqual(filter_hints["locations"], ["United States"])
+            self.assertNotIn("exclude_locations", filter_hints)
+
+    def test_former_shard_plan_location_opt_out_and_excludes(self) -> None:
+        plan = build_request_scoped_former_search_shard_plan(
+            function_ids=["24"],
+            past_companies=["xAI"],
+            locations=[],
+            exclude_locations=["Canada"],
+        )
+
+        self.assertEqual(plan["locations"], [])
+        self.assertEqual(plan["exclude_locations"], ["Canada"])
+        self.assertEqual(len(plan["shards"]), 1)
+        filter_hints = dict(plan["shards"][0]["filter_hints"])
+        self.assertNotIn("locations", filter_hints)
+        self.assertEqual(filter_hints["exclude_locations"], ["Canada"])
+        self.assertTrue(filter_hints[FORMER_FUNCTION_SHARD_PLAN_MARKER])
+
+    def test_former_shard_plan_location_passthrough(self) -> None:
+        plan = build_request_scoped_former_search_shard_plan(
+            function_ids=["8"],
+            past_companies=["OpenAI"],
+            locations=["United States", "United Kingdom"],
+        )
+
+        self.assertEqual(plan["locations"], ["United States", "United Kingdom"])
+        filter_hints = dict(plan["shards"][0]["filter_hints"])
+        self.assertEqual(filter_hints["locations"], ["United States", "United Kingdom"])
+
+    def test_former_shard_plan_empty_selection_yields_one_broad_shard_without_marker(self) -> None:
+        # No function selection keeps the legacy broad recall probe: one
+        # shard, NO plan marker, so the connector guardrail strips any
+        # non-plan-derived function ids exactly as before (anti-["19"]).
+        plan = build_request_scoped_former_search_shard_plan(
+            function_ids=[],
+            past_companies=["Anthropic"],
+            locations=None,
+        )
+
+        self.assertEqual(plan["strategy_id"], "broad_former_recall")
+        self.assertEqual(plan["function_ids"], [])
+        self.assertEqual(len(plan["shards"]), 1)
+        shard = plan["shards"][0]
+        self.assertEqual(shard["shard_id"], "former_broad")
+        self.assertEqual(shard["strategy_id"], "broad_former_recall")
+        self.assertEqual(shard["function_ids"], [])
+        filter_hints = dict(shard["filter_hints"])
+        self.assertEqual(filter_hints["past_companies"], ["Anthropic"])
+        self.assertEqual(filter_hints["locations"], ["United States"])
+        self.assertNotIn(FORMER_FUNCTION_SHARD_PLAN_MARKER, filter_hints)
+        self.assertNotIn("function_ids", filter_hints)
+
+
+
+
+class FormerFilterHintsCompanyUrlNormalizationTest(unittest.TestCase):
+    """`_build_former_filter_hints` must emit LinkedIn company URLs for
+    past-company lanes (dry-run finding, xAI 2026-07-21): plan-level hints may
+    carry the bare slug/name for slug-only registry identities; the provider
+    requires URL form."""
+
+    def test_slug_only_identity_resolves_to_url(self) -> None:
+        from sourcing_agent.acquisition import _build_former_filter_hints
+        from sourcing_agent.connectors import CompanyIdentity
+
+        identity = CompanyIdentity(
+            requested_name="xAI", canonical_name="xAI", company_key="xai",
+            linkedin_slug="xai", linkedin_company_url="https://www.linkedin.com/company/xai/",
+            domain="x.ai", aliases=["x.ai", "x ai"], resolver="manual_review_override", confidence="high",
+        )
+        hints = _build_former_filter_hints(
+            identity=identity,
+            base_filter_hints={"current_companies": ["xAI"], "locations": ["United States"]},
+        )
+        self.assertEqual(hints["past_companies"], ["https://www.linkedin.com/company/xai/"])
+
+    def test_slug_derived_url_and_foreign_non_url_dropped(self) -> None:
+        from sourcing_agent.acquisition import _build_former_filter_hints
+        from sourcing_agent.connectors import CompanyIdentity
+
+        identity = CompanyIdentity(
+            requested_name="xAI", canonical_name="xAI", company_key="xai",
+            linkedin_slug="xai", linkedin_company_url="", domain="x.ai",
+            aliases=["x.ai", "x ai"], resolver="builtin", confidence="high",
+        )
+        hints = _build_former_filter_hints(
+            identity=identity,
+            base_filter_hints={"current_companies": ["xAI", "Some Other Company"], "locations": ["United States"]},
+        )
+        self.assertEqual(hints["past_companies"], ["https://www.linkedin.com/company/xai/"])
+        self.assertEqual(hints["_dropped_non_url_company_references"], ["Some Other Company"])
+
+    def test_url_passthrough_and_alias_urls_preserved(self) -> None:
+        from sourcing_agent.acquisition import _build_former_filter_hints
+        from sourcing_agent.connectors import CompanyIdentity
+
+        identity = CompanyIdentity(
+            requested_name="Google", canonical_name="Google", company_key="google",
+            linkedin_slug="googledeepmind", linkedin_company_url="https://www.linkedin.com/company/googledeepmind/",
+            domain="google.com", aliases=["googledeepmind", "deepmind"],
+            resolver="manual_review_override", confidence="high",
+        )
+        hints = _build_former_filter_hints(
+            identity=identity,
+            base_filter_hints={
+                "current_companies": [
+                    "https://www.linkedin.com/company/googledeepmind/",
+                    "https://www.linkedin.com/company/deepmind/",
+                ],
+                "locations": ["United States"],
+            },
+        )
+        self.assertEqual(
+            hints["past_companies"],
+            ["https://www.linkedin.com/company/googledeepmind/", "https://www.linkedin.com/company/deepmind/"],
+        )
+        self.assertNotIn("_dropped_non_url_company_references", hints)
 
 
 if __name__ == "__main__":

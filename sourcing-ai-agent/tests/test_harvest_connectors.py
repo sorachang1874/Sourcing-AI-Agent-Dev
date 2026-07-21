@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import call, patch
 from urllib import parse as urlparse
 
+from sourcing_agent.company_shard_planning import FORMER_FUNCTION_SHARD_PLAN_MARKER
 from sourcing_agent.connectors import (
     CompanyIdentity,
     CompanyRosterSnapshot,
@@ -217,6 +218,50 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(payload["pastCompanies"], ["https://www.linkedin.com/company/anthropicresearch/"])
         self.assertEqual(payload["functionIds"], ["24"])
         self.assertEqual(payload["searchQuery"], "research scientist")
+
+    def test_apply_harvest_search_filters_passes_plan_derived_former_function_id(self) -> None:
+        # operator directive 2026-07-20: a PLAN-DERIVED per-function former
+        # shard (filter hints stamped by build_request_scoped_former_search_
+        # shard_plan) lets its single function id through to the provider
+        # payload — one shard per id, never a merged multi-function query.
+        payload = {}
+        _apply_harvest_search_filters(
+            payload,
+            {
+                "past_companies": ["https://www.linkedin.com/company/anthropicresearch/"],
+                "locations": ["United States"],
+                "function_ids": ["8"],
+                FORMER_FUNCTION_SHARD_PLAN_MARKER: True,
+            },
+            "former",
+        )
+        self.assertEqual(payload["pastCompanies"], ["https://www.linkedin.com/company/anthropicresearch/"])
+        self.assertEqual(payload["locations"], ["United States"])
+        self.assertEqual(payload["functionIds"], ["8"])
+        self.assertNotIn("searchQuery", payload)
+        # The internal marker itself must never serialize into the payload.
+        self.assertNotIn(FORMER_FUNCTION_SHARD_PLAN_MARKER, payload)
+
+    def test_apply_harvest_search_filters_marker_still_suppresses_keywords_and_excludes(self) -> None:
+        # Plan-derived or not, a former past-company probe with no query text
+        # never builds a searchQuery from scope_keywords/keywords, and
+        # exclusion function filters are never invented for the former lane.
+        payload = {}
+        _apply_harvest_search_filters(
+            payload,
+            {
+                "past_companies": ["https://www.linkedin.com/company/anthropicresearch/"],
+                "function_ids": ["24"],
+                "exclude_function_ids": ["8"],
+                "scope_keywords": ["reasoning"],
+                "keywords": ["frontier"],
+                FORMER_FUNCTION_SHARD_PLAN_MARKER: True,
+            },
+            "former",
+        )
+        self.assertEqual(payload["functionIds"], ["24"])
+        self.assertNotIn("excludeFunctionIds", payload)
+        self.assertNotIn("searchQuery", payload)
 
     def test_parse_harvest_profile_payload(self) -> None:
         payload = {

@@ -24,6 +24,7 @@ from .cohort_provider_compiler import (
     CohortRoleProofVerifier,
 )
 from .company_registry import normalize_company_key
+from .company_shard_planning import FORMER_FUNCTION_SHARD_PLAN_MARKER
 from .connectors import CompanyIdentity, CompanyRosterSnapshot
 from .profile_registry_utils import harvest_profile_payload_has_usable_content
 from .profile_timeline import normalized_primary_email_metadata
@@ -6265,18 +6266,34 @@ def _apply_harvest_search_filters(
     payload: dict[str, Any], filter_hints: dict[str, list[str]], employment_status: str
 ) -> None:
     query_text = str(payload.get("searchQuery") or "").strip()
-    # A broad former past-company probe (former + pastCompanies + no query
-    # text) is deliberately unrestricted: it exists to recall the full former
-    # population.  Planner-inferred or defaulted function ids must NEVER
-    # narrow it (a text-inferred functionIds ["19"] silently turned the GDM
-    # former probe into a product-management-only query).  Explicit function
-    # selections run through the cohort compiler's own lanes, not this probe.
-    broad_former_past_company_probe = (
+    # A former past-company probe (former + pastCompanies + no query text)
+    # recalls the former population and comes in two contract shapes (operator
+    # directive 2026-07-20):
+    # - BROAD probe (no plan marker): deliberately function-unrestricted.
+    #   Planner-inferred or defaulted function ids must NEVER narrow it (a
+    #   text-inferred functionIds ["19"] silently turned the GDM former probe
+    #   into a product-management-only query).  Explicit function selections
+    #   run through the cohort compiler's own lanes, not this probe.
+    # - PLAN-DERIVED per-function shard (filter hints stamped with
+    #   FORMER_FUNCTION_SHARD_PLAN_MARKER by the former shard planner): the
+    #   shard's single function id is authoritative and passes through — one
+    #   shard per function id, never a merged multi-function query.
+    # Exclusion function filters are never invented for either former probe
+    # shape, and keyword/searchQuery inference stays suppressed for both.
+    former_past_company_probe = (
         str(employment_status or "").strip().lower() == "former"
         and bool(list(filter_hints.get("past_companies") or []))
         and not query_text
     )
-    function_filter_keys = {"function_ids", "exclude_function_ids"} if broad_former_past_company_probe else set()
+    plan_derived_function_shard = former_past_company_probe and bool(
+        filter_hints.get(FORMER_FUNCTION_SHARD_PLAN_MARKER)
+    )
+    if not former_past_company_probe:
+        function_filter_keys: set[str] = set()
+    elif plan_derived_function_shard:
+        function_filter_keys = {"exclude_function_ids"}
+    else:
+        function_filter_keys = {"function_ids", "exclude_function_ids"}
     mapping = {
         "current_companies": "currentCompanies",
         "past_companies": "pastCompanies",

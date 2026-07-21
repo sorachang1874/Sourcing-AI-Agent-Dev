@@ -45,6 +45,14 @@ DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS = ["United States"]
 # from adaptive probe partitions.
 REQUEST_FUNCTION_PARTITION_STRATEGY_ID = "request_function_partition"
 
+# Internal filter_hints marker stamped ONLY by
+# ``build_request_scoped_former_search_shard_plan`` on plan-derived per-function
+# former shards.  The Harvest profile-search connector's payload mapping is
+# whitelist-based, so this underscore key never serializes into a provider
+# payload; it exists solely to tell the broad-former guardrail that the shard's
+# function id is plan-derived (never text-inferred or defaulted).
+FORMER_FUNCTION_SHARD_PLAN_MARKER = "_former_function_shard_plan_derived"
+
 
 def request_scoped_roster_function_ids(request_payload: dict[str, Any] | None) -> list[str]:
     """Explicitly selected provider function ids for the company-employees roster lane.
@@ -158,6 +166,82 @@ def build_request_scoped_company_employee_query_plan(
         "exclude_locations": exclude_locations,
         "function_ids": normalized_function_ids,
         "company_filters": base_filters,
+        "shards": shards,
+    }
+
+
+def build_request_scoped_former_search_shard_plan(
+    *,
+    function_ids: Iterable[str] | None,
+    past_companies: Iterable[str] | None,
+    locations: list[str] | None = None,
+    exclude_locations: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Request-scoped shard plan for the FORMER-member past-company recall lane.
+
+    Operator directive 2026-07-20: the former-member recall lane runs ONE
+    independent shard per selected function id (engineering "8" and research
+    "24" by default) — shards are NEVER merged into one multi-function query.
+    Only plan-derived function ids may reach the provider payload: each
+    per-function shard stamps ``FORMER_FUNCTION_SHARD_PLAN_MARKER`` into its
+    filter hints so the Harvest broad-former guardrail lets exactly that one
+    id through, while inferred/defaulted ids (the GDM functionIds ["19"]
+    incident) keep being stripped.  Keywords stay suppressed for every former
+    past-company query, marker or not.
+
+    An empty ``function_ids`` selection yields ONE broad shard (legacy
+    unrestricted recall) with NO marker, so the guardrail strips anything that
+    is not plan-derived exactly as before.
+
+    ``locations`` follows the roster lane's single-writer semantics (see
+    ``_request_scoped_location_filters``): ``None`` defaults to the United
+    States, ``[]`` opts out of location filtering, a non-empty list passes
+    through; ``exclude_locations`` composes independently.
+    """
+
+    resolved_locations, resolved_exclude_locations, location_filters = _request_scoped_location_filters(
+        locations,
+        list(exclude_locations or []),
+    )
+    normalized_past_companies = list(
+        dict.fromkeys(str(item).strip() for item in list(past_companies or []) if str(item).strip())
+    )
+    normalized_function_ids = list(
+        dict.fromkeys(str(item).strip() for item in list(function_ids or []) if str(item).strip())
+    )
+    shards: list[dict[str, Any]] = []
+    for function_id in normalized_function_ids:
+        shards.append(
+            {
+                "strategy_id": REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
+                "shard_id": f"former_function_{_normalize_shard_id(function_id)}",
+                "function_ids": [function_id],
+                "filter_hints": {
+                    "past_companies": list(normalized_past_companies),
+                    "function_ids": [function_id],
+                    FORMER_FUNCTION_SHARD_PLAN_MARKER: True,
+                    **{key: list(values) for key, values in location_filters.items()},
+                },
+            }
+        )
+    if not shards:
+        shards.append(
+            {
+                "strategy_id": "broad_former_recall",
+                "shard_id": "former_broad",
+                "function_ids": [],
+                "filter_hints": {
+                    "past_companies": list(normalized_past_companies),
+                    **{key: list(values) for key, values in location_filters.items()},
+                },
+            }
+        )
+    return {
+        "strategy_id": str(shards[0].get("strategy_id") or ""),
+        "function_ids": normalized_function_ids,
+        "past_companies": normalized_past_companies,
+        "locations": resolved_locations,
+        "exclude_locations": resolved_exclude_locations,
         "shards": shards,
     }
 
