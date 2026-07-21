@@ -4293,6 +4293,36 @@ def _get_harvest_actor_run(
     )
 
 
+def _get_harvest_dataset_item_count(
+    settings: HarvestActorSettings,
+    dataset_id: str,
+    *,
+    request_context: dict[str, Any] | None = None,
+) -> int | None:
+    """Expected item count for a dataset (GET /v2/datasets/{id}).
+
+    Returns None when the count cannot be determined — callers must fall
+    back to legacy short-page termination in that case.
+    """
+    try:
+        endpoint = _apify_api_endpoint(
+            f"v2/datasets/{parse.quote(str(dataset_id or '').strip(), safe='')}",
+            {"token": settings.api_token},
+            request_context=request_context,
+        )
+        payload = _harvest_json_request(endpoint, timeout=30)
+    except Exception:
+        return None
+    try:
+        count = int(dict(payload or {}).get("data", {}).get("itemCount"))
+    except (TypeError, ValueError):
+        return None
+    return max(0, count)
+
+
+_HARVEST_DATASET_INCOMPLETE_MAX_ATTEMPTS = 6
+
+
 def _get_harvest_dataset_items(
     settings: HarvestActorSettings,
     dataset_id: str,
@@ -4302,8 +4332,25 @@ def _get_harvest_dataset_items(
     request_context: dict[str, Any] | None = None,
 ) -> Any:
     page_size = _recommended_harvest_dataset_page_size(logical_name, request_context=request_context)
+    # Completeness gate (2026-07-21, two production incidents): a short or
+    # empty middle page is NOT proof of end-of-dataset — right after a run
+    # turns terminal the dataset can settle over several seconds, and one
+    # transiently short page used to truncate the download silently (355-item
+    # and 345-item datasets came back as 24 and 3).  When the provider's
+    # itemCount says more rows exist, settle-retry instead of breaking; on
+    # budget exhaustion raise a RETRYABLE error so the checkpoint records
+    # dataset_download_retryable rather than persisting a truncated body.
+    expected = _get_harvest_dataset_item_count(settings, dataset_id, request_context=request_context)
+    max_incomplete_attempts = max(
+        1,
+        int(
+            resolved_runtime_positive_int(request_context, key="harvest_dataset_incomplete_max_attempts")
+            or _HARVEST_DATASET_INCOMPLETE_MAX_ATTEMPTS
+        ),
+    )
     offset = 0
     items: list[Any] = []
+    incomplete_attempts = 0
     while True:
         page = _get_harvest_dataset_items_page(
             settings,
@@ -4318,21 +4365,38 @@ def _get_harvest_dataset_items(
         if page is None:
             if strict_profile_search:
                 raise HarvestProfileSearchResultError("Harvest profile search dataset page is unavailable.")
-            break
-        if strict_profile_search and not isinstance(page, list):
-            raise HarvestProfileSearchResultError("Harvest profile search dataset page must be an array.")
-        if isinstance(page, list):
+            page_items: list[Any] = []
+        elif isinstance(page, list):
             page_items = list(page)
         else:
             page_items = [page]
-        if not page_items:
-            break
+        if strict_profile_search and not isinstance(page, list):
+            raise HarvestProfileSearchResultError("Harvest profile search dataset page must be an array.")
         if strict_profile_search:
             _assert_harvest_profile_search_result_envelope(page_items)
-        items.extend(page_items)
+        if page_items:
+            items.extend(page_items)
+            offset += len(page_items)
+            incomplete_attempts = 0
         if len(page_items) < page_size:
-            break
-        offset += len(page_items)
+            # Termination is short-page-driven only: a FULL page always keeps
+            # paging even once len(items) >= expected, because the itemCount
+            # probe runs once before the download and a stale-LOW count would
+            # otherwise truncate a still-settling dataset at a page boundary.
+            if expected is None or len(items) >= expected:
+                break
+            incomplete_attempts += 1
+            if incomplete_attempts >= max_incomplete_attempts:
+                raise HarvestRetryableRequestError(
+                    f"Harvest dataset download incomplete: {len(items)}/{expected} items after "
+                    f"{incomplete_attempts} settle retries (dataset still settling or truncated)",
+                    endpoint=f"v2/datasets/{dataset_id}/items",
+                    logical_name=logical_name,
+                    run_id=run_id,
+                    dataset_id=dataset_id,
+                )
+            time.sleep(_harvest_retry_backoff_seconds(incomplete_attempts))
+            continue
     return items
 
 

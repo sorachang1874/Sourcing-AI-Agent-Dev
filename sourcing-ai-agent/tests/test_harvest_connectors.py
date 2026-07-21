@@ -4520,6 +4520,10 @@ class HarvestConnectorTest(unittest.TestCase):
         observed_timeouts: list[int] = []
 
         def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            # The completeness-gate count probe (GET /v2/datasets/{id}) is not
+            # an items page: answer it before the paging fake records offsets.
+            if not urlparse.urlparse(endpoint).path.endswith("/items"):
+                return {"data": {"itemCount": 201}}
             observed_timeouts.append(int(timeout))
             query = urlparse.parse_qs(urlparse.urlparse(endpoint).query)
             offset = int(query.get("offset", ["0"])[0])
@@ -4822,13 +4826,13 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(result, dataset_items)
         self.assertEqual(
             [(request["method"], request["path"]) for request in fake_apify.requests],
-            [("POST", actor_path), ("GET", run_path), ("GET", dataset_path)],
+            [("POST", actor_path), ("GET", run_path), ("GET", dataset_path.removesuffix("/items")), ("GET", dataset_path)],
         )
         submit_request = fake_apify.requests[0]
         self.assertEqual(submit_request["payload"], {"urls": ["https://www.linkedin.com/in/ada-lovelace-real/"]})
         self.assertEqual(submit_request["query"]["waitForFinish"], ["0"])
         self.assertEqual(submit_request["query"]["token"], ["fake-token"])
-        dataset_request = fake_apify.requests[2]
+        dataset_request = fake_apify.requests[3]  # [3] = the /items fetch ([2] is the itemCount probe)
         self.assertEqual(dataset_request["query"]["format"], ["json"])
         self.assertEqual(dataset_request["query"]["clean"], ["true"])
         self.assertEqual(dataset_request["query"]["offset"], ["0"])
@@ -4867,7 +4871,10 @@ class HarvestConnectorTest(unittest.TestCase):
                         },
                     )
 
-        self.assertEqual([(request["method"], request["path"]) for request in fake_apify.requests], [("GET", dataset_path)])
+        self.assertEqual(
+            [(request["method"], request["path"]) for request in fake_apify.requests],
+            [("GET", dataset_path.removesuffix("/items")), ("GET", dataset_path)],
+        )
 
     def test_fake_apify_provider_can_deliver_configured_webhook_to_local_receiver(self) -> None:
         settings = HarvestActorSettings(
@@ -5145,6 +5152,9 @@ class HarvestConnectorTest(unittest.TestCase):
         attempt_counter = {"count": 0}
 
         def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            # The completeness-gate count probe is not part of the retry sequence.
+            if not urlparse.urlparse(endpoint).path.endswith("/items"):
+                return {"data": {"itemCount": 1}}
             attempt_counter["count"] += 1
             if attempt_counter["count"] < 3:
                 raise RuntimeError("Harvest API request failed: IncompleteRead(2048 bytes read)")
@@ -5176,6 +5186,9 @@ class HarvestConnectorTest(unittest.TestCase):
         observed_timeouts: list[int] = []
 
         def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            # The completeness-gate count probe is not part of the attempt budget.
+            if not urlparse.urlparse(endpoint).path.endswith("/items"):
+                return {"data": {"itemCount": 73}}
             attempt_counter["count"] += 1
             observed_timeouts.append(int(timeout))
             raise RuntimeError("Harvest API request failed: IncompleteRead(2048 bytes read)")
@@ -5517,3 +5530,89 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(candidates[0].metadata.get("profile_url"), "https://www.linkedin.com/in/john-smith/")
         self.assertEqual(candidates[0].metadata.get("function_ids"), [])
         self.assertEqual(evidence[0].metadata.get("profile_url"), "https://www.linkedin.com/in/john-smith/")
+
+
+class HarvestDatasetItemsCompletenessTest(unittest.TestCase):
+    """`_get_harvest_dataset_items` must never accept a transiently short page
+    as end-of-dataset while the provider's itemCount says more rows exist
+    (two production truncations, 2026-07-21: 355→24 and 345→3)."""
+
+    def _settings(self) -> HarvestActorSettings:
+        return HarvestActorSettings(enabled=True, api_token="token", actor_id="actor")
+
+    def test_short_middle_page_settles_to_full_download(self) -> None:
+        from sourcing_agent import harvest_connectors as hc
+
+        full = [{"id": f"item-{i}"} for i in range(355)]
+        pages = [full[:24], full]  # transient short first page, then the settled full page
+        calls = {"n": 0}
+
+        def _fake_page(settings, dataset_id, *, offset, limit, **kwargs):
+            calls["n"] += 1
+            return pages[min(calls["n"] - 1, len(pages) - 1)][offset:offset + limit]
+
+        with patch.object(hc, "_get_harvest_dataset_item_count", return_value=355), patch(
+            "sourcing_agent.harvest_connectors._get_harvest_dataset_items_page", side_effect=_fake_page
+        ), patch("sourcing_agent.harvest_connectors.time.sleep", return_value=None):
+            items = hc._get_harvest_dataset_items(self._settings(), "dataset-x")
+
+        self.assertEqual(len(items), 355)
+        self.assertGreaterEqual(calls["n"], 2)
+
+    def test_permanent_short_page_raises_retryable_not_truncated(self) -> None:
+        from sourcing_agent import harvest_connectors as hc
+
+        def _fake_page(settings, dataset_id, *, offset, limit, **kwargs):
+            return [{"id": "only-one"}][offset:offset + limit]
+
+        with patch.object(hc, "_get_harvest_dataset_item_count", return_value=355), patch(
+            "sourcing_agent.harvest_connectors._get_harvest_dataset_items_page", side_effect=_fake_page
+        ), patch("sourcing_agent.harvest_connectors.time.sleep", return_value=None):
+            with self.assertRaises(hc.HarvestRetryableRequestError) as ctx:
+                hc._get_harvest_dataset_items(self._settings(), "dataset-x")
+        self.assertIn("1/355", str(ctx.exception))
+
+    def test_stale_low_item_count_never_truncates_a_full_page(self) -> None:
+        # The itemCount probe runs ONCE before the download; a stale-LOW count
+        # (dataset still settling upward) must not truncate the download at a
+        # page boundary — termination stays short-page-driven.
+        from sourcing_agent import harvest_connectors as hc
+
+        full_page = [{"id": f"item-{i}"} for i in range(200)]  # one full provider page
+        pages = [full_page, [{"id": f"tail-{i}"} for i in range(55)]]
+        calls = {"n": 0}
+
+        def _fake_page(settings, dataset_id, *, offset, limit, **kwargs):
+            calls["n"] += 1
+            return pages[min(calls["n"] - 1, len(pages) - 1)]
+
+        with patch.object(hc, "_get_harvest_dataset_item_count", return_value=24), patch(
+            "sourcing_agent.harvest_connectors._get_harvest_dataset_items_page", side_effect=_fake_page
+        ), patch("sourcing_agent.harvest_connectors.time.sleep", return_value=None):
+            items = hc._get_harvest_dataset_items(self._settings(), "dataset-x")
+
+        self.assertEqual(len(items), 255)
+        self.assertEqual(calls["n"], 2)
+
+    def test_unknown_count_keeps_legacy_short_page_break(self) -> None:
+        from sourcing_agent import harvest_connectors as hc
+
+        full_page = [{"id": f"item-{i}"} for i in range(200)]  # _HARVEST_DATASET_PAGE_SIZE_DEFAULT
+        pages = [full_page, [{"id": "tail"}]]
+        calls = {"n": 0}
+
+        def _fake_page(settings, dataset_id, *, offset, limit, **kwargs):
+            calls["n"] += 1
+            return pages[min(calls["n"] - 1, len(pages) - 1)]
+
+        with patch.object(hc, "_get_harvest_dataset_item_count", return_value=None), patch(
+            "sourcing_agent.harvest_connectors._get_harvest_dataset_items_page", side_effect=_fake_page
+        ), patch("sourcing_agent.harvest_connectors.time.sleep", return_value=None):
+            items = hc._get_harvest_dataset_items(self._settings(), "dataset-x")
+
+        self.assertEqual(len(items), 201)
+        self.assertEqual(calls["n"], 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
