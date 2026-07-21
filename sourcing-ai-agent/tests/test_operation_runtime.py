@@ -1181,6 +1181,71 @@ class OperationRuntimeTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 }
             )
 
+    def test_entity_delta_command_retry_replays_same_identity_without_collision(self) -> None:
+        # Production regression (2026-07-20): a retried provider command re-finalizes
+        # and re-records the same command-scoped entity delta with a NEW attempt_id.
+        # attempt_id is provenance, not identity: the retry must be an idempotent
+        # write-once replay instead of an "immutable identity collision" crash.
+        repository = self.store.repos.workflow_runtime
+        command_id = "cmd-retry-replay"
+        idempotency_key = (
+            f"workflow_command_entity_delta:profile_refill_submit:{command_id}:profile_refill_submit:candidate-1"
+        )
+        base = {
+            "workspace_id": "default",
+            "workflow_run_id": "wf-retry-replay",
+            "operation_run_id": "op-retry-replay",
+            "command_id": command_id,
+            "activity_run_id": "actrun-retry-replay",
+            "entity_type": "profile_refill_submit",
+            "entity_key": "candidate-1",
+            "delta_kind": "profile_refill_submitted",
+            "status": "recorded",
+            "reason": "provider_submit_queued",
+            "entity_payload": {"profile_url_key": "candidate-1", "worker_status": "queued"},
+            "projection_effect": {"entered_projection": False, "provider_submit_queued": True},
+            "idempotency_key": idempotency_key,
+            "metadata": {"activity_boundary": "profile_refill_submit"},
+        }
+        first = repository.upsert_entity_delta({**base, "attempt_id": "actattempt-1"})
+        self.assertEqual(first["attempt_id"], "actattempt-1")
+
+        replayed = repository.upsert_entity_delta({**base, "attempt_id": "actattempt-2"})
+
+        self.assertEqual(replayed, first)
+        self.assertEqual(replayed["attempt_id"], "actattempt-1")
+        self.assertEqual(repository.get_entity_delta(first["delta_id"]), first)
+
+        # Genuine identity conflicts on the same delta identity must still fail closed.
+        with self.assertRaises(RuntimeError):
+            repository.upsert_entity_delta({**base, "attempt_id": "actattempt-3", "entity_key": "candidate-2"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_entity_delta({**base, "attempt_id": "actattempt-3", "command_id": "cmd-other"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_entity_delta({**base, "attempt_id": "actattempt-3", "workflow_run_id": "wf-other"})
+        with self.assertRaises(RuntimeError):
+            repository.upsert_entity_delta(
+                {
+                    **base,
+                    "delta_id": first["delta_id"],
+                    "attempt_id": "actattempt-3",
+                    "idempotency_key": "workflow_entity_delta:other-scope",
+                }
+            )
+
+    def test_entity_delta_immutable_identity_tuples_stay_in_sync(self) -> None:
+        # The entity-delta immutable identity is defined in TWO hand-synced
+        # places (the repository and the PG identity-upsert config); the
+        # attempt_id incident showed what a drift here costs — keep them
+        # byte-identical and keep attempt_id out of both.
+        from sourcing_agent.control_plane_live_postgres import _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG
+        from sourcing_agent.repositories.workflow_runtime import WorkflowRuntimeRepository
+
+        pg_columns = tuple(_WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["workflow_entity_deltas"]["immutable_columns"])
+        repo_columns = tuple(WorkflowRuntimeRepository._ENTITY_DELTA_IMMUTABLE_COLUMNS)
+        self.assertEqual(repo_columns, pg_columns)
+        self.assertNotIn("attempt_id", pg_columns)
+
     def test_r020_public_exact_replay_is_already_applied_and_preserves_uow_timestamps(self) -> None:
         scope = self._seed_r020_scale_scope(
             "exact-replay",

@@ -846,6 +846,10 @@ _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG = {
             "created_at",
             "updated_at",
         ),
+        # attempt_id is provenance (first-recording attempt), not identity: a
+        # command retry replays the same command-scoped delta with a new attempt
+        # id and must hit the write-once no-op path instead of failing closed.
+        # All other identity fields still raise on mismatch (genuine conflict).
         "immutable_columns": (
             "delta_id",
             "workspace_id",
@@ -853,7 +857,6 @@ _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG = {
             "operation_run_id",
             "command_id",
             "activity_run_id",
-            "attempt_id",
             "acquisition_run_id",
             "entity_type",
             "entity_key",

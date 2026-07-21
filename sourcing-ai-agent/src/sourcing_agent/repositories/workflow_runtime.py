@@ -785,6 +785,12 @@ class WorkflowRuntimeRepository(Repository):
         "cancelled",
         "cancelled_remote_ignored",
     )
+    # Entity-delta identity is command+entity scoped: every producer derives the
+    # idempotency_key (and therefore delta_id) from command_id + entity identity,
+    # never from the attempt. attempt_id is provenance about which attempt first
+    # recorded the outcome, so a retried command re-recording the same delta is an
+    # idempotent replay (write-once no-op), not an identity collision. Keep this in
+    # sync with _WORKFLOW_RUNTIME_IDENTITY_UPSERT_CONFIG["workflow_entity_deltas"].
     _ENTITY_DELTA_IMMUTABLE_COLUMNS = (
         "delta_id",
         "workspace_id",
@@ -792,7 +798,6 @@ class WorkflowRuntimeRepository(Repository):
         "operation_run_id",
         "command_id",
         "activity_run_id",
-        "attempt_id",
         "acquisition_run_id",
         "entity_type",
         "entity_key",
