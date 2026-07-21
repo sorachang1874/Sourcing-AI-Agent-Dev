@@ -548,6 +548,48 @@ Anthropic 当前 snapshot 的 former enrich 已验证：
 - 已付 dataset 是收据：先 salvage 下载采纳 + union 再考虑重抓；只有语义变化或证明过期才允许重抓并记录原因。
 - 客户端超时≠未提交：先查询再重试（否则双写 job 并自锁 limiter）。
 - kill driver ≠ abort run：driver 必须记录 run id，停止时调 `/v2/actor-runs/{id}/abort`；杀 driver 前先列并 abort 其 run（实测被杀 driver 已发出 5×400 重复抓取）。
+- **代码落地 ≠ 代码在跑**：经长驻后端服务驱动付费流程前，先核对进程 vintage（`ps -o lstart -p <pid>` vs 关键代码 mtime）——合同改造合入后未重启服务，xAI former lane 就按旧 broad 形态跑了一整轮（2026-07-21，数据可复用但合同形态缺席）。规则：影响请求形态的改动合入后，要么先重启服务再发 job，要么改用 library/脚本路径驱动；dry-run 验证的是工作区代码，不是进程里的代码。
 - cancel 不清 lease、不杀 queued worker：cancel 后必须手动清 `runtime_provider_limiter_leases`（owner 前缀匹配）并取消其 worker（实测被取消 job 一小时后又提交了一个重复 run）。
 - ACwA（成员 dataset）→slug（profile item）的 join 顺序：resolved-url 直查 → 精确 (first,last) → currentCompany 消歧 → 规范化（音符/括号/CJK 语序）→ 姓末 token 变体；同名冲突保持未合并（错合并比缺 profile 更糟）。
 - driver 判重用文档的 `profile_fetched` 标志，禁止用 url 哈希（slug 双形态会让哈希判重静默失效导致全量重抓）。
+
+### Committed live-ops 脚本（2026-07-20，禁止再造 /tmp ad-hoc）
+
+- `scripts/live_apify_dataset_salvage.py` — 把已付费的孤儿 Apify dataset（job 取消未物化）采纳为 candidate documents + 合并快照；复用 `candidate_materialization` 的 ingest/consolidate 与 connector 的 profile 匹配/缓存键；信封形状对齐 OpenAI salvage 先例。
+- `scripts/live_profile_fetch_slot_fill.py` — 并发 slot-fill profile fetch（4–8 批，只抓 candidate_documents 减去缓存命中的缺失 url；connector 侧二次缓存防重；断言 live 双闸否则 fail closed）。
+- `scripts/live_candidate_profile_enrich.py` — 把缓存 profile 的 headline/location/experience/education/languages 回填进 candidate documents（分层 L2/L3 信号的输入；幂等、先备份）。
+- `scripts/live_layering_run.py` — 对 salvage 快照跑华人分层（`allow_candidate_documents_source=True`，CLI 暂无此旗标；DeepSeek 复核走 MODEL_PROVIDER_* env）。
+- `scripts/live_former_lane_run.py` — former lane per-function 分片查询（library 路径，绕开 daemon 依赖；复用产品 planner 的 per-function shard plan，payload 先验证再派发：`pastCompanies` 单 URL + 单 functionIds、无 keywords；产出 salvage 形状的 `former_<shard_id>.json`）。
+- `scripts/live_scoped_lane_run.py` — 关键词 scoped 名册（per-status × per-function 单元查询，`searchQuery` 保留；存在原因＝产品两条路径的合同缺口：full_company_roster 静默丢关键词、scoped_search_roster 合并 functionIds）。
+- `scripts/live_xfirst_seed_build.py` — Layer 1-3 → X-First seed_inputs（从 profile envelope 直取完整 profile facts：全部工作经历含描述、About 全文分段、教育、projects、patents 等，affiliation facts 带 current/historical 时间性，evidence_ref 绑定快照）。
+- `scripts/live_grok_collection_run.py` — Grok 采集驱动（CWD 固定在 `~/.grok` 防 "Device not configured"，--limit 先 smoke 再全量，默认 48 workers）。
+- `scripts/live_luna_judge_run.py` — DeepSeek judge 驱动（committed transport + binding；经 runner `extra_source_context` 钩子向 judge 输入注入 raw LinkedIn profile 全文 + 字段字典 + 引用白名单说明；v1 citation/pins/reducer 不动）。
+- `scripts/live_xfirst_export_csv.py` — 13 列导出（CRM 8 列 + X-First 5 列）；区分"待采集/无X账号/无X账号·据profile"、seed_fact 引用渲染进证据摘要、支持 judge 结果回填与账号冲突标注。
+- 规则：live 运维动作凡两次以上出现就必须落成 committed 脚本进本目录，并在本节登记；/tmp 脚本视为事故温床。
+
+### Judge 输入合同（2026-07-20，operator 指令定型）
+
+- judge 输入 = seed facts（引用锚点）+ grok bundle（X bio/posts）+ **raw LinkedIn profile 全文 + 字段字典**（supporting_context，非引用源）。理由：被判断人常在 Bio/工作经历/教育里写具体项目，提炼规则会漏；AI 能理解结构化 raw profile。
+- 引用白名单 fail-closed：只有 `seed_fact:<ref>` / `x_bio` / `post:<id>` 合法，非法引用整条 review 作废重判（`luna_output_citation_not_judged`）。
+- CSV 语义：X账号已确认 列承载账号状态，Pre-train方向经历 列承载判断状态；无 X 账号但 profile 有证据的行标记"（无X账号·据profile）"，不得用"无X账号"掩盖判断结果。
+
+### 与 workflow 内建 refill 机制的关系 + Agent 化重构 TODO（2026-07-20 记录）
+
+- 产品已有 job 生命周期内的补 profile 通道：`POST /api/jobs/{job_id}/profile-completion`（api.py:2069）+ daemon 驱动的 `linkedin.profile_refill.submit_batch` 命令链（`profile_fetch_owner.py`）。它是 job/daemon 绑定的：离开 job 上下文（salvage、手工 lane 补发）就没有独立入口。（曾带一个会杀 daemon 的 entitydelta 不可变冲突 bug——`attempt_id` 被误入不可变身份，命令重试必崩；已修：attempt_id 移出身份改记 provenance、command 级重放为 write-once no-op、真实冲突仍 fail-closed，回归测试在 `tests/test_operation_runtime.py`。）
+- 因此 `live_profile_fetch_slot_fill.py` 的定位是「任意快照的缺失补齐 + 4–8 并发批次」的独立 committed 入口。**Agent 化重构时必须把两者收敛成单一 fetch owner**：同一套 URL 去重、缓存键、批次几何（400–800 url/run）、slot-fill 调度、live 闸校验，workflow 内与独立驱动共用，禁止再长出第三条路径。
+- 驱动级教训（已内建于该脚本）：付费意图的驱动必须先断言 live 契约（`SOURCING_EXTERNAL_PROVIDER_MODE=live` + `SOURCING_LIVE_PROVIDER_CONFIRM=1` + `SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS=1`），否则 fail closed——产品的 simulate 默认值会静默地"看似跑完实际零提交"。
+
+### 个例 fetch 失败的 WebBridge 补齐路径（2026-07-21）
+
+- 判型：先用 `harvest_profile_payload_has_usable_content` 扫快照 envelope；`404 Profile not found` 类个例（非批量失败）才走人工通道，批量失败回到参数/配额诊断。
+- 做法：Kimi WebBridge 打开目标的 ACw member url（登录态下 302 到 slug；`/details/experience/` 二级经历页能渲染主卡受限隐藏的内容），抽取工作经历/教育/技能全文，按 harvest item 形状写 `_supplement` 标记的 envelope（保留原 404 为 `.404bak`）。
+- 之后：只对这些人生成 seeds → Grok → judge（全链路复用 committed 脚本），合并进 collection/batch 再重出 CSV。实测 xAI 2 个 404：Wenhan Xiong（Pretraining Grok 3+ 角色引用 → 有 current）、Yikang SHEN（bio 列出 JetMoE/DeltaNet 等 → 疑似）。
+- 纪律：补充内容必须来自真实浏览的可引用文本；`_supplement.source` 必填；禁止用模型想象填充缺失 profile。
+
+### LinkedIn UI 搜索 vs provider API 搜索的召回边界（Meta TBD 实测，2026-07-21）
+
+- 实测事实：同一查询（美国 + 关键词 `TBD` + Meta 公司页），LinkedIn UI（登录态，公司 people 页）报 **152 位关联会员**；harvest profile-search/company-employees 严格计数 **56 current + 32 past（去重后 67）**。缺口 ~2.3×。
+- 边界假设（待复验）：部分成员的隐私设置（3度+人脉的站外可见性）使其在 UI 搜索可见但不被 API/第三方 search 返回；LinkedIn UI 计数还含"猜您认识"推荐位，非严格匹配。
+- functionIds 过滤会额外误伤召回（LinkedIn function 字段稀疏）：本次 36（带 function 过滤）→ 67（去过滤）。关键词聚焦的小名册不要加 function 过滤；function 归属走下游 profile 内容判断。
+- 复验锚点（操作员手动搜索页）：`https://www.linkedin.com/company/meta/people/?facetGeoRegion=103644278&keywords=TBD`（facetGeoRegion=103644278 = 美国）。当时 facet 快照：工作领域 工程 86 / 研究 14 / 计划和项目管理 11 / 信息技术 7 / 运营 7；地区 美国 152（加州 103、旧金山湾区 101、门洛帕克 35、华盛顿州 22）；院校 MIT 14 / Stanford 14 / UC Berkeley 14 / CMU 13 / 清华 10；技能 Python 89 / C++ 74 / ML 71；专业 CS 90。人脉关系 152 全部 3 度+。
+- 规则：涉及召回率争议时，用同一关键词同时记录 UI 计数（含页面 URL + facet 快照）与 provider 严格计数，差异归因为以上边界之一，不得静默当作 provider 漏抓。
