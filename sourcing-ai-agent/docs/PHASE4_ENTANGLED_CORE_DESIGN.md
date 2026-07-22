@@ -96,3 +96,24 @@ recovery tick 进 worker daemon 独立进程的**前置条件**：① 请求路�
 - 不实施 worker/API 进程分离本体（只清前置债务 ①–③，本体随 Track C）。
 - 不动 2 个 CRM 钉死 drain 与其字面源码守卫；不动 `_job_is_terminal`/worker supervisor 的 fail-closed 反伪造护栏（约束 10）。
 - 不处理 `test_pipeline`（42k 行）测试设计与 PG fixture 收尾项；Phase 3b 留守件（excel 共享 spine + instance-patch 耦合）维持现状随 M3 再议。
+
+## Step 2b 迁移前置 characterization（B2 增量,2026-07-22 @HEAD d2f9e56 后）
+
+实测锚点（替代上文 ~74k 树旧锚）：
+
+- `run_worker_recovery_once` = orchestrator.py **40442–42557**（2,115 行；下一 def 42606）。
+- 区域内 `run_phase/_run_recovery_phase` 调用 **35** 处；`TickContext` 构造于 ~40952。
+- **线程化状态清单（迁移的核心障碍，实测）**：`nonlocal` 仅余 2 个
+  （`recovery_tick_budget_exhausted`、`durable_work_handoff_yield_requested`）；
+  其余跨 phase 状态为方法级局部 + 闭包捕获：
+  `profile_refill_submit_observed_this_tick`、`profile_refill_command_planned_this_tick`
+  （由 `_profile_refill_worker_submit_observed`/`_profile_refill_command_planned_observed`
+  闭包在 tick 相对 +581/+592 处写入）、`_profile_refill_owner_drain_payload`/
+  `_merge_profile_refill_results` 辅助闭包（相对 +198/+304）。
+- 四个 inline 级联簇的 orchestrator 侧注释锚 = 40946–40951（"entangled cascade
+  clusters stay inline below as named phase calls"）。
+- **迁移法（按本页 §3 Step 2 + 40946 注释的约束推导）**：每簇一个切片；先把该簇的
+  `*_this_tick` 局部提升为 `TickContext` 命名字段（oracle 无观测 —— 这些局部不进
+  phase 记录，提升是安全的第一步）；再把闭包辅助函数移为模块级纯函数（携带显式参数）；
+  最后 phase 体原样搬迁。每切片后 oracle 10/10 byte-identical 为硬门；任何
+  观测记录变化 = 停下重设计，不许改 oracle。
