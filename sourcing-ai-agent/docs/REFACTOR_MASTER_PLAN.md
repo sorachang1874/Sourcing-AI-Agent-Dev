@@ -71,7 +71,7 @@ last-verified: 2026-07-22 (B0a+B0b done)
 
 - [x] **B0a — R0 harness 地基** DONE 2026-07-22（mypy 棘轮:baseline 81 + check 脚本 + make 目标 + CI 活跑,'87' 勘误;lane manifest 单源+双消费者守卫;溯源门:契约文档+扫描器+213 祖父冻结基线+gate+REGRESSION_INDEX 含墓碑 T-001/002;4 个事故回归首次入 lane;x-first 基线 667 固化 `1eb0d7c`;离线门块 45/45 绿）
 - [x] **B0b — 策略 Step 1** DONE 2026-07-22 `2198dd3`（签名级去 size 参数；死写分支删除；manifest base_filters 回退；R-034 关闭 52/52 绿；PLAYBOOK/COHORT 合同文档修正）
-- [~] **B1 进行中**:preflight+翻转靶钉 `374198f`；Step 2a former-only 派发统一 `baa0040`（评审请求已入 re-fire 队列）；**R-010 关闭** `7b33073`（7→0：3 字面量位点 helper 派生化+5 个 fixture 迁移到 durable 事件/命令合同，seed_discovery 60/60；顺带收口 former-broad 显式授权与 stop_reason lane 来源化两处合同演进）；live_former_lane_run 兼容已验。**余：Step 2b planning 层 schema/merge 统一**（employment_status 一等 shard 参数；PIN_step2 翻转；触付费 payload 映射 6350-6409 守卫保持）
+- [x] **B1 DONE 2026-07-22**（`374198f`+`baa0040`+`7b33073`+`632f4fb`+`1618aef`）：strategy preflight+翻转靶钉入 lane；Step 2a 执行派发统一（former-only 走 per-function former lane，评审请求在 re-fire 队列）；Step 2b-i merge 经共享完成度合同（截断=partial，永不虚报全覆盖）；Step 2b-ii planning 层铸造 former_function_shard_plan+review 同步重建+PIN_step2 翻转；R-010 关闭（seed_discovery 60/60）。**遗留给 Step 3/5**：size 转向退役（PIN_step3 待翻）；former 对 roster task 的 strategy 劫持形态归 Step 5 归一
 - [ ] **B2 — Track A 切片 1（Step 2b）** characterization-first ＋ test_pipeline 打捞移植开始
 - [ ] **B3 — 策略 Step 3（size 转向退役，评审门）** ＋ Track A 切片 2（Block a）＋ 拆分第一波
 - [ ] **B4 — 策略 Step 4 ＋ 切片 3 回涨归位＋棘轮 ＋ mypy B/C 族 ＋ 拆分第二波**

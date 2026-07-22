@@ -18,14 +18,14 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | Gate | Route |
 |---|---|---|
-| Refactor continuation: **B0a+B0b DONE 2026-07-22**; next = B1 (strategy preflight + Step 2 former unification + Tier-1 retirement; review request queues behind chshapi wall) | launch each session via `/refactor-goal` | [REFACTOR_MASTER_PLAN.md](sourcing-ai-agent/docs/REFACTOR_MASTER_PLAN.md) §7 |
+| Refactor continuation: **B0a+B0b+B1 DONE 2026-07-22** (former lane unified at dispatch+merge+planning; R-010/R-034 closed; preflight+ratchet+provenance gates live); next = B2 (Track A slice 1 Step 2b cascade migration, characterization-first + test_pipeline salvage start) | launch each session via `/refactor-goal` | [REFACTOR_MASTER_PLAN.md](sourcing-ai-agent/docs/REFACTOR_MASTER_PLAN.md) §7 |
 | Parked 23 delivered-job commands: per-job re-enqueue vs cancel | re-enqueue-safe under legacy deletion (pgLegacy Q2 verified); operator decides keep-vs-cancel | neutralization ledger (operator memory) |
 
 ## Blocked on external walls
 
 | Item | Wall |
 |---|---|
-| Review re-fire queue (S1e2b rerun4, FF-SCHEMA rerun5, fnID roster, FT1 rerun4, FT2 rerun7, former-shard review) | chshapi quota; probe before firing |
+| Review re-fire queue (S1e2b rerun4, FF-SCHEMA rerun5, fnID roster, FT1 rerun4, FT2 rerun7, former-shard review, **B1 Step 2a former-only dispatch pinned `baa0040`**) | chshapi quota; probe before firing |
 | Any live acquisition (incl. TML empty-name former rows, hosted smoke intake evidence) | HarvestAPI monthly quota |
 
 ## Backlog (unowned, needs a lane)
