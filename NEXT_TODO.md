@@ -9,8 +9,10 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | State | Route |
 |---|---|---|
-| Registration-sync code fix: registry `source_path` should record canonical (not hot-cache) location | NEW — tick-1 reconcile re-minted a HOT_CACHE source_path on google 152139 (no longer destructive thanks to 23fb308, but the debt self-regenerates every reconcile) | [Phase C design](sourcing-ai-agent/docs/PHASE_C_DATA_CONSOLIDATION_DESIGN.md) C3 + asset_registration.py |
+| SALVAGE downloads of 4 orphaned PAID dataset groups (GDM fn8/fn24 function rosters ~2,346 items; TML Full-mode 192 urls; TML roster 220; OpenAI 19-url tail) | awaiting operator gate — dataset GET only, zero new actor runs; **Apify retention clock ticking (runs of 07-19/20)** | salvage report (operator memory `artifacts-intake-20260721/SALVAGE_REPORT.md`) + `scripts/live_apify_dataset_salvage.py` |
 | google repair snapshot 20260722T054928: review → registry promotion (or discard) | awaiting operator review (pointer already advanced; registry row absent by design) | serving-repair flow + completeness gate (passes on it) |
+| PG shard registry: 2026-07-22 simulate-run rows (result_count=40) mask real lineage | NEW data-debt from salvage audit | salvage report §coverage |
+| HarvestAPI capability-boundary probe round | designed, EXECUTES when quota returns | [HARVESTAPI_PLAYBOOK](sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md) §能力边界 |
 
 ## Next (approved sequence)
 
