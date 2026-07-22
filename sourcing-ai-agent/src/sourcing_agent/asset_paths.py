@@ -205,6 +205,31 @@ def hot_cache_snapshot_dir(runtime_dir: str | Path, company_key: str, snapshot_i
     return company_dir / str(snapshot_id or "").strip()
 
 
+def canonicalize_company_asset_path(runtime_dir: str | Path, path: str | Path) -> str:
+    """Return the canonical-root twin of a hot-cache company-asset path.
+
+    Registry rows must record where an asset canonically LIVES, not where a
+    build happened to write it: hot-cache source_path registrations are how the
+    2026-07-22 source==destination sync incident became reachable, and they
+    regenerate on every reconcile if minted here. Falls back to the original
+    path when it is not under the hot cache or the canonical twin does not
+    exist yet (never mint a dangling path).
+    """
+    raw = str(path or "").strip()
+    if not raw:
+        return raw
+    resolved = Path(raw).expanduser()
+    hot_root = hot_cache_company_assets_dir(runtime_dir)
+    if hot_root is None:
+        return raw
+    try:
+        relative = resolved.resolve().relative_to(hot_root.resolve())
+    except (OSError, ValueError):
+        return raw
+    canonical = canonical_company_assets_dir(runtime_dir) / relative
+    return str(canonical) if canonical.exists() else raw
+
+
 def latest_snapshot_id_for_company_dir(company_dir: Path) -> str:
     latest_payload = load_latest_snapshot_pointer(company_dir)
     snapshot_id = str(latest_payload.get("snapshot_id") or "").strip()

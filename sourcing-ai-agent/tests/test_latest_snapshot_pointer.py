@@ -60,5 +60,56 @@ class LatestSnapshotPointerContractTest(unittest.TestCase):
             self.assertNotIn("source_snapshot_dir_provenance", payload)
 
 
+class CanonicalizeCompanyAssetPathTest(unittest.TestCase):
+    """Registry source_path must record the canonical home of an asset, not the
+    hot-cache build location (regenerating hot-cache registrations re-armed the
+    2026-07-22 source==destination incident on every reconcile)."""
+
+    def _runtime(self, root: str) -> Path:
+        runtime = Path(root) / "runtime"
+        (runtime / "company_assets" / "xai" / "snap").mkdir(parents=True)
+        (runtime / "hot_cache_company_assets" / "xai" / "snap").mkdir(parents=True)
+        return runtime
+
+    def test_hot_cache_path_with_existing_canonical_twin_is_rewritten(self) -> None:
+        from unittest.mock import patch
+
+        from sourcing_agent.asset_paths import canonicalize_company_asset_path
+
+        with tempfile.TemporaryDirectory() as root, patch.dict(
+            "os.environ", {}, clear=False
+        ):
+            runtime = self._runtime(root)
+            (runtime / "company_assets" / "xai" / "snap" / "summary.json").write_text("{}")
+            hot = runtime / "hot_cache_company_assets" / "xai" / "snap" / "summary.json"
+            hot.write_text("{}")
+
+            result = canonicalize_company_asset_path(runtime, hot)
+
+            expected = (runtime / "company_assets").resolve() / "xai" / "snap" / "summary.json"
+            self.assertEqual(result, str(expected))
+
+    def test_hot_cache_path_without_canonical_twin_is_kept(self) -> None:
+        from sourcing_agent.asset_paths import canonicalize_company_asset_path
+
+        with tempfile.TemporaryDirectory() as root:
+            runtime = self._runtime(root)
+            hot = runtime / "hot_cache_company_assets" / "xai" / "snap" / "only_here.json"
+            hot.write_text("{}")
+
+            self.assertEqual(canonicalize_company_asset_path(runtime, hot), str(hot))
+
+    def test_non_hot_cache_paths_pass_through(self) -> None:
+        from sourcing_agent.asset_paths import canonicalize_company_asset_path
+
+        with tempfile.TemporaryDirectory() as root:
+            runtime = self._runtime(root)
+            canonical = runtime / "company_assets" / "xai" / "snap" / "summary.json"
+            canonical.write_text("{}")
+
+            self.assertEqual(canonicalize_company_asset_path(runtime, canonical), str(canonical))
+            self.assertEqual(canonicalize_company_asset_path(runtime, ""), "")
+
+
 if __name__ == "__main__":
     unittest.main()

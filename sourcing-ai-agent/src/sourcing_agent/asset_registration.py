@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from .asset_paths import canonicalize_company_asset_path
 from .company_registry import normalize_company_key
 from .storage import ControlPlaneStore
 
@@ -117,7 +118,7 @@ def sync_company_asset_registration(
             snapshot_id=normalized_snapshot_id,
             asset_view=normalized_asset_view,
             summary=dict(registry_summary or {}),
-            source_path=str(source_path or ""),
+            source_path=canonicalize_company_asset_path(runtime_dir, source_path),
             source_job_id=str(source_job_id or ""),
             authoritative=bool(authoritative),
         )
