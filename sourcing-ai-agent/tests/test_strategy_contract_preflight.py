@@ -122,14 +122,31 @@ class UnificationFlipTargetPinsTest(unittest.TestCase):
     of these fails, either the unification step just landed (update the pin in
     the same change) or strategy selection regressed (investigate)."""
 
-    def test_PIN_step3_org_size_still_steers_strategy(self) -> None:
-        # WS1 Step 3 flip target: after size-steering retirement this SAME
-        # request must stay full_company_roster and the profile may only tune
-        # shard parameters (paging/probe budgets), never the strategy.
+    def test_step3_org_size_never_steers_strategy(self) -> None:
+        # FLIPPED 2026-07-22 (WS1 Step 3): the org-profile steering branches
+        # are retired — the SAME request yields the SAME strategy with or
+        # without a large-band profile; the profile survives only as advisory
+        # shard-parameter metadata. A directional query is scoped because of
+        # the QUERY shape (fallback_rule_directional_scoped), never the size.
         without_profile = _plan(HARD_LARGE)
         with_large_profile = _plan(HARD_LARGE, LARGE_PROFILE)
         self.assertEqual(without_profile.acquisition_strategy.strategy_type, "full_company_roster")
-        self.assertEqual(with_large_profile.acquisition_strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(with_large_profile.acquisition_strategy.strategy_type, "full_company_roster")
+
+        directional = {
+            "raw_user_request": "Google multimodal researchers working on Veo",
+            "query": "Google Veo multimodal researchers",
+            "target_company": "Google",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["Veo", "multimodal"],
+        }
+        small_directional = _plan(directional)
+        large_directional = _plan(directional, LARGE_PROFILE)
+        self.assertEqual(
+            small_directional.acquisition_strategy.strategy_type,
+            large_directional.acquisition_strategy.strategy_type,
+        )
 
     def test_step2_former_only_plan_carries_the_per_function_former_shard_plan(self) -> None:
         # FLIPPED 2026-07-22 (WS1 Step 2a executor + 2b planning): a

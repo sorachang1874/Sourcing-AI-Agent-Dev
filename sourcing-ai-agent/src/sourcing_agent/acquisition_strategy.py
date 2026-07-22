@@ -822,37 +822,15 @@ def _determine_strategy_decision(
             "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
-    default_mode = str(normalized_profile.get("default_acquisition_mode") or "").strip().lower()
-    if default_mode == "scoped_search_roster":
-        return {
-            "strategy_type": "scoped_search_roster",
-            "decision_source": "organization_execution_profile",
-            "reason_codes": ["org_profile_default_scoped_search"],
-            "directional_query": directional_query,
-            "requested_population_boundary": requested_population_boundary,
-            "organization_execution_profile": normalized_profile,
-        }
-    if default_mode == "hybrid":
-        return {
-            "strategy_type": "scoped_search_roster" if directional_query else "full_company_roster",
-            "decision_source": "organization_execution_profile",
-            "reason_codes": [
-                "org_profile_default_hybrid",
-                "hybrid_directional_query" if directional_query else "hybrid_broad_query",
-            ],
-            "directional_query": directional_query,
-            "requested_population_boundary": requested_population_boundary,
-            "organization_execution_profile": normalized_profile,
-        }
-    if default_mode == "full_company_roster":
-        return {
-            "strategy_type": "full_company_roster",
-            "decision_source": "organization_execution_profile",
-            "reason_codes": ["org_profile_default_full_roster"],
-            "directional_query": directional_query,
-            "requested_population_boundary": requested_population_boundary,
-            "organization_execution_profile": normalized_profile,
-        }
+    # WS1 Step 3 (B3, 2026-07-22; operator recall directive 2026-07-19,
+    # re-ratified 2026-07-22): org_scale_band / default_acquisition_mode NEVER
+    # steer strategy_type. The three org-profile steering branches that lived
+    # here (scoped / hybrid / full defaults keyed on company size) are
+    # RETIRED — strategy now falls through to the size-agnostic rules below
+    # (a directional query is scoped because of the QUERY shape, never the
+    # company size). The profile stays in the decision payload as advisory
+    # shard-parameter metadata (paging budgets, probe settings, snapshot reuse
+    # limits) consumed downstream.
     google_scope_roster_preferred = target_company.strip().lower() in {"google", "alphabet"} and bool(
         related_company_scope_labels(target_company, scope_hints)
     )
@@ -860,7 +838,12 @@ def _determine_strategy_decision(
         # Size-agnostic fallback (operator directive 2026-07-20): a directional
         # or role/keyword-constrained query stays a scoped search regardless of
         # org size; org-size keys never steer strategy choice.  The Google
-        # sub-org scope rule (a scope preference, not a size fork) still wins.
+        # sub-org scope rule (a scope preference, not a size fork) still wins:
+        # sub-org members list either parent or sub-org on LinkedIn, so recall
+        # needs the multi-company-page roster + per-function shards, filtered
+        # locally.  Post-B3 this holds with or without a registry profile row
+        # (pre-B3 the profile branch shadowed it whenever a registry row
+        # existed, so the same query flipped strategy on registry presence).
         return {
             "strategy_type": "scoped_search_roster",
             "decision_source": "fallback_rules",

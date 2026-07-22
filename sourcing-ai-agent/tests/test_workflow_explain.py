@@ -300,8 +300,16 @@ class WorkflowExplainTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
 
         self.assertEqual(explained["ingress_normalization"]["prepared_request"]["target_company"], "Skild AI")
         self.assertEqual(explained["request_preview"]["target_company"], "Skild AI")
-        self.assertEqual(explained["dispatch_preview"]["strategy"], "reuse_snapshot")
+        # FLIPPED 2026-07-22 (WS1 Step 3): the small-org profile no longer
+        # steers a directional query to full_company_roster/pure-reuse — the
+        # query shape dispatches delta like the large-org matrix rows. Per-lane
+        # behavior stays coverage-driven: the current lane reuses baseline
+        # because the completeness ledger proves the "Pre-train" query is
+        # embedded in the 153-candidate baseline, while the former lane plans
+        # delta for its missing query.
+        self.assertEqual(explained["dispatch_preview"]["strategy"], "delta_from_snapshot")
         self.assertEqual(explained["lane_preview"]["current"]["planned_behavior"], "reuse_baseline")
+        self.assertEqual(explained["lane_preview"]["former"]["planned_behavior"], "delta_acquisition")
         self.assertIn("request_matching", explained["dispatch_matching_normalization"])
         self.assertGreaterEqual(float(explained["timings_ms"]["total"]), 0.0)
         self.assertIn("prepare_request", explained["timings_ms"])
@@ -1042,7 +1050,12 @@ class WorkflowExplainTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             ("我想要OpenAI做Audio方向的人", "OpenAI", ["Audio"], "delta_from_snapshot"),
             ("我想要OpenAI做Coding方向的人", "OpenAI", ["Coding"], "delta_from_snapshot"),
             ("帮我找Google做多模态方向的人", "Google", ["Multimodal"], "delta_from_snapshot"),
-            ("帮我找Google DeepMind做多模态方向的人", "Google", ["Multimodal"], "delta_from_snapshot"),
+            # FLIPPED 2026-07-22 (WS1 Step 3): with profile steering retired,
+            # the Google sub-org scope preference (2026-07-20 directive; scope
+            # rule, not a size fork) now decides this row with or without a
+            # registry profile row: full_company_roster over the sub-org scope,
+            # and the proven full-company baseline serves it as pure reuse.
+            ("帮我找Google DeepMind做多模态方向的人", "Google", ["Multimodal"], "reuse_snapshot"),
             ("帮我找NVIDIA做世界模型方向的人", "NVIDIA", ["World model"], "new_job"),
         ]
 
@@ -1069,6 +1082,10 @@ class WorkflowExplainTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                     )
                     self.assertEqual(explained["lane_preview"]["current"]["planned_behavior"], "delta_acquisition")
                     self.assertEqual(explained["lane_preview"]["former"]["planned_behavior"], "delta_acquisition")
+                elif expected_dispatch == "reuse_snapshot":
+                    self.assertFalse(explained["asset_reuse_plan"]["requires_delta_acquisition"])
+                    self.assertEqual(explained["lane_preview"]["current"]["planned_behavior"], "reuse_baseline")
+                    self.assertEqual(explained["lane_preview"]["former"]["planned_behavior"], "reuse_baseline")
                 else:
                     self.assertEqual(explained["lane_preview"]["current"]["planned_behavior"], "live_acquisition")
                     self.assertEqual(explained["lane_preview"]["former"]["planned_behavior"], "live_acquisition")

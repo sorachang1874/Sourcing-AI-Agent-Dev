@@ -794,9 +794,15 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(strategy.search_seed_queries, ["Pre-train"])
         self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
         self.assertNotIn("job_titles", strategy.filter_hints)
+        # FLIPPED 2026-07-22 (WS1 Step 3): scoped comes from the directional
+        # QUERY shape, not the large-org profile (steering retired).
         self.assertEqual(
             strategy.strategy_decision_explanation.get("decision_source"),
-            "organization_execution_profile",
+            "fallback_rules",
+        )
+        self.assertIn(
+            "fallback_rule_directional_scoped",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
         )
 
     def test_openai_infra_and_posttrain_query_keeps_distinct_keyword_shards(self) -> None:
@@ -885,7 +891,10 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(strategy.cost_policy.get("provider_people_search_mode"), "fallback_only")
         self.assertFalse(strategy.cost_policy.get("collect_email"))
 
-    def test_organization_execution_profile_prefers_scoped_search_for_large_org_directional_query(self) -> None:
+    def test_large_org_directional_query_scoped_by_query_shape_not_profile(self) -> None:
+        # FLIPPED 2026-07-22 (WS1 Step 3): org-profile steering retired; the
+        # directional query stays scoped via fallback_rule_directional_scoped
+        # and the profile survives only as advisory shard-parameter metadata.
         request = JobRequest(
             raw_user_request="给我 Google 做多模态和 Pre-train 方向的人",
             query="Google multimodal pre-train people",
@@ -910,10 +919,10 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(strategy.strategy_type, "scoped_search_roster")
         self.assertEqual(
             strategy.strategy_decision_explanation.get("decision_source"),
-            "organization_execution_profile",
+            "fallback_rules",
         )
         self.assertIn(
-            "org_profile_default_scoped_search",
+            "fallback_rule_directional_scoped",
             list(strategy.strategy_decision_explanation.get("reason_codes") or []),
         )
         self.assertEqual(
@@ -922,7 +931,9 @@ class PlanningModulesTest(unittest.TestCase):
         )
         self.assertEqual(strategy.roster_sources, ["harvest_profile_search", "company_suborg_sources"])
 
-    def test_organization_execution_profile_prefers_hybrid_broad_query_full_roster(self) -> None:
+    def test_broad_query_full_roster_regardless_of_profile_mode(self) -> None:
+        # FLIPPED 2026-07-22 (WS1 Step 3): hybrid/medium profile no longer
+        # steers; broad queries take the size-agnostic full-roster default.
         request = JobRequest(
             raw_user_request="帮我找 Anthropic 的成员",
             query="Anthropic employees",
@@ -946,10 +957,10 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(strategy.strategy_type, "full_company_roster")
         self.assertEqual(
             strategy.strategy_decision_explanation.get("decision_source"),
-            "organization_execution_profile",
+            "fallback_rules",
         )
         self.assertIn(
-            "hybrid_broad_query",
+            "fallback_rule_strategy",
             list(strategy.strategy_decision_explanation.get("reason_codes") or []),
         )
 
