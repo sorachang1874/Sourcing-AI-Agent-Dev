@@ -10,6 +10,7 @@ in docs/governance/REGRESSION_INDEX.md; the freeze ratchet
 (tests/test_pipeline_freeze.py) shrinks in the same change.
 """
 
+import json
 import os
 import tempfile
 import unittest
@@ -17,7 +18,10 @@ import unittest.mock
 from pathlib import Path
 
 from sourcing_agent.acquisition import AcquisitionEngine
+from sourcing_agent.domain import AcquisitionTask, Candidate, EvidenceRecord, JobRequest, make_evidence_id
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.asset_paths import canonicalize_company_key
+from sourcing_agent.company_registry import normalize_company_key
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -67,6 +71,172 @@ class OrchestratorPlanningTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
         env_patcher.start()
         self.addCleanup(env_patcher.stop)
+
+
+    def _write_company_snapshot_candidate_documents(
+        self,
+        *,
+        target_company: str,
+        snapshot_id: str,
+        candidates: list[dict[str, object]],
+    ) -> tuple[Path, Path]:
+        normalized_key = normalize_company_key(target_company)
+        company_key = canonicalize_company_key(target_company) or normalized_key
+        identity = {
+            "requested_name": target_company,
+            "canonical_name": target_company,
+            "company_key": company_key,
+            "linkedin_slug": company_key,
+            "aliases": [normalized_key] if normalized_key and normalized_key != company_key else [],
+        }
+        company_dir = Path(self.tempdir.name) / "company_assets" / company_key
+        snapshot_dir = company_dir / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "target_company": target_company,
+                        "snapshot_id": snapshot_id,
+                        "company_identity": identity,
+                    },
+                    "target_company": target_company,
+                    "snapshot_id": snapshot_id,
+                    "candidates": candidates,
+                    "evidence": [],
+                    "candidate_count": len(candidates),
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "identity.json").write_text(
+            json.dumps(identity, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id,
+                    "company_identity": identity,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id,
+                    "company_identity": identity,
+                    "target_company": target_company,
+                    "company_key": company_key,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "retrieval_index_summary.json").write_text(
+            json.dumps({"status": "built"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return snapshot_dir, candidate_doc_path
+
+
+    def _upsert_authoritative_org_registry(
+        self,
+        *,
+        target_company: str,
+        snapshot_id: str,
+        candidate_count: int,
+        source_path: str,
+        current_ready: bool,
+        former_ready: bool,
+        current_count: int,
+        former_count: int,
+        source_job_id: str = "",
+        materialization_generation_key: str = "",
+        materialization_generation_sequence: int = 0,
+        materialization_watermark: str = "",
+    ) -> dict[str, object]:
+        return self.store.upsert_organization_asset_registry(
+            {
+                "target_company": target_company,
+                "company_key": normalize_company_key(target_company),
+                "snapshot_id": snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "candidate_count": candidate_count,
+                "evidence_count": 0,
+                "profile_detail_count": candidate_count,
+                "explicit_profile_capture_count": candidate_count,
+                "missing_linkedin_count": 0,
+                "manual_review_backlog_count": 0,
+                "profile_completion_backlog_count": 0,
+                "source_snapshot_count": 1,
+                "standard_bundles": {"bundle_count": 1},
+                "completeness_score": 100.0,
+                "completeness_band": "high",
+                "current_lane_coverage": {
+                    "effective_candidate_count": current_count,
+                    "effective_ready": current_ready,
+                    "company_employees_current": {
+                        "effective_candidate_count": current_count,
+                        "effective_ready": current_ready,
+                        "inferred_candidate_count": current_count,
+                        "inferred_ready": current_ready,
+                    },
+                },
+                "former_lane_coverage": {
+                    "effective_candidate_count": former_count,
+                    "effective_ready": former_ready,
+                    "standard_bundle_ready_count": 1 if former_ready and former_count > 0 else 0,
+                    "inferred_candidate_count": former_count,
+                    "inferred_profile_detail_count": former_count,
+                    "inferred_linkedin_url_count": former_count,
+                    "profile_search_former": {
+                        "effective_candidate_count": former_count,
+                        "effective_ready": former_ready,
+                        "standard_bundle_ready_count": 1 if former_ready and former_count > 0 else 0,
+                        "inferred_candidate_count": former_count,
+                        "inferred_profile_detail_count": former_count,
+                        "inferred_linkedin_url_count": former_count,
+                    },
+                },
+                "current_lane_effective_candidate_count": current_count,
+                "former_lane_effective_candidate_count": former_count,
+                "current_lane_effective_ready": current_ready,
+                "former_lane_effective_ready": former_ready,
+                "selected_snapshot_ids": [snapshot_id],
+                "source_snapshot_selection": {"selected_snapshot_ids": [snapshot_id]},
+                "source_path": source_path,
+                "source_job_id": source_job_id,
+                "materialization_generation_key": materialization_generation_key,
+                "materialization_generation_sequence": materialization_generation_sequence,
+                "materialization_watermark": materialization_watermark,
+                "summary": {
+                    "target_company": target_company,
+                    "snapshot_id": snapshot_id,
+                    "candidate_count": candidate_count,
+                    "profile_detail_count": candidate_count,
+                    "standard_bundles": {"bundle_count": 1},
+                    "current_lane_coverage": {
+                        "effective_candidate_count": current_count,
+                        "effective_ready": current_ready,
+                    },
+                    "former_lane_coverage": {
+                        "effective_candidate_count": former_count,
+                        "effective_ready": former_ready,
+                    },
+                },
+            },
+            authoritative=True,
+        )
 
 
     def test_plan_workflow_returns_request_preview_and_infers_gemini_product_manager_scope(self) -> None:
@@ -181,6 +351,101 @@ class OrchestratorPlanningTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
             ["19"],
         )
+
+
+    def test_resolve_company_identity_uses_manual_target_company_linkedin_override(self) -> None:
+        task = AcquisitionTask(
+            task_id="resolve_company_identity",
+            task_type="resolve_company_identity",
+            title="Resolve company identity",
+            description="Resolve target company to LinkedIn identity.",
+        )
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我 Safe Superintelligence Inc 的成员",
+                "target_company": "Safe Superintelligence Inc",
+                "execution_preferences": {
+                    "target_company_linkedin_url": "https://www.linkedin.com/company/ssi-ai/",
+                },
+            }
+        )
+
+        with unittest.mock.patch.object(
+            self.acquisition_engine,
+            "_discover_company_identity_candidates",
+            side_effect=AssertionError("manual override should bypass observed-company lookup"),
+        ):
+            execution = self.acquisition_engine.execute_task(
+                task,
+                request,
+                "Safe Superintelligence Inc",
+                state={},
+            )
+
+        self.assertEqual(execution.status, "completed")
+        self.assertEqual(execution.payload["company_identity"]["linkedin_slug"], "ssi-ai")
+        self.assertEqual(
+            execution.payload["company_identity"]["linkedin_company_url"],
+            "https://www.linkedin.com/company/ssi-ai/",
+        )
+        self.assertEqual(execution.payload["company_identity"]["resolver"], "manual_review_override")
+
+
+    def test_plan_workflow_uses_cached_authoritative_baseline_without_runtime_backfill(self) -> None:
+        snapshot_id = "snapshot-cached-registry-only"
+        _, candidate_doc_path = self._write_company_snapshot_candidate_documents(
+            target_company="Reflection AI",
+            snapshot_id=snapshot_id,
+            candidates=[
+                Candidate(
+                    candidate_id="cand_reflection_cached",
+                    name_en="Infra One",
+                    display_name="Infra One",
+                    category="employee",
+                    target_company="Reflection AI",
+                    organization="Reflection AI",
+                    employment_status="current",
+                    role="Infrastructure Engineer",
+                    focus_areas="infra platform",
+                    linkedin_url="https://www.linkedin.com/in/reflection-cached/",
+                ).to_record(),
+            ],
+        )
+        self._upsert_authoritative_org_registry(
+            target_company="Reflection AI",
+            snapshot_id=snapshot_id,
+            candidate_count=1,
+            source_path=str(candidate_doc_path),
+            current_ready=True,
+            former_ready=False,
+            current_count=1,
+            former_count=0,
+        )
+
+        with (
+            unittest.mock.patch(
+                "sourcing_agent.asset_reuse_planning.ensure_organization_asset_registry",
+                side_effect=AssertionError("plan path should not backfill organization registry"),
+            ),
+            unittest.mock.patch(
+                "sourcing_agent.asset_reuse_planning.ensure_organization_completeness_ledger",
+                side_effect=AssertionError("plan path should not rebuild completeness ledger when cache exists"),
+            ),
+        ):
+            planned = self.orchestrator.plan_workflow(
+                {
+                    "raw_user_request": "帮我找Reflection AI做Infra方向的人",
+                    "target_company": "Reflection AI",
+                    "categories": ["employee"],
+                    "employment_statuses": ["current"],
+                    "keywords": ["Infra"],
+                }
+            )
+
+        asset_reuse_plan = dict(planned["plan"].get("asset_reuse_plan") or {})
+        self.assertTrue(asset_reuse_plan.get("baseline_reuse_available"))
+        self.assertEqual(asset_reuse_plan.get("baseline_snapshot_id"), snapshot_id)
+        self.assertEqual(asset_reuse_plan.get("baseline_resolution_mode"), "cached_only")
 
 
 
