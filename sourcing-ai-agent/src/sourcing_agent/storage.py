@@ -9235,12 +9235,71 @@ class ControlPlaneStore:
             "returned False; legacy SQLite tail retired (B4)"
         )
 
+    _OFFLINE_PROVIDER_RUN_MARKER = re.compile(r"^(simulate|replay|scripted)_probe_")
+    _OFFLINE_ROWS_IN_LIVE_SCHEMA_OVERRIDE_ENV = "SOURCING_ALLOW_OFFLINE_PROVIDER_ROWS_IN_LIVE_SCHEMA"
+
+    @classmethod
+    def _find_offline_provider_run_marker(cls, value: Any) -> str:
+        """Depth-first scan for connector-built offline run ids.
+
+        Harvest connectors stamp offline executions with
+        ``run_id = f"{provider_mode}_probe_{probe_id}"`` (simulate/replay/
+        scripted). Matching the full prefix keeps free-text fields that merely
+        mention "simulate" from tripping the fence."""
+        if isinstance(value, str):
+            return value if cls._OFFLINE_PROVIDER_RUN_MARKER.match(value.strip()) else ""
+        if isinstance(value, dict):
+            for item in value.values():
+                found = cls._find_offline_provider_run_marker(item)
+                if found:
+                    return found
+            return ""
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                found = cls._find_offline_provider_run_marker(item)
+                if found:
+                    return found
+        return ""
+
+    def _refuse_offline_provider_row_in_live_schema(
+        self, payload: dict[str, Any], *, table: str
+    ) -> dict[str, Any]:
+        """Live-schema write fence (2026-07-22 pg-simulate-row incident).
+
+        A daemon/CLI started against the live Postgres schema without the live
+        provider triple-gate executes harvest fail-closed simulate and, before
+        this fence, upserted 40-item placeholder rows over real paid lineage.
+        Offline provider rows are refused in any sourcing_live_* schema unless
+        the operator sets the override env for a deliberate exercise."""
+        schema = str(getattr(getattr(self, "_control_plane_postgres", None), "schema", "") or "")
+        if not schema.startswith("sourcing_live"):
+            return {}
+        if os.environ.get(self._OFFLINE_ROWS_IN_LIVE_SCHEMA_OVERRIDE_ENV, "").strip() == "1":
+            return {}
+        marker = self._find_offline_provider_run_marker(payload)
+        if not marker:
+            return {}
+        return {
+            "live_schema_write_refused": {
+                "table": table,
+                "reason": "offline_provider_row_in_live_schema",
+                "schema": schema,
+                "marker": marker,
+                "override_env": self._OFFLINE_ROWS_IN_LIVE_SCHEMA_OVERRIDE_ENV,
+            }
+        }
+
     def upsert_acquisition_shard_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
         shard_key = _normalized_payload_text(payload, "shard_key")
         target_company = _normalized_payload_text(payload, "target_company")
         snapshot_id = _normalized_payload_text(payload, "snapshot_id")
         if not shard_key or not target_company or not snapshot_id:
             return {}
+        fence_refusal = self._refuse_offline_provider_row_in_live_schema(
+            payload, table="acquisition_shard_registry"
+        )
+        if fence_refusal:
+            return fence_refusal
         status = _normalized_payload_text(payload, "status", default="completed") or "completed"
         completed_at = (
             datetime.now(timezone.utc).isoformat(timespec="seconds") if status.startswith("completed") else ""

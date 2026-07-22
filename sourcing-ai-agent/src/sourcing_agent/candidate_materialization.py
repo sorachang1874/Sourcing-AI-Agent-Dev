@@ -139,6 +139,15 @@ def select_source_snapshots_for_materialization(
     return [current_snapshot], selection
 
 
+def _free_text_field(value: Any) -> str:
+    # Structured provider payloads (lists/dicts, e.g. Full-mode education) must
+    # not be repr-stringified into the domain's free-text fields; they live as
+    # top-level document fields owned by the enrichment contract.
+    if isinstance(value, (list, dict)):
+        return ""
+    return str(value or "").strip()
+
+
 def candidate_from_payload(payload: dict[str, Any]) -> Candidate | None:
     if not isinstance(payload, dict):
         return None
@@ -195,8 +204,8 @@ def candidate_from_payload(payload: dict[str, Any]) -> Candidate | None:
         "ethnicity_background": str(payload.get("ethnicity_background") or "").strip(),
         "investment_involvement": str(payload.get("investment_involvement") or "").strip(),
         "focus_areas": str(payload.get("focus_areas") or "").strip(),
-        "education": str(payload.get("education") or "").strip(),
-        "work_history": str(payload.get("work_history") or "").strip(),
+        "education": _free_text_field(payload.get("education")),
+        "work_history": _free_text_field(payload.get("work_history")),
         "notes": str(payload.get("notes") or "").strip(),
         "linkedin_url": str(payload.get("linkedin_url") or "").strip(),
         "media_url": str(payload.get("media_url") or "").strip(),

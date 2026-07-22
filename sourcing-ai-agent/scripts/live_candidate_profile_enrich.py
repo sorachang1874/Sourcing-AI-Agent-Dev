@@ -83,9 +83,12 @@ def main() -> int:
             continue
         headline = str(item.get("headline") or "").strip()
         location = _location_text(item)
-        if headline and not doc.get("headline"):
+        # --force re-derives envelope-backed fields even when the doc carries a
+        # value: pass-through docs can arrive with repr-stringified copies (the
+        # 2026-07-22 salvage defect) that a fill-only merge would preserve.
+        if headline and (args.force or not doc.get("headline")):
             doc["headline"] = headline
-        if location and not doc.get("location"):
+        if location and (args.force or not doc.get("location")):
             doc["location"] = location
         for field, item_key in (
             ("experience", "experience"),
@@ -95,7 +98,7 @@ def main() -> int:
             ("about", "about"),
         ):
             value = item.get(item_key)
-            if value and not doc.get(field):
+            if value and (args.force or not doc.get(field)):
                 doc[field] = value
         enriched += 1
         skipped_has_profile += 0

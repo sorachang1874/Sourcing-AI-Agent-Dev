@@ -140,6 +140,43 @@ def _roster_item_to_candidate_payload(
     }
 
 
+PROFILE_SHAPE_FIELDS = ("headline", "location", "experience", "education", "languages", "skills", "about")
+
+
+def _reattach_profile_shape_fields(
+    records: list[dict[str, Any]], originals: list[dict[str, Any]]
+) -> int:
+    """Preserve structured top-level profile fields across the domain round-trip.
+
+    candidate_from_payload/to_record only carry domain-record fields, so a
+    pass-through doc's structured experience/education/... (the enrichment
+    contract's top-level shape) would be silently dropped (experience) or
+    repr-stringified (education) — the 2026-07-22 openai/tml salvage defect.
+    Re-attach the original values wherever the round-tripped record lost them."""
+    by_id: dict[str, dict[str, Any]] = {}
+    by_url: dict[str, dict[str, Any]] = {}
+    for doc in originals:
+        cid = str(doc.get("candidate_id") or "").strip()
+        url = str(doc.get("linkedin_url") or "").strip().rstrip("/").lower()
+        if cid and cid not in by_id:
+            by_id[cid] = doc
+        if url and url not in by_url:
+            by_url[url] = doc
+    attached = 0
+    for record in records:
+        source = by_id.get(str(record.get("candidate_id") or "").strip()) or by_url.get(
+            str(record.get("linkedin_url") or "").strip().rstrip("/").lower()
+        )
+        if not source:
+            continue
+        for field in PROFILE_SHAPE_FIELDS:
+            value = source.get(field)
+            if value and not record.get(field):
+                record[field] = value
+                attached += 1
+    return attached
+
+
 def _asset_entry(root: Path, path: Path, asset_type: str, source_kind: str) -> dict[str, Any]:
     rel = path.relative_to(root)
     return {
@@ -278,6 +315,7 @@ def main() -> int:
         )
     merged, _ = consolidate_materialized_duplicates(merged, {})
     records = [candidate.to_record() for candidate in merged.values()]
+    _reattach_profile_shape_fields(records, candidates)
     merged_urls = {
         str(record.get("linkedin_url") or "").strip().rstrip("/").lower()
         for record in records

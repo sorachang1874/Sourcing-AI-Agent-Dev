@@ -113,6 +113,72 @@ class SalvageAdapterFunctionAttributionTest(unittest.TestCase):
             self.assertIn("untagged", note)
 
 
+class SalvageProfileShapePreservationTest(unittest.TestCase):
+    """Structured top-level profile fields (enrichment contract: headline/
+    location/experience/education/languages/skills/about) must survive the
+    domain round-trip. Observed 2026-07-22: pass-through docs lost experience
+    entirely (not a domain-record field) and education arrived repr-stringified
+    (domain str() coercion) — openai salvage 0/3136 experience, tml 220
+    repr-string education."""
+
+    def test_structured_fields_survive_passthrough_rebuild(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            workdir = Path(root)
+            (workdir / "identity.json").write_text(
+                json.dumps({"canonical_name": "TML", "company_key": "thinkingmachineslab"}),
+                encoding="utf-8",
+            )
+            education = [{"schoolName": "MIT", "degree": "PhD"}]
+            experience = [{"companyName": "TML", "position": "Researcher"}]
+            prior_docs = workdir / "prior_candidate_documents.json"
+            prior_docs.write_text(
+                json.dumps(
+                    {
+                        "candidates": [
+                            {
+                                "candidate_id": "cccccccccccccccc",
+                                "name_en": "Eve E",
+                                "display_name": "Eve E",
+                                "category": "employee",
+                                "target_company": "TML",
+                                "employment_status": "current",
+                                "linkedin_url": "https://www.linkedin.com/in/eve-e",
+                                "education": education,
+                                "experience": experience,
+                                "headline": "Research Scientist",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--company-assets-root", str(workdir / "company_assets"),
+                    "--snapshot-id", "20260722T000000",
+                    "--identity-from", str(workdir / "identity.json"),
+                    "--former-candidate-documents", str(prior_docs),
+                    "--apply",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+            docs = json.loads(
+                (workdir / "company_assets" / "20260722T000000" / "candidate_documents.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            (candidate,) = docs["candidates"]
+            self.assertEqual(candidate["education"], education)
+            self.assertEqual(candidate["experience"], experience)
+            self.assertEqual(candidate["headline"], "Research Scientist")
+
+
 class SalvagePassthroughPreservationTest(unittest.TestCase):
     """Pass-through candidate documents that fail candidate_from_payload
     re-validation (the TML empty-name former rows, paid coverage pending a name
