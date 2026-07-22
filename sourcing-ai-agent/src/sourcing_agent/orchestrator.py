@@ -41008,8 +41008,8 @@ class SourcingOrchestrator:
             search_seed_resume_skip_job_ids = self._search_seed_discovery_resume_skip_job_ids(search_seed_discovery)
         explicit_job_id = str(payload.get("job_id") or "").strip()
         profile_prefetch_refill_enabled = _coerce_bool(payload.get("profile_prefetch_refill_enabled"), True)
-        profile_refill_submit_observed_this_tick = False
-        profile_refill_command_planned_this_tick = False
+        _tick_ctx.profile_refill_submit_observed_this_tick = False
+        _tick_ctx.profile_refill_command_planned_this_tick = False
         profile_refill_command_owner_enabled = _coerce_bool(
             payload.get("profile_refill_command_owner_enabled"),
             _env_bool("LINKEDIN_PROFILE_REFILL_COMMAND_OWNER_ENABLED", True),
@@ -41072,10 +41072,10 @@ class SourcingOrchestrator:
                 ),
                 max_sync_work="no pre-worker profile refill",
             )
-        profile_refill_submit_observed_this_tick = _profile_refill_worker_submit_observed(
+        _tick_ctx.profile_refill_submit_observed_this_tick = _profile_refill_worker_submit_observed(
             pre_worker_profile_prefetch_refill
         )
-        profile_refill_command_planned_this_tick = _profile_refill_command_planned_observed(
+        _tick_ctx.profile_refill_command_planned_this_tick = _profile_refill_command_planned_observed(
             pre_worker_profile_prefetch_refill
         )
         daemon = self._build_worker_recovery_daemon(payload)
@@ -41130,14 +41130,14 @@ class SourcingOrchestrator:
                 reason="explicit_job_scope",
                 max_sync_work="no global blocked workflow cleanup",
             )
-        if profile_prefetch_refill_enabled and profile_refill_submit_observed_this_tick:
+        if profile_prefetch_refill_enabled and _tick_ctx.profile_refill_submit_observed_this_tick:
             profile_prefetch_refill = _skipped_phase(
                 "profile_prefetch_refill",
                 owner="profile_refill_daemon",
                 reason="profile_refill_submit_budget_exhausted",
                 max_sync_work="profile refill already submitted provider work in this recovery tick",
             )
-        elif profile_prefetch_refill_enabled and profile_refill_command_planned_this_tick:
+        elif profile_prefetch_refill_enabled and _tick_ctx.profile_refill_command_planned_this_tick:
             profile_prefetch_refill = _skipped_phase(
                 "profile_prefetch_refill",
                 owner="profile_refill_daemon",
@@ -41163,11 +41163,11 @@ class SourcingOrchestrator:
                 reason="profile_prefetch_refill_disabled_by_payload",
                 max_sync_work="no profile refill work",
             )
-        profile_refill_submit_observed_this_tick = (
-            profile_refill_submit_observed_this_tick or _profile_refill_worker_submit_observed(profile_prefetch_refill)
+        _tick_ctx.profile_refill_submit_observed_this_tick = (
+            _tick_ctx.profile_refill_submit_observed_this_tick or _profile_refill_worker_submit_observed(profile_prefetch_refill)
         )
-        profile_refill_command_planned_this_tick = (
-            profile_refill_command_planned_this_tick
+        _tick_ctx.profile_refill_command_planned_this_tick = (
+            _tick_ctx.profile_refill_command_planned_this_tick
             or _profile_refill_command_planned_observed(profile_prefetch_refill)
         )
         profile_prefetch_refill = _merge_profile_refill_results(
@@ -41219,8 +41219,8 @@ class SourcingOrchestrator:
             ),
             _tick_ctx,
         )
-        profile_refill_submit_observed_this_tick = (
-            profile_refill_submit_observed_this_tick
+        _tick_ctx.profile_refill_submit_observed_this_tick = (
+            _tick_ctx.profile_refill_submit_observed_this_tick
             or _profile_refill_worker_submit_observed(profile_refill_command_owner)
         )
         profile_url_terminal_record_command_owner_limit = _coerce_int(
@@ -41300,7 +41300,7 @@ class SourcingOrchestrator:
             and profile_prefetch_refill_enabled
             and not worker_recovery_handoff_required
             and profile_refill_work_observed
-            and not profile_refill_submit_observed_this_tick
+            and not _tick_ctx.profile_refill_submit_observed_this_tick
         ):
             provider_control_open_work = _provider_control_open_work_summary()
             profile_refill_local_apply_limit, profile_refill_board_visible_limit = _provider_control_visibility_limits(
@@ -41332,7 +41332,7 @@ class SourcingOrchestrator:
                     else "worker_recovery_durable_handoff_to_daemon_tick"
                     if explicit_job_id and worker_recovery_handoff_required
                     else "profile_refill_submit_handoff_to_next_tick"
-                    if explicit_job_id and profile_refill_submit_observed_this_tick
+                    if explicit_job_id and _tick_ctx.profile_refill_submit_observed_this_tick
                     else "no_profile_refill_event_work"
                     if explicit_job_id and profile_prefetch_refill_enabled
                     else "job_scope_missing"
@@ -41343,7 +41343,7 @@ class SourcingOrchestrator:
                     else "worker recovery tick yielded durable local-apply and board-visible work to the next daemon tick"
                     if explicit_job_id and worker_recovery_handoff_required
                     else "profile refill already submitted provider work in this tick; durable local-apply and board-visible work stay queued"
-                    if explicit_job_id and profile_refill_submit_observed_this_tick
+                    if explicit_job_id and _tick_ctx.profile_refill_submit_observed_this_tick
                     else "profile refill did not dispatch or queue provider work in this tick"
                     if explicit_job_id and profile_prefetch_refill_enabled
                     else "no job-scoped event-level drain after profile refill"
@@ -41353,7 +41353,7 @@ class SourcingOrchestrator:
         board_visible_ready_before_local_apply = (
             explicit_job_id.strip()
             and not worker_recovery_handoff_required
-            and not profile_refill_submit_observed_this_tick
+            and not _tick_ctx.profile_refill_submit_observed_this_tick
             and not profile_refill_event_work_observed
             and _ready_board_visible_apply_item_exists()
         )
@@ -41377,7 +41377,7 @@ class SourcingOrchestrator:
                     "unit in this tick; remaining local profile delta apply commands stay durable for the next tick"
                 ),
             )
-        elif profile_refill_submit_observed_this_tick:
+        elif _tick_ctx.profile_refill_submit_observed_this_tick:
             local_apply_backlog = _skipped_phase(
                 "local_apply_backlog",
                 owner="profile_local_apply_command_owner",
@@ -41480,7 +41480,7 @@ class SourcingOrchestrator:
             and not profile_refill_event_work_observed
             and not local_apply_backlog_work_observed
             and not legacy_materialization_adapter_work_observed
-            and not profile_refill_submit_observed_this_tick
+            and not _tick_ctx.profile_refill_submit_observed_this_tick
             and not board_visible_ready_before_local_apply
         ):
             provider_control_open_work = _provider_control_open_work_summary()
@@ -41513,7 +41513,7 @@ class SourcingOrchestrator:
                     else "profile_refill_event_drain_owned_local_apply_this_tick"
                     if explicit_job_id and profile_refill_event_work_observed
                     else "profile_refill_submit_handoff_to_next_tick"
-                    if explicit_job_id and profile_refill_submit_observed_this_tick
+                    if explicit_job_id and _tick_ctx.profile_refill_submit_observed_this_tick
                     else "board_visible_apply_ready_prioritized"
                     if explicit_job_id and board_visible_ready_before_local_apply
                     else "legacy_materialization_adapter_planned_commands_this_tick"
@@ -41528,7 +41528,7 @@ class SourcingOrchestrator:
                     else "profile refill event-level drain already consumed the local-apply unit for this tick"
                     if explicit_job_id and profile_refill_event_work_observed
                     else "profile refill already submitted provider work in this tick; event-level materialization yields"
-                    if explicit_job_id and profile_refill_submit_observed_this_tick
+                    if explicit_job_id and _tick_ctx.profile_refill_submit_observed_this_tick
                     else "ready board-visible work is prioritized over new event-level local apply"
                     if explicit_job_id and board_visible_ready_before_local_apply
                     else "legacy materialization adapter planned canonical commands this tick; legacy event-level drains yield"
@@ -41546,7 +41546,7 @@ class SourcingOrchestrator:
                 event_level_materialization_followup,
                 profile_refill_event_level_materialization_followup,
             )
-            and not profile_refill_submit_observed_this_tick
+            and not _tick_ctx.profile_refill_submit_observed_this_tick
             and not legacy_materialization_adapter_work_observed
         ):
             post_event_level_profile_prefetch_refill = _run_recovery_phase(
@@ -41563,8 +41563,8 @@ class SourcingOrchestrator:
                     }
                 ),
             )
-            profile_refill_submit_observed_this_tick = (
-                profile_refill_submit_observed_this_tick
+            _tick_ctx.profile_refill_submit_observed_this_tick = (
+                _tick_ctx.profile_refill_submit_observed_this_tick
                 or _profile_refill_worker_submit_observed(post_event_level_profile_prefetch_refill)
             )
         else:
@@ -41577,7 +41577,7 @@ class SourcingOrchestrator:
                     else "profile_refill_submit_budget_exhausted"
                     if explicit_job_id
                     and profile_prefetch_refill_enabled
-                    and profile_refill_submit_observed_this_tick
+                    and _tick_ctx.profile_refill_submit_observed_this_tick
                     and _phase_work_observed(
                         local_apply_backlog,
                         event_level_materialization_followup,
@@ -41620,7 +41620,7 @@ class SourcingOrchestrator:
         event_level_work_observed = _phase_work_observed(event_level_materialization_followup)
         same_tick_visibility_handoff_required = (
             worker_recovery_handoff_required
-            or profile_refill_submit_observed_this_tick
+            or _tick_ctx.profile_refill_submit_observed_this_tick
             or _phase_work_observed(profile_url_terminal_record_command_owner)
             or legacy_materialization_adapter_work_observed
         )
@@ -41635,7 +41635,7 @@ class SourcingOrchestrator:
                 "worker_recovery_durable_handoff_to_daemon_tick"
                 if worker_recovery_handoff_required
                 else "profile_refill_submit_handoff_to_next_tick"
-                if profile_refill_submit_observed_this_tick
+                if _tick_ctx.profile_refill_submit_observed_this_tick
                 else "profile_url_terminal_record_handoff_to_next_tick"
                 if _phase_work_observed(profile_url_terminal_record_command_owner)
                 else "profile_refill_event_drain_owned_local_apply_this_tick"
@@ -41649,7 +41649,7 @@ class SourcingOrchestrator:
                 "durable local-apply, board-visible apply, and full compaction remain queued for the next daemon tick"
                 if worker_recovery_handoff_required
                 else "profile refill already submitted provider work in this tick; local-apply, board-visible apply, and full compaction remain queued"
-                if profile_refill_submit_observed_this_tick
+                if _tick_ctx.profile_refill_submit_observed_this_tick
                 else "profile URL terminal-record owner already consumed registry state writes in this tick; local-apply, board-visible apply, and full compaction remain queued"
                 if _phase_work_observed(profile_url_terminal_record_command_owner)
                 else "profile refill event-level drain already consumed a bounded local-apply/board-visible unit; "
@@ -42334,7 +42334,7 @@ class SourcingOrchestrator:
             explicit_job_id
             and profile_prefetch_refill_enabled
             and _phase_work_observed(remote_event_followup, post_followup_event_level_materialization_followup)
-            and not profile_refill_submit_observed_this_tick
+            and not _tick_ctx.profile_refill_submit_observed_this_tick
         ):
             post_followup_profile_prefetch_refill = _run_recovery_phase(
                 "post_followup_profile_prefetch_refill",
@@ -42350,8 +42350,8 @@ class SourcingOrchestrator:
                     }
                 ),
             )
-            profile_refill_submit_observed_this_tick = (
-                profile_refill_submit_observed_this_tick
+            _tick_ctx.profile_refill_submit_observed_this_tick = (
+                _tick_ctx.profile_refill_submit_observed_this_tick
                 or _profile_refill_worker_submit_observed(post_followup_profile_prefetch_refill)
             )
         else:
@@ -42364,7 +42364,7 @@ class SourcingOrchestrator:
                     else "profile_refill_submit_budget_exhausted"
                     if explicit_job_id
                     and profile_prefetch_refill_enabled
-                    and profile_refill_submit_observed_this_tick
+                    and _tick_ctx.profile_refill_submit_observed_this_tick
                     and _phase_work_observed(remote_event_followup, post_followup_event_level_materialization_followup)
                     else "no_remote_event_profile_refill_opportunity"
                     if explicit_job_id

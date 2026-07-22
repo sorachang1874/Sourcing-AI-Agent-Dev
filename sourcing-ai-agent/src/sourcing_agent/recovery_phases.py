@@ -134,6 +134,13 @@ class TickContext:
     profile_prefetch_refill_enabled: bool = True
     post_completion_reconcile_enabled: bool = True
 
+    # --- Step 2b lift (B2, 2026-07-22): profile-refill cascade threading ---
+    # First named fields lifted from the inline cascade clusters' method
+    # locals (not oracle-observed; the addendum in
+    # docs/PHASE4_ENTANGLED_CORE_DESIGN.md records the migration method).
+    profile_refill_submit_observed_this_tick: bool = False
+    profile_refill_command_planned_this_tick: bool = False
+
     # NOTE (Step 2 scope): only the phases currently migrated to the registry
     # read this context (orchestrator/payload/run_phase/skipped_phase/scope
     # flags). The densely-threaded cascade clusters (profile_refill /
