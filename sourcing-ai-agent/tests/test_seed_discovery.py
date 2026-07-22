@@ -8,6 +8,8 @@ from unittest import mock
 
 import sourcing_agent.seed_discovery as seed_discovery_module
 from sourcing_agent.asset_logger import AssetLogger
+from sourcing_agent.durable_runtime import legacy_job_workflow_run_id
+from tests.pg_store_fixture import pg_backed_control_plane_store
 from sourcing_agent.connectors import CompanyIdentity, RapidApiAccount, resolve_company_identity
 from sourcing_agent.runtime_environment import LiveProviderAccessError
 from sourcing_agent.search_provider import (
@@ -1624,6 +1626,12 @@ class SeedDiscoveryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             discovery_dir = Path(tempdir)
             runtime = _FakeWorkerRuntime()
+            # R-010 fixture migration (2026-07-22): item registration now goes
+            # through DurableRuntimeWriter events/reducers — a real PG-backed
+            # store replaces the retired _FakeItemStore write surface.
+            runtime.store = self.enterContext(
+                pg_backed_control_plane_store(schema_label="r010_queued_worker")
+            )
             acquirer = SearchSeedAcquirer([], search_provider=_PendingSearchProvider())
             result = acquirer._execute_query_spec(
                 index=1,
@@ -1648,14 +1656,35 @@ class SeedDiscoveryTest(unittest.TestCase):
             self.assertEqual(result["summary"]["status"], "queued")
             self.assertEqual(runtime.completed[0]["status"], "queued")
             self.assertTrue((discovery_dir / "web_query_01_task_post.json").exists())
-            discovery_items = list(runtime.store.items.values())
-            self.assertEqual(len(discovery_items), 1)
-            self.assertEqual(discovery_items[0]["item_kind"], "search_seed_discovery_query")
-            self.assertEqual(discovery_items[0]["status"], "running")
-            self.assertEqual(discovery_items[0]["phase"], "provider_owned")
-            self.assertEqual(discovery_items[0]["source_worker_ids"], [1])
-            self.assertEqual(discovery_items[0]["metadata"]["worker_status"], "queued")
-            self.assertEqual(discovery_items[0]["metadata"]["search_state"]["task_id"], "task_123")
+            # Current registration contract (R-010 migration 2026-07-22): a
+            # queued provider worker durably records DiscoveryQueryStateRecorded
+            # workflow events via DurableRuntimeWriter — job_materialization_items
+            # is no longer this path's write surface.
+            run_events = runtime.store.repos.workflow_runtime.list_workflow_events(
+                legacy_job_workflow_run_id("job_1"), limit=0
+            )
+            discovery_events = [
+                dict(event.get("payload") or {})
+                for event in run_events
+                if str(event.get("event_type") or "") == "DiscoveryQueryStateRecorded"
+            ]
+            self.assertGreaterEqual(len(discovery_events), 1)
+            # Events are per-call snapshots; fold them newest-last to mirror the
+            # old item-row merge semantics.
+            folded_metadata: dict = {}
+            for event_payload in discovery_events:
+                folded_metadata.update(dict(event_payload.get("materialization_metadata") or {}))
+            latest = discovery_events[-1]
+            self.assertEqual(latest["item_kind"], "search_seed_discovery_query")
+            self.assertEqual(latest["status"], "running")
+            self.assertEqual(latest["phase"], "provider_owned")
+            self.assertTrue(any(event.get("source_worker_ids") == [1] for event in discovery_events))
+            self.assertEqual(
+                [(event.get("status"), event.get("phase")) for event in discovery_events],
+                [("queued", "queued"), ("running", "provider_owned")],
+            )
+            self.assertEqual(folded_metadata.get("worker_id"), 1)
+            self.assertTrue(str(folded_metadata.get("worker_key") or ""))
 
     def test_discover_batch_prefetches_dataforseo_tasks(self) -> None:
         class _BatchSearchProvider:
@@ -1979,6 +2008,11 @@ class SeedDiscoveryTest(unittest.TestCase):
                     "allow_stage1_web_seed_fallback": True,
                     "parallel_search_workers": 1,
                     "public_media_results_per_query": 10,
+                    # R-010 update (2026-07-22): broad former past-company
+                    # recall now requires this explicit strategy authorization
+                    # (paid-cost guard former_broad_past_company_requires_
+                    # explicit_strategy) — the test predates the gate.
+                    "former_broad_past_company_only": True,
                 },
                 employment_status="former",
                 worker_runtime=runtime,
@@ -2538,7 +2572,9 @@ class SeedDiscoveryTest(unittest.TestCase):
                 employment_status="current",
             )
 
-        self.assertEqual(snapshot.stop_reason, "completed")
+        # stop_reason carries lane provenance since the primary/fallback split
+        # (R-010 vocabulary update 2026-07-22).
+        self.assertEqual(snapshot.stop_reason, "provider_people_search_primary")
         self.assertEqual(len(snapshot.entries), 1)
         self.assertEqual(snapshot.summary_payload["incomplete_provider_query_count"], 0)
         self.assertEqual(snapshot.query_summaries[0]["status"], "degraded")
@@ -2742,6 +2778,11 @@ class SeedDiscoveryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             snapshot_dir = Path(tempdir)
             runtime = _FakeWorkerRuntime()
+            # R-010 migration (2026-07-22): retry-wait registration plans a
+            # durable workflow command via DurableRuntimeWriter — real store.
+            runtime.store = self.enterContext(
+                pg_backed_control_plane_store(schema_label="r010_zero_exhaustion")
+            )
             acquirer = SearchSeedAcquirer([], harvest_search_connector=_FakeHarvestConnector())
             snapshot = acquirer.discover(
                 identity,
@@ -2765,20 +2806,26 @@ class SeedDiscoveryTest(unittest.TestCase):
                 job_id="job_google_gemini",
             )
 
-        discovery_items = [
-            dict(item)
-            for item in runtime.store.items.values()
-            if str(item.get("item_kind") or "") == "search_seed_discovery_query"
+        # R-010 migration (2026-07-22): exhaustion is durably recorded as
+        # workflow events (CompletionProofRecorded for terminal statuses).
+        run_events = runtime.store.repos.workflow_runtime.list_workflow_events(
+            legacy_job_workflow_run_id("job_google_gemini"), limit=0
+        )
+        exhausted_events = [
+            dict(event.get("payload") or {})
+            for event in run_events
+            if str(dict(event.get("payload") or {}).get("status") or "") == "exhausted"
         ]
-        self.assertEqual(len(discovery_items), 1)
-        self.assertEqual(discovery_items[0]["status"], "exhausted")
-        self.assertEqual(discovery_items[0]["phase"], "exhausted")
-        self.assertTrue(discovery_items[0]["metadata"]["linked_provider_search_retry_required"])
+        self.assertEqual(len(exhausted_events), 1)
+        self.assertEqual(exhausted_events[0]["phase"], "exhausted")
+        item_id = str(exhausted_events[0]["item_id"])
+        folded_metadata = dict(exhausted_events[0].get("materialization_metadata") or {})
+        self.assertTrue(folded_metadata.get("linked_provider_search_retry_required"))
         provider_retry_items = collect_search_seed_provider_retry_items(snapshot)
         self.assertEqual(len(provider_retry_items), 1)
         self.assertEqual(provider_retry_items[0]["owner"], "search_seed_discovery_query")
-        self.assertEqual(provider_retry_items[0]["owner_item_id"], discovery_items[0]["item_id"])
-        self.assertEqual(snapshot.query_summaries[0]["discovery_query_item_id"], discovery_items[0]["item_id"])
+        self.assertEqual(provider_retry_items[0]["owner_item_id"], item_id)
+        self.assertEqual(snapshot.query_summaries[0]["discovery_query_item_id"], item_id)
 
     def test_provider_people_search_retryable_failure_enters_discovery_query_retry_wait(self) -> None:
         class _FakeSettings:
@@ -2817,6 +2864,11 @@ class SeedDiscoveryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             snapshot_dir = Path(tempdir)
             runtime = _FakeWorkerRuntime()
+            # R-010 migration (2026-07-22): retry-wait registration plans a
+            # durable workflow command via DurableRuntimeWriter — real store.
+            runtime.store = self.enterContext(
+                pg_backed_control_plane_store(schema_label="r010_retry_wait")
+            )
             acquirer = SearchSeedAcquirer([], harvest_search_connector=_FakeHarvestConnector())
             snapshot = acquirer.discover(
                 identity,
@@ -2837,15 +2889,15 @@ class SeedDiscoveryTest(unittest.TestCase):
                 job_id="job_google_gemini_retry",
             )
 
-        discovery_items = [
-            dict(item)
-            for item in runtime.store.items.values()
-            if str(item.get("item_kind") or "") == "search_seed_discovery_query"
+        retry_commands = [
+            dict(command)
+            for command in runtime.store.list_workflow_commands(limit=50)
+            if str(command.get("command_type") or "") == "linkedin.discovery_query.run"
         ]
-        self.assertEqual(len(discovery_items), 1)
-        self.assertEqual(discovery_items[0]["status"], "failed_retryable")
-        self.assertEqual(discovery_items[0]["phase"], "retry_wait")
-        self.assertTrue(discovery_items[0]["not_before_at"])
+        self.assertEqual(len(retry_commands), 1)
+        self.assertTrue(retry_commands[0]["not_before_at"])
+        command_payload = dict(retry_commands[0].get("payload") or {})
+        self.assertEqual(command_payload.get("item_kind"), "search_seed_discovery_query")
         self.assertEqual(snapshot.stop_reason, "provider_people_search_incomplete")
         self.assertEqual(snapshot.query_summaries[0]["status"], "retry_wait")
         self.assertTrue(snapshot.query_summaries[0]["provider_search_retryable"])
