@@ -936,7 +936,15 @@ class OrganizationAssetRegistryGenerationGuardTest(PGControlPlaneStoreTestMixin,
         self.tempdir.cleanup()
         super().tearDown()
 
-    def _payload(self, snapshot_id: str, *, sequence: int, **overrides: object) -> dict[str, object]:
+    def _payload(
+        self,
+        snapshot_id: str,
+        *,
+        sequence: int,
+        generation_key: str = "",
+        selected: list[str] | None = None,
+        **overrides: object,
+    ) -> dict[str, object]:
         payload: dict[str, object] = {
             "target_company": "OpenAI",
             "company_key": "openai",
@@ -944,8 +952,9 @@ class OrganizationAssetRegistryGenerationGuardTest(PGControlPlaneStoreTestMixin,
             "asset_view": "canonical_merged",
             "status": "ready",
             "candidate_count": 10,
-            "materialization_generation_key": f"gen-{sequence}",
+            "materialization_generation_key": generation_key or f"gen-{snapshot_id}",
             "materialization_generation_sequence": sequence,
+            "selected_snapshot_ids": list(selected if selected is not None else [snapshot_id]),
         }
         payload.update(overrides)
         return payload
@@ -954,44 +963,96 @@ class OrganizationAssetRegistryGenerationGuardTest(PGControlPlaneStoreTestMixin,
         rows = self.store.list_organization_asset_registry(target_company="OpenAI")
         return {str(r["snapshot_id"]): int(bool(r["authoritative"])) for r in rows}
 
-    def test_lower_generation_promotion_is_refused_and_reported(self) -> None:
-        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+    def test_same_lineage_stale_sequence_replay_is_refused(self) -> None:
+        self.store.upsert_organization_asset_registry(
+            self._payload("snap-current", sequence=6, generation_key="lineage-a"), authoritative=True
+        )
 
-        result = self.store.upsert_organization_asset_registry(self._payload("snap-gen3", sequence=3), authoritative=True)
+        result = self.store.upsert_organization_asset_registry(
+            self._payload("snap-stale", sequence=3, generation_key="lineage-a"), authoritative=True
+        )
 
         refusal = result.get("authoritative_promotion_refused")
         self.assertIsNotNone(refusal)
-        self.assertEqual(refusal["reason"], "materialization_generation_regression")
-        self.assertEqual(refusal["blocking_snapshot_id"], "snap-gen6")
+        self.assertEqual(refusal["reason"], "stale_generation_sequence_replay")
+        self.assertEqual(refusal["blocking_snapshot_id"], "snap-current")
         self.assertEqual(refusal["blocking_generation_sequence"], 6)
-        self.assertEqual(self._authoritative_map(), {"snap-gen6": 1, "snap-gen3": 0})
+        self.assertEqual(self._authoritative_map(), {"snap-current": 1, "snap-stale": 0})
 
-    def test_untracked_generation_cannot_stomp_a_tracked_authoritative_row(self) -> None:
-        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+    def test_source_coverage_regression_is_refused_across_lineages(self) -> None:
+        # The 2026-07-22 incident shape: incumbent merged {104157, 041551};
+        # a stale-job recovery re-materialized 041551 selecting only itself.
+        self.store.upsert_organization_asset_registry(
+            self._payload("snap-104157", sequence=6, selected=["snap-104157", "snap-041551"]),
+            authoritative=True,
+        )
 
-        result = self.store.upsert_organization_asset_registry(self._payload("snap-legacy", sequence=0), authoritative=True)
+        result = self.store.upsert_organization_asset_registry(
+            self._payload("snap-041551", sequence=3, selected=["snap-041551"]), authoritative=True
+        )
 
-        self.assertIsNotNone(result.get("authoritative_promotion_refused"))
-        self.assertEqual(self._authoritative_map(), {"snap-gen6": 1, "snap-legacy": 0})
+        refusal = result.get("authoritative_promotion_refused")
+        self.assertIsNotNone(refusal)
+        self.assertEqual(refusal["reason"], "source_snapshot_coverage_regression")
+        self.assertEqual(refusal["blocking_snapshot_id"], "snap-104157")
+        self.assertEqual(self._authoritative_map(), {"snap-104157": 1, "snap-041551": 0})
 
-    def test_equal_or_higher_generation_promotion_still_demotes_companion(self) -> None:
-        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+    def test_new_lineage_with_equal_or_wider_coverage_promotes(self) -> None:
+        self.store.upsert_organization_asset_registry(
+            self._payload("snap-old", sequence=6, selected=["snap-old", "snap-extra"]), authoritative=True
+        )
 
-        result = self.store.upsert_organization_asset_registry(self._payload("snap-gen7", sequence=7), authoritative=True)
+        result = self.store.upsert_organization_asset_registry(
+            self._payload("snap-repair", sequence=1, selected=["snap-old", "snap-extra", "snap-repair"]),
+            authoritative=True,
+        )
+
+        self.assertNotIn("authoritative_promotion_refused", result)
+        self.assertEqual(self._authoritative_map(), {"snap-old": 0, "snap-repair": 1})
+
+    def test_same_lineage_higher_sequence_promotes(self) -> None:
+        self.store.upsert_organization_asset_registry(
+            self._payload("snap-gen6", sequence=6, generation_key="lineage-a", selected=["snap-gen6"]),
+            authoritative=True,
+        )
+
+        result = self.store.upsert_organization_asset_registry(
+            self._payload("snap-gen7", sequence=7, generation_key="lineage-a", selected=["snap-gen6", "snap-gen7"]),
+            authoritative=True,
+        )
 
         self.assertNotIn("authoritative_promotion_refused", result)
         self.assertEqual(self._authoritative_map(), {"snap-gen6": 0, "snap-gen7": 1})
 
     def test_repromoting_the_current_authoritative_snapshot_is_allowed(self) -> None:
-        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+        self.store.upsert_organization_asset_registry(
+            self._payload("snap-gen6", sequence=6, generation_key="lineage-a"), authoritative=True
+        )
 
         result = self.store.upsert_organization_asset_registry(
-            self._payload("snap-gen6", sequence=6, candidate_count=11), authoritative=True
+            self._payload("snap-gen6", sequence=6, generation_key="lineage-a", candidate_count=11),
+            authoritative=True,
         )
 
         self.assertNotIn("authoritative_promotion_refused", result)
         self.assertEqual(self._authoritative_map(), {"snap-gen6": 1})
         self.assertEqual(int(result["candidate_count"]), 11)
+
+    def test_selection_untracked_writers_keep_previous_promotion_behavior(self) -> None:
+        # Escape hatch, documented: writers that record neither a shared
+        # lineage key nor source selections cannot be classified as
+        # regressions and promote as before the guard existed.
+        self.store.upsert_organization_asset_registry(
+            self._payload("snap-tracked", sequence=6, selected=["snap-tracked", "snap-extra"]),
+            authoritative=True,
+        )
+
+        result = self.store.upsert_organization_asset_registry(
+            self._payload("snap-legacy", sequence=0, selected=[]), authoritative=True
+        )
+
+        self.assertNotIn("authoritative_promotion_refused", result)
+        self.assertEqual(self._authoritative_map(), {"snap-tracked": 0, "snap-legacy": 1})
 
 
 if __name__ == "__main__":

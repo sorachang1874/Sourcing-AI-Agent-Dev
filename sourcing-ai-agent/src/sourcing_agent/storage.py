@@ -8605,37 +8605,67 @@ class ControlPlaneStore:
             )
             # Generation-regression guard (2026-07-22 incident): a stale-job
             # recovery reconcile re-materialized an OLD snapshot and promoted
-            # it authoritative, demoting the current generation (seq 6 → 3).
-            # Promotion over a DIFFERENT snapshot's authoritative row is only
-            # honored when the incoming row's materialization generation
-            # sequence is equal-or-higher; otherwise the promotion is refused
-            # (row still upserts, non-authoritative) and the refusal is
-            # reported on the returned record.
+            # it authoritative over the current generation. Promotion over a
+            # DIFFERENT snapshot's authoritative row is refused (row still
+            # upserts, non-authoritative; refusal reported on the returned
+            # record) in exactly two regression shapes:
+            #   1. same materialization_generation_key with a LOWER sequence —
+            #      a stale replay of the same lineage;
+            #   2. different lineage whose selected_snapshot_ids are a
+            #      non-empty STRICT SUBSET of the incumbent's — a source-
+            #      coverage regression (the incident: {041551} vs
+            #      {104157, 041551}).
+            # Legitimate new lineages (repairs, fresh materializations with
+            # equal-or-wider coverage) still promote normally.
             requested_authoritative = bool(authoritative or payload.get("authoritative"))
+            incoming_generation_key = _normalized_payload_text(payload, "materialization_generation_key")
             incoming_generation_sequence = int(payload.get("materialization_generation_sequence") or 0)
+            incoming_selected_ids = {
+                str(value or "").strip()
+                for value in list(payload.get("selected_snapshot_ids") or [])
+                if str(value or "").strip()
+            }
             authoritative_promotion_refused: dict[str, Any] | None = None
             if requested_authoritative:
-                blocking_row = next(
-                    (
-                        row
-                        for row in existing_rows
-                        if bool(row.get("authoritative"))
-                        and str(row.get("snapshot_id") or "").strip() != snapshot_id
-                        and int(row.get("materialization_generation_sequence") or 0) > incoming_generation_sequence
-                    ),
-                    None,
-                )
-                if blocking_row is not None:
-                    requested_authoritative = False
-                    authoritative_promotion_refused = {
-                        "reason": "materialization_generation_regression",
-                        "incoming_snapshot_id": snapshot_id,
-                        "incoming_generation_sequence": incoming_generation_sequence,
-                        "blocking_snapshot_id": str(blocking_row.get("snapshot_id") or ""),
-                        "blocking_generation_sequence": int(
-                            blocking_row.get("materialization_generation_sequence") or 0
-                        ),
+                for candidate_row in existing_rows:
+                    if not bool(candidate_row.get("authoritative")):
+                        continue
+                    if str(candidate_row.get("snapshot_id") or "").strip() == snapshot_id:
+                        continue
+                    blocking_key = str(candidate_row.get("materialization_generation_key") or "").strip()
+                    blocking_sequence = int(candidate_row.get("materialization_generation_sequence") or 0)
+                    blocking_selected_ids = {
+                        str(value or "").strip()
+                        for value in list(candidate_row.get("selected_snapshot_ids") or [])
+                        if str(value or "").strip()
                     }
+                    refusal_reason = ""
+                    if (
+                        incoming_generation_key
+                        and incoming_generation_key == blocking_key
+                        and incoming_generation_sequence < blocking_sequence
+                    ):
+                        refusal_reason = "stale_generation_sequence_replay"
+                    elif (
+                        incoming_selected_ids
+                        and blocking_selected_ids
+                        and incoming_selected_ids < blocking_selected_ids
+                    ):
+                        refusal_reason = "source_snapshot_coverage_regression"
+                    if refusal_reason:
+                        requested_authoritative = False
+                        authoritative_promotion_refused = {
+                            "reason": refusal_reason,
+                            "incoming_snapshot_id": snapshot_id,
+                            "incoming_generation_key": incoming_generation_key,
+                            "incoming_generation_sequence": incoming_generation_sequence,
+                            "incoming_selected_snapshot_ids": sorted(incoming_selected_ids),
+                            "blocking_snapshot_id": str(candidate_row.get("snapshot_id") or ""),
+                            "blocking_generation_key": blocking_key,
+                            "blocking_generation_sequence": blocking_sequence,
+                            "blocking_selected_snapshot_ids": sorted(blocking_selected_ids),
+                        }
+                        break
             if requested_authoritative:
                 for companion_row in existing_rows:
                     if not bool(companion_row.get("authoritative")):
