@@ -1,7 +1,14 @@
 # AGENTS.md
 
 ## Scope
-This file defines workspace-level engineering rules. It applies to everything under this directory unless a deeper `AGENTS.md` overrides part of it.
+This file defines workspace-level engineering rules. It applies to everything under this directory unless a deeper `AGENTS.md` overrides part of it. `CLAUDE.md` is a thin tool-native mirror of the critical rules; this file wins on conflict.
+
+## Routing (three-hop chain)
+1. Current state: [PROGRESS.md](PROGRESS.md) · work queue: [NEXT_TODO.md](NEXT_TODO.md).
+2. Docs router (problem → owning module → canonical doc): [sourcing-ai-agent/docs/README.md](sourcing-ai-agent/docs/README.md).
+3. Package rules: [sourcing-ai-agent/AGENTS.md](sourcing-ai-agent/AGENTS.md) · [x-first-researcher-sourcing/AGENTS.md](x-first-researcher-sourcing/AGENTS.md).
+
+Live lane coordination is gitignored `sourcing-ai-agent/.coord/` (BOARD.md + handoffs); it is an ephemeral channel — git is authoritative, durable decisions get promoted into the snapshots and module docs.
 
 ## Role
 You are a senior staff-level engineer working in an existing production codebase.

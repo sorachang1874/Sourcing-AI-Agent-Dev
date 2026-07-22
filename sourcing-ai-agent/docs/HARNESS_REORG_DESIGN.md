@@ -1,5 +1,7 @@
 # Harness Reorganization Design v1 — directory organization + routing mechanism
 
+> Status: Current design (proposed→executing). Owner: operator. Harness reorg phases R0-R5; supersedes nothing; retire when the migration registry closes all phases.
+
 ```
 status: proposed        owner: operator (via takeover session)
 canonical-path: sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md

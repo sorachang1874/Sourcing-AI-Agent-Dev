@@ -1,6 +1,8 @@
 # Documentation Index
 
-> Status: Current first-party doc. Use this file to distinguish current guidance from reference-only docs, and cross-check with `README.md` and `PROGRESS.md` when runtime contracts change. Restructured 2026-06-11 into tiers; archived docs live under `docs/archive/`.
+> Status: Current catalog page, routed from [README.md](README.md) (the project router — start there). Use this file for tier/status authority over the flat documents until R3 distributes them into module indexes. Restructured 2026-06-11 into tiers; archived docs live under `docs/archive/`.
+>
+> Update (2026-07-22): the entry chain is workspace `AGENTS.md`/`README.md` → `PROGRESS.md`/`NEXT_TODO.md` → [README.md](README.md) router → module index. The "Current Stage Checkpoint" below is a 2026-06-11 planning snapshot; post-07-09 state (takeover, Phase C data consolidation, harness reorg) lives in the workspace snapshots. Live lane state: gitignored `.coord/BOARD.md` — git wins.
 
 这份索引用来区分"当前有效文档"和"历史参考文档"，避免新的开发者或新的 AI session 被旧 snapshot、旧数字或旧操作顺序误导。
 

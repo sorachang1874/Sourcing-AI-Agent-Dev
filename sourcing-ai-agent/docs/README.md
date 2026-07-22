@@ -1,6 +1,12 @@
 # Documentation Router
 
-> Status: Current Phase-1 problem-to-module router. Existing canonical documents keep their current paths; use [INDEX.md](INDEX.md) for status/tier authority until each migration row is closed.
+> Status: Current problem-to-module router (three-hop chain: root AGENTS/README → this file → module index → canonical doc). Existing canonical documents keep their current paths; use [INDEX.md](INDEX.md) for status/tier authority until each migration row is closed.
+
+```
+owner: operator   last-route-audit: 2026-07-22   next-route-audit: harness reorg R3
+link-check: tests/test_markdown_status.py (routing lints land in reorg R5)
+reorg design: HARNESS_REORG_DESIGN.md   migration registry: governance/DOCUMENTATION_MIGRATION_AND_RETIREMENT.md
+```
 
 这份入口按“问题属于哪个模块”来路由，而不是按文件名或最近修改时间来猜。
 Phase 1 只增加索引，不批量移动现有文档，因此已有链接、评审 scope 和活跃分支不会被打断。
@@ -30,8 +36,11 @@ owner matrix in a canonical contract.
 | Provider queue, Harvest/DataForSEO/Apify, model transport, cost/rate policy | [Provider runtime](modules/provider-runtime/README.md) | Provider contract and mode isolation | Provider-specific playbook |
 | PG/storage migration, test environment, local runtime, deploy, independent review | [Platform operations](modules/platform-operations/README.md) | Environment or storage contract | Mode-specific runbook and validation |
 | Cross-module contract or unclear owner | [Module registry](modules/README.md) | Every named producer/consumer module | [Documentation status index](INDEX.md) and owner matrix |
-| Current/blocked/next work | Project snapshot | [NEXT_TODO.md](NEXT_TODO.md) | Canonical module artifact linked from the row |
-| Latest handoff/resume state | Project snapshot | [PROGRESS.md](../PROGRESS.md) | Canonical evidence and commands linked from the handoff |
+| Current/blocked/next work | Workspace snapshot | [../../NEXT_TODO.md](../../NEXT_TODO.md) | Canonical module artifact linked from the row |
+| Latest handoff/resume state | Workspace snapshot | [../../PROGRESS.md](../../PROGRESS.md) | Live lane state: gitignored `.coord/BOARD.md` (git wins) |
+| X-First collection, judge contract, CSV export | X-First package | [../../x-first-researcher-sourcing/AGENTS.md](../../x-first-researcher-sourcing/AGENTS.md) | Export/live scripts: [../scripts/README.md](../scripts/README.md) (R2) |
+| Live ops, paid dispatch, provider quota walls | [Provider runtime](modules/provider-runtime/README.md) | [../../CLAUDE.md](../../CLAUDE.md) critical rules | [HARVESTAPI_PLAYBOOK.md](HARVESTAPI_PLAYBOOK.md) |
+| Directory organization / doc routing itself | Documentation governance | [HARNESS_REORG_DESIGN.md](HARNESS_REORG_DESIGN.md) | This file's routing-gaps table |
 | Stale, duplicate, or misplaced document | Documentation governance | [Migration and retirement registry](governance/DOCUMENTATION_MIGRATION_AND_RETIREMENT.md) | Owning module index |
 
 ## Module Routes
@@ -76,10 +85,12 @@ owner. Its owner matrix must still name each producer and consumer module.
 
 ## Snapshot Boundary
 
-- [NEXT_TODO.md](NEXT_TODO.md) is the current/blocked/immediately-next routing
-  snapshot, not the durable home of module detail.
-- [PROGRESS.md](../PROGRESS.md) is the latest resume/handoff snapshot, not an
-  append-only history.
+- Workspace [../../NEXT_TODO.md](../../NEXT_TODO.md) (≤120 lines) is the
+  current/blocked/immediately-next routing snapshot; workspace
+  [../../PROGRESS.md](../../PROGRESS.md) (≤200 lines) is the resume/handoff
+  snapshot. Both replace-not-append. The old package-level
+  [PROGRESS.md](../PROGRESS.md) / [NEXT_TODO.md](NEXT_TODO.md) are superseded
+  redirect stubs (full content archived).
 - Contracts, decisions, product intent, test rules, runbooks, and review
   evidence remain in their module or current canonical flat path.
 - Snapshot cleanup is tracked separately so active Track D work is not mixed
@@ -87,6 +98,15 @@ owner. Its owner matrix must still name each producer and consumer module.
 
 See the [migration and retirement registry](governance/DOCUMENTATION_MIGRATION_AND_RETIREMENT.md)
 for the cadence, deletion conditions, and current Phase-1 debt.
+
+## Routing Gaps
+
+| Gap | Impact | Temporary route | Resolution target |
+| --- | --- | --- | --- |
+| live-script registry lives inside HARVESTAPI_PLAYBOOK.md | script discovery detours through a provider doc | playbook §committed 脚本注册表 | R2 → [../scripts/README.md](../scripts/README.md) |
+| ~60 TRACK_D increment docs flat at docs/ top level | active contracts drowned in increments | [INDEX.md](INDEX.md) Tier 3 | R3 archive + module distribution |
+| deliverable CSVs have no manifest | delivery locations are tribal knowledge | workspace [../../PROGRESS.md](../../PROGRESS.md) | R4 deliverables/MANIFEST.md |
+| module indexes still Phase-1 (link to flat paths) | third hop lands on flat files | each module README | R3 onwards, one module at a time |
 
 ## Phase-1 Validation
 

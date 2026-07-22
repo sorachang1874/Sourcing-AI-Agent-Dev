@@ -1,5 +1,7 @@
 # Phase C — Data-Layer Consolidation Design (v1, 2026-07-22)
 
+> Status: Current design (partially executed 2026-07-22: C1.2/C2/C3/C1.4/C4 done, see workspace PROGRESS.md). Owner: operator.
+
 Owner: takeover session (post-Kimi). Scope: OpenAI identity merge, authoritative-flag
 repair, runtime-root/pointer unification, canonical completeness checking. All facts
 below are from read-only audits (queries + file reads); nothing in this document has

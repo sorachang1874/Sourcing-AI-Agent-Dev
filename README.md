@@ -1,99 +1,37 @@
-# Sourcing AI Agent Dev
+# Sourcing AI Agent — workspace
 
-这个目录现在已经整理成一个适合放入 GitHub repo 的 monorepo 工作区，包含三类内容：
-
-- 历史调研/技能资产
-- 新开发的 `sourcing-ai-agent` 后端
-- 项目进度与复盘文档
-
-## Start Here
-
-如果你是新的开发者，或是从新的 AI session 重新接手，请先看：
-
-1. [ONBOARDING.md](ONBOARDING.md)
-2. [CONTRIBUTING.md](CONTRIBUTING.md)
-3. [GITHUB_SYNC_PREP.md](GITHUB_SYNC_PREP.md)
-4. [sourcing-ai-agent/README.md](sourcing-ai-agent/README.md)
-5. [sourcing-ai-agent/PROGRESS.md](sourcing-ai-agent/PROGRESS.md)
-6. [sourcing-ai-agent/docs/INDEX.md](sourcing-ai-agent/docs/INDEX.md)
-
-如果你只想快速进入当前有效体系，不要先从 dated handoff / retrospective / todo 文档开始。历史文档仍保留在 `sourcing-ai-agent/docs/`，但已经在 [sourcing-ai-agent/docs/INDEX.md](sourcing-ai-agent/docs/INDEX.md) 里标注为 reference-only。
-
-## 目录
-
-```text
-Sourcing AI Agent Dev/
-├── Anthropic华人专项/
-├── anthropic-employee-scan/
-├── biz-visit-onepager/
-├── investor-chinese-scan/
-└── sourcing-ai-agent/
+```
+owner: operator   last-verified: 2026-07-22   route-audit: 随 docs/HARNESS_REORG_DESIGN.md 各阶段
 ```
 
-## 主要说明
+AI 驱动的人才 sourcing 流水线：LinkedIn roster/profile 采集（HarvestAPI/Apify）→ 华人
+线索分层（L1–3）→ X-First 账号发现 + LLM judge（v1 引用契约）→ 13 列 CRM+X-First CSV
+交付，底座是 PG-only 的 durable workflow 引擎。
 
-- `Anthropic华人专项/`
-  历史 Anthropic 华人专项的数据资产与过程文档。
-- `anthropic-employee-scan/`
-  历史 employee scan skill/workflow 沉淀。
-- `biz-visit-onepager/`
-  相关 one-pager/业务访问支持资产。
-- `investor-chinese-scan/`
-  投资机构华人成员扫描相关资产。
-- `sourcing-ai-agent/`
-  当前正在持续开发的通用 Sourcing AI Agent 后端工程。
+## 入口链（按序读）
 
-## GitHub 同步约束
+1. [AGENTS.md](AGENTS.md) — 工作区工程规则（CLAUDE.md 为 Claude Code 镜像其关键条目）。
+2. [PROGRESS.md](PROGRESS.md) — 有界的当前状态快照；[NEXT_TODO.md](NEXT_TODO.md) — 有界的工作队列。
+3. [sourcing-ai-agent/docs/README.md](sourcing-ai-agent/docs/README.md) — 文档路由器：问题 → 归属模块 → canonical 文档。
 
-这个 monorepo 现在可以推送到 GitHub repo，但必须遵守以下规则：
+多 agent 实时协调走 gitignored 的 `sourcing-ai-agent/.coord/`（短暂通道）；**git 为权威**，
+持久决定必须提升到上面的快照与模块文档。
 
-- 日常协作规则统一以 [CONTRIBUTING.md](CONTRIBUTING.md) 为准
-- 不提交任何真实密钥或 provider secret
-- 不提交 `runtime/` 下的 live data / search payload / profile payload / company assets
-- 不提交历史 `api_accounts.json`
-- 不提交原始 zip 包
+## 布局
 
-根目录 `.gitignore` 已经按这个原则配置，可直接用于后续继续推送、换设备 clone 后继续开发。
+| 路径 | 内容 |
+|---|---|
+| [sourcing-ai-agent/](sourcing-ai-agent/AGENTS.md) | 主包：采集、workflow runtime、存储、serving、live-ops 脚本 |
+| [x-first-researcher-sourcing/](x-first-researcher-sourcing/AGENTS.md) | X-First 包：Grok 采集、judge 契约、批处理 runner |
+| archive/legacy-research-2026-04/ | 4 月研究资产冻结归档（pipeline 前时代） |
+| ai-assisted-engineering-playbook/ | 实践手册姊妹仓（独立 git，本仓不跟踪） |
+| .worktrees/ | lane 工作树（独立 git 上下文，本仓不跟踪） |
 
-## 同步边界
+## 环境与数据边界
 
-当前 GitHub repo 主要同步：
-
-- 代码
-- 文档
-- 示例配置
-- 不含 secrets 的历史方法论资产
-
-不会同步：
-
-- `runtime/`
-- provider secrets
-- 历史 `api_accounts.json`
-- zip / tar 打包副产物
-
-另外要注意：
-
-- `runtime/vendor/` 里的本机增强依赖也不会进入 Git
-  - 例如 `pdfminer.six`
-  - 例如 browser-search 用到的 `playwright` / browser binaries
-- 这类依赖如果要跨设备复用，应跟随 asset bundle/object storage 一起恢复，而不是指望 Git 带上
-
-如果后续需要跨设备复用 runtime 或高价值 profile 资产，应单独放到安全的云端存储，而不是 Git。
-
-## 换设备继续开发
-
-如果你后续切换到公司电脑或新的 AI 开发环境，推荐顺序是：
-
-1. 从 GitHub clone 这个 monorepo。
-2. 阅读 [ONBOARDING.md](ONBOARDING.md)。
-3. 阅读 [sourcing-ai-agent/PROGRESS.md](sourcing-ai-agent/PROGRESS.md) 和 [sourcing-ai-agent/docs/INDEX.md](sourcing-ai-agent/docs/INDEX.md)。
-4. 单独恢复 `runtime/secrets/providers.local.json` 或重新配置环境变量。
-5. 如需复用历史 live data / company assets / profile assets，从单独的安全存储恢复，不要指望 Git 自动带上这些资产。
-
-## 当前建议
-
-1. 继续将本目录作为 monorepo 根目录维护。
-2. 只提交代码、文档、示例配置和不含密钥的历史方法论资产。
-3. 继续把 live data、runtime snapshot、provider cache 保留在本地或后续云端存储。
-4. 将高价值 asset bundle 逐步迁移到 object storage，而不是再创建一个“包含 secrets 和 runtime 的 GitHub repo”。
-5. 当前 Thinking Machines Lab handoff bundle 已完成真实 R2 `upload -> download -> restore`，后续优先继续补资产，而不是重复搭基础同步层。
+- Python 一律用各包 `.venv`（不要直接用 Homebrew python）。本地控制面 Postgres：
+  `make -C sourcing-ai-agent local-pg-up`（env 在 `sourcing-ai-agent/.local-postgres.env`，
+  需 `set -a` 方式 source）。验证命令与测试 lane 规则见 AGENTS.md 与路由器 testing 路由。
+- 外部 provider 默认 **FAIL-CLOSED**——live 访问需要 provider 模块文档描述的三重门 env。
+- git 只装代码、文档、示例配置；`runtime/`（live 数据、快照、secrets、provider cache）
+  永不入库，跨设备恢复走独立安全存储；`runtime/secrets/providers.local.json` 换机重配。
