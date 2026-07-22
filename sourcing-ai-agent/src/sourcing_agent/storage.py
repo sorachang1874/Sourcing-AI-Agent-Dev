@@ -8603,7 +8603,40 @@ class ControlPlaneStore:
                 existing_rows=existing_rows,
                 id_column="registry_id",
             )
-            if authoritative:
+            # Generation-regression guard (2026-07-22 incident): a stale-job
+            # recovery reconcile re-materialized an OLD snapshot and promoted
+            # it authoritative, demoting the current generation (seq 6 → 3).
+            # Promotion over a DIFFERENT snapshot's authoritative row is only
+            # honored when the incoming row's materialization generation
+            # sequence is equal-or-higher; otherwise the promotion is refused
+            # (row still upserts, non-authoritative) and the refusal is
+            # reported on the returned record.
+            requested_authoritative = bool(authoritative or payload.get("authoritative"))
+            incoming_generation_sequence = int(payload.get("materialization_generation_sequence") or 0)
+            authoritative_promotion_refused: dict[str, Any] | None = None
+            if requested_authoritative:
+                blocking_row = next(
+                    (
+                        row
+                        for row in existing_rows
+                        if bool(row.get("authoritative"))
+                        and str(row.get("snapshot_id") or "").strip() != snapshot_id
+                        and int(row.get("materialization_generation_sequence") or 0) > incoming_generation_sequence
+                    ),
+                    None,
+                )
+                if blocking_row is not None:
+                    requested_authoritative = False
+                    authoritative_promotion_refused = {
+                        "reason": "materialization_generation_regression",
+                        "incoming_snapshot_id": snapshot_id,
+                        "incoming_generation_sequence": incoming_generation_sequence,
+                        "blocking_snapshot_id": str(blocking_row.get("snapshot_id") or ""),
+                        "blocking_generation_sequence": int(
+                            blocking_row.get("materialization_generation_sequence") or 0
+                        ),
+                    }
+            if requested_authoritative:
                 for companion_row in existing_rows:
                     if not bool(companion_row.get("authoritative")):
                         continue
@@ -8625,11 +8658,7 @@ class ControlPlaneStore:
                 "asset_view": asset_view,
                 "status": _normalized_payload_text(payload, "status", default="ready") or "ready",
                 "authoritative": (
-                    1
-                    if authoritative
-                    or bool(payload.get("authoritative"))
-                    or bool((existing_row or {}).get("authoritative"))
-                    else 0
+                    1 if requested_authoritative or bool((existing_row or {}).get("authoritative")) else 0
                 ),
                 "candidate_count": int(payload.get("candidate_count") or 0),
                 "evidence_count": int(payload.get("evidence_count") or 0),
@@ -8721,7 +8750,10 @@ class ControlPlaneStore:
                     ],
                 )
             if row is not None:
-                return self._organization_asset_registry_from_row(row)
+                result = self._organization_asset_registry_from_row(row)
+                if authoritative_promotion_refused is not None:
+                    result["authoritative_promotion_refused"] = authoritative_promotion_refused
+                return result
             if self._control_plane_postgres_should_skip_sqlite_fallback("organization_asset_registry"):
                 # Track B B4.1b: PG is authoritative — fail closed rather than fall through to the dead
                 # SQLite shadow.

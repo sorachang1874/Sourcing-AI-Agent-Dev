@@ -922,5 +922,77 @@ class AssetConsolidationAuditTest(PGControlPlaneStoreTestMixin, unittest.TestCas
         self.assertIn("registry_payload_count_mismatch", candidate["promotion_risks"])
 
 
+class OrganizationAssetRegistryGenerationGuardTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """Authoritative promotion must never demote a HIGHER materialization
+    generation (2026-07-22 incident: a stale-job recovery reconcile
+    re-materialized an old snapshot and flipped authoritative seq 6 → 3)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.store = self.make_pg_store(Path(self.tempdir.name) / "sourcing_agent.db")
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+        super().tearDown()
+
+    def _payload(self, snapshot_id: str, *, sequence: int, **overrides: object) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "target_company": "OpenAI",
+            "company_key": "openai",
+            "snapshot_id": snapshot_id,
+            "asset_view": "canonical_merged",
+            "status": "ready",
+            "candidate_count": 10,
+            "materialization_generation_key": f"gen-{sequence}",
+            "materialization_generation_sequence": sequence,
+        }
+        payload.update(overrides)
+        return payload
+
+    def _authoritative_map(self) -> dict[str, int]:
+        rows = self.store.list_organization_asset_registry(target_company="OpenAI")
+        return {str(r["snapshot_id"]): int(bool(r["authoritative"])) for r in rows}
+
+    def test_lower_generation_promotion_is_refused_and_reported(self) -> None:
+        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+
+        result = self.store.upsert_organization_asset_registry(self._payload("snap-gen3", sequence=3), authoritative=True)
+
+        refusal = result.get("authoritative_promotion_refused")
+        self.assertIsNotNone(refusal)
+        self.assertEqual(refusal["reason"], "materialization_generation_regression")
+        self.assertEqual(refusal["blocking_snapshot_id"], "snap-gen6")
+        self.assertEqual(refusal["blocking_generation_sequence"], 6)
+        self.assertEqual(self._authoritative_map(), {"snap-gen6": 1, "snap-gen3": 0})
+
+    def test_untracked_generation_cannot_stomp_a_tracked_authoritative_row(self) -> None:
+        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+
+        result = self.store.upsert_organization_asset_registry(self._payload("snap-legacy", sequence=0), authoritative=True)
+
+        self.assertIsNotNone(result.get("authoritative_promotion_refused"))
+        self.assertEqual(self._authoritative_map(), {"snap-gen6": 1, "snap-legacy": 0})
+
+    def test_equal_or_higher_generation_promotion_still_demotes_companion(self) -> None:
+        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+
+        result = self.store.upsert_organization_asset_registry(self._payload("snap-gen7", sequence=7), authoritative=True)
+
+        self.assertNotIn("authoritative_promotion_refused", result)
+        self.assertEqual(self._authoritative_map(), {"snap-gen6": 0, "snap-gen7": 1})
+
+    def test_repromoting_the_current_authoritative_snapshot_is_allowed(self) -> None:
+        self.store.upsert_organization_asset_registry(self._payload("snap-gen6", sequence=6), authoritative=True)
+
+        result = self.store.upsert_organization_asset_registry(
+            self._payload("snap-gen6", sequence=6, candidate_count=11), authoritative=True
+        )
+
+        self.assertNotIn("authoritative_promotion_refused", result)
+        self.assertEqual(self._authoritative_map(), {"snap-gen6": 1})
+        self.assertEqual(int(result["candidate_count"]), 11)
+
+
 if __name__ == "__main__":
     unittest.main()
