@@ -32,5 +32,6 @@ last-verified: 2026-07-22
 
 | id | test 文件/家族 | 保护过什么 | 退役原因 | 日期 | superseded_by |
 |---|---|---|---|---|---|
+| T-003 | `test_pipeline.py` 死白盒 13 件（cleanup-duplicate-inflight ×2、runtime-health ×2、job-progress auto-recovery ×3、release-stale-job-lease ×4、file-lock recovery ×1、harvest-prefetch overlay recovery ×1；共 31 处 `store._lock/_connection` 引用）| SQLite 时代的 job-lease/文件锁/runner 存活轮询恢复语义 | 架构已被 Phase 4 PG lease+事件驱动恢复取代；测试自 PG-pure store 起引用不存在属性（瞬间 AttributeError，零现役覆盖，R-009 证据）| 2026-07-22 | 现行恢复合同归 `test_recovery_*.py` 家族 + `test_operation_runtime.py` lease 族；现代覆盖若有缺口属新测试工作，不是复活这批 |
 | T-001 | `test_request_scoped_roster_shards.py::test_keyword_policy_subdivides_only_over_cap_function_roots` + 2 个 keyword_probe_policy 测试 | Step 4 keyword_union 超帽细分的验收设想 | 引用从未 land 的 `build_large_org_keyword_probe_shard_policy`（233a31a 半落地）;设计意图保存于 233a31a + master plan WS1 Step 4 | 2026-07-22 | Step 4 落地时的新验收套件（R-034 退出证据）|
 | T-002 | 同文件 `test_plan_builds_request_shards_for_cohort_role_request`、`test_plan_manifest_parity_for_cohort_role_request` | cohort 角色经 legacy 元数据出 roster shard | 落地设计中 cohort 整体绕过 legacy 元数据走 CohortProviderCompiler | 2026-07-22 | `tests/test_cohort_*.py` 套件;归一见 master plan WS1 Step 5 |
