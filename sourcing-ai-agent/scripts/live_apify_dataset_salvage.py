@@ -65,6 +65,16 @@ def _load_json_list(path: Path) -> list[dict[str, Any]]:
     raise ValueError(f"unsupported JSON shape in {path}")
 
 
+def _roster_salvage_note(employment_status: str, function_tag: str) -> str:
+    lane = "current roster" if employment_status == "current" else "former roster"
+    if function_tag:
+        return (
+            f"{lane} salvage from function-sharded query (function {function_tag}); "
+            "function attribution preserved from the shard lane"
+        )
+    return f"{lane} salvage (merged/unsharded query); function attribution untagged"
+
+
 def _roster_item_to_candidate_payload(
     item: dict[str, Any],
     *,
@@ -75,6 +85,7 @@ def _roster_item_to_candidate_payload(
     source_path: Path,
     employment_status: str = "current",
     source_dataset: str = "apify_salvage_current_roster",
+    function_tag: str = "",
 ) -> dict[str, Any] | None:
     linkedin_url = str(item.get("linkedinUrl") or item.get("profileUrl") or item.get("profile_url") or item.get("url") or "").strip()
     if not linkedin_url:
@@ -111,7 +122,7 @@ def _roster_item_to_candidate_payload(
         "role": role,
         "focus_areas": role,
         "notes": (
-            f"Salvaged from paid Apify dataset {dataset_id} (run {run_id}, current roster). "
+            f"Salvaged from paid Apify dataset {dataset_id} (run {run_id}, {employment_status} roster). "
             f"Location: {location_text}."
         ).strip(),
         "linkedin_url": linkedin_url,
@@ -123,7 +134,8 @@ def _roster_item_to_candidate_payload(
             "summary": summary,
             "salvage_dataset_id": dataset_id,
             "salvage_run_id": run_id,
-            "salvage_note": "current roster paid 2026-07-20 (merged function [8,24] query); function attribution intentionally untagged",
+            "salvage_note": _roster_salvage_note(employment_status, function_tag),
+            **({"salvage_function_id": function_tag} if function_tag else {}),
         },
     }
 
@@ -151,6 +163,21 @@ def main() -> int:
     parser.add_argument("--snapshot-id", required=True)
     parser.add_argument("--identity-from", required=True, type=Path)
     parser.add_argument("--current-roster-dataset", type=Path, action="append", default=[])
+    parser.add_argument(
+        "--current-roster-function",
+        action="append",
+        default=[],
+        help=(
+            "function tag paired positionally with the Nth --current-roster-dataset; "
+            "preserves shard-level function attribution instead of collapsing it on merge"
+        ),
+    )
+    parser.add_argument(
+        "--current-roster-run-id",
+        action="append",
+        default=[],
+        help="Apify run id paired positionally with the Nth --current-roster-dataset (falls back to --current-run-id)",
+    )
     parser.add_argument("--former-roster-dataset", type=Path, action="append", default=[])
     parser.add_argument("--current-dataset-id", default="")
     parser.add_argument("--current-run-id", default="")
@@ -172,21 +199,48 @@ def main() -> int:
     skipped = 0
     if args.former_candidate_documents:
         for doc in _load_json_list(args.former_candidate_documents):
+            doc["_salvage_passthrough_origin"] = str(args.former_candidate_documents)
             candidates.append(doc)
-    for roster_path, status, source_name in [
-        *[(p, "current", "apify_salvage_current_roster") for p in args.current_roster_dataset],
-        *[(p, "former", "apify_salvage_former_roster") for p in args.former_roster_dataset],
-    ]:
+    current_shards: list[dict[str, Any]] = []
+    for idx, roster_path in enumerate(args.current_roster_dataset):
+        current_shards.append(
+            {
+                "path": roster_path,
+                "dataset_id": args.current_dataset_id or roster_path.stem,
+                "run_id": (
+                    args.current_roster_run_id[idx]
+                    if idx < len(args.current_roster_run_id)
+                    else args.current_run_id
+                ).strip(),
+                "function": (
+                    args.current_roster_function[idx]
+                    if idx < len(args.current_roster_function)
+                    else ""
+                ).strip(),
+            }
+        )
+    roster_specs = [
+        *[
+            (shard["path"], "current", "apify_salvage_current_roster", shard["dataset_id"], shard["run_id"], shard["function"])
+            for shard in current_shards
+        ],
+        *[
+            (p, "former", "apify_salvage_former_roster", args.current_dataset_id or p.stem, args.current_run_id, "")
+            for p in args.former_roster_dataset
+        ],
+    ]
+    for roster_path, status, source_name, dataset_id, run_id, function_tag in roster_specs:
         for item in _load_json_list(roster_path):
             payload = _roster_item_to_candidate_payload(
                 item,
                 target_company=target_company,
                 organization=organization,
-                dataset_id=args.current_dataset_id or roster_path.stem,
-                run_id=args.current_run_id,
+                dataset_id=dataset_id,
+                run_id=run_id,
                 source_path=roster_path,
                 employment_status=status,
                 source_dataset=source_name,
+                function_tag=function_tag,
             )
             if payload is None:
                 skipped += 1
@@ -197,10 +251,23 @@ def main() -> int:
     aliases: dict[str, str] = {}
     index: dict[str, str] = {}
     invalid = 0
+    passthrough_preserved: list[dict[str, Any]] = []
     for payload in candidates:
+        origin = str(payload.pop("_salvage_passthrough_origin", "") or "")
         candidate = candidate_from_payload(payload)
         if candidate is None:
-            invalid += 1
+            if origin:
+                # Paid coverage already materialized upstream (e.g. empty-name
+                # former rows pending a name resolve) must survive the rebuild:
+                # preserve verbatim instead of silently shrinking the union.
+                kept = dict(payload)
+                metadata = dict(kept.get("metadata") or {})
+                metadata["salvage_passthrough_invalid"] = True
+                metadata["salvage_passthrough_origin"] = origin
+                kept["metadata"] = metadata
+                passthrough_preserved.append(kept)
+            else:
+                invalid += 1
             continue
         ingest_materialized_candidate(
             candidate,
@@ -211,6 +278,16 @@ def main() -> int:
         )
     merged, _ = consolidate_materialized_duplicates(merged, {})
     records = [candidate.to_record() for candidate in merged.values()]
+    merged_urls = {
+        str(record.get("linkedin_url") or "").strip().rstrip("/").lower()
+        for record in records
+        if str(record.get("linkedin_url") or "").strip()
+    }
+    for kept in passthrough_preserved:
+        kept_url = str(kept.get("linkedin_url") or "").strip().rstrip("/").lower()
+        if kept_url and kept_url in merged_urls:
+            continue
+        records.append(kept)
     status_counts: dict[str, int] = {}
     for record in records:
         key = str(record.get("employment_status") or "").strip() or "unknown"
@@ -229,7 +306,7 @@ def main() -> int:
         matched_profiles.update(matched)
 
     print(f"candidates_in={len(candidates)} skipped_no_url={skipped} invalid={invalid}")
-    print(f"union={len(records)} by_status={status_counts}")
+    print(f"union={len(records)} by_status={status_counts} passthrough_preserved={len(passthrough_preserved)}")
     print(f"profile_urls={len(profile_urls)} salvaged_profiles_matched={len(matched_profiles)}")
     extra_cache = [p for d in args.extra_profile_cache_dir for p in sorted(Path(d).glob('*.json'))]
     print(f"extra_profile_cache_files={len(extra_cache)}")
@@ -250,19 +327,40 @@ def main() -> int:
         "candidates": records,
         "evidence": [],
         "salvage_note": (
-            "Built from adopted paid Apify datasets (current roster dataset "
-            f"{args.current_dataset_id} via run {args.current_run_id}) + reused former "
-            "candidate documents (operator-approved); no re-fetch, no new provider dispatches."
+            "Built from adopted paid Apify datasets ("
+            + (
+                ", ".join(
+                    f"{shard['dataset_id']}" + (f" fn{shard['function']}" if shard["function"] else "")
+                    for shard in current_shards
+                )
+                or f"{args.current_dataset_id} via run {args.current_run_id}"
+            )
+            + ") + reused former/prior candidate documents (operator-approved); "
+            "no re-fetch, no new provider dispatches."
         ),
         "acquisition_sources": {
             "current_roster_salvage": {
                 "dataset_id": args.current_dataset_id,
                 "run_id": args.current_run_id,
-                "note": "current roster paid 2026-07-20 (merged function [8,24] query); function attribution intentionally untagged",
+                "note": (
+                    "function-sharded rosters adopted with per-shard attribution (see shards)"
+                    if any(shard["function"] for shard in current_shards)
+                    else "current roster salvage (merged/unsharded query); function attribution untagged"
+                ),
+                "shards": [
+                    {
+                        "file": str(shard["path"]),
+                        "dataset_id": shard["dataset_id"],
+                        "run_id": shard["run_id"],
+                        "function": shard["function"],
+                    }
+                    for shard in current_shards
+                ],
             },
             "former_candidate_documents": {
                 "reused_from": str(args.former_candidate_documents or ""),
             },
+            "profile_datasets_adopted": [str(p) for p in args.profile_dataset],
         },
         "enrichment_summary": {
             "profiles_merged": 0,
@@ -297,6 +395,8 @@ def main() -> int:
         "inputs": {
             "identity_from": str(args.identity_from),
             "current_roster_dataset": str(args.current_roster_dataset or ""),
+            "current_roster_functions": list(args.current_roster_function or []),
+            "current_roster_run_ids": list(args.current_roster_run_id or []),
             "current_dataset_id": args.current_dataset_id,
             "current_run_id": args.current_run_id,
             "former_candidate_documents": str(args.former_candidate_documents or ""),
@@ -307,6 +407,7 @@ def main() -> int:
             "candidates_in": len(candidates),
             "union_candidates": len(records),
             "by_status": status_counts,
+            "passthrough_preserved_invalid": len(passthrough_preserved),
             "salvaged_profiles_written": written,
             "extra_profile_cache_copied": copied,
         },
