@@ -1822,7 +1822,7 @@ def load_smoke_cases(matrix_file: str = "", selected_cases: set[str] | None = No
         if not isinstance(payload, dict):
             raise ValueError(f"case `{case_name}` is missing a dict payload")
         expectations = case.get("expectations")
-        normalized_case = {"case": case_name, "payload": payload}
+        normalized_case: dict[str, Any] = {"case": case_name, "payload": payload}
         if isinstance(expectations, dict):
             expectation_errors = validate_smoke_expectations(expectations, context=f"case:{case_name}")
             if expectation_errors:
@@ -3135,7 +3135,7 @@ def _build_materialization_streaming_report(
         queued_writer_count=queued_writer_count,
         oldest_pending_delta_age_ms=oldest_pending_delta_age_ms,
     )
-    event_budget_actions = Counter()
+    event_budget_actions: Counter[str] = Counter()
     for item in event_samples:
         budget_action = str(
             item.get("recommended_action") or dict(item.get("budget") or {}).get("recommended_action") or ""
@@ -3657,23 +3657,23 @@ def _build_post_preview_finalization_report(
         materialize_started_at.append(started_at)
         finalization_started_at.append(started_at)
         elapsed_ms = max(0.0, (completed_at - started_at).total_seconds() * 1000)
-        sync_scope = item_kind
+        sync_scope_label = item_kind
         if item_kind == "snapshot_full_materialization":
-            sync_scope = "snapshot_full_materialization"
+            sync_scope_label = "snapshot_full_materialization"
         elif item_kind == "board_visible_delta_apply":
-            sync_scope = "board_visible_delta_apply"
+            sync_scope_label = "board_visible_delta_apply"
         elif item_kind == "local_apply_closure":
-            sync_scope = "local_apply_closure_lifecycle"
+            sync_scope_label = "local_apply_closure_lifecycle"
         materialize_sync_durations.append(elapsed_ms)
-        materialize_sync_durations_by_scope[sync_scope].append(elapsed_ms)
-        materialize_sync_scope_counts[sync_scope] += 1
+        materialize_sync_durations_by_scope[sync_scope_label].append(elapsed_ms)
+        materialize_sync_scope_counts[sync_scope_label] += 1
         materialize_syncs.append(
             {
                 "command_id": str(payload.get("command_id") or "").strip(),
                 "command_type": command_type,
                 "item_id": str(command_payload.get("item_id") or payload.get("command_id") or "").strip(),
                 "reconcile_kind": item_kind,
-                "sync_scope": sync_scope,
+                "sync_scope": sync_scope_label,
                 "duration_semantics": duration_semantics,
                 "duration_includes_deferred_wait": False,
                 "owner": str(payload.get("owner") or "").strip(),
@@ -4074,7 +4074,7 @@ def _build_workflow_wall_clock_report(
         preview_completed_at = effective_preview_completed_at
     final_stage = dict(stage_wall_clock.get("stage_2_final") or stage_wall_clock.get("public_web_stage_2") or {})
     final_completed_at = str(final_stage.get("completed_at") or "").strip()
-    report: dict[str, float] = {}
+    report: dict[str, Any] = {}
     timeline = list(timeline or [])
     job_submit_offset_ms = round(
         sum(float(timings_ms.get(key) or 0.0) for key in ("explain", "plan", "review", "start")),
@@ -6097,7 +6097,7 @@ def _evaluate_smoke_expectations(
         if not bool(profile_scheduler_contract.get("report_available")):
             failures.append("profile scheduler contract: report missing")
         elif bool(profile_scheduler_contract.get("violation_detected")):
-            details = {
+            scheduler_violation_details = {
                 key: _safe_int(profile_scheduler_contract.get(key))
                 for key in (
                     "same_wave_ordinal_violation_count",
@@ -6111,7 +6111,9 @@ def _evaluate_smoke_expectations(
                 )
                 if _safe_int(profile_scheduler_contract.get(key)) > 0
             }
-            detail_text = ", ".join(f"{key}={value}" for key, value in sorted(details.items()))
+            detail_text = ", ".join(
+                f"{key}={value}" for key, value in sorted(scheduler_violation_details.items())
+            )
             failures.append(
                 "profile scheduler contract violation detected" + (f" ({detail_text})" if detail_text else "")
             )
@@ -6119,7 +6121,7 @@ def _evaluate_smoke_expectations(
         if not bool(workflow_causality_contract_metrics.get("report_available")):
             failures.append("workflow causality contract: report missing")
         elif bool(workflow_causality_contract_metrics.get("violation_detected")):
-            details = {
+            causality_violation_details = {
                 key: _safe_int(workflow_causality_contract_metrics.get(key))
                 for key in (
                     "missing_envelope_count",
@@ -6129,7 +6131,7 @@ def _evaluate_smoke_expectations(
                 )
                 if _safe_int(workflow_causality_contract_metrics.get(key)) > 0
             }
-            detail_text = ", ".join(f"{key}={value}" for key, value in sorted(details.items()))
+            detail_text = ", ".join(f"{key}={value}" for key, value in sorted(causality_violation_details.items()))
             failures.append(
                 "workflow causality contract violation detected" + (f" ({detail_text})" if detail_text else "")
             )
@@ -6661,16 +6663,16 @@ def _evaluate_smoke_expectations(
             str(explain_payload.get("request_delta_baseline_snapshot_id") or ""),
         ),
     )
-    for expectation_key, metric_name, actual_value in string_expectations:
+    for expectation_key, metric_name, actual_text in string_expectations:
         if expectation_key not in payload:
             continue
-        expected_value = str(payload.get(expectation_key) or "")
-        if actual_value != expected_value:
+        expected_text = str(payload.get(expectation_key) or "")
+        if actual_text != expected_text:
             failures.append(
                 _expectation_equal_failure(
                     name=metric_name,
-                    actual=actual_value,
-                    expected=expected_value,
+                    actual=actual_text,
+                    expected=expected_text,
                 )
             )
     if "expect_explain_requires_delta_acquisition" in payload:
