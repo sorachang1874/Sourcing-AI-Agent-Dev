@@ -6,7 +6,7 @@
 status: active          owner: operator
 canonical-path: sourcing-ai-agent/docs/REFACTOR_MASTER_PLAN.md
 ratified: 2026-07-22    measurement-pin: 69b7423
-last-verified: 2026-07-22
+last-verified: 2026-07-22 (B0a+B0b done)
 ```
 
 ## 0. 使命与三条主线
@@ -69,8 +69,8 @@ last-verified: 2026-07-22
 
 碰撞矩阵：backend-ci.yml/Makefile 仅 R0 批触碰；seed_discovery.py 归策略批（R-010 退役骑行）；test 文件按批次独占。评审门协议：实现+定向测试+pin commit+记录评审请求后**继续下一批**，verdict 等 chshapi 配额；NO-GO 只冻结所涉 scope 晋升。
 
-- [ ] **B0a — R0 harness 地基**（lane manifest 单源+meta-guard；溯源门 Phase 0；mypy 棘轮三件套；数字固化）
-- [ ] **B0b — 策略 Step 1**（死代码/文档漂移/R-034；与 B0a 零交集，并行）
+- [x] **B0a — R0 harness 地基** DONE 2026-07-22（mypy 棘轮:baseline 81 + check 脚本 + make 目标 + CI 活跑,'87' 勘误;lane manifest 单源+双消费者守卫;溯源门:契约文档+扫描器+213 祖父冻结基线+gate+REGRESSION_INDEX 含墓碑 T-001/002;4 个事故回归首次入 lane;x-first 基线 667 固化 `1eb0d7c`;离线门块 45/45 绿）
+- [x] **B0b — 策略 Step 1** DONE 2026-07-22 `2198dd3`（签名级去 size 参数；死写分支删除；manifest base_filters 回退；R-034 关闭 52/52 绿；PLAYBOOK/COHORT 合同文档修正）
 - [ ] **B1 — 策略 preflight + Step 2 former 统一**（评审请求入队）＋ Tier 1 退役骑行
 - [ ] **B2 — Track A 切片 1（Step 2b）** characterization-first ＋ test_pipeline 打捞移植开始
 - [ ] **B3 — 策略 Step 3（size 转向退役，评审门）** ＋ Track A 切片 2（Block a）＋ 拆分第一波

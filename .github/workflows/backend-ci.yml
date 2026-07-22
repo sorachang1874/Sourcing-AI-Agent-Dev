@@ -12,10 +12,13 @@ on:
 # below mirror the project's real lanes: `lint` = ruff format+check on the quality
 # targets; `contract-tests` = the PG-backed pytest contract lane. Heavier lanes
 # (testcontainers pg-contract, browser gates, scripted large-org, live) run as
-# separate opt-in jobs / locally via make. mypy is intentionally NOT yet gating:
-# the branch is mid-refactor and carries 87 pre-existing type errors; fold it back
-# in once the refactor stabilizes. (Note: ruff F401 auto-fix is unsafe here — it
-# strips re-export imports; re-exports are guarded with `# noqa: F401`.)
+# separate opt-in jobs / locally via make. mypy gates via the shrink-only
+# ratchet (scripts/check_mypy_ratchet.py + configs/mypy_ratchet_baseline.json,
+# 81 budgeted errors as of 2026-07-22; the old '87' comment had silently
+# drifted — 6 errors were fixed incidentally by 82d69a1 with no artifact
+# noticing, which is exactly what the ratchet prevents). (Note: ruff F401
+# auto-fix is unsafe here — it strips re-export imports; re-exports are
+# guarded with `# noqa: F401`.)
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -78,7 +81,8 @@ jobs:
             "psycopg[binary]>=3.2,<3.3" \
             "psycopg-pool>=3.2,<3.4" \
             "requests>=2.33,<2.34" \
-            "pytest>=9,<10"
+            "pytest>=9,<10" \
+            "mypy>=1.20,<1.21"
 
       - name: Compile Python Sources
         run: |
@@ -95,11 +99,20 @@ jobs:
           SOURCING_REQUIRE_PG_STORE_TESTS: "1"
           SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS: "1"
         run: |
-          # Docs routing gates (harness reorg R5): status banners + local link
-          # graph + snapshot budgets. Offline; run first so docs drift fails fast.
+          # Offline harness gates, first so drift fails fast: docs banners/links/
+          # budgets (harness reorg R5), lane-manifest drift guard, test-provenance
+          # gate, mypy-ratchet comparator, and the 2026-07 incident regressions
+          # that previously ran in no lane (REGRESSION_INDEX routing).
           python -m pytest -q \
             tests/test_markdown_status.py \
-            tests/test_docs_routing.py
+            tests/test_docs_routing.py \
+            tests/test_lane_manifest.py \
+            tests/test_provenance.py \
+            tests/test_mypy_ratchet.py \
+            tests/test_artifact_cache.py \
+            tests/test_latest_snapshot_pointer.py \
+            tests/test_live_apify_dataset_salvage.py \
+            tests/test_live_schema_write_fence.py
           python -m pytest -q \
             tests/test_api_auth.py \
             tests/test_api_server_identity.py \
@@ -133,3 +146,7 @@ jobs:
           python -m pytest -q \
             tests/test_remote_provider_events.py \
             -k terminal_marker_handoff_is_strand_safe
+
+      - name: mypy ratchet (shrink-only per-file/error-code budgets)
+        run: |
+          python scripts/check_mypy_ratchet.py

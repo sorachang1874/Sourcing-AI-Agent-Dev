@@ -1,0 +1,38 @@
+{
+ "_meta": {
+  "generated": "2026-07-22",
+  "mypy_version": "1.20.2 (.venv-tests, resolved by scripts/run_python_quality.sh resolve_tool)",
+  "invocation": "bash scripts/run_python_quality.sh typecheck",
+  "tool_mypy_config_sha256_16": "510442fc03a87356",
+  "total_errors": 81,
+  "policy": "Shrink-only ratchet (operator decision 2026-07-22): counts may only decrease and the baseline must be shrunk in the same change; new (file,error-code) keys fail; every module extracted from a listed file enters [tool.mypy].files with a zero budget and disallow_untyped_defs. Sanctioned re-baselines (config/scope changes) must regenerate _meta and say so in the commit message."
+ },
+ "budgets": {
+  "src/sourcing_agent/candidate_artifacts.py": {
+   "attr-defined": 1
+  },
+  "src/sourcing_agent/orchestrator.py": {
+   "arg-type": 10,
+   "assignment": 5,
+   "attr-defined": 5,
+   "call-overload": 16,
+   "dict-item": 3,
+   "index": 5,
+   "misc": 1,
+   "no-redef": 5,
+   "operator": 7,
+   "type-var": 1
+  },
+  "src/sourcing_agent/public_web_runtime_core.py": {
+   "arg-type": 1
+  },
+  "src/sourcing_agent/workflow_smoke.py": {
+   "assignment": 13,
+   "attr-defined": 2,
+   "index": 2,
+   "no-redef": 1,
+   "type-var": 2,
+   "var-annotated": 1
+  }
+ }
+}

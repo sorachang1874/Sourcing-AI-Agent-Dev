@@ -300,6 +300,9 @@ lint:
 typecheck:
 	@$(PYTHON_QUALITY_CMD) typecheck
 
+typecheck-ratchet:
+	@.venv/bin/python scripts/check_mypy_ratchet.py
+
 verify-python:
 	@$(PYTHON_QUALITY_CMD) all
 
