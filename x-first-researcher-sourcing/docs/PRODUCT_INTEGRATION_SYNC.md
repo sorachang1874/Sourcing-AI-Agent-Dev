@@ -100,7 +100,7 @@ All commands from `x-first-researcher-sourcing/`:
 
 ```bash
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest discover -s tests
-# Ran 608 tests — OK
+# Ran 667 tests — OK  (refreshed 2026-07-22; was a stale 608 record — no in-repo baseline existed)
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.research_orchestration
 # {"errors": [], "status": "valid"}
 PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.contracts
@@ -125,7 +125,7 @@ PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m x_first.contracts
   `tests/test_research_orchestration.py`, `tests/test_portable_campaign_package.py`,
   `tests/test_residual_ledger.py`, `scripts/check_residual_ledger.py`,
   `docs/GENERALIZED_RESEARCH_ORCHESTRATION.md`, `docs/RESIDUAL_LEDGER.md`, this file
-- last validation: `PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest discover -s tests` → `Ran 608 tests — OK`
+- last validation: `PYTHONPATH=src ../sourcing-ai-agent/.venv/bin/python -m unittest discover -s tests` → `Ran 667 tests — OK` (2026-07-22)
 - state: X-First side complete and green; product-lane sync not yet applied (checklist above)
 - next step: product lane executes the checklist, then both lanes re-run the pinned cross-project
   review; residuals tracked in `docs/RESIDUAL_LEDGER.md` (R-001…R-004, N-001)
