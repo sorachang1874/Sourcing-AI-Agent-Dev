@@ -2418,7 +2418,7 @@ def repair_paginated_candidate_artifacts_from_materialized(
         strict_dir = root_artifact_dir / "strict_roster_only"
         if normalized_asset_view == "canonical_merged" and strict_dir.exists():
             view_dirs.append(("strict_roster_only", strict_dir))
-        snapshot_payload = {
+        snapshot_payload: dict[str, Any] = {
             "snapshot_id": row_snapshot_id,
             "authoritative": bool(row.get("authoritative")),
             "views": [],
