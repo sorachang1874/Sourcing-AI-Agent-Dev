@@ -3098,19 +3098,19 @@ def _build_materialization_streaming_report(
     if provider_to_materialization_ms <= 0.0 and event_samples:
         first_started_at = min(
             (
-                _parse_timestamp(str(item.get("created_at") or ""))
+                parsed_started
                 for item in event_samples
                 if str(item.get("phase") or "") == "materialize_started"
-                and _parse_timestamp(str(item.get("created_at") or "")) is not None
+                and (parsed_started := _parse_timestamp(str(item.get("created_at") or ""))) is not None
             ),
             default=None,
         )
         first_completed_at = min(
             (
-                _parse_timestamp(str(item.get("created_at") or ""))
+                parsed_completed
                 for item in event_samples
                 if str(item.get("phase") or "") == "materialize_completed"
-                and _parse_timestamp(str(item.get("created_at") or "")) is not None
+                and (parsed_completed := _parse_timestamp(str(item.get("created_at") or ""))) is not None
             ),
             default=None,
         )
@@ -3743,6 +3743,7 @@ def _build_post_preview_finalization_report(
         finalization_start_gate_boundary = profile_terminal_at
         finalization_start_gate_source = profile_terminal_source or "profile_terminal_at"
         profile_wait_excluded_ms = max(0.0, (profile_terminal_at - stage1_terminal_at).total_seconds() * 1000)
+    finalization_start_gate_ms: float | None
     if finalization_start_gate_boundary is not None and first_finalization_start is not None:
         if first_finalization_start <= finalization_start_gate_boundary:
             finalization_start_gate_ms = 0.0
