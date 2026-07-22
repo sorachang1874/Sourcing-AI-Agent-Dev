@@ -440,9 +440,28 @@ def mark_hot_cache_snapshot_access(
 
 
 def materialize_link_first_file(source: Path, destination: Path) -> str:
-    resolved_source = Path(source).expanduser().resolve()
+    expanded_source = Path(source).expanduser()
     resolved_destination = Path(destination).expanduser()
+    # Same-file guard MUST run before the destination is removed: when a
+    # registry/pointer already places the "source" inside the destination tree
+    # (source == destination), removing the destination deletes the only copy
+    # and the fallback then creates a content-destroying self-symlink. The
+    # textual check comes first because resolve() raises on a corrupted
+    # self-symlink loop instead of answering.
+    if expanded_source == resolved_destination:
+        return "same_path"
+    resolved_source = expanded_source.resolve()
     resolved_destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if resolved_source == resolved_destination.resolve():
+            return "same_path"
+    except (OSError, RuntimeError):
+        pass
+    try:
+        if os.path.samefile(resolved_source, resolved_destination):
+            return "already_linked"
+    except OSError:
+        pass
     _remove_existing_path(resolved_destination)
     if resolved_source.is_symlink():
         target = os.readlink(resolved_source)
