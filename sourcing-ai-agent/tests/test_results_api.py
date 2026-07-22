@@ -6330,6 +6330,10 @@ class ResultsApiTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             offset=0,
             limit=24,
             candidate_filter={},
+            # Calibrated 2026-07-22: fc5d603 (track-d projection read action
+            # schemas) threads workspace_id through the reader; this mock
+            # expectation was the one assertion in the file left behind.
+            workspace_id="default",
         )
         self.assertEqual(page["source_path"], "proj_before_cutover")
         self.assertEqual(page["candidate_count"], 1)

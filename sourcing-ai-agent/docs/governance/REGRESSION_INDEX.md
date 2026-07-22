@@ -18,6 +18,7 @@ last-verified: 2026-07-22
 | docs 门（banner/链接/快照预算/溯源/lane/mypy 棘轮）| harness 治理 | backend-ci docs-gate 块,离线先跑 | — |
 | changed-path → 套件映射 | 定向回归选择 | `src/sourcing_agent/regression_matrix.py`（label+reason 为准）| — |
 | 2026-07 事故回归四件（`test_artifact_cache.py`、`test_latest_snapshot_pointer.py`、`test_live_apify_dataset_salvage.py`、`test_recovery_remote_wait_orphan.py`）+ 收口新增（`test_live_schema_write_fence.py`、`test_mypy_ratchet.py`、`test_lane_manifest.py`、`test_provenance.py`）| 数据毁损/指针漂移/salvage/simulate 写入/棘轮机制 | **此前无 lane 归属（recon 缺口）**→ 本批起离线四件入 docs-gate 块;PG 依赖件走 regression_matrix | `test_live_apify_dataset_salvage.py` 起 subprocess,~1s×3 |
+| `tests/test_serving_mesh_boundary.py`（2026-07-22,WS2 切片 2）| Block (a) resolver 抽取结构守卫：Edge B 钉死（paging 永不重解 candidate_source）+ resolver 模块依赖方向（不触命令带/paging/orchestrator import）+ 委托席防平行再实现 | GH lane 离线块（`tests/lane_manifest.py`）| 纯静态源检查,无 PG |
 | `tests/test_pipeline.py` | （打捞-退役目标,master plan WS3 Tier 3）| **永不全量跑** | RESIDUAL_LEDGER R-009;PG 100 连接耗尽 |
 
 ### Ported from test_pipeline.py (salvage waves)

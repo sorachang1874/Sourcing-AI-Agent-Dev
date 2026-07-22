@@ -563,6 +563,7 @@ from .results_store import (
     read_snapshot_materialized_candidate_window,
     read_snapshot_publishable_email_lookup,
 )
+from .candidate_source_resolver import CandidateSourceResolver, CandidateSourceResolverDeps
 from .retrieval_runtime import (
     OUTREACH_LAYER_KEY_BY_INDEX,
     candidate_source_is_snapshot_authoritative,
@@ -24834,6 +24835,43 @@ class SourcingOrchestrator:
             pass
         return overlay_candidate_source, repaired_result_view
 
+    @property
+    def _candidate_source_resolver(self) -> CandidateSourceResolver:
+        # Block (a) seam (WS2 slice 2, 2026-07-22): resolution is owned by
+        # CandidateSourceResolver; ladder members still living on this class
+        # are handed over through the explicit dependency registry and migrate
+        # out in later slices without touching call sites.
+        resolver = self.__dict__.get("_candidate_source_resolver_instance")
+        if resolver is None:
+            resolver = CandidateSourceResolver(
+                store=self.store,
+                deps=CandidateSourceResolverDeps(
+                    candidate_source_result_view_stub=self._candidate_source_result_view_stub,
+                    apply_job_result_view_to_candidate_source=self._apply_job_result_view_to_candidate_source,
+                    attach_persisted_lifecycle_to_candidate_source=self._attach_persisted_lifecycle_to_candidate_source,
+                    strip_superseded_asset_population_overlay_from_public_source=(
+                        self._strip_superseded_asset_population_overlay_from_public_source
+                    ),
+                    annotate_running_result_view_publication_gap=self._annotate_running_result_view_publication_gap,
+                    candidate_source_has_manifest_invalid=self._candidate_source_has_manifest_invalid,
+                    resolve_candidate_source_snapshot_dir=self._resolve_candidate_source_snapshot_dir,
+                    candidate_source_materialized_path=self._candidate_source_materialized_path,
+                    maybe_promote_workflow_job_to_completed_from_final_results=(
+                        self._maybe_promote_workflow_job_to_completed_from_final_results
+                    ),
+                    load_workflow_stage_summaries=self._load_workflow_stage_summaries,
+                    stage1_progress_payload_from_lifecycle_row=self._stage1_progress_payload_from_lifecycle_row,
+                    build_public_linkedin_stage1_progress_payload=self._build_public_linkedin_stage1_progress_payload,
+                    safe_list_persisted_job_workers=self._safe_list_persisted_job_workers,
+                    organization_execution_profile_from_plan_payload=self._organization_execution_profile_from_plan_payload,
+                    build_effective_execution_semantics=self._build_effective_execution_semantics,
+                    snapshot_publishable_email_lookup_for_request=self._snapshot_publishable_email_lookup_for_request,
+                    provider_execution_manifest_from_plan_payload=_provider_execution_manifest_from_plan_payload,
+                ),
+            )
+            self.__dict__["_candidate_source_resolver_instance"] = resolver
+        return resolver
+
     def _resolve_job_candidate_source(
         self,
         *,
@@ -24843,66 +24881,13 @@ class SourcingOrchestrator:
         stage1_preview_summary: dict[str, Any] | None = None,
         linkedin_stage_1_progress: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        summary_payload = dict(job_summary or {})
-        preview_payload = dict(stage1_preview_summary or {})
-        candidate_source = dict(
-            summary_payload.get("candidate_source") or preview_payload.get("candidate_source") or {}
+        return self._candidate_source_resolver.resolve(
+            job=job,
+            request=request,
+            job_summary=job_summary,
+            stage1_preview_summary=stage1_preview_summary,
+            linkedin_stage_1_progress=linkedin_stage_1_progress,
         )
-        if str(request.target_company or "").strip() and not str(candidate_source.get("target_company") or "").strip():
-            candidate_source["target_company"] = str(request.target_company or "").strip()
-        result_view = self._candidate_source_result_view_stub(candidate_source)
-        normalized_job_id = str(dict(job or {}).get("job_id") or "").strip()
-        if normalized_job_id:
-            stored_view = self.store.get_job_result_view(job_id=normalized_job_id)
-        if stored_view:
-            result_view = stored_view
-        resolved_source = self._apply_job_result_view_to_candidate_source(candidate_source, result_view)
-        resolved_source, result_view = self._attach_persisted_lifecycle_to_candidate_source(
-            job_id=normalized_job_id,
-            candidate_source=resolved_source,
-            result_view=result_view,
-        )
-        resolved_source, result_view = self._strip_superseded_asset_population_overlay_from_public_source(
-            resolved_source,
-            result_view,
-        )
-        job_status = str(dict(job or {}).get("status") or "").strip().lower()
-        if job_status != "completed":
-            result_view = self._annotate_running_result_view_publication_gap(
-                job_id=normalized_job_id,
-                request=request,
-                result_view=result_view,
-                summary_payloads=[summary_payload, preview_payload, linkedin_stage_1_progress],
-            )
-            if result_view:
-                resolved_source["result_view"] = dict(result_view)
-        if candidate_source_is_snapshot_authoritative(resolved_source):
-            if self._candidate_source_has_manifest_invalid(resolved_source):
-                if dict(resolved_source.get("result_view") or {}):
-                    result_view = dict(resolved_source.get("result_view") or {})
-                return resolved_source, dict(result_view or {})
-            snapshot_dir = self._resolve_candidate_source_snapshot_dir(
-                request=request,
-                candidate_source=resolved_source,
-            )
-            if snapshot_dir is not None:
-                materialized_path = self._candidate_source_materialized_path(
-                    snapshot_dir=snapshot_dir,
-                    asset_view=str(
-                        resolved_source.get("asset_view") or request.asset_view or "canonical_merged"
-                    ).strip()
-                    or "canonical_merged",
-                )
-                if materialized_path is not None:
-                    source_path = Path(str(resolved_source.get("source_path") or "").strip()).expanduser()
-                    if not source_path.exists():
-                        resolved_source["source_path"] = str(materialized_path)
-                        if result_view:
-                            result_view = {
-                                **dict(result_view),
-                                "source_path": str(materialized_path),
-                            }
-        return resolved_source, dict(result_view or {})
 
     def _snapshot_publishable_email_lookup_for_request(
         self,
@@ -25060,81 +25045,10 @@ class SourcingOrchestrator:
         *,
         include_publishable_email_lookup: bool = True,
     ) -> dict[str, Any] | None:
-        job = self.store.get_job(job_id)
-        if job is None:
-            return None
-        job = self._maybe_promote_workflow_job_to_completed_from_final_results(job)
-        workflow_stage_summaries = self._load_workflow_stage_summaries(job=job)
-        plan_payload = dict(job.get("plan") or {})
-        job_summary = dict(job.get("summary") or {})
-        stage1_preview_summary = dict(
-            dict(workflow_stage_summaries.get("summaries") or {}).get("stage_1_preview") or {}
+        return self._candidate_source_resolver.build_results_context(
+            job_id,
+            include_publishable_email_lookup=include_publishable_email_lookup,
         )
-        request = JobRequest.from_payload(dict(job.get("request") or {}))
-        asset_reuse_plan = dict(plan_payload.get("asset_reuse_plan") or {})
-        lifecycle_row = self.store.get_job_result_lifecycle(job_id)
-        dynamic_stage1_progress = dict(job_summary.get("linkedin_stage_1") or {})
-        linkedin_stage_1_progress = (
-            self._stage1_progress_payload_from_lifecycle_row(
-                lifecycle_row,
-                dynamic_progress=dynamic_stage1_progress,
-            )
-            or dynamic_stage1_progress
-        )
-        if not linkedin_stage_1_progress:
-            # Stage 1 detail is a separate progress/debug line. It may be
-            # reconstructed from persisted worker facts for legacy/reuse rows,
-            # but board denominators still come only from job_result_lifecycle.
-            linkedin_stage_1_progress = self._build_public_linkedin_stage1_progress_payload(
-                job=job,
-                workers=self._safe_list_persisted_job_workers(job_id),
-            )
-        lifecycle_stage1_progress = self._stage1_progress_payload_from_lifecycle_row(
-            lifecycle_row,
-            dynamic_progress=linkedin_stage_1_progress,
-        )
-        if lifecycle_stage1_progress:
-            linkedin_stage_1_progress = lifecycle_stage1_progress
-        candidate_source, result_view = self._resolve_job_candidate_source(
-            job=job,
-            request=request,
-            job_summary=job_summary,
-            stage1_preview_summary=stage1_preview_summary,
-            linkedin_stage_1_progress=linkedin_stage_1_progress,
-        )
-        organization_execution_profile = self._organization_execution_profile_from_plan_payload(
-            plan_payload=plan_payload,
-            request=request,
-            candidate_source=candidate_source,
-        )
-        effective_execution_semantics = self._build_effective_execution_semantics(
-            request=request,
-            organization_execution_profile=organization_execution_profile,
-            asset_reuse_plan=asset_reuse_plan,
-            candidate_source=candidate_source,
-        )
-        publishable_email_lookup = (
-            self._snapshot_publishable_email_lookup_for_request(
-                request=request,
-                candidate_source=candidate_source,
-            )
-            if include_publishable_email_lookup
-            else {}
-        )
-        return {
-            "job": job,
-            "workflow_stage_summaries": workflow_stage_summaries,
-            "plan_payload": plan_payload,
-            "provider_execution_manifest": _provider_execution_manifest_from_plan_payload(plan_payload),
-            "job_summary": job_summary,
-            "stage1_preview_summary": stage1_preview_summary,
-            "request": request,
-            "candidate_source": candidate_source,
-            "result_view": result_view,
-            "effective_execution_semantics": effective_execution_semantics,
-            "publishable_email_lookup": publishable_email_lookup,
-            "linkedin_stage_1_progress": linkedin_stage_1_progress,
-        }
 
     def _safe_list_persisted_job_workers(self, job_id: str) -> list[dict[str, Any]]:
         if not job_id:
