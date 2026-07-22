@@ -82,6 +82,19 @@ def _payload_candidate_count(payload: Any) -> int:
     return max(count_values) if count_values else 0
 
 
+def _worker_checkpoint_connector_resumable_run_ref(worker: dict[str, Any]) -> str:
+    """Run reference (if any) that the harvest connector resume path honors.
+
+    Must stay in lockstep with harvest_connectors' resume key set
+    (run_id / actor_run_id / actorRunId on the CHECKPOINT itself): dataset-only
+    and metadata/summary-level refs do not resume a remote run there.
+    """
+    checkpoint = dict(dict(worker or {}).get("checkpoint") or {})
+    return str(
+        checkpoint.get("run_id") or checkpoint.get("actor_run_id") or checkpoint.get("actorRunId") or ""
+    ).strip()
+
+
 def _worker_is_already_submitted_remote_wait(worker: dict[str, Any]) -> bool:
     payload = dict(worker or {})
     checkpoint = dict(payload.get("checkpoint") or {})
@@ -382,6 +395,15 @@ class PersistentWorkerRecoveryDaemon:
         if self.remote_wait_orphan_seconds <= 0 or self.remote_wait_orphan_limit <= 0:
             return False
         if admitted_count >= self.remote_wait_orphan_limit:
+            return False
+        # Admission is gated on the CHECKPOINT carrying a run reference the
+        # connector resume path honors. The broader submitted-remote-wait
+        # predicate also accepts metadata/summary/dataset-only refs — resuming
+        # one of those hands the connector a checkpoint without a resumable
+        # run id, and its fallback is a duplicate PAID actor submit. Such
+        # workers stay in remote_wait_skipped (fail-closed), as they did
+        # before orphan admission existed.
+        if not _worker_checkpoint_connector_resumable_run_ref(worker):
             return False
         age_seconds = _worker_updated_at_age_seconds(worker)
         return age_seconds is not None and age_seconds >= self.remote_wait_orphan_seconds

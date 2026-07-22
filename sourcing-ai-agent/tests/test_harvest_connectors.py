@@ -5625,5 +5625,78 @@ class HarvestDatasetItemsCompletenessTest(unittest.TestCase):
         self.assertEqual(calls["n"], 2)
 
 
+class HarvestCheckpointResumeTest(unittest.TestCase):
+    """The live execute path must resume from EVERY checkpoint key this module
+    (cache/scripted branches) and the recovery daemon treat as an existing
+    remote run. Honoring only `run_id` turned an alt-ref checkpoint
+    (actor_run_id / actorRunId vintage) into a duplicate PAID actor submit."""
+
+    def setUp(self) -> None:
+        live_env_patch = patch.dict(
+            os.environ,
+            {
+                "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+                "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+            },
+            clear=False,
+        )
+        live_env_patch.start()
+        self.addCleanup(live_env_patch.stop)
+
+    def _resume_with_checkpoint(self, checkpoint: dict) -> tuple:
+        from sourcing_agent import harvest_connectors as hc
+
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor")
+        submit_calls = {"n": 0}
+
+        def _fail_submit(*args, **kwargs):
+            submit_calls["n"] += 1
+            raise AssertionError("resume path performed a duplicate paid actor submit")
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            base_path = Path(tempdir) / "runtime" / "company_assets" / "xai" / "snap-resume"
+            base_path.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload", return_value=(None, None, None)
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run", side_effect=_fail_submit
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-alt", "defaultDatasetId": "dataset-alt", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=[{"id": "resumed-item"}],
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep", return_value=None
+            ):
+                result = hc._execute_harvest_actor_with_checkpoint(
+                    settings,
+                    logical_name="harvest_company_employees",
+                    payload={"query": "resume"},
+                    base_path=base_path,
+                    checkpoint=checkpoint,
+                )
+        return result, submit_calls["n"]
+
+    def test_actor_run_id_checkpoint_resumes_without_new_submit(self) -> None:
+        result, submit_count = self._resume_with_checkpoint(
+            {"actor_run_id": "run-alt", "defaultDatasetId": "dataset-alt"}
+        )
+        self.assertEqual(submit_count, 0)
+        self.assertEqual(result.checkpoint.get("run_id"), "run-alt")
+        self.assertEqual(result.body, [{"id": "resumed-item"}])
+
+    def test_camel_case_actor_run_id_checkpoint_resumes_without_new_submit(self) -> None:
+        result, submit_count = self._resume_with_checkpoint({"actorRunId": "run-alt"})
+        self.assertEqual(submit_count, 0)
+        self.assertEqual(result.checkpoint.get("run_id"), "run-alt")
+
+    def test_run_id_checkpoint_still_resumes(self) -> None:
+        result, submit_count = self._resume_with_checkpoint({"run_id": "run-alt", "dataset_id": "dataset-alt"})
+        self.assertEqual(submit_count, 0)
+        self.assertEqual(result.checkpoint.get("run_id"), "run-alt")
+
+
 if __name__ == "__main__":
     unittest.main()

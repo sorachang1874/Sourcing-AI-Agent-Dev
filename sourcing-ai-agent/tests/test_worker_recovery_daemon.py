@@ -779,6 +779,70 @@ class PersistentWorkerRecoveryDaemonTest(PGControlPlaneStoreTestMixin, unittest.
         self.assertEqual(admitted_ids | skipped_ids, {int(handle.worker_id) for handle in handles})
         self.assertEqual(summary["claimed_count"], 2)
 
+    def test_alt_ref_only_checkpoint_is_never_orphan_admitted(self) -> None:
+        # The submitted-remote-wait predicate accepts metadata/summary/dataset
+        # refs, but the connector resume path only honors a checkpoint-level
+        # run id (run_id/actor_run_id/actorRunId). Admitting a worker whose
+        # checkpoint lacks one hands the connector nothing to resume and its
+        # fallback is a duplicate PAID actor submit — so such orphans must
+        # stay in the skipped (event-owner) lane, fail-closed.
+        job_id = "job_orphan_alt_ref_only"
+        self._save_job(job_id)
+        handle = self._begin_company_roster_remote_wait_worker(job_id)
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "dataset_id": "dataset-orphan",
+                "recovery_kind": "harvest_company_employees",
+            },
+            output_payload={"summary": {"status": "queued", "run_id": "run-orphan", "dataset_id": "dataset-orphan"}},
+            status="queued",
+        )
+        self._age_worker_updated_at(handle.worker_id, age_seconds=86400)
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=900, remote_wait_orphan_limit=4)
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 0)
+        self.assertEqual(summary["remote_wait_skipped_count"], 1)
+        self.assertEqual(summary["remote_wait_skipped_worker_ids"], [handle.worker_id])
+        self.assertEqual(summary["claimed_count"], 0)
+        self.assertEqual(self.fake_engine.harvest_company_calls, [])
+        self.assertEqual(worker["status"], "queued")
+
+    def test_actor_run_id_checkpoint_is_orphan_admitted(self) -> None:
+        # actor_run_id is a legitimate resume key for the connector (its cache
+        # and scripted branches already honor it; the live path now does too),
+        # so an aged alt-key checkpoint must be admitted like a run_id one.
+        job_id = "job_orphan_actor_run_id"
+        self._save_job(job_id)
+        handle = self._begin_company_roster_remote_wait_worker(job_id)
+        self.controller_store.checkpoint_agent_worker(
+            handle.worker_id,
+            checkpoint_payload={
+                "stage": "waiting_remote_harvest",
+                "actor_run_id": "run-orphan-alt",
+                "dataset_id": "dataset-orphan",
+                "recovery_kind": "harvest_company_employees",
+            },
+            output_payload={"summary": {"status": "queued", "run_id": "run-orphan-alt"}},
+            status="queued",
+        )
+        self._age_worker_updated_at(handle.worker_id, age_seconds=3600)
+
+        daemon = self._orphan_daemon(job_id, remote_wait_orphan_seconds=900, remote_wait_orphan_limit=4)
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["remote_wait_orphan_admitted_count"], 1)
+        self.assertEqual(summary["remote_wait_orphan_admitted_worker_ids"], [handle.worker_id])
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_company_calls), 1)
+        self.assertEqual(worker["status"], "completed")
+
     def test_orphan_admission_disabled_preserves_event_owner_skip(self) -> None:
         job_id = "job_orphan_admission_disabled"
         self._save_job(job_id)

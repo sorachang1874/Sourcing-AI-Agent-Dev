@@ -2242,7 +2242,14 @@ class HarvestCompanyEmployeesConnector:
         effective_requested_items = max(1, int(requested_items or 25))
         probe_metadata: dict[str, Any] = {}
         checkpoint_payload = dict(checkpoint or {})
-        has_existing_run = bool(str(checkpoint_payload.get("run_id") or "").strip())
+        has_existing_run = bool(
+            str(
+                checkpoint_payload.get("run_id")
+                or checkpoint_payload.get("actor_run_id")
+                or checkpoint_payload.get("actorRunId")
+                or ""
+            ).strip()
+        )
         if not has_existing_run:
             payload, effective_requested_items, probe_metadata = self._resolve_probe_sized_payload(
                 identity=identity,
@@ -4053,8 +4060,15 @@ def _execute_harvest_actor_with_checkpoint(
             artifacts=[*artifacts, retry_artifact],
         )
 
-    run_id = str(existing.get("run_id") or "").strip()
-    dataset_id = str(existing.get("dataset_id") or existing.get("default_dataset_id") or "").strip()
+    # Resume MUST honor every checkpoint key the rest of this module (cache
+    # branch, scripted branch) and the recovery daemon's submitted-remote-wait
+    # predicate treat as an existing remote run. Honoring only `run_id` here
+    # turns an alt-ref checkpoint (actor_run_id / defaultDatasetId vintage)
+    # into a duplicate PAID actor submit on resume.
+    run_id = str(existing.get("run_id") or existing.get("actor_run_id") or existing.get("actorRunId") or "").strip()
+    dataset_id = str(
+        existing.get("dataset_id") or existing.get("default_dataset_id") or existing.get("defaultDatasetId") or ""
+    ).strip()
 
     if not run_id:
         submit_payload = _submit_harvest_actor_run(settings, payload, request_context=request_context)
