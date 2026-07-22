@@ -9,14 +9,12 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | State | Route |
 |---|---|---|
-| Harness reorg R1 entry chain | executing | [design](sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md) §4 |
-| Harness reorg R2 tool-native layer (skills/commands, scripts registry) | approved | design §4 |
+| Harness reorg R3–R5 (docs lifecycle, deliverables manifest, CI lints) | awaiting operator approval (R0–R2 done 2026-07-22: 26bcff4/60fa305/bc8b5d4) | [design](sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md) §4–5 |
 
 ## Next (approved sequence)
 
 | Item | Gate | Route |
 |---|---|---|
-| Harness reorg R3–R5 (docs lifecycle, deliverables manifest, CI lints) | operator approval after R2 report | design §4–5 |
 | Runtime-root selection + daemon restart (+ google 60-file rebuild via reconcile) | after harness reorg, operator picks root | [Phase C design](sourcing-ai-agent/docs/PHASE_C_DATA_CONSOLIDATION_DESIGN.md) + PROGRESS hazards |
 | Parked 23 delivered-job commands: per-job re-enqueue vs cancel | after daemon restart | neutralization ledger (operator memory) |
 
