@@ -1,0 +1,985 @@
+[
+  {
+    "id": "ACwAAD6HyLQBi7iOD7G2B7eHugeCBZBsVwqokJ0",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAD6HyLQBi7iOD7G2B7eHugeCBZBsVwqokJ0",
+    "firstName": "Raphael",
+    "lastName": "Guilhem",
+    "summary": "Building at the intersection of AI, growth, and creativity. ",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 8
+        },
+        "companyName": "Pletor",
+        "description": "AI creative agents. Limitless marketing.",
+        "title": "Founding Growth",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 8
+        },
+        "startedOn": {
+          "month": 9,
+          "year": 2025
+        },
+        "companyId": "102784195",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/102784195"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQEcUFRh9KExgg/profile-displayphoto-crop_800_800/B4EZpUBfFdHMAM-/0/1762346267463?e=1778716800&v=beta&t=DO_kipKPIbnY5FBtEykQ9A4WaTNj_32oyZz6zOf1Odc",
+    "location": {
+      "linkedinText": "France"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAArAPT4BIDbx6ahuoCb7A2K9jL5SqCgBOoU",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAArAPT4BIDbx6ahuoCb7A2K9jL5SqCgBOoU",
+    "firstName": "Anastasiia",
+    "lastName": "Borzenko",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numYears": 1,
+          "numMonths": 5
+        },
+        "companyName": "Joom Group",
+        "title": "Head of Partnerships And Affiliate Marketing",
+        "current": true,
+        "tenureAtCompany": {
+          "numYears": 1,
+          "numMonths": 5
+        },
+        "startedOn": {
+          "month": 12,
+          "year": 2024
+        },
+        "companyId": "25040952",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/25040952"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/C4E03AQGQYcbY3D_DKg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1553156838730?e=1778716800&v=beta&t=q6U3VnO_3iiMzC0XL9Z_-3UZwJYmIkc8Vr_Et2Klxq8",
+    "location": {
+      "linkedinText": "New York City Metropolitan Area"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAB2DajgB-08wjV7DcnyDBBj_CIr3tY4BXBI",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAB2DajgB-08wjV7DcnyDBBj_CIr3tY4BXBI",
+    "firstName": "Amir",
+    "lastName": "S.",
+    "summary": "Started my first company at 18. By 23, scaled my second company to $5M revenue and a 25-person team. Self-taught in computer science and machine learning. Former youth national-level boxer with two silver medals.",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQHF3KIYu7qeAg/profile-displayphoto-crop_800_800/B4EZ0vvVvWIsAM-/0/1774622436845?e=1778716800&v=beta&t=aarD__k5v_DyH5lbbGkaNp4Rbg77blgvKJFNdtHB5kc",
+    "location": {
+      "linkedinText": "Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAABA4st8Bl7MZGhUX8cNsz6ajPUyR8Yws1L8",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAABA4st8Bl7MZGhUX8cNsz6ajPUyR8Yws1L8",
+    "firstName": "Duyen Jin",
+    "lastName": "Nguyen",
+    "summary": "I believe building great companies starts with the right people but also with the right tools, systems, and ways of working. Over the years, I’ve had the privilege of working with fast-growing companies to build strong teams across tech, product, and commercial roles. What excites me most is being in the space where people, technology, and ambition meet and helped companies scale while thinking differently about how work gets done. Now at Lovable, I’m especially excited about what happens when AI and product thinking start reshaping how we build companies, teams, and ideas from the ground up.  If you’re curious about AI-native ways of building, hiring in fast-growing teams, or just want to exchange ideas about the future of work — let’s connect 🪩",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 2
+        },
+        "companyName": "Lovable",
+        "description": "Building the team at Lovable, focusing on Design, Data and Platform teams:)",
+        "title": "Recruitment",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 9
+        },
+        "startedOn": {
+          "month": 3,
+          "year": 2026
+        },
+        "companyId": "101649602",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/101649602"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQEHmlJEFS97uA/profile-displayphoto-crop_800_800/B4DZlhwSB4JIAI-/0/1758281671360?e=1778716800&v=beta&t=Q3UzahOaJrWWQupGUutzSXfVNy6CEpX_ZoLD0B94v8g",
+    "location": {
+      "linkedinText": "Stockholm, Stockholm County, Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAAXwCysBVkBc2bcv7Gbp3IbTbcfO6bkCRxg",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAAXwCysBVkBc2bcv7Gbp3IbTbcfO6bkCRxg",
+    "firstName": "Stephane ",
+    "lastName": "Boghossian ",
+    "summary": "Just joined HAQQ Legal AI. The mission is simple and ambitious: make legal intelligence accessible, usable, and real.\n\nBorn in Belgium. Raised in Lebanon.\n\nI was originally on track to take over my family’s diamond and jewelry business. While expanding into LVMH jewelry markets, plans changed fast. Startups happened. I never looked back.\n\nI founded, scaled, raised, and exited ExJewel AI before ChatGPT made AI fashionable.\n\nDuring Covid, I shifted hard into growth. I advised Seed to Series A startups out of Paris, then joined Chafik & Jeremy at Brainboard, helping scale it to $1M ARR through pure organic growth.\n\nLater, I met Anton when Lovable was still GPTEngineer. I joined early, stayed until $75M ARR, and remain an active contributor and vibe coder.\n\nThen came CNTXT AI, where I helped launch AI agents for government use, while running multiple AI side projects in parallel.\n\nComing back to Lebanon was always the goal. I did.\nHAQQ is home now. $3M raised. Fast growth. Currently the fastest-growing startup in Lebanon. MENA is next.",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 5
+        },
+        "companyName": "HAQQ",
+        "description": "HAQQ is the Legal AI Twin and Practice Management System.\n\nIt thinks like your firm.\nIt drafts at partner level.\nIt enforces your standards across every matter.\n\nIt replaces your CRM, DMS, billing, and time tracking.\nFirms save up to $50,000 per lawyer per year.\n\n11,000 law firms already run on HAQQ.\nThat number is doubling every month.\n\nFastest growing startup in the Lebanon. ",
+        "title": "Head of Growth",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 5
+        },
+        "startedOn": {
+          "month": 12,
+          "year": 2025
+        },
+        "companyId": "73176289",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/73176289"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQE0T5b5UsAG3w/profile-displayphoto-crop_800_800/B4DZ3A9EIuIYAM-/0/1777058731002?e=1778716800&v=beta&t=SeWXgAiDackswKFkpqjCb-GlQWzxrkk24Dy4gRMnk3U",
+    "location": {
+      "linkedinText": "France"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAAvLPAABCZIsSsdkolLENBHXKyHSAzsqSRc",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAAvLPAABCZIsSsdkolLENBHXKyHSAzsqSRc",
+    "firstName": "Ryan",
+    "lastName": "McCready",
+    "summary": "I teach teams how to actually use AI at work. Content engineer, Zapier workshop partner, 12+ years in content marketing.",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 1
+        },
+        "companyName": "Zapier",
+        "title": "AI Marketing Manager",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 1
+        },
+        "startedOn": {
+          "month": 4,
+          "year": 2026
+        },
+        "companyId": "2418251",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2418251"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQEuofmCkeIGvA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1714581350817?e=1778716800&v=beta&t=EximlTXW-Uw4fi5T0anXDWvTUtKaUgmHV-px-uycMtw",
+    "location": {
+      "linkedinText": "Kansas City Metropolitan Area"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAACAQzwQBFOgwNtdVB_7mb7a9MyNBIcRZZDU",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAACAQzwQBFOgwNtdVB_7mb7a9MyNBIcRZZDU",
+    "firstName": "Joseph",
+    "lastName": "Cassidy",
+    "summary": "I help teams thrive by driving talent strategy, HR initiatives, and employee experience programs that make a real impact. From hiring top talent and optimizing onboarding to fostering culture, engagement, and growth, I partner with leaders to create an environment where people can succeed and organizations can scale.\n\nPassionate about unlocking potential, I focus on building seamless processes, empowering employees, and shaping workplaces that inspire collaboration and innovation. I love turning people's challenges into opportunities for growth, for individuals and the business alike.",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 3
+        },
+        "companyName": "Legora",
+        "title": "People Enablement Partner",
+        "current": true,
+        "tenureAtCompany": {
+          "numYears": 1
+        },
+        "startedOn": {
+          "month": 2,
+          "year": 2026
+        },
+        "companyId": "93196471",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/93196471"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQGRBSe6wAHeBA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1730403299626?e=1778716800&v=beta&t=mD-467bU8AQjRYZBngbdYvCqdeKxNBH_6ICqJHChJYY",
+    "location": {
+      "linkedinText": "Stockholm, Stockholm County, Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAASM1CkBDWSJGzcExIepE5HG_JC-W9i_lMg",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAASM1CkBDWSJGzcExIepE5HG_JC-W9i_lMg",
+    "firstName": "Andreas",
+    "lastName": "Wennberg",
+    "summary": "Hired engineers for 100+ companies (including Lovable, Legora, Instabridge, Motorica, and Epiminds)\n\nWhat makes us different:\n1) We understand code and pair program with candidates in TypeScript, Python, C++ and Java.\n2) We have built our own agent that helps us source exceptional developers on LinkedIn and Github. \n3) We have worked with some of the fastest growing companies in the world.\n\nIf you want help with finding the best devs for your company let me know.\n\nWhat I have done previously: \n- Head of Talent at Sting (startup accelerator with 400+ companies)\n- Built mobile apps, SaaS and ML/AI projects\n- Growth hacking for niche social products\n- Played live poker professionally",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numYears": 4,
+          "numMonths": 2
+        },
+        "companyName": "Predictable Hiring",
+        "title": "CEO",
+        "current": true,
+        "tenureAtCompany": {
+          "numYears": 4,
+          "numMonths": 2
+        },
+        "startedOn": {
+          "month": 3,
+          "year": 2022
+        },
+        "companyId": "14844300",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/14844300"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQEAt0ykNpRPtw/profile-displayphoto-shrink_800_800/B4DZbOKnr9HAAg-/0/1747215613139?e=1778716800&v=beta&t=OEMRN1tV0-QfXxdxaJ4s-TNHf1BMENpngzAJoA0AOHU",
+    "location": {
+      "linkedinText": "Stockholm, Stockholm County, Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAABmUnJsBQsSpRYBMSwxokYhHTHiqEXPJ7kA",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAABmUnJsBQsSpRYBMSwxokYhHTHiqEXPJ7kA",
+    "firstName": "Abhijeet",
+    "lastName": "Jha",
+    "summary": "Curious about algorithms and system design",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 6
+        },
+        "companyName": "Stealth",
+        "description": "Helping Enterprise get AI ready.",
+        "title": "Co-Founder",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 6
+        },
+        "startedOn": {
+          "month": 11,
+          "year": 2025
+        },
+        "companyId": "79372457",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/79372457"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQGgxWlwIQFbTw/profile-displayphoto-crop_800_800/B56ZjR3WFNHQAI-/0/1755867605083?e=1778716800&v=beta&t=g1CUMQHvNpm2onsS-KMpOBEQkp5Qwrw10TcBLvaX1hs",
+    "location": {
+      "linkedinText": "India"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAAwBu9oBsI3jXfnO6twJqxGJ4GTeW3A_boo",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAAwBu9oBsI3jXfnO6twJqxGJ4GTeW3A_boo",
+    "firstName": "Mindaugas ",
+    "lastName": "Petrutis",
+    "summary": "I build products with music, fashion, and film clients who have cultural weight but no technical team.TL;DR/How we can work together: BUILD: Your idea, live in weeks. I build AI-native digital products for artists, labels, and creative brands. CREATE: Content that makes brands culturally relevant. Current client: Lovable. Open to a couple more. CONSULT: Go-to-market and influencer marketing. I built Lovable's influencer function from zero and brought in Will.i.am, Gwyneth Paltrow, Kevin Hart, and Steve Aoki as investors.More: Previously, I was one of the first 50 at Lovable where I built the influencer program from scratch scaling it past 110M+ views, brought high-profile people and celebrities on board as investors (will.i.am, Casey Affleck, Kevin Hart, Gwyneth Paltrow, Steve Aoki, Steven Bartlett, Christina Aguilera &amp; Matthew Rutler) + turned many of them into builders and advocates for the product.Now I'm independent.I work as a content creator, with Lovable as my first client. I'm also building projects with some of the most well-known people in music and fashion by helping hyper-creative people at the top of their game create rich, unique consumer experiences using Lovable. On the side, I advise and consult a select number of companies, everything from product and go-to-market strategy to building internal tools for them. Before all of this I spent 10 years building professional communities at On Deck (first 30 employees) and InVision. The thread through all of it: I like building things with people who are the best at what they do.Usually in Dublin. Often in Los Angeles.",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 3
+        },
+        "companyName": "Hit-Boy",
+        "description": "Hit-Boy is a 3x Grammy award winning producer (Jay-Z, Nas, Beyonce, Travis Scott, Rhianna etc.) and artist. We're building fan-facing digital experiences: fully immersive 3D catalogue world, a browser game built on top of a music video, and a cinematic release experience for an upcoming film project.",
+        "title": "CVO (Chief Vibecoding Officer)",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 3
+        },
+        "startedOn": {
+          "month": 2,
+          "year": 2026
+        }
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQFGiIQ_GiUCFw/profile-displayphoto-crop_800_800/B4DZjDKzIQG8AQ-/0/1755621049883?e=1778716800&v=beta&t=OUkTuJy1naqba93J8bUH_xi5xC-lg3sq7OElXQFlmMY",
+    "location": {
+      "linkedinText": "Dublin, County Dublin, Ireland"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAAd1dGcB53kEidXLQKgz-vxBkj5xO_Yf4S4",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAAd1dGcB53kEidXLQKgz-vxBkj5xO_Yf4S4",
+    "firstName": "Chris",
+    "lastName": "Donnelly",
+    "summary": "Cofounder of Searchable: \n\nAn Autonomous SEO & AEO Growth Engineer \nAnalyse, fix, & scale your website to drive customers\n\nWork out how to master AI Search here: searchable.com\n\nThe short life story \n\nI decided to skip the corporate job & start a digital marketing agency at 21. Here is the journey so far: \n\nAge 21: Bootstrapped Adjust Media at university making websites \nAge 22: Left Uni and rebranded to Verb Brands\nAge 27: Acquired DBD Media Ltd, their 20 staff & expanded to digital marketing\nAge 28: Won Bugatti & recognised as leading luxury agency\nAge 30: Sell entirety of Verb Brands to Croud & LDC in an 8-figure deal\nAge 31: Founded Lottie Org w/ Will Donnelly (Grow revenue to 8 figures, raise $35m & hire 100 people).\nAge 32: Launch my Media, Education and Investment business\nAge 33: Launched the Creator Accelerator and reached 8 figures in revenue\nAge 34: Co Founded Searchable\n\nIt’s been a journey. \n\nThrough Searchable.com I help founders and marketers to grow their organic traffic on auto pilot with our autonomous Seo and Aeo tool: searchable.com\n\nThrough my investment company, we support and invest into Entrepreneurs running incredible businesses, and with our experience as operators, help them scale. \n\nIf you are a founder of a profitable and growing company with approximately $1m+ EBITDA, and you want to see if you can grow faster, reach out. \n\nIf you are not at that level yet, I produce resources to help you get there. \n\nI run a podcast called Wake Up, and produce content on YouTube, LinkedIn, and Instagram for free.\n\nCommercial enquiries for speaking or brand deals: enquiries@chris-donnelly.co.uk",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 8
+        },
+        "companyName": "Searchable",
+        "description": "Drive revenue from AI Search. \n\nVisibility & analytics for AI Search - plus the actions to drive growth\n\nSearchable shows you exactly what's working, what's not, and helps you agentically complete technical, content, and strategic tasks\n\nBecome more visible with Searchable.com",
+        "title": "Co-Founder & CEO ",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 8
+        },
+        "startedOn": {
+          "month": 9,
+          "year": 2025
+        },
+        "companyId": "108012871",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/108012871"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQF3XNOMNKGJEw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1727343670005?e=1778716800&v=beta&t=6nPtVVO4eKK32Ist77ezoeKIcu7ZmEBIsBENUoLKk7E",
+    "location": {
+      "linkedinText": "London Area, United Kingdom"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAABdh-wByCUKurHrxpwfly5IW711D4UFjC4",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAABdh-wByCUKurHrxpwfly5IW711D4UFjC4",
+    "firstName": "Yev",
+    "lastName": "Marusenko, Ph.D.",
+    "summary": "PhD &gt; Ads &gt; Founder &gt; 1M+ YouTube subs &gt; GrowthBuilt high-velocity systems that turn chaos into compounding experiments in a brand-heavy AI world. Drove billions of views unconventionally.Architecting how behavior becomes the infrastructure for self-learning growth loops.X @doctoryev",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 4
+        },
+        "companyName": "Uare.ai",
+        "title": "Head of Growth Marketing",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 4
+        },
+        "startedOn": {
+          "month": 1,
+          "year": 2026
+        },
+        "companyId": "102780089",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/102780089"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/C4D03AQH5-tD3e8XACQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1591651396268?e=1778716800&v=beta&t=ZwFz7-4t9tUFqtJuJfxtQxDXEPfNnTokt3PrHNS_tAQ",
+    "location": {
+      "linkedinText": "Palo Alto, California, United States"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAADzGP00B-4jSvrU95hfadlxch-QTc0qPBAg",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAADzGP00B-4jSvrU95hfadlxch-QTc0qPBAg",
+    "firstName": "Jarik",
+    "lastName": "Foth",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 10
+        },
+        "companyName": "her labs",
+        "description": "context layer for any workplace agent",
+        "title": "Co-Founder",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 10
+        },
+        "startedOn": {
+          "month": 7,
+          "year": 2025
+        },
+        "companyId": "111078989",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/111078989"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQE-1WIe65X0Yg/profile-displayphoto-crop_800_800/B4EZiqh7XtHIAI-/0/1755207678233?e=1778716800&v=beta&t=bYxXPFN5hnXnPtYWNrlRc_0jWJeGA90wZrwvFdL-0rQ",
+    "location": {
+      "linkedinText": "Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAACs4FQIBzXvJyoEzCi3XiLEHF3ZSCAcS9GQ",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAACs4FQIBzXvJyoEzCi3XiLEHF3ZSCAcS9GQ",
+    "firstName": "Alexander",
+    "lastName": "Wikström",
+    "summary": "Building Blaise.i like crazy ideas and getting shit done",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 2
+        },
+        "companyName": "Blaise",
+        "description": "Your ideas, to production.",
+        "title": "CEO & Founder",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 2
+        },
+        "startedOn": {
+          "month": 3,
+          "year": 2026
+        },
+        "companyId": "112022504",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/112022504"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQFxdCMX5kFlVA/profile-displayphoto-crop_800_800/B4EZ2hvwKGHMAM-/0/1776535145838?e=1778716800&v=beta&t=RB_li5asQm_L4Ix9gSVv98cjqRSt3ZTiQQnriYDZnI0",
+    "location": {
+      "linkedinText": "Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAALbEQYBp4UXZpcr8VIZBYOI5SC8cEujEu4",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAALbEQYBp4UXZpcr8VIZBYOI5SC8cEujEu4",
+    "firstName": "Yannis",
+    "lastName": "Karagiannidis",
+    "summary": "Building self-serve growth engines that scale while you sleep. 😴→💰\n\nWho I Am:\nA 15-year veteran at the intersection of AI, product-led growth, and performance marketing. I've scaled companies from thousands of users to millions, and from idea to $20M ARR in record time.\n\nWhat I've Done:\n✓ 0→$20M ARR in <90 days (108% monthly growth)\n✓ 55% CAC reduction at scale\n✓ Millions of users acquired & retained\n✓ 30-50% improvements in conversion, activation & LTV\n\nHow I Do It:\n🎯 Product-Led Growth - Self-serve funnels that convert automatically\n🤖 AI-Powered Acquisition - ML targeting that finds your best customers\n📈 Data-Driven Strategy - Predictive models that eliminate guesswork\n🔄 Omnichannel Orchestration - Paid, organic, product, email—all working together\n💎 Value-Based Monetization - Freemium models that print money\n🚀 Viral Loops - Referral programs that create exponential growth\n\nMy Philosophy:\nGrowth isn't about hacks or tricks. It's about building systematic, repeatable engines that turn strangers into users, users into customers, and customers into advocates.\n\nI live for the challenge of understanding human behavior at scale and building the systems that influence it.\n\nLet's connect if you're building something ambitious. 🚀",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 7
+        },
+        "companyName": "Playabl AI (YC P26)",
+        "description": "Text to Playabl 3D Models AI",
+        "title": "Growth Advisor",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 7
+        },
+        "startedOn": {
+          "month": 10,
+          "year": 2025
+        },
+        "companyId": "109163922",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/109163922"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQFvds2e8T8bPA/profile-displayphoto-crop_800_800/B4EZrcKINdIwAI-/0/1764630243638?e=1778716800&v=beta&t=oE9eh64-QjPqvcUVmLMUUSo0oRmCAL9lj8qowe5W4Tg",
+    "location": {
+      "linkedinText": "Dubai, United Arab Emirates"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAADW0s5wBxUuBwSciiB_2COynghBSYpLGWsY",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAADW0s5wBxUuBwSciiB_2COynghBSYpLGWsY",
+    "firstName": "Jonas",
+    "lastName": "Rosengren",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 6
+        },
+        "companyName": "Lovable",
+        "title": "Member of Technical Staff",
+        "current": true,
+        "tenureAtCompany": {
+          "numYears": 1
+        },
+        "startedOn": {
+          "month": 11,
+          "year": 2025
+        },
+        "companyId": "101649602",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/101649602"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQG4KpGFocUwHw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1719266730852?e=1778716800&v=beta&t=06Y54W4w1lTsTpbzM2YiO7gQDBdhZYREnHDIs66BLLM",
+    "location": {
+      "linkedinText": "Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAAGPOMQBfzfuA_TO2V35lJuIwXpVHoXEo9A",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAAGPOMQBfzfuA_TO2V35lJuIwXpVHoXEo9A",
+    "firstName": "Mo",
+    "lastName": "Calloway",
+    "summary": "AI Creator, Builder & Tech Founder\nbackground  in Enterprise IT, DevOps and Platform PM  ",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQF8hLy-iev-Lw/profile-displayphoto-crop_800_800/B56ZeBqmrpHoAQ-/0/1750227119286?e=1778716800&v=beta&t=DdxTseYt5rzO2HvWXPL5mFwpYOCyW_ihHw5Apza_B4c",
+    "location": {
+      "linkedinText": "Bellevue, Washington, United States"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAACFBOgBVLuZTlZng41YxKEXj49Z8cyDI70",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAACFBOgBVLuZTlZng41YxKEXj49Z8cyDI70",
+    "firstName": "Gurpreet",
+    "lastName": "Kalra",
+    "summary": "I'm a product/UX enthusiast who can't help but notice when something feels off—and more importantly, I love figuring out how to fix it. Whether it's a confusing button flow or a missed micro-interaction, I see every friction point as an opportunity to make things smoother, smarter, and more human.\n\nWith a background in agile product development and a Certified ScrumMaster credential, I thrive in fast-moving environments where iteration is the norm and user empathy lead the way. I’ve built tone-checking tools with AI, explored vibe coding, and shared my learnings openly—because I believe design is better when it's collaborative and transparent.\n\nIf you're a startup founder, hiring manager, or team looking to build products users actually love—not just tolerate—let’s connect. I'm actively exploring UX roles where I can bring clarity to chaos and insight to iteration.",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 2
+        },
+        "companyName": "Lovable",
+        "description": "- Help community members troubleshoot issues and unblock their projects in the Lovable Discord server\n- Investigate unfamiliar problems and follow up with users to help resolve them\n- Facilitate discussions by encouraging members to share issues in the right channels so they can get faster help\n- Contribute to a supportive builder community by sharing knowledge and helping users navigate the platform",
+        "title": "Community Champion (Volunteer)",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 8
+        },
+        "startedOn": {
+          "month": 3,
+          "year": 2026
+        },
+        "companyId": "101649602",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/101649602"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQEjsezHUeq8Ew/profile-displayphoto-crop_800_800/B56ZeoWQqdGoAI-/0/1750876109747?e=1778716800&v=beta&t=VoEvpd6ygf8p56U-D_TK8csKq4-6EUO2mZVaxK5IiJE",
+    "location": {
+      "linkedinText": "Sammamish, Washington, United States"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAFoXREUBB2iyb0WW66cNDDPMR0LKHW_9m08",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAFoXREUBB2iyb0WW66cNDDPMR0LKHW_9m08",
+    "firstName": "Brenton",
+    "lastName": "Andersen",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 4
+        },
+        "companyName": "Toolhouse",
+        "title": "Growth",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 4
+        },
+        "startedOn": {
+          "month": 1,
+          "year": 2026
+        },
+        "companyId": "102772754",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/102772754"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4E03AQFXaVM9PK1YOA/profile-displayphoto-crop_800_800/B4EZo3QOrgHoAM-/0/1761863594125?e=1778716800&v=beta&t=wQo6xMq-tVd83bp5J7PDhFXCQyE8nsFGBkwW24yZ3GA",
+    "location": {
+      "linkedinText": "Adelaide, South Australia, Australia"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAD3QBMEBQBykQfSfV6VyikKGIzSEbPwWwMU",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAD3QBMEBQBykQfSfV6VyikKGIzSEbPwWwMU",
+    "firstName": "Roman",
+    "lastName": "Yanushevskyi",
+    "summary": "Math + CS student at the National University of Singapore.\n\nInterned as a Quantitative Researcher at Citadel Securities in 2024.\n\nIn 2022 won a gold medal (and placed 7th overall worldwide) in the International Olympiad in Informatics (IOI).\n\nAn active AI revolution believer.",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQHpTCo2MC4q2g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1689826376268?e=1778716800&v=beta&t=fgnR-ZZSXyD4mKqqiZybRKm20azFxtqJozRaVKfCVH8",
+    "location": {
+      "linkedinText": "United Kingdom"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAACAs8uYBUN9hHGx1p7711m9oMjOUN8iVuFM",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAACAs8uYBUN9hHGx1p7711m9oMjOUN8iVuFM",
+    "firstName": "Zaid",
+    "lastName": "Khan",
+    "summary": "I help cool products get max attention.",
+    "openProfile": false,
+    "premium": true,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 7
+        },
+        "companyName": "Macroscope",
+        "title": "Growth Consultant",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 7
+        },
+        "startedOn": {
+          "month": 10,
+          "year": 2025
+        },
+        "companyId": "107542671",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/107542671"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D4D03AQHCwv2nFivovg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1701281715332?e=1778716800&v=beta&t=o3HYZEfg7DWLJD_B2PIGxgsj80aKbEEgiu8LGhqUwG8",
+    "location": {
+      "linkedinText": "Mumbai, Maharashtra, India"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAABLh-GABhyPITbyuRhXVt-dOnEpD2WR1tNo",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAABLh-GABhyPITbyuRhXVt-dOnEpD2WR1tNo",
+    "firstName": "Artin",
+    "lastName": "Esmailzadeh",
+    "summary": "Senior growth leader with a proven track record of scaling profitable revenue growth. I have built and led high performing teams across marketing, product, tech and credit. Now building something new.",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numYears": 1
+        },
+        "companyName": "Jiro",
+        "description": "AI-native fintech for SMEs",
+        "title": "Co-Founder",
+        "current": true,
+        "tenureAtCompany": {
+          "numYears": 1
+        },
+        "startedOn": {
+          "month": 5,
+          "year": 2025
+        },
+        "companyId": "107670440",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/107670440"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQE1LuXgLCJPPA/profile-displayphoto-crop_800_800/B56ZgYP9kfIAAM-/0/1752753495080?e=1778716800&v=beta&t=iqGUyosY_v2B9aVkjle3USpXKjRlKeLouzWO8QHwPEg",
+    "location": {
+      "linkedinText": "Sweden"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAADWnjEMBpczg3yyONUfGFTbj-KdhDcyeJ38",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAADWnjEMBpczg3yyONUfGFTbj-KdhDcyeJ38",
+    "firstName": "Dhruv",
+    "lastName": "Bakshi",
+    "summary": "Senior AI Engineer specializing in production-grade Agentic Workflows, LLM Infrastructure, and Scalable SaaS Architectures. With expertise in AST parsing and self-healing code and AI Workflows, I've driven $2M+ in revenue and supported 1M+ users at Lovable (Lead AI Engineer), Anything AI, Creatr AI (Founding Engineer) and others, while founding Fresources (3K DAU).",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 6
+        },
+        "companyName": "School Dost",
+        "title": "CTO & Co Founder",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 6
+        },
+        "startedOn": {
+          "month": 11,
+          "year": 2025
+        },
+        "companyId": "109627137",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/109627137"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/C4D03AQG5UyIJIso3Lg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1641395019266?e=1778716800&v=beta&t=w-YGqtcL6LDIcXLUWNtF6AT5KEgrhkLohwcq0GcFmr4",
+    "location": {
+      "linkedinText": "New Delhi, Delhi, India"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAABoX-MABA3s5d3NsDV1JvvoofbLDpnUTqpg",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAABoX-MABA3s5d3NsDV1JvvoofbLDpnUTqpg",
+    "firstName": "Petros",
+    "lastName": "Hong",
+    "summary": "20x wins in Hackathons. Spoke at TedAI stage. 1900+ github commits past year. An avid self-taught learner who has worn many hats. From engineering, marketing, talent, partnerships, creative, design, UI/UX, product management, finance, HR, office management, operations, social media, and C suite.Helped grow CGC's trading card and video game divisions to #2 and #1 in submissions globally in 2 years.Set up APX Talent, a Korean gaming talent marketing company that became profitable from Year 1. 1st employee and former COO of https://www.linkedin.com/redir/suspicious-page?url=adergaming%2ecom which grew to a multi-million dollar company in less than 2 years.Spoke at TEDAI San Francisco 2025I wasn't given many chances in my career so I had built my own opportunities from the ground up. And I've just started.You can see my repos here: https://github.com/petroshongYou can see my data visualization work here: https://public.tableau.com/profile/petros.hong#!/",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numMonths": 2
+        },
+        "companyName": "Apify",
+        "title": "Developer Commuity Manager",
+        "current": true,
+        "tenureAtCompany": {
+          "numMonths": 2
+        },
+        "startedOn": {
+          "month": 3,
+          "year": 2026
+        },
+        "companyId": "10608457",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10608457"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQHWbdCDxOetMA/profile-displayphoto-crop_800_800/B56ZoKQroRKAAI-/0/1761108736896?e=1778716800&v=beta&t=5jmOAFKbWGcEj36_5_K0zw--cBEFwNV1qsE1tGjevPM",
+    "location": {
+      "linkedinText": "San Francisco, California, United States"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  },
+  {
+    "id": "ACwAAAFM7QQBUpO74bLL2ZL-uudLysLIOkG-VGA",
+    "linkedinUrl": "https://www.linkedin.com/in/ACwAAAFM7QQBUpO74bLL2ZL-uudLysLIOkG-VGA",
+    "firstName": "Jacob",
+    "lastName": "Aldridge",
+    "summary": "Increasingly my business coaching work is focused on Portfolio Entrepreneurs + HoldCos - individuals who own a meaningful stake in multiple businesses (or aspire to do so). I deliver “Freedom Through Business” - aiming to add $1M+ per year to my clients' portfolios, while also improving their broader life and family goals. \n\nPracticing what I preach means working with a small number of great clients + companies, while living my family’s dream life.\n\nI live and work as a full-time traveller, alongside my beautiful wife Harmony while we also worldschool our 6yo daughter ‘Flash’.\n\nIn 20 years of business coaching I’ve worked at depth with 400+ businesses across 14 countries and created over $1 Billion of revenue growth.\n\nWhat My Clients Say:\n👉🏾 “Nobody understands me like Jacob does.”\n👉🏾 “Jacob makes complex things simple.”\n👉🏾 “He answers all my strangest questions without blinking.”\n👉🏾 “Jacob helps me make the right decisions every time.”\n\nMy goal is to live a life so extraordinary that people on social media think I must be lying. I held a Guinness World Record for the longest ever movie marathon. I’ve published 6 books – historical, architectural, a novel, on start-ups, remote work, and encouraging male leaders to embrace more feminine traits. The last two were Amazon best-sellers.\n \nThe Coach Foundation has twice named me in their “Best Business Coaches in the World” list. I am a Virtual Speakers Hall of Fame Nominee – remember that next time you host an event and want my wit + wisdom from wherever I am in the world.\n\nA life motto is “Sprezzatura”, making something difficult look simple, or as I prefer to define it “Proactive Laziness”. If you can do the most valuable 1% thing right now then the results will reverberate through your life.\n\nIf you're not doing the most valuable 1% thing in your business portfolio right now, let's chat.\n\nwww.ComoPortfolio.com\nwww.JacobAldridge.com\n\nSPEAKER - https://jacobaldridge.com/speaker/\nAs a conference Speaker and MC, my experience includes: The Ecole des Ponts business school (2024), The Family Law Practitioners Association Conference (2019), Happy Lawyer Happy Life Retreat (2018-2024), generationYOU (2016), Key Person of Influence Australia (2014), World Business and Executive Coach Summit (2011), the Email Marketing Summit Australia (2009-15), and business coaching conferences in Australia, the UK and the USA.\n\nVIDEO + PODCASTS\nI hosted the video series 'Blackboard Fridays' (BlackboardFriday.com), sharing tips and strategies for business owners.\n\nI LOVE invitations for business podcasts or media quotes.",
+    "openProfile": false,
+    "premium": false,
+    "currentPositions": [
+      {
+        "tenureAtPosition": {
+          "numYears": 20,
+          "numMonths": 1
+        },
+        "companyName": "Como Business Coaching",
+        "description": "As an international business coach, partner and advisor I work with energetic young companies seeking growth. Since 2006, I have worked with more than 400 companies in Australia, the UK, North America and across Asia-Pacific.\n\nFounder and CEO Coaching ensures that you're focusing on the right things in your business and you have support to execute your best ideas.\n\nCoaching Projects average a 20% uplift in either Revenue or Profit (depending on your focus), working with your Leadership team on the strategic design and implementation of Growth Systems, Revenue Systems, and/or Productivity Systems.\n\nStrategy Workshops - from half a day to your multi-day conference or offsite retreat - bring both energy and practical outcomes that ensure they are both memorable and provide you with a return on investment.\n\nCorporate Training allows larger organisations to more rapidly provide their team with insight and improved capability. Ranging from 2 to 10 sessions per Training Program, the most requested topics are Sales & Lead Generation, Productivity & Profitability, and Coaching & Leadership Skills.\n\nMy alumni clients and colleagues describe me as the smart and quirky business guy who makes things happen. I bring business experience that impacts both profit and valuation - plus a unique energy borne from the belief that business is best when it's fun.\n\nI've worked with one-person companies and multi-nationals, with most of my experience working with founders of companies from $US1.5 - $US17 million in annual revenue.\n\nThe clients who have received the greatest return on their investment are multi-site professional services firms, especially those with international offices seeking a consistent global approach that will deliver commercial and cultural change for the better.",
+        "title": "International Business Advisor | Business Coach | Virtual Speaker Hall of Fame Nominee",
+        "current": true,
+        "tenureAtCompany": {
+          "numYears": 20,
+          "numMonths": 1
+        },
+        "startedOn": {
+          "month": 4,
+          "year": 2006
+        },
+        "companyId": "89852817",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89852817"
+      }
+    ],
+    "pictureUrl": "https://media.licdn.com/dms/image/v2/D5603AQHvmp9b6d939g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1715615332089?e=1778716800&v=beta&t=6dsqeK0GWDOXjMDd9PFTvR3ZW1HafJqyEs6GgbCFSMU",
+    "location": {
+      "linkedinText": "Brisbane, Queensland, Australia"
+    },
+    "_meta": {
+      "pagination": {
+        "totalElements": 173,
+        "totalPages": 7,
+        "pageNumber": 1,
+        "previousElements": 0,
+        "pageSize": 25
+      }
+    }
+  }
+]

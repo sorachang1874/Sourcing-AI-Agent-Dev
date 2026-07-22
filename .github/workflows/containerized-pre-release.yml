@@ -1,0 +1,57 @@
+name: Containerized Pre-Release Gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/containerized-pre-release.yml"
+      - "sourcing-ai-agent/Makefile"
+      - "sourcing-ai-agent/pyproject.toml"
+      - "sourcing-ai-agent/frontend-demo/**"
+      - "sourcing-ai-agent/scripts/**"
+      - "sourcing-ai-agent/src/**"
+      - "sourcing-ai-agent/tests/**"
+  workflow_dispatch:
+
+jobs:
+  containerized-pre-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: sourcing-ai-agent
+    env:
+      TESTCONTAINERS_RYUK_DISABLED: "1"
+      TESTCONTAINERS_POSTGRES_IMAGE: public.ecr.aws/docker/library/postgres:16-alpine
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/sourcing-ai-agent/.cache/ms-playwright
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/sourcing-ai-agent/.cache/npm
+      PLAYWRIGHT_LD_LIBRARY_PATH: ${{ github.workspace }}/sourcing-ai-agent/.cache/ubuntu-libs/root/usr/lib/x86_64-linux-gnu
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: sourcing-ai-agent/pyproject.toml
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: sourcing-ai-agent/frontend-demo/package-lock.json
+
+      - name: Bootstrap Python test environment
+        run: make bootstrap-test-env
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend-demo
+
+      - name: Install browser test dependencies
+        run: npm run browser:install --prefix frontend-demo
+
+      - name: Run containerized pre-release gates
+        run: make ci-containerized-pre-release
