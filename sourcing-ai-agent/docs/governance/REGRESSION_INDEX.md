@@ -20,6 +20,12 @@ last-verified: 2026-07-22
 | 2026-07 事故回归四件（`test_artifact_cache.py`、`test_latest_snapshot_pointer.py`、`test_live_apify_dataset_salvage.py`、`test_recovery_remote_wait_orphan.py`）+ 收口新增（`test_live_schema_write_fence.py`、`test_mypy_ratchet.py`、`test_lane_manifest.py`、`test_provenance.py`）| 数据毁损/指针漂移/salvage/simulate 写入/棘轮机制 | **此前无 lane 归属（recon 缺口）**→ 本批起离线四件入 docs-gate 块;PG 依赖件走 regression_matrix | `test_live_apify_dataset_salvage.py` 起 subprocess,~1s×3 |
 | `tests/test_pipeline.py` | （打捞-退役目标,master plan WS3 Tier 3）| **永不全量跑** | RESIDUAL_LEDGER R-009;PG 100 连接耗尽 |
 
+### Ported from test_pipeline.py (salvage waves)
+
+| 新文件 | 保护什么 | 来源 | 运行约束 |
+|---|---|---|---|
+| `tests/test_orchestrator_planning.py`（salvage wave 1, 2026-07-22）| plan_workflow 意图推断合同（Gemini→Google/ChatGPT→OpenAI scope、effective-request 元数据、未知关键词保留）| 从冻结的 `test_pipeline.py` 移植（原名同名 ×4：gemini_product_manager_scope / task_metadata_carries_effective_request / openai_scope_from_chatgpt / preserves_unknown_meta_team_keyword）,PG fixture 重座；棘轮 461→457 | 无 PG 之外约束 |
+
 ## Tombstones（退役测试墓碑;删除祖父基线文件必须先落行）
 
 | id | test 文件/家族 | 保护过什么 | 退役原因 | 日期 | superseded_by |

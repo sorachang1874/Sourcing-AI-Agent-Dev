@@ -537,57 +537,6 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("intent_rewrite", result)
         self.assertFalse(result["intent_rewrite"]["request"]["matched"])
 
-    def test_plan_workflow_returns_request_preview_and_infers_gemini_product_manager_scope(self) -> None:
-        planned = self.orchestrator.plan_workflow(
-            {
-                "raw_user_request": "我想找Gemini的产品经理",
-            }
-        )
-
-        self.assertEqual(planned["request"]["target_company"], "Google")
-        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
-        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
-        self.assertIn("Gemini", planned["request"]["organization_keywords"])
-        self.assertIn("Google DeepMind", planned["request"]["organization_keywords"])
-        self.assertEqual(planned["request_preview"]["target_company"], "Google")
-        self.assertEqual(planned["request_preview"]["must_have_primary_role_buckets"], ["product_management"])
-        self.assertIn("Gemini", planned["request_preview"]["organization_keywords"])
-        self.assertEqual(
-            planned["request_preview"]["intent_axes"]["population_boundary"]["employment_statuses"],
-            ["current", "former"],
-        )
-        self.assertEqual(
-            planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"],
-            "Google",
-        )
-        self.assertEqual(
-            planned["request_preview"]["intent_axes"]["thematic_constraints"]["must_have_primary_role_buckets"],
-            ["product_management"],
-        )
-        self.assertTrue(
-            any(
-                item.get("rewrite_id") == "greater_china_outreach"
-                for item in list(planned["intent_rewrite"].get("policy_catalog") or [])
-                if isinstance(item, dict)
-            )
-        )
-        self.assertEqual(
-            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
-            ["19"],
-        )
-        self.assertEqual(
-            planned["plan"]["acquisition_strategy"]["strategy_type"],
-            "scoped_search_roster",
-        )
-        self.assertEqual(
-            planned["plan"]["acquisition_strategy"]["filter_hints"]["current_companies"],
-            ["Google"],
-        )
-        self.assertEqual(
-            planned["plan"]["organization_execution_profile"]["default_acquisition_mode"],
-            "scoped_search_roster",
-        )
-
     def test_resolve_company_identity_uses_manual_target_company_linkedin_override(self) -> None:
         task = AcquisitionTask(
             task_id="resolve_company_identity",
@@ -624,27 +573,6 @@ class PipelineTest(unittest.TestCase):
             "https://www.linkedin.com/company/ssi-ai/",
         )
         self.assertEqual(execution.payload["company_identity"]["resolver"], "manual_review_override")
-
-    def test_plan_workflow_task_metadata_carries_effective_request(self) -> None:
-        planned = self.orchestrator.plan_workflow(
-            {
-                "raw_user_request": "我想找Gemini的产品经理",
-            }
-        )
-
-        first_task = next(
-            task
-            for task in list(planned["plan"].get("acquisition_tasks") or [])
-            if isinstance(task, dict)
-            and isinstance(dict(task.get("metadata") or {}).get("intent_view"), dict)
-            and dict(dict(task.get("metadata") or {}).get("intent_view") or {}).get("effective_request")
-        )
-        intent_view = dict(dict(first_task.get("metadata") or {}).get("intent_view") or {})
-        effective_request = dict(intent_view.get("effective_request") or {})
-        self.assertEqual(effective_request.get("target_company"), "Google")
-        self.assertEqual(effective_request.get("employment_statuses"), ["current", "former"])
-        self.assertEqual(effective_request.get("must_have_primary_role_buckets"), ["product_management"])
-        self.assertIn("Gemini", list(effective_request.get("organization_keywords") or []))
 
     def test_plan_workflow_uses_cached_authoritative_baseline_without_runtime_backfill(self) -> None:
         snapshot_id = "snapshot-cached-registry-only"
@@ -701,24 +629,6 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(asset_reuse_plan.get("baseline_reuse_available"))
         self.assertEqual(asset_reuse_plan.get("baseline_snapshot_id"), snapshot_id)
         self.assertEqual(asset_reuse_plan.get("baseline_resolution_mode"), "cached_only")
-
-    def test_plan_workflow_infers_openai_scope_from_chatgpt_product_manager_query(self) -> None:
-        planned = self.orchestrator.plan_workflow(
-            {
-                "raw_user_request": "我想找ChatGPT的产品经理",
-            }
-        )
-
-        self.assertEqual(planned["request"]["target_company"], "OpenAI")
-        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
-        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
-        self.assertEqual(planned["request_preview"]["target_company"], "OpenAI")
-        self.assertIn("ChatGPT", planned["request"]["organization_keywords"])
-        self.assertIn("ChatGPT", planned["request_preview"]["organization_keywords"])
-        self.assertEqual(
-            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
-            ["19"],
-        )
 
     def test_plan_workflow_materializes_intent_axes_only_request_normalization(self) -> None:
         class RequestNormalizingModelClient(DeterministicModelClient):
@@ -780,23 +690,6 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(planned["request"]["execution_preferences"]["run_former_search_seed"])
         self.assertIn("Gemini", planned["request"]["organization_keywords"])
         self.assertEqual(planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"], "Google")
-        self.assertEqual(
-            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
-            ["19"],
-        )
-
-    def test_plan_workflow_preserves_unknown_meta_team_keyword_without_hardcoded_mapping(self) -> None:
-        planned = self.orchestrator.plan_workflow(
-            {
-                "raw_user_request": "我想找Meta TBD的产品经理",
-            }
-        )
-
-        self.assertEqual(planned["request"]["target_company"], "Meta")
-        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
-        self.assertIn("TBD", planned["request"]["organization_keywords"])
-        self.assertNotIn("Meta TBD", planned["request"]["organization_keywords"])
-        self.assertIn("TBD", planned["request_preview"]["organization_keywords"])
         self.assertEqual(
             planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
             ["19"],
