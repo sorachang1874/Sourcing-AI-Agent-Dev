@@ -7459,13 +7459,42 @@ def _merge_former_function_shard_executions(
                     if isinstance(snapshot, SearchSeedSnapshot)
                     else str(payload.get("stop_reason") or "").strip()
                 ),
+                # Truncation evidence for the shared roster completion
+                # contract (WS1 Step 2b): an incomplete provider scan on one
+                # former shard must keep the merged lane partial, never
+                # reported as full former coverage.
+                "partial_result": bool(
+                    (
+                        isinstance(snapshot, SearchSeedSnapshot)
+                        and (
+                            str(snapshot.stop_reason or "").strip() == "provider_people_search_incomplete"
+                            or int(dict(snapshot.summary_payload or {}).get("incomplete_provider_query_count") or 0) > 0
+                        )
+                    )
+                    or bool(payload.get("provider_cap_hit"))
+                ),
             }
         )
 
     all_completed = not failed_shard_ids
+    # WS1 Step 2b (2026-07-22): the former lane's completion verdict routes
+    # through the SAME honest contract as the segmented roster (failed shards
+    # count as missing; truncated shards keep the lane partial).
+    completion_resolution = resolve_segmented_roster_completion(
+        expected_shard_ids=[
+            str(dict(shard or {}).get("shard_id") or "").strip()
+            for shard in list(dict(shard_plan or {}).get("shards") or [])
+        ],
+        shard_summaries=[
+            summary for summary in shard_summaries if str(summary.get("status") or "") == "completed"
+        ],
+        completed_stop_reason="",
+        partial_stop_reason="former_function_shards_incomplete",
+    )
+    lane_fully_complete = completion_resolution.get("completion_status") == "completed"
     merged_snapshot = _merge_former_function_shard_snapshots(
         shard_snapshots,
-        stop_reason_override="" if all_completed else "former_function_shards_incomplete",
+        stop_reason_override="" if lane_fully_complete else "former_function_shards_incomplete",
     )
     entry_count = len(merged_snapshot.entries) if isinstance(merged_snapshot, SearchSeedSnapshot) else 0
     requested_profile_urls = (
@@ -7499,16 +7528,25 @@ def _merge_former_function_shard_executions(
         "provider_retry_item_count": len(provider_retry_items),
         "former_function_shard_plan": shard_plan,
         "former_function_shard_summaries": shard_summaries,
+        "former_function_shard_completion": completion_resolution,
     }
     if failed_shard_ids:
         payload["failed_former_function_shard_ids"] = list(failed_shard_ids)
-    if all_completed:
+    if all_completed and lane_fully_complete:
         status = "completed"
         detail = (
             f"Recovered {entry_count} former-member search-seed candidates across "
             f"{len(shard_results)} per-function shard(s)."
             if entry_count
             else "Former-member search completed but did not add any new candidates."
+        )
+    elif all_completed:
+        truncated = ", ".join(list(completion_resolution.get("truncated_shard_ids") or []))
+        status = "completed"
+        detail = (
+            f"Recovered {entry_count} former-member search-seed candidates, but shard(s) "
+            f"{truncated or completion_resolution.get('missing_shard_ids')} carry truncated/"
+            "incomplete provider coverage — former coverage recorded as PARTIAL, not full."
         )
     else:
         status = "blocked"
