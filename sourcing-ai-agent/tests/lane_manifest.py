@@ -25,6 +25,7 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_live_apify_dataset_salvage.py", "GDM fn8/fn24 salvage adapter contract (function attribution + passthrough preservation)"),
     ("tests/test_live_schema_write_fence.py", "2026-07-22 simulate-rows-in-live-schema incident fence"),
     ("tests/test_strategy_contract_preflight.py", "strategy_type cross-surface preflight + Step 2/3 flip-target pins (Contract Field Ownership rule 2)"),
+    ("tests/test_pipeline_freeze.py", "R-009 god-file freeze ratchet: test_pipeline only shrinks until salvage-delete completes"),
     ("tests/test_api_auth.py", "C2.1 auth foundation contract"),
     ("tests/test_api_server_identity.py", "server identity contract"),
     ("tests/test_user_private_reads.py", "user-scoped read isolation contract"),

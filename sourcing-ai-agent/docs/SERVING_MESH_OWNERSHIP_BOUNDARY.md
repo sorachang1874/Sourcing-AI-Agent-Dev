@@ -1,6 +1,6 @@
 # Serving Mesh Ownership Boundary — Phase 4 Step 4
 
-> Status: Boundary freeze (2026-06-14). Phase 4 Step 4 deliverable — boundaries frozen now; code extraction lands with M3-M5 (decision #5). No code moved by this doc.
+> Status: Boundary freeze (2026-06-14); Block (a) resolver extraction PULLED FORWARD by operator decision 2026-07-22 (REFACTOR_MASTER_PLAN.md WS2 切片 2 — the +8.4k orchestrator regrowth invalidated waiting for M3-M5). **锚点勘误 2026-07-22**：行号锚点采于 ~74k 行树，现树偏移 ~2.4k 行，动刀前逐段重测。 Phase 4 Step 4 deliverable — boundaries frozen now; code extraction lands with M3-M5 (decision #5). No code moved by this doc.
 
 参见 `docs/PHASE4_ENTANGLED_CORE_DESIGN.md` §2(b) option B2 + §3 Step 4。所有 `file:line` 引用基于 `src/sourcing_agent/orchestrator.py`（73,807 行）@ `9db6943`，已对当前树逐条 re-verify（Audit-B 范围已随 orchestrator 变动而平移）。
 

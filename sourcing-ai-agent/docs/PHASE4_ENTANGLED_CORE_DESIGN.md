@@ -1,6 +1,6 @@
 # Phase 4 Entangled Core 重设计提案
 
-> Status: Proposal awaiting owner review (2026-06-12)。Track A Phase 0–3 收官后的 Phase 4 设计稿（NEXT_TODO Track A Phase 4 要求动工前 owner 过设计讨论——即本稿）。输入 = 三份审计：A（recovery/control core）、B（projection 网数据流与所有权）、C（约束清单）；全部 file:line 锚点已对当前树（`governance-phase0-ttl-20260611` @ cae2ba5）抽查核验。范围约束来自 `SERVICE_GRADE_ARCHITECTURE_PLAN.md` 2026-06-11 Plan Revision：recovery phase 编排 registry 化在 Phase 4 内做；projection/candidate_source/asset_population 网随 M3–M5 拆解，Phase 4 只定边界。
+> Status: Executed (Steps 0-5e complete 2026-06-15); Step 2b cascade-cluster migration re-opened as refactor batch B2 (REFACTOR_MASTER_PLAN.md WS2 切片 1, 2026-07-22)。**锚点勘误 2026-07-22 @69b7423**：本文行号锚点采于 ~74k 行树，现树 82.5k（+8.4k 回涨），普遍偏移 ~2.4k 行——已重测关键锚：`run_worker_recovery_once` = orchestrator.py:40442-42605；其余锚点随 B2 迁移 pass 逐段重测，勿按旧行号直接动刀。原始状态行：Proposal awaiting owner review (2026-06-12)。Track A Phase 0–3 收官后的 Phase 4 设计稿（NEXT_TODO Track A Phase 4 要求动工前 owner 过设计讨论——即本稿）。输入 = 三份审计：A（recovery/control core）、B（projection 网数据流与所有权）、C（约束清单）；全部 file:line 锚点已对当前树（`governance-phase0-ttl-20260611` @ cae2ba5）抽查核验。范围约束来自 `SERVICE_GRADE_ARCHITECTURE_PLAN.md` 2026-06-11 Plan Revision：recovery phase 编排 registry 化在 Phase 4 内做；projection/candidate_source/asset_population 网随 M3–M5 拆解，Phase 4 只定边界。
 
 ## 1. 现状图：post-Phase-3 残余纠缠核心
 
