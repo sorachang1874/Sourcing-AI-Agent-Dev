@@ -5879,13 +5879,24 @@ class AcquisitionEngine:
         snapshot_dir: Path,
     ) -> None:
         latest_pointer = company_dir / "latest_snapshot.json"
+        # Pointer contract: `snapshot_id` is the contract; the recorded
+        # snapshot_dir is derived from THIS company_dir so a pointer can never
+        # aim outside its own assets root (cross-root/cross-machine absolute
+        # paths were the 2026-07 drift: canonical pointers into hot-cache,
+        # test_env_live, and a dead /home path). Readers resolve by id via
+        # asset_paths; a differing caller-supplied dir is kept as provenance.
+        recorded_snapshot_dir = company_dir / str(snapshot_id or "").strip()
+        pointer_payload: dict[str, Any] = {
+            "company_identity": identity.to_record(),
+            "snapshot_id": snapshot_id,
+            "snapshot_dir": str(recorded_snapshot_dir),
+            "pointer_contract": "snapshot_id",
+        }
+        if str(Path(snapshot_dir).expanduser()) != str(recorded_snapshot_dir):
+            pointer_payload["source_snapshot_dir_provenance"] = str(snapshot_dir)
         AssetLogger(company_dir).write_json(
             latest_pointer,
-            {
-                "company_identity": identity.to_record(),
-                "snapshot_id": snapshot_id,
-                "snapshot_dir": str(snapshot_dir),
-            },
+            pointer_payload,
             asset_type="latest_snapshot_pointer",
             source_kind="snapshot_registry",
             is_raw_asset=False,
