@@ -425,6 +425,27 @@ Anthropic 当前 snapshot 的 former enrich 已验证：
   - 成本高
   - 不适合作为 corner-case exact-name 主链
 
+## 能力边界（未收口的 OPEN QUESTIONS，2026-07-22 记录）
+
+> 状态：观察已记录、系统性探测**推迟到 HarvestAPI 配额恢复后**（月配额已耗尽，现在无法
+> live 验证；操作者 2026-07-22 决定：先文档化防知识流失，探针实验设计后择期批量执行）。
+> 每条回答后把结论移入上方对应参数节并在此划掉。
+
+1. **`pastCompanies` 语义不纯**（Meta-TBD 轮观察）：filter 选 past company = Meta 时，
+   返回中疑似仍含**在职 Meta** 的人——past/current 过滤可能是"曾出现在该公司经历"而非
+   "已离开"。影响 former lane 的口径；下游已用 employment_status 二次判定兜底，但
+   provider 侧语义需实验确认（同一人是否同时出现在 current 与 past 查询）。
+2. **返回量远低于 LinkedIn UI 同条件搜索**（Meta-TBD 轮观察）：操作者在 LinkedIn Meta
+   公司页 search 看到 ~150 人的场景，API 只返回 ~60 条。假设待检验：API 的
+   maxItems/分页上限？访客视角 vs 登录视角的可见性差异？actor 内部截断？（注意与已修
+   的 itemCount stale-low 截断 bug 区分——那是我们客户端的，这是 provider 侧的。）
+   探测法：同条件跑满分页 + 对照 UI 人名清单求差集。
+3. **company-employees vs profile-search 成员集不一致**：两个 actor 对同一公司返回的
+   成员列表有差异（并集才接近全集）。已知但未量化——per-lab 的 lane 覆盖差异盘点见
+   salvage 报告（2026-07-22），系统性结论待探针轮。
+4. 探针轮设计要求：小预算（每问题 ≤2 次 run）、固定公司样本（Meta + 一家小公司）、
+   全程记录 run_id/payload/结论回写本节。
+
 ## 当前已知坑
 
 ### 1. 认证失败会伪装成“没有结果”
