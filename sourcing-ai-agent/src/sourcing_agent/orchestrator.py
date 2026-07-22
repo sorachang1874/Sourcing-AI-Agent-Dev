@@ -41679,45 +41679,54 @@ class SourcingOrchestrator:
         registry_drain_results: dict[str, dict[str, Any]] = {}
         for _drain_phase in build_recovery_phase_registry(build_drain_group_phases(self._recovery_drain_registry)):
             registry_drain_results[_drain_phase.name] = run_registry_phase(_drain_phase, _tick_ctx)
-        if same_tick_visibility_handoff_required:
-            board_visible_apply = _skipped_phase(
-                "board_visible_apply",
-                owner=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_OWNER,
-                reason=same_tick_durable_work_handoff_reason,
-                max_sync_work=same_tick_durable_work_handoff_max_sync_work,
-            )
-        else:
-            board_visible_apply = _run_recovery_phase(
-                "board_visible_apply",
-                owner=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_OWNER,
-                max_sync_work="claim and execute ready projection.board_visible_patch.publish workflow_commands only",
-                callback=lambda: self._run_board_visible_apply_queue_once(payload),
-            )
-        board_visible_apply_work_observed = phase_work_observed(board_visible_apply)
-        if same_tick_durable_work_observed:
-            run_scope_projection_finalize = _skipped_phase(
-                "run_scope_projection_finalize",
-                owner=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
-                reason=same_tick_durable_work_handoff_reason,
-                max_sync_work=same_tick_durable_work_handoff_max_sync_work,
-            )
-        elif board_visible_apply_work_observed:
-            run_scope_projection_finalize = _skipped_phase(
-                "run_scope_projection_finalize",
-                owner=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
-                reason="board_visible_apply_consumed_this_tick",
-                max_sync_work=(
-                    "board-visible publication already consumed a bounded durable unit in this tick; "
-                    "run-scope projection finalization remains queued for a later background tick"
+        # Step 2b slice 7: the projection one-durable-unit serial pair on the
+        # registry seam — handoff reason/max_sync flow in as computed skip
+        # payloads via default-arg captures.
+        board_visible_apply = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="board_visible_apply",
+                default_owner=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_OWNER,
+                default_max_sync_work="claim and execute ready projection.board_visible_patch.publish workflow_commands only",
+                guard=lambda ctx, _handoff=same_tick_visibility_handoff_required, _reason=same_tick_durable_work_handoff_reason, _msw=same_tick_durable_work_handoff_max_sync_work: (
+                    SkipDecision(reason=_reason, max_sync_work=_msw) if _handoff else True
                 ),
-            )
-        else:
-            run_scope_projection_finalize = _run_recovery_phase(
-                "run_scope_projection_finalize",
-                owner=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
-                max_sync_work="claim and execute ready projection.run_scope.finalize workflow_commands only",
-                callback=lambda: self._drain_run_scope_projection_finalize_commands(payload),
-            )
+                body=lambda ctx: ctx.run_phase(
+                    "board_visible_apply",
+                    owner=PROJECTION_BOARD_VISIBLE_PATCH_PUBLISH_OWNER,
+                    max_sync_work="claim and execute ready projection.board_visible_patch.publish workflow_commands only",
+                    callback=lambda: ctx.orchestrator._run_board_visible_apply_queue_once(ctx.payload),
+                ),
+            ),
+            _tick_ctx,
+        )
+        board_visible_apply_work_observed = phase_work_observed(board_visible_apply)
+        run_scope_projection_finalize = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="run_scope_projection_finalize",
+                default_owner=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
+                default_max_sync_work="claim and execute ready projection.run_scope.finalize workflow_commands only",
+                guard=lambda ctx, _durable=same_tick_durable_work_observed, _reason=same_tick_durable_work_handoff_reason, _msw=same_tick_durable_work_handoff_max_sync_work, _board_work=board_visible_apply_work_observed: (
+                    SkipDecision(reason=_reason, max_sync_work=_msw)
+                    if _durable
+                    else SkipDecision(
+                        reason="board_visible_apply_consumed_this_tick",
+                        max_sync_work=(
+                            "board-visible publication already consumed a bounded durable unit in this tick; "
+                            "run-scope projection finalization remains queued for a later background tick"
+                        ),
+                    )
+                    if _board_work
+                    else True
+                ),
+                body=lambda ctx: ctx.run_phase(
+                    "run_scope_projection_finalize",
+                    owner=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
+                    max_sync_work="claim and execute ready projection.run_scope.finalize workflow_commands only",
+                    callback=lambda: ctx.orchestrator._drain_run_scope_projection_finalize_commands(ctx.payload),
+                ),
+            ),
+            _tick_ctx,
+        )
         run_scope_projection_finalize_work_observed = phase_work_observed(run_scope_projection_finalize)
         post_projection_workflow_resume: list[dict[str, Any]] = []
         post_projection_workflow_resume_barrier = {}
