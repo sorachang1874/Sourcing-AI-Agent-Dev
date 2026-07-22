@@ -9,7 +9,7 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | State | Route |
 |---|---|---|
-| SALVAGE downloads of 4 orphaned PAID dataset groups (GDM fn8/fn24 function rosters ~2,346 items; TML Full-mode 192 urls; TML roster 220; OpenAI 19-url tail) | awaiting operator gate — dataset GET only, zero new actor runs; **Apify retention clock ticking (runs of 07-19/20)** | salvage report (operator memory `artifacts-intake-20260721/SALVAGE_REPORT.md`) + `scripts/live_apify_dataset_salvage.py` |
+| SALVAGE downloads of 4 orphaned PAID dataset groups (GDM fn8/fn24 function rosters ~2,346 items; TML Full-mode 192 urls; TML roster 220; OpenAI 19-url tail) | operator APPROVED 2026-07-22; **BLOCKED on local VPN/proxy (all external HTTPS = HTTP 000, api.apify.com resolves to fake-IP 198.18.0.104)** — retry probes the moment network returns; retention clock ticking (runs of 07-19/20) | salvage report (operator memory `artifacts-intake-20260721/SALVAGE_REPORT.md`) + `scripts/live_apify_dataset_salvage.py` |
 | google repair snapshot 20260722T054928: review → registry promotion (or discard) | awaiting operator review (pointer already advanced; registry row absent by design) | serving-repair flow + completeness gate (passes on it) |
 | PG shard registry: 2026-07-22 simulate-run rows (result_count=40) mask real lineage | NEW data-debt from salvage audit | salvage report §coverage |
 | HarvestAPI capability-boundary probe round | designed, EXECUTES when quota returns | [HARVESTAPI_PLAYBOOK](sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md) §能力边界 |
