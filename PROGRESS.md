@@ -23,8 +23,16 @@ budget: ≤200 lines, replace-not-append; detail lives in linked module docs / a
 - **Daemon restart preconditions (2026-07-22)**: 3 code fixes landed — alt-ref
   admission/resume asymmetry closed (paid-submit hazard; ORPHAN_SECONDS=0 no longer
   required), authoritative-promotion regression guard (lineage replay + coverage
-  subset), pointer writer self-consistency. **Worker daemon remains STOPPED** by
-  operator decision until harness reorg completes, then runtime-root selection.
+  subset), pointer writer self-consistency. **Daemon RESTARTED 2026-07-22
+  (runtime root = `runtime/`, canonical assets `runtime/company_assets`, default
+  orphan window)**: tick 1 clean (one post-completion reconcile, zero dispatch,
+  queue untouched), google view rebuilt (52/60 destroyed files regenerated,
+  promoted back into canonical; 8 residual: identity.json,
+  retrieval_index_summary.json, 6 strict_roster_only view files — regenerable
+  by their own view passes), OpenAI authoritative untouched (104157/seq6).
+  Tick-1 serving repair minted google repair snapshot 20260722T054928 (canonical,
+  pointer advanced by `repair_authoritative_serving_generation`; registry
+  promotion intentionally awaits review). Log noise gone (2 lines vs 170MB/day).
 - **Harness reorg (2026-07-22, R0–R5 COMPLETE)**: research (external harness
   survey + playbook doc 06/18 + 22-item gap analysis) → executed design
   (`sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md`). Landed: root hygiene +

@@ -9,7 +9,8 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | State | Route |
 |---|---|---|
-| Runtime-root selection + daemon restart (+ google 60-file rebuild via reconcile) | NEXT — harness reorg R0–R5 done 2026-07-22, operator picks root | [Phase C design](sourcing-ai-agent/docs/PHASE_C_DATA_CONSOLIDATION_DESIGN.md) + PROGRESS hazards + daemon-ops skill |
+| Registration-sync code fix: registry `source_path` should record canonical (not hot-cache) location | NEW — tick-1 reconcile re-minted a HOT_CACHE source_path on google 152139 (no longer destructive thanks to 23fb308, but the debt self-regenerates every reconcile) | [Phase C design](sourcing-ai-agent/docs/PHASE_C_DATA_CONSOLIDATION_DESIGN.md) C3 + asset_registration.py |
+| google repair snapshot 20260722T054928: review → registry promotion (or discard) | awaiting operator review (pointer already advanced; registry row absent by design) | serving-repair flow + completeness gate (passes on it) |
 
 ## Next (approved sequence)
 
