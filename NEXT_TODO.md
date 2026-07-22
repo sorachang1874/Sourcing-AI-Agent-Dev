@@ -18,7 +18,8 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | Gate | Route |
 |---|---|---|
-| Parked 23 delivered-job commands: per-job re-enqueue vs cancel | after daemon restart | neutralization ledger (operator memory) |
+| Refactor continuation batches B0a/B0b onward (ratified 2026-07-22; launch each session via `/refactor-goal`) | none for B0a/B0b (offline); later batches queue review requests behind chshapi wall | [REFACTOR_MASTER_PLAN.md](sourcing-ai-agent/docs/REFACTOR_MASTER_PLAN.md) §7 |
+| Parked 23 delivered-job commands: per-job re-enqueue vs cancel | re-enqueue-safe under legacy deletion (pgLegacy Q2 verified); operator decides keep-vs-cancel | neutralization ledger (operator memory) |
 
 ## Blocked on external walls
 

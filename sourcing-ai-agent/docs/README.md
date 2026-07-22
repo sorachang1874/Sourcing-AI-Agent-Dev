@@ -43,6 +43,7 @@ owner matrix in a canonical contract.
 | X-First collection, judge contract, CSV export | X-First package | [../../x-first-researcher-sourcing/AGENTS.md](../../x-first-researcher-sourcing/AGENTS.md) | Export/live scripts: [../scripts/README.md](../scripts/README.md) (R2) |
 | Live ops, paid dispatch, provider quota walls | [Provider runtime](modules/provider-runtime/README.md) | [../../CLAUDE.md](../../CLAUDE.md) critical rules | [HARVESTAPI_PLAYBOOK.md](HARVESTAPI_PLAYBOOK.md) |
 | Directory organization / doc routing itself | Documentation governance | [HARNESS_REORG_DESIGN.md](HARNESS_REORG_DESIGN.md) | This file's routing-gaps table |
+| Refactor continuation (strategy unification / Track A / test governance / mypy / provenance) — what to do next and batch status | Cross-module master plan | [REFACTOR_MASTER_PLAN.md](REFACTOR_MASTER_PLAN.md) | Launch via workspace `/refactor-goal` command |
 | Stale, duplicate, or misplaced document | Documentation governance | [Migration and retirement registry](governance/DOCUMENTATION_MIGRATION_AND_RETIREMENT.md) | Owning module index |
 
 ## Module Routes
