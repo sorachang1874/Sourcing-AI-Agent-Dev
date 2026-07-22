@@ -3143,8 +3143,18 @@ class SeedDiscoveryTest(unittest.TestCase):
                 plan_payload={},
                 runtime_mode="workflow",
             )
-            self.assertEqual(provider.ready_calls[0], ["current::seed_queries::01", "current::seed_queries::02"])
-            self.assertEqual(provider.ready_calls[1], ["current::seed_queries::02"])
+            expected_keys = [
+                _search_seed_worker_key("seed_queries", index, "current", query_text=query)
+                for index, query in enumerate(
+                    [
+                        '"Jane Doe" "Thinking Machines Lab" site:linkedin.com/in',
+                        '"John Smith" "Thinking Machines Lab" site:linkedin.com/in',
+                    ],
+                    start=1,
+                )
+            ]
+            self.assertEqual(provider.ready_calls[0], expected_keys)
+            self.assertEqual(provider.ready_calls[1], expected_keys[1:])
 
     def test_discover_worker_direct_fetch_updates_batch_manifest(self) -> None:
         class _BatchSearchProvider:
@@ -3429,7 +3439,9 @@ class SeedDiscoveryTest(unittest.TestCase):
                     "artifact_paths": {},
                     "entries": [
                         {
-                            "task_key": "seed_queries::01",
+                            "task_key": _search_seed_worker_key(
+                                "seed_queries", 1, "", query_text='"Jane Doe" "Thinking Machines Lab"'
+                            ),
                             "query": '"Jane Doe" "Thinking Machines Lab"',
                             "search_state": {
                                 "provider_name": provider.provider_name,
@@ -3475,7 +3487,9 @@ class SeedDiscoveryTest(unittest.TestCase):
                 prefetched_search_artifact_paths={},
                 prefetched_search_raw_path=str(cached_raw_path),
                 prefetched_search_manifest_path=str(manifest_path),
-                prefetched_search_manifest_key="seed_queries::01",
+                prefetched_search_manifest_key=_search_seed_worker_key(
+                    "seed_queries", 1, "", query_text='"Jane Doe" "Thinking Machines Lab"'
+                ),
             )
             self.assertEqual(provider.execute_calls, 0)
             self.assertEqual(result["worker_status"], "completed")
