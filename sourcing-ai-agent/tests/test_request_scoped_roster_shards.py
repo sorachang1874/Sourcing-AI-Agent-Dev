@@ -915,6 +915,41 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
         return execution, fetch_calls
 
+    def test_former_only_strategy_routes_to_the_former_lane_not_keyword_pool(self) -> None:
+        # WS1 Step 2a (2026-07-22): standalone former-only requests must take
+        # the SAME per-function former lane as the full-roster companion seed.
+        # Before this change strategy_type=former_employee_search on the roster
+        # task dispatched into _acquire_search_seed_pool (keyword recall) and
+        # never reached build_request_scoped_former_search_shard_plan — the
+        # divergence pinned by test_strategy_contract_preflight PIN_step2.
+        calls: list[str] = []
+        with unittest.mock.patch.object(
+            self.acquisition_engine,
+            "_acquire_former_search_seed",
+            side_effect=lambda *a, **k: calls.append("former_lane") or "former-execution",
+        ), unittest.mock.patch.object(
+            self.acquisition_engine,
+            "_acquire_search_seed_pool",
+            side_effect=lambda *a, **k: calls.append("keyword_pool") or "pool-execution",
+        ):
+            task = self._task({"strategy_type": "former_employee_search"})
+            result = self.acquisition_engine.execute_task(
+                task,
+                JobRequest.from_payload(
+                    {
+                        "raw_user_request": "Former Lovable people",
+                        "query": "Lovable former employees",
+                        "target_company": "Lovable",
+                        "categories": ["employee"],
+                        "employment_statuses": ["former"],
+                    }
+                ),
+                "Lovable",
+                {"company_identity": self.identity, "snapshot_dir": Path(self.tempdir.name)},
+            )
+        self.assertEqual(calls, ["former_lane"])
+        self.assertEqual(result, "former-execution")
+
     def test_roster_defaults_to_per_function_shards_with_us_location(self) -> None:
         # Ratified contract (2026-07-19 directive, re-ratified 2026-07-22):
         # a plain roster request defaults to per-function shards (technical

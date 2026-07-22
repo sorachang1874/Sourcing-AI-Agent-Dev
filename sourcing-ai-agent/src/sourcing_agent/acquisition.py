@@ -977,7 +977,16 @@ class AcquisitionEngine:
                 if company_key == "anthropic" and use_local_anthropic_assets:
                     return self._anthropic_local_asset_task(task, bootstrap_summary or {}, state)
                 return self._acquire_full_roster(task, state, job_request)
-            if strategy_type in {"scoped_search_roster", "former_employee_search"}:
+            if strategy_type == "former_employee_search":
+                # WS1 Step 2a (2026-07-22): a former-ONLY request takes the SAME
+                # per-function former lane as the full-roster companion seed
+                # (build_request_scoped_former_search_shard_plan via
+                # _acquire_default_former_search_seed) instead of the legacy
+                # keyword seed pool — standalone and companion former recall
+                # were divergent contracts (the same lane got per-function
+                # shards as a companion but broad/keyword recall standalone).
+                return self._acquire_former_search_seed(task, state, job_request)
+            if strategy_type == "scoped_search_roster":
                 return self._acquire_search_seed_pool(task, state, job_request)
             if strategy_type == "investor_firm_roster":
                 return self._acquire_investor_firm_roster(task, state, job_request)

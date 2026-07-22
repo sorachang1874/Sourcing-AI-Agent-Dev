@@ -132,14 +132,16 @@ class UnificationFlipTargetPinsTest(unittest.TestCase):
         self.assertEqual(with_large_profile.acquisition_strategy.strategy_type, "scoped_search_roster")
 
     def test_PIN_step2_former_only_hijacks_roster_task_without_former_plan(self) -> None:
-        # WS1 Step 2 flip target: a former-only request today rides the
-        # acquire_full_roster task with strategy_type=former_employee_search
-        # (executor: acquisition.py strategy dispatch -> keyword seed pool) and
-        # gets NO per-function former shard plan — while the same former lane
-        # run as a full-roster companion DOES (acquisition.py
-        # _acquire_default_former_search_seed). After Step 2 both routes must
-        # produce the per-function former shard plan (employment_status as a
-        # first-class shard parameter).
+        # WS1 Step 2 flip target — PLANNING layer. Step 2a (2026-07-22)
+        # already unified the EXECUTION dispatch: former_employee_search now
+        # routes through _acquire_former_search_seed (per-function former
+        # shard plan), pinned by test_request_scoped_roster_shards::
+        # test_former_only_strategy_routes_to_the_former_lane_not_keyword_pool.
+        # This pin holds the remaining PLANNING-layer facts: the former-only
+        # request still hijacks the roster task's strategy_type and the plan
+        # carries no per-function former shard metadata — Step 2b (schema/
+        # merge unification, employment_status as a first-class shard
+        # parameter) flips these.
         plan = _plan(FORMER_ONLY)
         self.assertEqual(plan.acquisition_strategy.strategy_type, "former_employee_search")
         roster_task = next(
