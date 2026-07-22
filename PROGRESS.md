@@ -25,14 +25,16 @@ budget: ≤200 lines, replace-not-append; detail lives in linked module docs / a
   required), authoritative-promotion regression guard (lineage replay + coverage
   subset), pointer writer self-consistency. **Worker daemon remains STOPPED** by
   operator decision until harness reorg completes, then runtime-root selection.
-- **Harness reorg (2026-07-22)**: research (external harness survey + playbook
-  doc 06/18 + 22-item gap analysis) + design committed
-  (`sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md`); **R0–R2 DONE**
-  (26bcff4/60fa305/bc8b5d4): root hygiene + legacy archive, single entry chain
-  (README/AGENTS/CLAUDE → snapshots → docs router → module index), bounded
-  snapshots, tool-native skills (/takeover, live-wave, review-gate, daemon-ops,
-  session-handoff), scripts registry at `sourcing-ai-agent/scripts/README.md`.
-  R3–R5 (docs lifecycle / deliverables manifest / CI lints) await approval.
+- **Harness reorg (2026-07-22, R0–R5 COMPLETE)**: research (external harness
+  survey + playbook doc 06/18 + 22-item gap analysis) → executed design
+  (`sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md`). Landed: root hygiene +
+  legacy archive; single entry chain (README/AGENTS/CLAUDE → snapshots → docs
+  router → module index); tool-native skills + /takeover; scripts registry
+  (`scripts/README.md`); status-banner gate FULLY GREEN (81 files bannered);
+  deliverables tier with tracked MANIFEST (6 CSVs checksummed, payloads out of
+  git); link gate green across all 366 first-party docs; docs gates wired into
+  backend-ci. Remaining follow-ups live in the migration registry + router gap
+  table (per-module doc migration passes, ARCHITECTURE/MODULES refresh).
 
 ## Standing walls / hazards
 

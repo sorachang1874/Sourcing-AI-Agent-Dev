@@ -1,6 +1,6 @@
 # Harness Reorganization Design v1 — directory organization + routing mechanism
 
-> Status: Current design (proposed→executing). Owner: operator. Harness reorg phases R0-R5; supersedes nothing; retire when the migration registry closes all phases.
+> Status: Executed (R0-R5 complete 2026-07-22: 26bcff4/60fa305/bc8b5d4/e4a5562/ccfeb2f/7960588). Owner: operator. Retained as the reorg record; remaining follow-ups (per-module doc migration passes, ARCHITECTURE/MODULES refresh) are tracked in the migration registry and router gap table.
 
 ```
 status: proposed        owner: operator (via takeover session)
