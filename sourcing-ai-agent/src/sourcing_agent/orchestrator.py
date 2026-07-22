@@ -41154,62 +41154,73 @@ class SourcingOrchestrator:
             _tick_ctx,
         )
         provider_control_open_work: dict[str, Any] = {}
-        profile_refill_event_level_materialization_followup = {"status": "skipped", "reason": "job_scope_missing"}
         profile_refill_work_observed = phase_work_observed(profile_prefetch_refill)
-        if (
-            explicit_job_id
-            and profile_prefetch_refill_enabled
-            and not worker_recovery_handoff_required
-            and profile_refill_work_observed
-            and not _tick_ctx.profile_refill_submit_observed_this_tick
-        ):
+
+        def _event_followup_body(ctx: TickContext) -> Any:
             provider_control_open_work = _provider_control_open_work_summary()
-            profile_refill_local_apply_limit, profile_refill_board_visible_limit = _provider_control_visibility_limits(
+            local_apply_limit, board_visible_limit = _provider_control_visibility_limits(
                 provider_control_open_work,
-                local_apply_limit=_coerce_int(payload.get("event_level_local_apply_limit"), 1),
-                board_visible_limit=_coerce_int(payload.get("event_level_board_visible_limit"), 1),
+                local_apply_limit=_coerce_int(ctx.payload.get("event_level_local_apply_limit"), 1),
+                board_visible_limit=_coerce_int(ctx.payload.get("event_level_board_visible_limit"), 1),
             )
-            profile_refill_event_level_materialization_followup = _run_recovery_phase(
+            return ctx.run_phase(
                 "profile_refill_event_level_materialization_followup",
                 owner="event_level_local_apply_to_board_visible",
                 max_sync_work=(
                     "bounded local_apply_closure then board_visible_delta_apply for one job; "
                     "provider-control-open ticks use a one-item visibility budget"
                 ),
-                callback=lambda: self._drain_event_level_materialization_for_job(
-                    job_id=explicit_job_id,
+                callback=lambda: ctx.orchestrator._drain_event_level_materialization_for_job(
+                    job_id=ctx.explicit_job_id,
                     source="worker_recovery_tick_after_profile_refill",
-                    local_apply_limit=profile_refill_local_apply_limit,
-                    board_visible_limit=profile_refill_board_visible_limit,
+                    local_apply_limit=local_apply_limit,
+                    board_visible_limit=board_visible_limit,
                 ),
             )
-        else:
-            profile_refill_event_level_materialization_followup = _skipped_phase(
-                "profile_refill_event_level_materialization_followup",
-                owner="event_level_local_apply_to_board_visible",
-                reason=(
-                    "profile_prefetch_refill_disabled_by_payload"
-                    if explicit_job_id and not profile_prefetch_refill_enabled
-                    else "worker_recovery_durable_handoff_to_daemon_tick"
-                    if explicit_job_id and worker_recovery_handoff_required
-                    else "profile_refill_submit_handoff_to_next_tick"
-                    if explicit_job_id and _tick_ctx.profile_refill_submit_observed_this_tick
-                    else "no_profile_refill_event_work"
-                    if explicit_job_id and profile_prefetch_refill_enabled
-                    else "job_scope_missing"
+
+        profile_refill_event_level_materialization_followup = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="profile_refill_event_level_materialization_followup",
+                default_owner="event_level_local_apply_to_board_visible",
+                default_max_sync_work="no job-scoped event-level drain after profile refill",
+                guard=lambda ctx, _handoff=worker_recovery_handoff_required, _work=profile_refill_work_observed: (
+                    True
+                    if (
+                        ctx.explicit_job_id
+                        and ctx.profile_prefetch_refill_enabled
+                        and not _handoff
+                        and _work
+                        and not ctx.profile_refill_submit_observed_this_tick
+                    )
+                    else SkipDecision(
+                        reason=(
+                            "profile_prefetch_refill_disabled_by_payload"
+                            if ctx.explicit_job_id and not ctx.profile_prefetch_refill_enabled
+                            else "worker_recovery_durable_handoff_to_daemon_tick"
+                            if ctx.explicit_job_id and _handoff
+                            else "profile_refill_submit_handoff_to_next_tick"
+                            if ctx.explicit_job_id and ctx.profile_refill_submit_observed_this_tick
+                            else "no_profile_refill_event_work"
+                            if ctx.explicit_job_id and ctx.profile_prefetch_refill_enabled
+                            else "job_scope_missing"
+                        ),
+                        max_sync_work=(
+                            "no event-level drain after disabled profile refill"
+                            if ctx.explicit_job_id and not ctx.profile_prefetch_refill_enabled
+                            else "worker recovery tick yielded durable local-apply and board-visible work to the next daemon tick"
+                            if ctx.explicit_job_id and _handoff
+                            else "profile refill already submitted provider work in this tick; durable local-apply and board-visible work stay queued"
+                            if ctx.explicit_job_id and ctx.profile_refill_submit_observed_this_tick
+                            else "profile refill did not dispatch or queue provider work in this tick"
+                            if ctx.explicit_job_id and ctx.profile_prefetch_refill_enabled
+                            else "no job-scoped event-level drain after profile refill"
+                        ),
+                    )
                 ),
-                max_sync_work=(
-                    "no event-level drain after disabled profile refill"
-                    if explicit_job_id and not profile_prefetch_refill_enabled
-                    else "worker recovery tick yielded durable local-apply and board-visible work to the next daemon tick"
-                    if explicit_job_id and worker_recovery_handoff_required
-                    else "profile refill already submitted provider work in this tick; durable local-apply and board-visible work stay queued"
-                    if explicit_job_id and _tick_ctx.profile_refill_submit_observed_this_tick
-                    else "profile refill did not dispatch or queue provider work in this tick"
-                    if explicit_job_id and profile_prefetch_refill_enabled
-                    else "no job-scoped event-level drain after profile refill"
-                ),
-            )
+                body=_event_followup_body,
+            ),
+            _tick_ctx,
+        )
         profile_refill_event_work_observed = phase_work_observed(profile_refill_event_level_materialization_followup)
         board_visible_ready_before_local_apply = (
             explicit_job_id.strip()
