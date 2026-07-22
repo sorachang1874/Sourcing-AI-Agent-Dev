@@ -11,6 +11,7 @@
 | 脚本 | 用途 |
 |---|---|
 | `live_apify_dataset_salvage.py` | 把已付费的孤儿 Apify dataset（job 取消未物化）采纳为 candidate documents + 合并快照；复用 candidate_materialization ingest/consolidate 与 connector 匹配/缓存键 |
+| `live_promote_company_snapshot.py` | 单快照定向晋升（registry 守卫翻转 + 指针同步）或 `--provenance-only` 注册；默认 dry-run 打印守卫预测。存在原因：`rebuild-company-serving-view` 是跨全部历史快照的合并清扫（2026-07-22 google 75 分钟未翻转且混入 simulate 源），晋升本身只需两个 O(1) 操作 |
 | `live_profile_fetch_slot_fill.py` | 并发 slot-fill profile fetch（4–8 批；只抓 candidate_documents 减缓存命中的缺失 url；connector 二次缓存防重；断言 live 双闸否则 fail closed） |
 | `live_candidate_profile_enrich.py` | 缓存 profile 的 headline/location/experience/education/languages 回填 candidate documents（幂等、先备份） |
 | `live_layering_run.py` | 对 salvage 快照跑华人分层（`allow_candidate_documents_source=True`；DeepSeek 复核走 MODEL_PROVIDER_* env） |

@@ -9,9 +9,9 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | State | Route |
 |---|---|---|
-| Review 3 salvage snapshots `*/20260722T113432` (google fn-attributed 2,337; tml 230 + 192 Full-mode profiles; openai 3,136 + 258 envelopes) → promote or keep as provenance-only | **salvage EXECUTED 2026-07-22** (8/8 datasets downloaded, counts exact, zero new actor runs); pointers/registry deliberately untouched — promotion is operator review | salvage report §EXECUTION (operator memory `artifacts-intake-20260721/SALVAGE_REPORT.md`) |
-| google repair snapshot 20260722T054928: review → registry promotion (or discard) | awaiting operator review (pointer already advanced; registry row absent by design) | serving-repair flow + completeness gate (passes on it) |
-| PG shard registry: 2026-07-22 simulate-run rows (result_count=40) mask real lineage | NEW data-debt from salvage audit | salvage report §coverage |
+| Salvage lineage backfill: register real Apify receipts (google fn8/fn24, tml roster+Full-mode, openai batch) as shard-registry rows from `*/20260722T113432` manifests | closeout DONE 2026-07-22 (google serving cutover 40-simulate→221424/4,297 REAL; tml/openai cache-merge + provenance rows; simulate snapshots quarantine-renamed; R-033); this backfill is the remaining forward step — `scripts/backfill_acquisition_shard_query_families.py --rebuild-from-assets --dry-run` first | R-033 + salvage report §5 |
+| profile_fetched flag reconciliation: openai 20 closures + tml Full-mode upgrades not yet visible in counts | envelopes merged into authoritative snapshots' harvest_profiles; flags/PG counts need the supplement flow | company_asset_supplement + R-033 |
+| 8 stalled `running` workflow_current_state rows (7 cancelled jobs + orphan `tml_full_fetch_20260719`) → terminalize; decide 2 stale pending plan_review_sessions (#2 OpenAI, #7 Google, 07-19/20) | latent resurrection surface + the only non-terminal legacy-strategy carriers (blocks legacy-fallback deletion conditions) | recon-gap-close pgLegacy inventory (2026-07-22) |
 | HarvestAPI capability-boundary probe round | designed, EXECUTES when quota returns | [HARVESTAPI_PLAYBOOK](sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md) §能力边界 |
 
 ## Next (approved sequence)

@@ -576,7 +576,10 @@ def load_company_snapshot_registry_summary(
         except (OSError, ValueError, json.JSONDecodeError):
             raw_payload = {}
 
-    snapshot_metadata = dict(raw_payload.get("snapshot") or {})
+    raw_snapshot_metadata = raw_payload.get("snapshot")
+    # Salvage-family envelopes record "snapshot" as the snapshot-id string
+    # (provenance), not a metadata dict — tolerate both shapes.
+    snapshot_metadata = dict(raw_snapshot_metadata) if isinstance(raw_snapshot_metadata, dict) else {}
     source_snapshot_selection = dict(snapshot_metadata.get("source_snapshot_selection") or {})
     selected_snapshot_ids = _normalize_string_list(
         source_snapshot_selection.get("selected_snapshot_ids")
