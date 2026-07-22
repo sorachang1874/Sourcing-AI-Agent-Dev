@@ -10,7 +10,6 @@ from .cohort_provider_compiler import COHORT_PROVIDER_MANIFEST_VERSION, CohortPr
 from .cohort_selection import CohortSelectionValidationError, explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
-    REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
     build_default_company_employee_shard_policy,
     build_request_scoped_company_employee_query_plan,
     resolve_roster_lane_function_ids,
@@ -613,7 +612,6 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
         company_scope=company_scope,
         filter_hints=filter_hints,
         cost_policy=cost_policy,
-        organization_execution_profile=dict(acquisition_strategy.get("organization_execution_profile") or {}),
         max_pages=max_pages,
         locations=list(request_roster_plan.get("locations") or []) if strategy_type == "full_company_roster" else None,
         exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
@@ -643,22 +641,22 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
         if str(task.get("task_type") or "") == "acquire_full_roster":
             metadata["max_pages"] = max_pages
             metadata["page_limit"] = FULL_COMPANY_EMPLOYEES_PAGE_LIMIT
-            request_roster_shards: list[dict[str, Any]] = []
-            if request_roster_function_ids and not shard_policy:
-                # Small-company lane (no adaptive policy): concrete per-function
-                # shards.  Large-org/keyword policies carry the same request
-                # axes and expand per function during probe planning.
-                request_roster_shards = list(request_roster_plan.get("shards") or [])
             metadata["company_employee_base_filters"] = (
                 dict(request_roster_plan.get("company_filters") or {}) if strategy_type == "full_company_roster" else {}
             )
-            metadata["company_employee_shards"] = request_roster_shards
-            if request_roster_shards:
-                metadata["company_employee_shard_policy"] = {}
-                metadata["company_employee_shard_strategy"] = REQUEST_FUNCTION_PARTITION_STRATEGY_ID
-            else:
-                metadata["company_employee_shard_policy"] = shard_policy
-                metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
+            # This writer emits ONLY the unified adaptive-policy shape since
+            # 2026-07-22 (strategy Step 1): for full_company_roster the policy
+            # builder is total (never empty), and for other strategies the
+            # roster request plan is empty — the former "small-company
+            # concrete-shards" write branch was unreachable both ways.
+            # STORED plans with the explicit-shards shape (policy={} +
+            # company_employee_shards + request-function-partition strategy id)
+            # remain a READ contract honored by the acquisition
+            # task_metadata_shards path until the pre-unification rows age out
+            # (deletion conditions: RESIDUAL_LEDGER / master plan WS1).
+            metadata["company_employee_shards"] = []
+            metadata["company_employee_shard_policy"] = shard_policy
+            metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
         if str(task.get("task_type") or "") == "enrich_profiles_multisource":
             metadata["publication_source_families"] = publication_families
         task["metadata"] = _sync_task_intent_view_from_metadata(metadata)
@@ -677,7 +675,6 @@ def _build_review_company_shard_policy(
     company_scope: list[str],
     filter_hints: dict[str, Any],
     cost_policy: dict[str, Any],
-    organization_execution_profile: dict[str, Any] | None = None,
     max_pages: int,
     locations: list[str] | None = None,
     exclude_locations: list[str] | None = None,
@@ -686,10 +683,8 @@ def _build_review_company_shard_policy(
     if strategy_type != "full_company_roster":
         return {}
     return build_default_company_employee_shard_policy(
-        normalize_company_key(target_company),
         max_pages=max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-        organization_execution_profile=organization_execution_profile,
         locations=locations,
         exclude_locations=exclude_locations,
         request_function_ids=request_function_ids,

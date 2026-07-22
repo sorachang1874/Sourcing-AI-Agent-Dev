@@ -342,28 +342,28 @@ def resolve_roster_lane_function_ids(
 
 
 def build_default_company_employee_shard_policy(
-    company_key: str,
     *,
     max_pages: int,
     page_limit: int,
-    organization_execution_profile: dict[str, Any] | None = None,
     locations: list[str] | None = None,
     exclude_locations: list[str] | None = None,
     request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """THE roster shard policy — one unified contract for every company.
 
-    There is no large/small-org fork (operator directive 2026-07-20): every
-    company gets the same probe-driven, per-function shard policy.  Each
-    selected function id becomes its own probe root (never one combined
-    multi-function query); a root that still exceeds the provider cap stays a
-    capped shard with explicit overflow metadata (``allow_overflow_partial``)
-    so capped coverage is never reported as complete.
+    There is no large/small-org fork (operator directive 2026-07-20, ratified
+    again 2026-07-22): every company gets the same probe-driven, per-function
+    shard policy.  Each selected function id becomes its own probe root (never
+    one combined multi-function query); a root that still exceeds the provider
+    cap stays a capped shard with explicit overflow metadata
+    (``allow_overflow_partial``) so capped coverage is never reported as
+    complete.
 
     ``locations=None`` defaults to the United States; an explicit list
     (including ``[]``) is the single-writer request value and is never merged
-    with the default.  ``company_key`` / ``organization_execution_profile``
-    are retained for caller compatibility and no longer alter the policy.
+    with the default.  ``company_key`` and ``organization_execution_profile``
+    were removed from this signature on 2026-07-22 (strategy Step 1): company
+    identity and org size are structurally unable to alter the policy.
     """
 
     effective_locations = (

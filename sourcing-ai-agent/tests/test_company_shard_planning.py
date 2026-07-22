@@ -11,10 +11,8 @@ from sourcing_agent.company_shard_planning import (
 class CompanyShardPlanningTest(unittest.TestCase):
     def test_build_default_company_employee_shard_policy_for_anthropic(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "anthropic",
             max_pages=100,
             page_limit=25,
-            organization_execution_profile={"org_scale_band": "large"},
         )
 
         self.assertEqual(policy["strategy_id"], "adaptive_us_technical_partition")
@@ -26,7 +24,6 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
     def test_build_default_company_employee_shard_policy_for_xai(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "xai",
             max_pages=100,
             page_limit=25,
         )
@@ -38,7 +35,6 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
     def test_build_default_company_employee_shard_policy_for_openai_uses_large_org_technical_default(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "openai",
             max_pages=100,
             page_limit=25,
         )
@@ -54,7 +50,6 @@ class CompanyShardPlanningTest(unittest.TestCase):
         # submitted independently.  No probe or shard may ever carry a merged
         # multi-function function_ids list.
         policy = build_default_company_employee_shard_policy(
-            "openai",
             max_pages=100,
             page_limit=25,
         )
@@ -86,7 +81,6 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
     def test_plan_company_employee_shards_from_policy_plans_one_root_per_function(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "anthropic",
             max_pages=100,
             page_limit=25,
         )
@@ -117,7 +111,6 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
     def test_plan_company_employee_shards_from_policy_blocks_when_function_root_stays_over_cap(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "anthropic",
             max_pages=100,
             page_limit=25,
         )
@@ -145,7 +138,6 @@ class CompanyShardPlanningTest(unittest.TestCase):
 
     def test_plan_company_employee_shards_allows_capped_function_root_when_overflow_enabled(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "xai",
             max_pages=100,
             page_limit=25,
         )

@@ -212,11 +212,12 @@
 - raw asset 更清晰
 - 可以先积累人口池，再按优先级补 detail
 
-## 大组织的 adaptive shard 策略
+## adaptive shard 策略（size-agnostic：所有公司同一条路径）
 
-对于 Anthropic 这类 large org，当前不再把 shard 写死成固定的两片。
+没有大/小公司之分（operator 指令 2026-07-19/20，2026-07-22 重申批准）：每个公司都走同一条
+probe-driven per-function shard 路径，org 规模只影响 shard 参数（分页预算等），不选择策略。
 
-现在的推荐做法是：
+推荐做法（对任何公司）：
 
 1. 先对 root scope 发 `company-employees` probe
 2. 从 Harvest actor log 里解析：
@@ -298,11 +299,10 @@ full-company roster（Harvest company-employees）lane 的一等请求参数，�
   任何模式下都不接受把多个显式 functionIds 合并进一条查询。未选择 function 时保持现状：一条
   不分片的查询（小公司 TML 行为），只携带 location filters。
 
-分片形态（所有公司同一规则）：
+分片形态（所有公司同一规则，2026-07-22 起 planner/review 只发统一 adaptive-policy 形状；
+存量 concrete-shards 形状仅为读侧兼容合同，见 RESIDUAL_LEDGER R-034）：
 
-- 无 adaptive policy（小公司）：直接生成 concrete `request_function_partition` shard，每个
-  function id 一片，不再 probe。
-- large-org adaptive / `large_org_keyword_probe_mode`：policy 的 root_filters 一律改用请求级
+- 统一 adaptive policy：policy 的 root_filters 一律改用请求级
   location/exclude（替换默认 US），并把显式 function 选择记录为 `request_function_ids`；probe
   planner（`plan_company_employee_shards_from_policy`）先把 scope 展成**每个 function 一个 probe
   root**，只有当某个 function root 自己超过 provider cap 时才在该 function 内做可选的 keyword

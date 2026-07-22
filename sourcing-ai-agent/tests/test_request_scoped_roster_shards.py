@@ -42,7 +42,6 @@ from sourcing_agent.company_shard_planning import (
     DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS,
     REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
     build_default_company_employee_shard_policy,
-    build_large_org_keyword_probe_shard_policy,
     build_request_scoped_company_employee_query_plan,
     plan_company_employee_shards_from_policy,
     request_scoped_roster_function_ids,
@@ -64,6 +63,7 @@ from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.plan_review import apply_plan_review_decision
 from sourcing_agent.planning import _build_provider_execution_manifest, build_sourcing_plan
 from sourcing_agent.query_signal_knowledge import function_id_selectable_labels
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import (
     AppSettings,
@@ -297,35 +297,10 @@ class RequestScopedRosterFunctionIdsTest(unittest.TestCase):
 class RosterLanePlanningTest(unittest.TestCase):
     """Planner + plan-review wiring of the request-scoped roster contract."""
 
-    def test_plan_builds_request_shards_for_cohort_role_request(self) -> None:
-        request = JobRequest.from_payload(_cohort_request_payload())
-
-        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
-        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
-
-        self.assertEqual(acquire_task.metadata["strategy_type"], "full_company_roster")
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], REQUEST_FUNCTION_PARTITION_STRATEGY_ID)
-        self.assertEqual(acquire_task.metadata["company_employee_shard_policy"], {})
-        shards = acquire_task.metadata["company_employee_shards"]
-        self.assertEqual(len(shards), 2)
-        self.assertEqual(
-            [shard["company_filters"] for shard in shards],
-            [
-                {"locations": ["United States"], "function_ids": ["24"]},
-                {"locations": ["United States"], "function_ids": ["8"]},
-            ],
-        )
-        self.assertEqual(acquire_task.metadata["company_employee_base_filters"], {"locations": ["United States"]})
-        self.assertEqual(
-            acquire_task.metadata["intent_view"]["company_employee_shards"],
-            acquire_task.metadata["company_employee_shards"],
-        )
-        self.assertEqual(
-            acquire_task.metadata["intent_view"]["company_employee_shard_strategy"],
-            REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
-        )
-
-    def test_text_role_request_without_cohort_stays_unsharded(self) -> None:
+    def test_text_role_request_does_not_buy_shards_beyond_the_default(self) -> None:
+        # F4 under the ratified default: a soft text-inferred role never
+        # expands the shard set — the policy is byte-identical to a plain
+        # request's technical default.
         request = JobRequest.from_payload(
             {
                 "raw_user_request": "Lovable multimodal researcher full roster",
@@ -341,11 +316,14 @@ class RosterLanePlanningTest(unittest.TestCase):
 
         self.assertEqual(acquire_task.metadata["strategy_type"], "full_company_roster")
         self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
-        self.assertEqual(acquire_task.metadata["company_employee_shard_policy"], {})
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "")
+        policy = dict(acquire_task.metadata["company_employee_shard_policy"])
+        self.assertEqual(sorted(policy["request_function_ids"]), ["24", "8"])
         self.assertEqual(acquire_task.metadata["company_employee_base_filters"], {"locations": ["United States"]})
 
-    def test_plan_without_function_selection_keeps_unsharded_small_company_behavior(self) -> None:
+    def test_plan_without_function_selection_gets_the_technical_default_policy(self) -> None:
+        # Ratified default (2026-07-19/22): no function selection means the
+        # TECHNICAL default per-function policy (['8','24']) — never the
+        # 233a31a-era unsharded query.
         request = JobRequest.from_payload(
             {
                 "raw_user_request": "Lovable full roster",
@@ -361,8 +339,10 @@ class RosterLanePlanningTest(unittest.TestCase):
 
         self.assertEqual(acquire_task.metadata["strategy_type"], "full_company_roster")
         self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
-        self.assertEqual(acquire_task.metadata["company_employee_shard_policy"], {})
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "")
+        policy = dict(acquire_task.metadata["company_employee_shard_policy"])
+        self.assertEqual(sorted(policy["request_function_ids"]), ["24", "8"])
+        self.assertEqual(policy["root_filters"], {"locations": ["United States"]})
+        self.assertTrue(acquire_task.metadata["company_employee_shard_strategy"])
 
     def test_large_org_policy_uses_request_locations_instead_of_us_default(self) -> None:
         request = JobRequest.from_payload(
@@ -409,53 +389,10 @@ class RosterLanePlanningTest(unittest.TestCase):
         self.assertEqual(policy.get("root_filters", {}).get("locations"), ["Germany"])
         self.assertEqual(policy.get("root_filters", {}).get("exclude_locations"), ["France"])
 
-    def test_keyword_probe_policy_composes_request_axes_and_function_expansion(self) -> None:
-        request = JobRequest.from_payload(
-            _cohort_request_payload(
-                target_company="Google",
-                raw_user_request="给我 Google 负责多模态和 Veo 的研究员和工程师，全量跑 roster。",
-                query="Google multimodal Veo roster",
-                keywords=["multimodal", "Veo", "Nano Banana"],
-                target_locations=["Germany"],
-                execution_preferences={
-                    "use_company_employees_lane": True,
-                    "confirmed_company_scope": ["Google", "Google DeepMind"],
-                },
-            )
-        )
-
-        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
-        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
-
-        policy = dict(acquire_task.metadata["company_employee_shard_policy"] or {})
-        self.assertEqual(str(policy.get("strategy_id") or ""), "adaptive_large_org_keyword_probe")
-        self.assertEqual(policy.get("root_filters", {}).get("locations"), ["Germany"])
-        self.assertEqual(policy.get("request_function_ids"), ["24", "8"])
-        self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
-
-    def test_keyword_probe_policy_without_cohort_keeps_priority_function_axis(self) -> None:
-        request = JobRequest.from_payload(
-            {
-                "raw_user_request": "给我 Google 负责多模态和 Veo 的研究员，全量跑 roster。",
-                "target_company": "Google",
-                "keywords": ["multimodal", "Veo", "Nano Banana"],
-                "execution_preferences": {
-                    "use_company_employees_lane": True,
-                    "confirmed_company_scope": ["Google", "Google DeepMind"],
-                },
-            }
-        )
-
-        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
-        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
-
-        policy = dict(acquire_task.metadata["company_employee_shard_policy"] or {})
-        self.assertEqual(str(policy.get("strategy_id") or ""), "adaptive_large_org_keyword_probe")
-        self.assertNotIn("request_function_ids", policy)
-        self.assertEqual(policy.get("root_filters", {}).get("locations"), ["United States"])
-        self.assertEqual(policy.get("root_filters", {}).get("function_ids"), ["8", "9", "19", "24"])
-
-    def test_plan_review_sync_preserves_request_scoped_shards(self) -> None:
+    def test_plan_review_sync_rebuilds_the_unified_policy_with_request_axes(self) -> None:
+        # Since 2026-07-22 (strategy Step 1) review sync emits ONLY the
+        # unified adaptive-policy shape; cohort roles resolve into the
+        # policy's function ids, never into explicit metadata shards.
         request_payload = _cohort_request_payload()
         plan_payload = {
             "target_company": "Reflection AI",
@@ -480,27 +417,17 @@ class RosterLanePlanningTest(unittest.TestCase):
         _updated_request, updated_plan = apply_plan_review_decision(request_payload, plan_payload, {})
         acquire_task = updated_plan["acquisition_tasks"][0]
 
-        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], REQUEST_FUNCTION_PARTITION_STRATEGY_ID)
-        self.assertEqual(acquire_task["metadata"]["company_employee_shard_policy"], {})
-        self.assertEqual(
-            [shard["company_filters"] for shard in acquire_task["metadata"]["company_employee_shards"]],
-            [
-                {"locations": ["United States"], "function_ids": ["24"]},
-                {"locations": ["United States"], "function_ids": ["8"]},
-            ],
-        )
-        self.assertEqual(acquire_task["metadata"]["company_employee_base_filters"], {"locations": ["United States"]})
-
-
-class RequestFunctionPolicyExpansionTest(unittest.TestCase):
-    """F2: explicit functions expand into per-function probe roots before subdivision."""
-
+        metadata = acquire_task["metadata"]
+        self.assertEqual(metadata["company_employee_shards"], [])
+        policy = dict(metadata["company_employee_shard_policy"])
+        self.assertEqual(policy["request_function_ids"], ["24", "8"])
+        self.assertEqual(policy["root_filters"], {"locations": ["United States"]})
+        self.assertEqual(metadata["company_employee_shard_strategy"], policy["strategy_id"])
+        self.assertEqual(metadata["company_employee_base_filters"], {"locations": ["United States"]})
     def test_partition_policy_expands_one_probe_root_per_function(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "acme-large",
             max_pages=100,
             page_limit=25,
-            organization_execution_profile={"org_scale_band": "large"},
             locations=["Germany"],
             request_function_ids=["24", "8"],
         )
@@ -532,54 +459,10 @@ class RequestFunctionPolicyExpansionTest(unittest.TestCase):
         for shard in plan["shards"]:
             self.assertEqual(shard["strategy_id"], REQUEST_FUNCTION_PARTITION_STRATEGY_ID)
 
-    def test_keyword_policy_subdivides_only_over_cap_function_roots(self) -> None:
-        policy = build_large_org_keyword_probe_shard_policy(
-            "google",
-            company_scope=["Google", "Google DeepMind"],
-            keyword_hints=["multimodal", "Veo"],
-            max_pages=100,
-            page_limit=25,
-            locations=["Germany"],
-            request_function_ids=["24", "8"],
-        )
-
-        def probe_fn(filters, context):  # noqa: ANN001, ANN202
-            function_ids = list(dict(filters).get("function_ids") or [])
-            search_query = str(filters.get("search_query") or "")
-            if function_ids == ["24"] and not search_query:
-                return {"status": "completed", "estimated_total_count": 800}
-            if function_ids == ["8"] and not search_query:
-                return {"status": "completed", "estimated_total_count": 4200}
-            if "Multimodal" in search_query:
-                return {"status": "completed", "estimated_total_count": 1800}
-            if "Veo" in search_query:
-                return {"status": "completed", "estimated_total_count": 900}
-            return {"status": "completed", "estimated_total_count": 0}
-
-        plan = plan_company_employee_shards_from_policy(policy, probe_fn=probe_fn)
-
-        self.assertEqual(plan["status"], "planned")
-        self.assertEqual(plan["reason"], "request_function_partition")
-        # function_24 (800, within cap) stays one shard; function_8 (4200) gets
-        # the optional keyword subdivision inside its own scope.
-        shard_ids = sorted(str(shard["shard_id"]) for shard in plan["shards"])
-        self.assertEqual(
-            shard_ids,
-            ["function_24__germany_researcher", "function_8__kw_multimodal", "function_8__kw_veo"],
-        )
-        for shard in plan["shards"]:
-            function_ids = shard["company_filters"]["function_ids"]
-            self.assertEqual(len(function_ids), 1)
-            self.assertEqual(shard["company_filters"]["locations"], ["Germany"])
-        multimodal = next(shard for shard in plan["shards"] if shard["shard_id"] == "function_8__kw_multimodal")
-        self.assertIn("Multimodal", str(multimodal["company_filters"]["search_query"] or ""))
-
     def test_empty_function_scope_is_skipped_not_blocking(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "acme-large",
             max_pages=100,
             page_limit=25,
-            organization_execution_profile={"org_scale_band": "large"},
             request_function_ids=["24", "9"],
         )
 
@@ -595,10 +478,8 @@ class RequestFunctionPolicyExpansionTest(unittest.TestCase):
 
     def test_all_empty_function_scopes_block_closed(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "acme-large",
             max_pages=100,
             page_limit=25,
-            organization_execution_profile={"org_scale_band": "large"},
             request_function_ids=["24", "9"],
         )
 
@@ -624,7 +505,9 @@ class ManifestLaneParityTest(unittest.TestCase):
         payload.update(overrides)
         return AcquisitionStrategyPlan(**payload)  # type: ignore[arg-type]
 
-    def test_unsharded_lane_carries_exact_base_filters_and_paging(self) -> None:
+    def test_roster_lane_carries_exact_base_filters_and_paging(self) -> None:
+        # Current adaptive-policy metadata shape (the only shape the
+        # planner/review writer has emitted since 2026-07-22).
         task = AcquisitionTask(
             task_id="acquire-full-roster",
             task_type="acquire_full_roster",
@@ -637,7 +520,13 @@ class ManifestLaneParityTest(unittest.TestCase):
                 "page_limit": 25,
                 "company_employee_base_filters": {"locations": ["Germany"], "exclude_locations": ["France"]},
                 "company_employee_shards": [],
-                "company_employee_shard_policy": {},
+                "company_employee_shard_policy": build_default_company_employee_shard_policy(
+                    max_pages=20,
+                    page_limit=25,
+                    locations=["Germany"],
+                    exclude_locations=["France"],
+                    request_function_ids=["24", "8"],
+                ),
             },
         )
 
@@ -658,8 +547,12 @@ class ManifestLaneParityTest(unittest.TestCase):
         self.assertEqual(lane["page_limit"], 25)
         # No combined function axis on an unsharded lane.
         self.assertNotIn("function_ids", lane["company_filters"])
-
-    def test_one_manifest_lane_per_request_function_shard(self) -> None:
+    def test_stored_explicit_shards_metadata_still_surfaces_the_lane_view(self) -> None:
+        # READ contract for pre-unification stored plans (R-034 forensics
+        # 2026-07-22): explicit-shards metadata no longer gets one manifest
+        # lane per shard — the manifest is the lane view (base filters +
+        # paging); per-shard execution parity is pinned by
+        # test_planner_emitted_metadata_shards_drive_the_same_lane.
         shards = build_request_scoped_company_employee_query_plan(
             target_locations=["Germany"],
             function_ids=["24", "8"],
@@ -690,41 +583,16 @@ class ManifestLaneParityTest(unittest.TestCase):
         )
 
         roster_lanes = [lane for lane in manifest["lanes"] if lane["provider"] == "harvest_company_employees"]
-        self.assertEqual(len(roster_lanes), 2)
-        by_lane_id = {lane["lane_id"]: lane for lane in roster_lanes}
-        self.assertEqual(
-            sorted(by_lane_id),
-            ["current_company_employees::function_24", "current_company_employees::function_8"],
-        )
-        self.assertEqual(
-            by_lane_id["current_company_employees::function_24"]["company_filters"],
-            {
-                "current_companies": ["Lovable"],
-                "locations": ["Germany"],
-                "exclude_locations": ["France"],
-                "function_ids": ["24"],
-            },
-        )
-        self.assertEqual(
-            by_lane_id["current_company_employees::function_8"]["company_filters"],
-            {
-                "current_companies": ["Lovable"],
-                "locations": ["Germany"],
-                "exclude_locations": ["France"],
-                "function_ids": ["8"],
-            },
-        )
-        for lane in roster_lanes:
-            self.assertEqual(lane["reason"], "request_function_partition")
-            self.assertEqual(lane["max_pages"], 20)
-            self.assertEqual(lane["page_limit"], 25)
-
+        self.assertEqual(len(roster_lanes), 1)
+        lane_filters = dict(roster_lanes[0].get("company_filters") or {})
+        lane_filters.pop("current_companies", None)
+        self.assertEqual(lane_filters, {"locations": ["Germany"], "exclude_locations": ["France"]})
+        self.assertEqual(roster_lanes[0]["max_pages"], 20)
+        self.assertEqual(roster_lanes[0]["page_limit"], 25)
     def test_adaptive_policy_lane_shows_planned_root_scope_and_function_expansion(self) -> None:
         policy = build_default_company_employee_shard_policy(
-            "acme-large",
             max_pages=100,
             page_limit=25,
-            organization_execution_profile={"org_scale_band": "large"},
             locations=["Germany"],
             request_function_ids=["24", "8"],
         )
@@ -755,33 +623,6 @@ class ManifestLaneParityTest(unittest.TestCase):
         self.assertEqual(lane["reason"], "adaptive_shard_probe_pending")
         self.assertEqual(lane["company_filters"]["locations"], ["Germany"])
         self.assertEqual(lane["request_function_ids"], ["24", "8"])
-
-    def test_plan_manifest_parity_for_cohort_role_request(self) -> None:
-        request = JobRequest.from_payload(
-            _cohort_request_payload(target_locations=["Germany"], exclude_target_locations=["France"])
-        )
-
-        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
-        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
-
-        # The canonical roster plan in task metadata equals the unified
-        # query-plan builder output for the same request (single source).
-        expected = build_request_scoped_company_employee_query_plan(
-            target_locations=["Germany"],
-            exclude_target_locations=["France"],
-            function_ids=["24", "8"],
-            max_pages=20,
-            page_limit=25,
-        )
-        self.assertEqual(
-            [dict(shard.get("company_filters") or {}) for shard in acquire_task.metadata["company_employee_shards"]],
-            [dict(shard.get("company_filters") or {}) for shard in expected["shards"]],
-        )
-        self.assertEqual(acquire_task.metadata["company_employee_base_filters"], expected["company_filters"])
-
-
-class SegmentedCompletionContractTest(unittest.TestCase):
-    """F6: capped/truncated shards keep the roster partial, never completed."""
 
     def test_completed_only_when_all_expected_present_and_untruncated(self) -> None:
         completion = resolve_segmented_roster_completion(
@@ -878,25 +719,19 @@ class RosterEntryMergeContractTest(unittest.TestCase):
         self.assertEqual(key_shard_a, roster_merge_dedupe_key(dict(row), shard_id="function_24"))
 
 
-class RosterLaneExecutionTest(unittest.TestCase):
-    """Engine-level lane wiring, fully scripted: no provider/model/network calls."""
+class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """Engine-level lane wiring, fully scripted: no provider/model/network calls.
+
+    Uses the repo-standard per-class PG schema fixture; the 233a31a-era manual
+    DSN patch left the schema unselected and blocked every engine run
+    (R-034 forensics, 2026-07-22)."""
 
     def setUp(self) -> None:
-        dsn = str(resolve_control_plane_postgres_dsn(_REPO_ROOT) or "").strip()
-        if not dsn:
-            self.skipTest("no local control-plane Postgres DSN resolved (make local-pg-up)")
-        self._env_patch = unittest.mock.patch.dict(
-            os.environ,
-            {"SOURCING_CONTROL_PLANE_POSTGRES_DSN": dsn},
-            clear=False,
-        )
-        self._env_patch.start()
-        self.addCleanup(self._env_patch.stop)
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
         self.catalog = AssetCatalog.discover()
-        self.store = ControlPlaneStore(Path(self.tempdir.name) / "test.db")
-        self.addCleanup(self.store.close)
+        self.store = self.make_pg_store(str(Path(self.tempdir.name) / "test.db"))
         self.settings = AppSettings(
             project_root=Path(self.tempdir.name),
             runtime_dir=Path(self.tempdir.name),
@@ -1044,12 +879,34 @@ class RosterLaneExecutionTest(unittest.TestCase):
             stop_reason = str((stop_reason_by_function or {}).get(function_ids[0] if function_ids else "", ""))
             return self._snapshot(Path(_snapshot_dir), entries, stop_reason=stop_reason)
 
+        def _fake_probe(
+            _identity,
+            _snapshot_dir,
+            *,
+            asset_logger=None,
+            company_filters=None,
+            probe_id="",
+            title="",
+            max_pages=1,
+            page_limit=25,
+            runtime_timing_overrides=None,
+        ):
+            # Ratified roster contract (2026-07-19/22): every roster request is
+            # probe-planned into per-function shards; this stub answers each
+            # probe root with an under-cap estimate so planning always
+            # proceeds to per-shard fetches.
+            return {"status": "completed", "estimated_total_count": 100}
+
         snapshot_dir = self.settings.company_assets_dir / "lovable" / "snapshot-request-scoped"
         snapshot_dir.mkdir(parents=True, exist_ok=True)
         with unittest.mock.patch.object(
             type(self.acquisition_engine.harvest_company_connector),
             "fetch_company_roster",
             side_effect=_fake_fetch,
+        ), unittest.mock.patch.object(
+            type(self.acquisition_engine.harvest_company_connector),
+            "probe_company_roster_query",
+            side_effect=_fake_probe,
         ):
             execution = self.acquisition_engine._acquire_full_roster(
                 self._task(metadata),
@@ -1058,7 +915,11 @@ class RosterLaneExecutionTest(unittest.TestCase):
             )
         return execution, fetch_calls
 
-    def test_unsharded_roster_defaults_to_united_states_location_filter(self) -> None:
+    def test_roster_defaults_to_per_function_shards_with_us_location(self) -> None:
+        # Ratified contract (2026-07-19 directive, re-ratified 2026-07-22):
+        # a plain roster request defaults to per-function shards (technical
+        # default ['8','24']) with the US location default — never one
+        # combined unsharded query (the 233a31a-era expectation).
         execution, fetch_calls = self._run_roster(
             {
                 "raw_user_request": "Lovable full roster",
@@ -1070,10 +931,15 @@ class RosterLaneExecutionTest(unittest.TestCase):
         )
 
         self.assertEqual(execution.status, "completed")
-        self.assertEqual(len(fetch_calls), 1)
-        self.assertEqual(fetch_calls[0]["company_filters"], {"locations": ["United States"]})
+        self.assertEqual(
+            sorted(json.dumps(c["company_filters"], sort_keys=True) for c in fetch_calls),
+            [
+                json.dumps({"function_ids": ["24"], "locations": ["United States"]}, sort_keys=True),
+                json.dumps({"function_ids": ["8"], "locations": ["United States"]}, sort_keys=True),
+            ],
+        )
 
-    def test_unsharded_roster_passes_multi_region_locations_and_excludes(self) -> None:
+    def test_roster_shards_all_carry_multi_region_locations_and_excludes(self) -> None:
         execution, fetch_calls = self._run_roster(
             {
                 "raw_user_request": "Lovable full roster",
@@ -1087,14 +953,18 @@ class RosterLaneExecutionTest(unittest.TestCase):
         )
 
         self.assertEqual(execution.status, "completed")
-        self.assertEqual(len(fetch_calls), 1)
-        self.assertEqual(
-            fetch_calls[0]["company_filters"],
-            {"locations": ["United States", "Germany"], "exclude_locations": ["France"]},
-        )
+        self.assertEqual(len(fetch_calls), 2)
+        for call in fetch_calls:
+            filters = call["company_filters"]
+            self.assertEqual(filters["locations"], ["United States", "Germany"])
+            self.assertEqual(filters["exclude_locations"], ["France"])
+            self.assertIn(filters["function_ids"], (["8"], ["24"]))
 
-    def test_text_role_request_executes_one_unsharded_query(self) -> None:
-        # F4: a soft text-inferred role must not buy per-function shards.
+    def test_text_role_request_does_not_alter_the_default_shard_set(self) -> None:
+        # F4 (updated to the ratified fn-sharded default, 2026-07-22): a soft
+        # text-inferred role must not buy shards beyond the technical default —
+        # the shard set is identical to a plain roster request (['8','24']),
+        # with no role-derived additions.
         execution, fetch_calls = self._run_roster(
             {
                 "raw_user_request": "Lovable multimodal researcher full roster",
@@ -1106,8 +976,10 @@ class RosterLaneExecutionTest(unittest.TestCase):
         )
 
         self.assertEqual(execution.status, "completed")
-        self.assertEqual(len(fetch_calls), 1)
-        self.assertEqual(fetch_calls[0]["company_filters"], {"locations": ["United States"]})
+        self.assertEqual(
+            sorted(tuple(c["company_filters"].get("function_ids") or []) for c in fetch_calls),
+            [("24",), ("8",)],
+        )
 
     def test_cohort_functions_dispatch_one_query_per_function_with_provenance(self) -> None:
         execution, fetch_calls = self._run_roster(
@@ -1295,7 +1167,7 @@ class RosterLaneExecutionTest(unittest.TestCase):
             {"24", "8"},
         )
 
-    def test_manifest_task_worker_parity_for_unsharded_request(self) -> None:
+    def test_manifest_task_worker_parity_for_default_sharded_request(self) -> None:
         # F3/F9 cross-layer preflight: the request's location axes must read
         # identically in task metadata, the provider manifest lane, and the
         # filters the worker actually submits.
@@ -1324,8 +1196,11 @@ class RosterLaneExecutionTest(unittest.TestCase):
 
         execution, fetch_calls = self._run_roster(request_payload)
         self.assertEqual(execution.status, "completed")
-        self.assertEqual(len(fetch_calls), 1)
-        self.assertEqual(fetch_calls[0]["company_filters"], expected_filters)
+        self.assertEqual(len(fetch_calls), 2)
+        for call in fetch_calls:
+            filters = dict(call["company_filters"])
+            self.assertIn(filters.pop("function_ids"), (["8"], ["24"]))
+            self.assertEqual(filters, expected_filters)
 
 
 if __name__ == "__main__":

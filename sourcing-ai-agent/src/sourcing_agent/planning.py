@@ -1013,7 +1013,13 @@ def _build_provider_execution_manifest(
             operation="company_employees",
             company_filters={
                 "current_companies": current_companies,
-                **dict(shard_policy.get("root_filters") or {}),
+                # Stored pre-unification plans carry no adaptive policy; their
+                # location axes live in company_employee_base_filters — fall
+                # back so the lane view never drops the request scope.
+                **(
+                    dict(shard_policy.get("root_filters") or {})
+                    or dict(acquire_metadata.get("company_employee_base_filters") or {})
+                ),
             },
             display_label="Harvest company employees",
             reason="adaptive_shard_probe_pending",
@@ -1123,10 +1129,8 @@ def _default_full_company_roster_shard_policy(
     if acquisition_strategy.strategy_type != "full_company_roster":
         return {}
     return build_default_company_employee_shard_policy(
-        normalize_company_key(target_company),
         max_pages=max_pages,
         page_limit=page_limit,
-        organization_execution_profile=acquisition_strategy.organization_execution_profile,
         locations=locations,
         exclude_locations=exclude_locations,
         request_function_ids=request_function_ids,
