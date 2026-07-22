@@ -131,28 +131,29 @@ class UnificationFlipTargetPinsTest(unittest.TestCase):
         self.assertEqual(without_profile.acquisition_strategy.strategy_type, "full_company_roster")
         self.assertEqual(with_large_profile.acquisition_strategy.strategy_type, "scoped_search_roster")
 
-    def test_PIN_step2_former_only_hijacks_roster_task_without_former_plan(self) -> None:
-        # WS1 Step 2 flip target — PLANNING layer. Step 2a (2026-07-22)
-        # already unified the EXECUTION dispatch: former_employee_search now
-        # routes through _acquire_former_search_seed (per-function former
-        # shard plan), pinned by test_request_scoped_roster_shards::
-        # test_former_only_strategy_routes_to_the_former_lane_not_keyword_pool.
-        # This pin holds the remaining PLANNING-layer facts: the former-only
-        # request still hijacks the roster task's strategy_type and the plan
-        # carries no per-function former shard metadata — Step 2b (schema/
-        # merge unification, employment_status as a first-class shard
-        # parameter) flips these.
+    def test_step2_former_only_plan_carries_the_per_function_former_shard_plan(self) -> None:
+        # FLIPPED 2026-07-22 (WS1 Step 2a executor + 2b planning): a
+        # former-only request now (a) routes execution through the per-function
+        # former lane and (b) carries the request-scoped former shard plan in
+        # the roster task metadata — the technical-default function ids
+        # ['8','24'] each become one past-company shard with the plan-derived
+        # marker, mirroring the full-roster companion seed. strategy_type
+        # still reads former_employee_search on the roster task (task-shape
+        # unification is Step 5 convergence scope).
         plan = _plan(FORMER_ONLY)
         self.assertEqual(plan.acquisition_strategy.strategy_type, "former_employee_search")
         roster_task = next(
             task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster"
         )
-        self.assertEqual(roster_task.metadata.get("strategy_type"), "former_employee_search")
-        self.assertNotIn("former_function_shard_plan", roster_task.metadata)
-        self.assertEqual(
-            [task.task_type for task in plan.acquisition_tasks if "former" in task.task_type],
-            [],
-        )
+        former_plan = dict(roster_task.metadata.get("former_function_shard_plan") or {})
+        self.assertEqual(sorted(former_plan.get("function_ids") or []), ["24", "8"])
+        shards = list(former_plan.get("shards") or [])
+        self.assertEqual(len(shards), 2)
+        for shard in shards:
+            hints = dict(shard.get("filter_hints") or {})
+            self.assertEqual(len(hints.get("function_ids") or []), 1)
+            self.assertTrue(hints.get("_former_function_shard_plan_derived"))
+            self.assertTrue(hints.get("past_companies"))
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from .company_shard_planning import (
     MODEL_WRITTEN_PLANNING_MODES,
     build_default_company_employee_shard_policy,
     build_request_scoped_company_employee_query_plan,
+    build_request_scoped_former_search_shard_plan,
     resolve_roster_lane_function_ids,
 )
 from .domain import (
@@ -626,6 +627,20 @@ def _build_acquisition_tasks(
             page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
             exclude_target_locations=request.exclude_target_locations,
         )
+    former_function_shard_plan: dict[str, Any] = {}
+    if acquisition_strategy.strategy_type == "former_employee_search":
+        # WS1 Step 2b-ii (2026-07-22): a former-ONLY plan mints the same
+        # request-scoped per-function former shard plan the full-roster
+        # companion seed uses (employment status is a lane parameter, not a
+        # strategy fork). The plan is reviewable at plan time; execution
+        # re-derives past companies from the RESOLVED company identity
+        # (request-wins), so the planning-time list is the request scope.
+        former_function_shard_plan = build_request_scoped_former_search_shard_plan(
+            function_ids=list(roster_function_ids or []),
+            past_companies=list(acquisition_strategy.company_scope or []),
+            locations=request.target_locations,
+            exclude_locations=request.exclude_target_locations,
+        )
     request_roster_function_ids = list(request_roster_plan.get("function_ids") or [])
     company_employee_shard_policy = _default_full_company_roster_shard_policy(
         target_company=effective_target_company,
@@ -688,6 +703,11 @@ def _build_acquisition_tasks(
                 "company_employee_shards": [],
                 "company_employee_shard_policy": company_employee_shard_policy,
                 "company_employee_shard_strategy": company_employee_shard_strategy,
+                **(
+                    {"former_function_shard_plan": former_function_shard_plan}
+                    if former_function_shard_plan
+                    else {}
+                ),
                 "include_former_search_seed": include_former_search_seed,
                 "intent_view": _task_intent_view_with_overrides(
                     task_intent_view,

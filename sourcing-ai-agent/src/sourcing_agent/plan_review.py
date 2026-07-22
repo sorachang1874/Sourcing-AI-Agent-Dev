@@ -12,6 +12,7 @@ from .company_registry import normalize_company_key
 from .company_shard_planning import (
     build_default_company_employee_shard_policy,
     build_request_scoped_company_employee_query_plan,
+    build_request_scoped_former_search_shard_plan,
     resolve_roster_lane_function_ids,
 )
 from .domain import JobRequest, SourcingPlan
@@ -657,6 +658,20 @@ def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str,
             metadata["company_employee_shards"] = []
             metadata["company_employee_shard_policy"] = shard_policy
             metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
+            if strategy_type == "former_employee_search":
+                # WS1 Step 2b-ii: review sync rebuilds the former-only plan's
+                # per-function former shard plan under the same request axes
+                # (mirrors the planner; execution re-derives past companies
+                # from the resolved identity).
+                metadata["former_function_shard_plan"] = build_request_scoped_former_search_shard_plan(
+                    function_ids=resolve_roster_lane_function_ids(
+                        request_payload,
+                        planning_mode=str(dict(request_payload or {}).get("planning_mode") or ""),
+                    ),
+                    past_companies=list(company_scope or []),
+                    locations=dict(request_payload or {}).get("target_locations"),
+                    exclude_locations=dict(request_payload or {}).get("exclude_target_locations") or [],
+                )
         if str(task.get("task_type") or "") == "enrich_profiles_multisource":
             metadata["publication_source_families"] = publication_families
         task["metadata"] = _sync_task_intent_view_from_metadata(metadata)
