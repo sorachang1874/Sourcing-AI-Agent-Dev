@@ -41229,86 +41229,92 @@ class SourcingOrchestrator:
             and not profile_refill_event_work_observed
             and _ready_board_visible_apply_item_exists()
         )
-        if worker_recovery_handoff_required:
-            local_apply_backlog = _skipped_phase(
-                "local_apply_backlog",
-                owner="local_apply_closure_queue",
-                reason="worker_recovery_durable_handoff_to_daemon_tick",
-                max_sync_work=(
-                    "worker recovery already consumed terminal worker evidence in this tick; "
-                    "local profile delta apply commands remain durable for the next daemon tick"
-                ),
-            )
-        elif profile_refill_event_work_observed:
-            local_apply_backlog = _skipped_phase(
-                "local_apply_backlog",
-                owner="profile_local_apply_command_owner",
-                reason="profile_refill_event_drain_owned_local_apply_this_tick",
-                max_sync_work=(
-                    "profile refill event-level follow-up already consumed a bounded local_apply_closure "
-                    "unit in this tick; remaining local profile delta apply commands stay durable for the next tick"
-                ),
-            )
-        elif _tick_ctx.profile_refill_submit_observed_this_tick:
-            local_apply_backlog = _skipped_phase(
-                "local_apply_backlog",
-                owner="profile_local_apply_command_owner",
-                reason="profile_refill_submit_handoff_to_next_tick",
-                max_sync_work=(
-                    "profile refill already submitted provider work in this tick; local profile delta apply "
-                    "commands remain durable for a later bounded daemon tick"
-                ),
-            )
-        elif board_visible_ready_before_local_apply:
-            local_apply_backlog = _skipped_phase(
-                "local_apply_backlog",
-                owner="profile_local_apply_command_owner",
-                reason="board_visible_apply_ready_prioritized",
-                max_sync_work=(
-                    "board_visible_delta_apply work is already ready; publish one bounded board-visible "
-                    "unit before claiming more local_apply_closure work"
-                ),
-            )
-        else:
+        def _local_apply_backlog_body(ctx: TickContext) -> Any:
             provider_control_open_work = _provider_control_open_work_summary()
-            local_apply_backlog_limit, _ = _provider_control_visibility_limits(
+            backlog_limit, _ = _provider_control_visibility_limits(
                 provider_control_open_work,
-                local_apply_limit=_coerce_int(payload.get("local_apply_closure_item_limit"), 20),
+                local_apply_limit=_coerce_int(ctx.payload.get("local_apply_closure_item_limit"), 20),
                 board_visible_limit=1,
             )
-            local_apply_backlog_group_limit = max(
+            backlog_group_limit = max(
                 1,
                 min(
-                    local_apply_backlog_limit,
+                    backlog_limit,
                     _coerce_int(
-                        payload.get("local_apply_backlog_group_limit"),
+                        ctx.payload.get("local_apply_backlog_group_limit"),
                         _env_int("LOCAL_APPLY_BACKLOG_GROUP_LIMIT", 4),
                     ),
                 ),
             )
-            local_apply_backlog_phase_budget_ms = max(
+            backlog_phase_budget_ms = max(
                 0,
                 _coerce_int(
-                    payload.get("local_apply_backlog_phase_budget_ms"),
+                    ctx.payload.get("local_apply_backlog_phase_budget_ms"),
                     _env_int("LOCAL_APPLY_BACKLOG_PHASE_BUDGET_MS", 12000),
                 ),
             )
-            local_apply_backlog = _run_recovery_phase(
+            return ctx.run_phase(
                 "local_apply_backlog",
                 owner="profile_local_apply_command_owner",
                 max_sync_work=(
                     "claim and execute ready linkedin.local_profile_delta.apply workflow_commands only; "
                     "legacy local_apply_closure items are payload references during W2c migration"
                 ),
-                callback=lambda: self._run_local_apply_backlog_drain_once(
+                callback=lambda: ctx.orchestrator._run_local_apply_backlog_drain_once(
                     {
-                        **payload,
-                        "local_apply_closure_item_limit": local_apply_backlog_limit,
-                        "local_apply_closure_item_group_limit": local_apply_backlog_group_limit,
-                        "local_apply_closure_phase_budget_ms": local_apply_backlog_phase_budget_ms,
+                        **ctx.payload,
+                        "local_apply_closure_item_limit": backlog_limit,
+                        "local_apply_closure_item_group_limit": backlog_group_limit,
+                        "local_apply_closure_phase_budget_ms": backlog_phase_budget_ms,
                     }
                 ),
             )
+
+        local_apply_backlog = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="local_apply_backlog",
+                default_owner="profile_local_apply_command_owner",
+                default_max_sync_work="claim and execute ready linkedin.local_profile_delta.apply workflow_commands only",
+                guard=lambda ctx, _handoff=worker_recovery_handoff_required, _event_work=profile_refill_event_work_observed, _board_ready=board_visible_ready_before_local_apply: (
+                    SkipDecision(
+                        owner="local_apply_closure_queue",
+                        reason="worker_recovery_durable_handoff_to_daemon_tick",
+                        max_sync_work=(
+                            "worker recovery already consumed terminal worker evidence in this tick; "
+                            "local profile delta apply commands remain durable for the next daemon tick"
+                        ),
+                    )
+                    if _handoff
+                    else SkipDecision(
+                        reason="profile_refill_event_drain_owned_local_apply_this_tick",
+                        max_sync_work=(
+                            "profile refill event-level follow-up already consumed a bounded local_apply_closure "
+                            "unit in this tick; remaining local profile delta apply commands stay durable for the next tick"
+                        ),
+                    )
+                    if _event_work
+                    else SkipDecision(
+                        reason="profile_refill_submit_handoff_to_next_tick",
+                        max_sync_work=(
+                            "profile refill already submitted provider work in this tick; local profile delta apply "
+                            "commands remain durable for a later bounded daemon tick"
+                        ),
+                    )
+                    if ctx.profile_refill_submit_observed_this_tick
+                    else SkipDecision(
+                        reason="board_visible_apply_ready_prioritized",
+                        max_sync_work=(
+                            "board_visible_delta_apply work is already ready; publish one bounded board-visible "
+                            "unit before claiming more local_apply_closure work"
+                        ),
+                    )
+                    if _board_ready
+                    else True
+                ),
+                body=_local_apply_backlog_body,
+            ),
+            _tick_ctx,
+        )
         local_apply_backlog_work_observed = phase_work_observed(local_apply_backlog)
         legacy_materialization_adapter_enabled = _legacy_materialization_adapter_enabled_for_payload(payload)
         legacy_materialization_adapter = run_registry_phase(
