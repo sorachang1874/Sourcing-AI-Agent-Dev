@@ -436,3 +436,23 @@ def merge_profile_refill_results(primary: Any, secondary: Any) -> dict[str, Any]
     merged["post_worker_recovery"] = secondary_payload
     return merged
 
+
+def profile_refill_worker_submit_observed(result: Any) -> bool:
+    if not isinstance(result, dict):
+        return False
+    owner_drain = profile_refill_owner_drain_payload(result)
+    return (
+        _coerce_int(result.get("queued_worker_count"), 0) > 0
+        or _coerce_int(result.get("dispatched_url_count"), 0) > 0
+        or _coerce_int(owner_drain.get("queued_worker_count"), 0) > 0
+        or _coerce_int(owner_drain.get("dispatched_url_count"), 0) > 0
+    )
+
+def profile_refill_command_planned_observed(result: Any) -> bool:
+    if not isinstance(result, dict):
+        return False
+    return (
+        _coerce_int(result.get("planned_command_count"), 0) > 0
+        or _coerce_int(result.get("planned_worker_count"), 0) > 0
+        or _coerce_int(result.get("planned_url_count"), 0) > 0
+    )

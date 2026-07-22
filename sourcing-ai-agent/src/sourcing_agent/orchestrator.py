@@ -467,6 +467,8 @@ from .recovery_phases import (
     build_drain_group_phases,
     build_recovery_phase_registry,
     merge_profile_refill_results,
+    profile_refill_command_planned_observed,
+    profile_refill_worker_submit_observed,
     phase_work_observed,
     profile_refill_owner_drain_payload,
     run_registry_phase,
@@ -40865,6 +40867,10 @@ class SourcingOrchestrator:
             search_seed_resume_skip_job_ids = self._search_seed_discovery_resume_skip_job_ids(search_seed_discovery)
         explicit_job_id = str(payload.get("job_id") or "").strip()
         profile_prefetch_refill_enabled = _coerce_bool(payload.get("profile_prefetch_refill_enabled"), True)
+        # Step 2b: mirror the settled scope flags into the tick context the
+        # moment they bind — registry phases read ctx, never the raw locals.
+        _tick_ctx.explicit_job_id = explicit_job_id
+        _tick_ctx.profile_prefetch_refill_enabled = profile_prefetch_refill_enabled
         _tick_ctx.profile_refill_submit_observed_this_tick = False
         _tick_ctx.profile_refill_command_planned_this_tick = False
         profile_refill_command_owner_enabled = _coerce_bool(
@@ -40876,63 +40882,54 @@ class SourcingOrchestrator:
             _env_bool("LINKEDIN_PROFILE_URL_TERMINAL_RECORD_COMMAND_OWNER_ENABLED", True),
         )
 
-        def _profile_refill_worker_submit_observed(result: Any) -> bool:
-            if not isinstance(result, dict):
-                return False
-            owner_drain = profile_refill_owner_drain_payload(result)
-            return (
-                _coerce_int(result.get("queued_worker_count"), 0) > 0
-                or _coerce_int(result.get("dispatched_url_count"), 0) > 0
-                or _coerce_int(owner_drain.get("queued_worker_count"), 0) > 0
-                or _coerce_int(owner_drain.get("dispatched_url_count"), 0) > 0
-            )
-
-        def _profile_refill_command_planned_observed(result: Any) -> bool:
-            if not isinstance(result, dict):
-                return False
-            return (
-                _coerce_int(result.get("planned_command_count"), 0) > 0
-                or _coerce_int(result.get("planned_worker_count"), 0) > 0
-                or _coerce_int(result.get("planned_url_count"), 0) > 0
-            )
-
-        pre_worker_profile_prefetch_refill = {"status": "skipped", "reason": "pre_worker_refill_not_requested"}
-        if (
-            explicit_job_id
-            and profile_prefetch_refill_enabled
-            and _coerce_bool(payload.get("profile_prefetch_refill_before_worker_recovery"), False)
-        ):
-            pre_worker_profile_prefetch_refill = _run_recovery_phase(
-                "pre_worker_profile_prefetch_refill",
-                owner="profile_refill_daemon",
-                max_sync_work=(
-                    "remote-provider slot release handoff: registry scan/replan/claim/provider submit "
-                    "before worker completion callbacks"
+        # Step 2b slice 3 (B2, 2026-07-22): first cascade-cluster phase moved
+        # onto the registry seam — guard encodes the exact three-variant skip
+        # ladder; the body routes through ctx.run_phase so the pinned metric
+        # rows are byte-identical.
+        pre_worker_profile_prefetch_refill = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="pre_worker_profile_prefetch_refill",
+                default_owner="profile_refill_daemon",
+                default_max_sync_work="no pre-worker profile refill",
+                guard=lambda ctx: (
+                    True
+                    if (
+                        ctx.explicit_job_id
+                        and ctx.profile_prefetch_refill_enabled
+                        and _coerce_bool(ctx.payload.get("profile_prefetch_refill_before_worker_recovery"), False)
+                    )
+                    else SkipDecision(
+                        reason=(
+                            "profile_prefetch_refill_disabled_by_payload"
+                            if ctx.explicit_job_id and not ctx.profile_prefetch_refill_enabled
+                            else "pre_worker_refill_not_requested"
+                            if ctx.explicit_job_id
+                            else "job_scope_missing"
+                        ),
+                        max_sync_work="no pre-worker profile refill",
+                    )
                 ),
-                callback=lambda: self._run_profile_prefetch_refill_queue_once(
-                    {
-                        **payload,
-                        "profile_prefetch_refill_phase": "pre_worker_profile_prefetch_refill",
-                    }
+                body=lambda ctx: ctx.run_phase(
+                    "pre_worker_profile_prefetch_refill",
+                    owner="profile_refill_daemon",
+                    max_sync_work=(
+                        "remote-provider slot release handoff: registry scan/replan/claim/provider submit "
+                        "before worker completion callbacks"
+                    ),
+                    callback=lambda: ctx.orchestrator._run_profile_prefetch_refill_queue_once(
+                        {
+                            **ctx.payload,
+                            "profile_prefetch_refill_phase": "pre_worker_profile_prefetch_refill",
+                        }
+                    ),
                 ),
-            )
-        else:
-            pre_worker_profile_prefetch_refill = _skipped_phase(
-                "pre_worker_profile_prefetch_refill",
-                owner="profile_refill_daemon",
-                reason=(
-                    "profile_prefetch_refill_disabled_by_payload"
-                    if explicit_job_id and not profile_prefetch_refill_enabled
-                    else "pre_worker_refill_not_requested"
-                    if explicit_job_id
-                    else "job_scope_missing"
-                ),
-                max_sync_work="no pre-worker profile refill",
-            )
-        _tick_ctx.profile_refill_submit_observed_this_tick = _profile_refill_worker_submit_observed(
+            ),
+            _tick_ctx,
+        )
+        _tick_ctx.profile_refill_submit_observed_this_tick = profile_refill_worker_submit_observed(
             pre_worker_profile_prefetch_refill
         )
-        _tick_ctx.profile_refill_command_planned_this_tick = _profile_refill_command_planned_observed(
+        _tick_ctx.profile_refill_command_planned_this_tick = profile_refill_command_planned_observed(
             pre_worker_profile_prefetch_refill
         )
         daemon = self._build_worker_recovery_daemon(payload)
@@ -41021,11 +41018,11 @@ class SourcingOrchestrator:
                 max_sync_work="no profile refill work",
             )
         _tick_ctx.profile_refill_submit_observed_this_tick = (
-            _tick_ctx.profile_refill_submit_observed_this_tick or _profile_refill_worker_submit_observed(profile_prefetch_refill)
+            _tick_ctx.profile_refill_submit_observed_this_tick or profile_refill_worker_submit_observed(profile_prefetch_refill)
         )
         _tick_ctx.profile_refill_command_planned_this_tick = (
             _tick_ctx.profile_refill_command_planned_this_tick
-            or _profile_refill_command_planned_observed(profile_prefetch_refill)
+            or profile_refill_command_planned_observed(profile_prefetch_refill)
         )
         profile_prefetch_refill = merge_profile_refill_results(
             pre_worker_profile_prefetch_refill,
@@ -41078,7 +41075,7 @@ class SourcingOrchestrator:
         )
         _tick_ctx.profile_refill_submit_observed_this_tick = (
             _tick_ctx.profile_refill_submit_observed_this_tick
-            or _profile_refill_worker_submit_observed(profile_refill_command_owner)
+            or profile_refill_worker_submit_observed(profile_refill_command_owner)
         )
         profile_url_terminal_record_command_owner_limit = _coerce_int(
             payload.get("profile_url_terminal_record_command_owner_limit"),
@@ -41422,7 +41419,7 @@ class SourcingOrchestrator:
             )
             _tick_ctx.profile_refill_submit_observed_this_tick = (
                 _tick_ctx.profile_refill_submit_observed_this_tick
-                or _profile_refill_worker_submit_observed(post_event_level_profile_prefetch_refill)
+                or profile_refill_worker_submit_observed(post_event_level_profile_prefetch_refill)
             )
         else:
             post_event_level_profile_prefetch_refill = _skipped_phase(
@@ -42209,7 +42206,7 @@ class SourcingOrchestrator:
             )
             _tick_ctx.profile_refill_submit_observed_this_tick = (
                 _tick_ctx.profile_refill_submit_observed_this_tick
-                or _profile_refill_worker_submit_observed(post_followup_profile_prefetch_refill)
+                or profile_refill_worker_submit_observed(post_followup_profile_prefetch_refill)
             )
         else:
             post_followup_profile_prefetch_refill = _skipped_phase(
