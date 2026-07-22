@@ -24,6 +24,7 @@ last-verified: 2026-07-22
 
 | 新文件 | 保护什么 | 来源 | 运行约束 |
 |---|---|---|---|
+| `tests/test_orchestrator_retrieval.py`（salvage wave 2, 2026-07-22）| execute_retrieval 合同（deterministic summary 默认、asset-population 默认视图跳过打分、snapshot-backed 结果的 job-result-view 持久化、stale candidate-source override 拒绝）| 从冻结 `test_pipeline.py` 移植 ×4（原名同名），PG fixture 重座 + `_write_company_snapshot_candidate_documents` helper 随迁；棘轮 457→453 | 无 |
 | `tests/test_orchestrator_planning.py`（salvage wave 1, 2026-07-22）| plan_workflow 意图推断合同（Gemini→Google/ChatGPT→OpenAI scope、effective-request 元数据、未知关键词保留）| 从冻结的 `test_pipeline.py` 移植（原名同名 ×4：gemini_product_manager_scope / task_metadata_carries_effective_request / openai_scope_from_chatgpt / preserves_unknown_meta_team_keyword）,PG fixture 重座；棘轮 461→457 | 无 PG 之外约束 |
 
 ## Tombstones（退役测试墓碑;删除祖父基线文件必须先落行）
