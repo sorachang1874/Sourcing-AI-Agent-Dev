@@ -4431,7 +4431,7 @@ class SourcingOrchestrator:
         if payload is None:
             return None
         request_payload = dict(payload.get("request") or {})
-        public_payload = {
+        public_payload: dict[str, Any] = {
             "job_id": str(payload.get("job_id") or ""),
             "job_type": str(payload.get("job_type") or ""),
             "status": str(payload.get("status") or ""),
@@ -11125,7 +11125,7 @@ class SourcingOrchestrator:
             overlay_records.append(record)
         if not overlay_records:
             return {}
-        overlay_payload = {
+        overlay_payload: dict[str, Any] = {
             "job_id": normalized_job_id,
             "target_company": str(request.target_company or candidate_source.get("target_company") or "").strip(),
             "snapshot_id": str(candidate_source.get("snapshot_id") or "").strip(),
@@ -12191,7 +12191,7 @@ class SourcingOrchestrator:
         if not patch_candidate_ids:
             return {"status": "skipped", "reason": "current_snapshot_patch_candidates_missing"}
         published_at = _utc_now_iso()
-        metadata_payload = {
+        metadata_payload: dict[str, Any] = {
             "schema_version": 1,
             "asset_population_overlay_path": overlay_path,
             "asset_population_patch": overlay_patch,
@@ -13988,7 +13988,7 @@ class SourcingOrchestrator:
                     apply_items[-1] = dict(waiting_item)
                     result["board_visible_apply_item"] = waiting_item
                 queued_count += 1
-                board_visible_patch = {
+                board_visible_patch: dict[str, Any] = {
                     "status": "waiting_prerequisite",
                     "reason": delta_sync_reason or "candidate_delta_candidates_missing",
                     "item_id": str(board_visible_apply_item.get("item_id") or ""),
@@ -14182,7 +14182,7 @@ class SourcingOrchestrator:
             worker_ids=normalized_worker_ids,
             worker_kind=normalized_worker_kind,
         )
-        item = {
+        closure_item: dict[str, Any] = {
             "item_id": item_id,
             "job_id": job_id,
             "target_company": request.target_company,
@@ -14201,7 +14201,7 @@ class SourcingOrchestrator:
             "metadata": metadata_payload,
         }
         command = self._plan_local_profile_delta_apply_command_for_item(
-            item=item,
+            item=closure_item,
             job=job,
             request=request,
             source=str(source or "inline_incremental_apply_marker").strip(),
@@ -14210,7 +14210,7 @@ class SourcingOrchestrator:
         if not command:
             return {"status": "failed", "reason": "local_apply_closure_command_enqueue_failed"}
         return {
-            **item,
+            **closure_item,
             "workflow_command": self._workflow_command_observation(
                 command,
                 migration_phase="W6_local_profile_delta_apply",
@@ -19802,7 +19802,7 @@ class SourcingOrchestrator:
             }
         prerequisite_reason = str(board_visible_patch.get("reason") or "").strip()
         if patch_status == "waiting_prerequisite" or prerequisite_reason in _BOARD_VISIBLE_DELTA_PREREQUISITE_REASONS:
-            waiting_items: list[dict[str, Any]] = []
+            waiting_items = []
             if not command_owned_payload:
                 for item_id in item_ids:
                     waiting_item = self.store.mark_job_materialization_item_waiting_prerequisite(
@@ -19832,7 +19832,7 @@ class SourcingOrchestrator:
                 "board_visible_patch": board_visible_patch,
             }
         retryable = patch_status not in {"skipped"}
-        failed_items: list[dict[str, Any]] = []
+        failed_items = []
         if not command_owned_payload:
             for item_id in item_ids:
                 failed_item = self.store.mark_job_materialization_item_failed(
@@ -20736,7 +20736,7 @@ class SourcingOrchestrator:
             }
         else:
             board_visible = self._run_board_visible_apply_queue_once(board_visible_payload)
-        payload = {
+        payload: dict[str, Any] = {
             "event_family": "event_level_materialization_followup",
             "schema_version": 1,
             "source": str(source or "").strip(),
@@ -21057,7 +21057,7 @@ class SourcingOrchestrator:
         output_dir.mkdir(parents=True, exist_ok=True)
         full_path = output_dir / "layered_analysis.json"
         summary_path = output_dir / "analysis_summary.json"
-        full_payload = {
+        full_payload: dict[str, Any] = {
             "status": "completed",
             "target_company": target_company,
             "snapshot_id": snapshot_id,
@@ -25233,7 +25233,7 @@ class SourcingOrchestrator:
             )
         except CandidateArtifactError:
             return ""
-        token_parts: list[str] = []
+        token_parts = []
         for path in (
             artifact_store.artifact_dir / "artifact_summary.json",
             artifact_store.artifact_dir / "manifest.json",
@@ -26017,7 +26017,7 @@ class SourcingOrchestrator:
             return payload
         overlay_payload = self._load_candidate_source_asset_population_overlay(candidate_source)
         if overlay_payload:
-            overlay_artifact_summary = {
+            overlay_artifact_summary: dict[str, Any] = {
                 "candidate_count": int(
                     overlay_payload.get("candidate_count")
                     or candidate_source.get("candidate_count")
@@ -30746,7 +30746,7 @@ class SourcingOrchestrator:
         for signal in eligible_signals:
             signal_run_id = str(signal.get("run_id") or "").strip() or "historical-public-web-signals"
             grouped_by_run[signal_run_id].append(signal)
-        aggregate = {
+        aggregate: dict[str, Any] = {
             "asset_count": 0,
             "evidence_count": 0,
             "entity_delta_count": 0,
@@ -46392,7 +46392,7 @@ class SourcingOrchestrator:
                 "owner_specific_control": True,
                 "contract": "w11_workflow_command_owner_specific_control_v1",
             }
-        cancelled_activities: list[dict[str, Any]] = []
+        cancelled_activities = []
         for activity in activities:
             metadata = dict(activity.get("metadata") or {})
             metadata.update(
