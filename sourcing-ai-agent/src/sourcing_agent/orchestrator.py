@@ -42059,95 +42059,31 @@ class SourcingOrchestrator:
                     _env_int("WORKFLOW_EXPLICIT_JOB_RECOVERY_FOLLOWUP_ROUNDS", 0),
                 ),
             )
-        if explicit_job_followup_rounds > 0:
-            followup_started_at = _utc_now_iso()
-            followup_started_monotonic = time.perf_counter()
-            recovery_daemon_limit = max(10, int(payload.get("total_limit") or 4) * 10)
-            recovery_owner_id = str(summary.get("owner_id") or payload.get("owner_id") or "").strip()
-            followup_rounds_executed = 0
-            followup_claimed_count = 0
-            followup_executed_count = 0
-            followup_budget_exhausted = False
-            if _tick_budget_exhausted():
-                recovery_tick_budget_exhausted = True
-                followup_budget_exhausted = True
-            else:
-                for _ in range(explicit_job_followup_rounds):
-                    if followup_rounds_executed > 0 and _tick_budget_exhausted():
-                        recovery_tick_budget_exhausted = True
-                        followup_budget_exhausted = True
-                        break
-                    recoverable_workers = self.store.list_recoverable_agent_workers(
-                        limit=recovery_daemon_limit,
-                        stale_after_seconds=recovery_stale_after_seconds,
-                        job_id=explicit_job_id,
-                    )
-                    if not recoverable_workers:
-                        break
-                    followup_payload = dict(payload)
-                    followup_payload["job_id"] = explicit_job_id
-                    if recovery_owner_id:
-                        followup_payload["owner_id"] = recovery_owner_id
-                    followup_daemon = self._build_worker_recovery_daemon(followup_payload)
-                    followup_summary = followup_daemon.run_once()
-                    summary = self._merge_worker_recovery_daemon_summaries(summary, followup_summary)
-                    followup_claimed_count += int(followup_summary.get("claimed_count") or 0)
-                    followup_executed_count += int(followup_summary.get("executed_count") or 0)
-                    workflow_resume.extend(
-                        self._resume_blocked_workflows_after_recovery(
-                            followup_summary,
-                            explicit_job_id=explicit_job_id if workflow_resume_explicit_job else "",
-                            stale_job_scope_job_id=workflow_stale_scope_job_id,
-                            include_stale_acquiring=workflow_auto_resume_enabled,
-                            stale_after_seconds=workflow_resume_stale_after_seconds,
-                            resume_limit=workflow_resume_limit,
-                            include_stale_queued=workflow_queue_auto_takeover_enabled,
-                            queued_stale_after_seconds=workflow_queue_resume_stale_after_seconds,
-                            queued_resume_limit=workflow_queue_resume_limit,
-                            skip_job_ids=search_seed_resume_skip_job_ids,
-                        )
-                    )
-                    if post_completion_reconcile_enabled:
-                        post_completion_reconcile.extend(
-                            self._reconcile_completed_workflows_after_recovery(
-                                followup_summary,
-                                explicit_job_id=explicit_job_id,
-                            )
-                        )
-                    followup_rounds_executed += 1
-                    if (
-                        int(followup_summary.get("claimed_count") or 0) <= 0
-                        and int(followup_summary.get("executed_count") or 0) <= 0
-                    ):
-                        break
-            if followup_rounds_executed > 0:
-                summary["followup_rounds_executed"] = (
-                    int(summary.get("followup_rounds_executed") or 0) + followup_rounds_executed
-                )
-            recovery_phase_metrics["explicit_job_followup_rounds"] = {
-                "phase": "explicit_job_followup_rounds",
-                "owner": "worker_recovery_daemon",
-                "max_sync_work": "bounded same-job worker recovery follow-up rounds",
-                "started_at": followup_started_at,
-                "finished_at": _utc_now_iso(),
-                "elapsed_ms": int(max(0.0, (time.perf_counter() - followup_started_monotonic) * 1000)),
-                "status": "skipped"
-                if followup_budget_exhausted and followup_rounds_executed <= 0
-                else "active"
-                if followup_rounds_executed > 0
-                else "idle",
-                "reason": "recovery_tick_budget_exhausted"
-                if followup_budget_exhausted
-                else "explicit_job_followup_rounds",
-                "counts": {
-                    "round_count": followup_rounds_executed,
-                    "claimed_count": followup_claimed_count,
-                    "executed_count": followup_executed_count,
-                },
-                "budget_exhausted": followup_budget_exhausted,
-                "tick_elapsed_ms": _recovery_tick_elapsed_ms(),
-                "tick_total_budget_ms": recovery_tick_total_budget_ms,
-            }
+        summary, _followup_budget_exhausted = self._run_explicit_job_followup_rounds(
+            payload=payload,
+            summary=summary,
+            explicit_job_id=explicit_job_id,
+            explicit_job_followup_rounds=explicit_job_followup_rounds,
+            recovery_stale_after_seconds=recovery_stale_after_seconds,
+            workflow_resume=workflow_resume,
+            post_completion_reconcile=post_completion_reconcile,
+            post_completion_reconcile_enabled=post_completion_reconcile_enabled,
+            workflow_resume_explicit_job=workflow_resume_explicit_job,
+            workflow_stale_scope_job_id=workflow_stale_scope_job_id,
+            workflow_auto_resume_enabled=workflow_auto_resume_enabled,
+            workflow_resume_stale_after_seconds=workflow_resume_stale_after_seconds,
+            workflow_resume_limit=workflow_resume_limit,
+            workflow_queue_auto_takeover_enabled=workflow_queue_auto_takeover_enabled,
+            workflow_queue_resume_stale_after_seconds=workflow_queue_resume_stale_after_seconds,
+            workflow_queue_resume_limit=workflow_queue_resume_limit,
+            search_seed_resume_skip_job_ids=search_seed_resume_skip_job_ids,
+            recovery_phase_metrics=recovery_phase_metrics,
+            recovery_tick_total_budget_ms=recovery_tick_total_budget_ms,
+            tick_budget_exhausted=_tick_budget_exhausted,
+            recovery_tick_elapsed_ms=_recovery_tick_elapsed_ms,
+        )
+        if _followup_budget_exhausted:
+            recovery_tick_budget_exhausted = True
         else:
             _skipped_phase(
                 "explicit_job_followup_rounds",
@@ -42511,6 +42447,133 @@ class SourcingOrchestrator:
             "runtime_heartbeat": runtime_heartbeat,
             "runtime_metrics": runtime_metrics_payload,
         }
+
+
+    def _run_explicit_job_followup_rounds(
+        self,
+        *,
+        payload: dict[str, Any],
+        summary: dict[str, Any],
+        explicit_job_id: str,
+        explicit_job_followup_rounds: int,
+        recovery_stale_after_seconds: int,
+        workflow_resume: list[dict[str, Any]],
+        post_completion_reconcile: list[dict[str, Any]],
+        post_completion_reconcile_enabled: bool,
+        workflow_resume_explicit_job: bool,
+        workflow_stale_scope_job_id: str,
+        workflow_auto_resume_enabled: bool,
+        workflow_resume_stale_after_seconds: int,
+        workflow_resume_limit: int,
+        workflow_queue_auto_takeover_enabled: bool,
+        workflow_queue_resume_stale_after_seconds: int,
+        workflow_queue_resume_limit: int,
+        search_seed_resume_skip_job_ids: set[str],
+        recovery_phase_metrics: dict[str, Any],
+        recovery_tick_total_budget_ms: int,
+        tick_budget_exhausted: Callable[[], bool],
+        recovery_tick_elapsed_ms: Callable[[], int],
+    ) -> tuple[dict[str, Any], bool]:
+        """Step 2b slice 9 (B2, 2026-07-22): the explicit-job followup tail-loop.
+
+        Deliberately NOT a registry phase (mirrors the 2 CRM pinned drains
+        precedent): it writes its OWN metrics record with a custom status
+        vocabulary (skipped/active/idle) instead of the run_phase seam, rebinds
+        the tick summary, and extends the resume/reconcile accumulators in
+        place. Extracted verbatim as a named epilogue; returns the (possibly
+        re-merged) summary and whether the tick budget was exhausted here.
+        """
+        budget_exhausted_flag = False
+        if explicit_job_followup_rounds > 0:
+            followup_started_at = _utc_now_iso()
+            followup_started_monotonic = time.perf_counter()
+            recovery_daemon_limit = max(10, int(payload.get("total_limit") or 4) * 10)
+            recovery_owner_id = str(summary.get("owner_id") or payload.get("owner_id") or "").strip()
+            followup_rounds_executed = 0
+            followup_claimed_count = 0
+            followup_executed_count = 0
+            followup_budget_exhausted = False
+            if tick_budget_exhausted():
+                budget_exhausted_flag = True
+                followup_budget_exhausted = True
+            else:
+                for _ in range(explicit_job_followup_rounds):
+                    if followup_rounds_executed > 0 and tick_budget_exhausted():
+                        budget_exhausted_flag = True
+                        followup_budget_exhausted = True
+                        break
+                    recoverable_workers = self.store.list_recoverable_agent_workers(
+                        limit=recovery_daemon_limit,
+                        stale_after_seconds=recovery_stale_after_seconds,
+                        job_id=explicit_job_id,
+                    )
+                    if not recoverable_workers:
+                        break
+                    followup_payload = dict(payload)
+                    followup_payload["job_id"] = explicit_job_id
+                    if recovery_owner_id:
+                        followup_payload["owner_id"] = recovery_owner_id
+                    followup_daemon = self._build_worker_recovery_daemon(followup_payload)
+                    followup_summary = followup_daemon.run_once()
+                    summary = self._merge_worker_recovery_daemon_summaries(summary, followup_summary)
+                    followup_claimed_count += int(followup_summary.get("claimed_count") or 0)
+                    followup_executed_count += int(followup_summary.get("executed_count") or 0)
+                    workflow_resume.extend(
+                        self._resume_blocked_workflows_after_recovery(
+                            followup_summary,
+                            explicit_job_id=explicit_job_id if workflow_resume_explicit_job else "",
+                            stale_job_scope_job_id=workflow_stale_scope_job_id,
+                            include_stale_acquiring=workflow_auto_resume_enabled,
+                            stale_after_seconds=workflow_resume_stale_after_seconds,
+                            resume_limit=workflow_resume_limit,
+                            include_stale_queued=workflow_queue_auto_takeover_enabled,
+                            queued_stale_after_seconds=workflow_queue_resume_stale_after_seconds,
+                            queued_resume_limit=workflow_queue_resume_limit,
+                            skip_job_ids=search_seed_resume_skip_job_ids,
+                        )
+                    )
+                    if post_completion_reconcile_enabled:
+                        post_completion_reconcile.extend(
+                            self._reconcile_completed_workflows_after_recovery(
+                                followup_summary,
+                                explicit_job_id=explicit_job_id,
+                            )
+                        )
+                    followup_rounds_executed += 1
+                    if (
+                        int(followup_summary.get("claimed_count") or 0) <= 0
+                        and int(followup_summary.get("executed_count") or 0) <= 0
+                    ):
+                        break
+            if followup_rounds_executed > 0:
+                summary["followup_rounds_executed"] = (
+                    int(summary.get("followup_rounds_executed") or 0) + followup_rounds_executed
+                )
+            recovery_phase_metrics["explicit_job_followup_rounds"] = {
+                "phase": "explicit_job_followup_rounds",
+                "owner": "worker_recovery_daemon",
+                "max_sync_work": "bounded same-job worker recovery follow-up rounds",
+                "started_at": followup_started_at,
+                "finished_at": _utc_now_iso(),
+                "elapsed_ms": int(max(0.0, (time.perf_counter() - followup_started_monotonic) * 1000)),
+                "status": "skipped"
+                if followup_budget_exhausted and followup_rounds_executed <= 0
+                else "active"
+                if followup_rounds_executed > 0
+                else "idle",
+                "reason": "recovery_tick_budget_exhausted"
+                if followup_budget_exhausted
+                else "explicit_job_followup_rounds",
+                "counts": {
+                    "round_count": followup_rounds_executed,
+                    "claimed_count": followup_claimed_count,
+                    "executed_count": followup_executed_count,
+                },
+                "budget_exhausted": followup_budget_exhausted,
+                "tick_elapsed_ms": recovery_tick_elapsed_ms(),
+                "tick_total_budget_ms": recovery_tick_total_budget_ms,
+            }
+        return summary, budget_exhausted_flag
 
     def run_worker_recovery_forever(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = dict(payload or {})
