@@ -601,10 +601,12 @@ sourcing-ai-agent/
 
 ## Onboarding
 
-如果你是新的开发者或新的 AI session，建议按这个顺序进入项目：
+如果你是新的开发者或新的 AI session，走工作区入口链：[../AGENTS.md](../AGENTS.md) →
+[../PROGRESS.md](../PROGRESS.md)/[../NEXT_TODO.md](../NEXT_TODO.md) →
+[docs/README.md](docs/README.md) 路由器。以下为本包内参考序：
 
-1. 根目录 [../ONBOARDING.md](../ONBOARDING.md)
-2. [PROGRESS.md](PROGRESS.md)
+1. [PROGRESS.md](PROGRESS.md)（superseded stub → 工作区快照）
+2. [docs/README.md](docs/README.md)
 3. [docs/INDEX.md](docs/INDEX.md)
 4. [docs/MODULES.md](docs/MODULES.md)
 5. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

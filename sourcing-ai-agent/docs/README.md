@@ -3,8 +3,10 @@
 > Status: Current problem-to-module router (three-hop chain: root AGENTS/README → this file → module index → canonical doc). Existing canonical documents keep their current paths; use [INDEX.md](INDEX.md) for status/tier authority until each migration row is closed.
 
 ```
-owner: operator   last-route-audit: 2026-07-22   next-route-audit: harness reorg R3
-link-check: tests/test_markdown_status.py (routing lints land in reorg R5)
+owner: operator   last-route-audit: 2026-07-22   next-route-audit: next per-module migration pass
+gates (CI, backend-ci lane): tests/test_markdown_status.py (banners) +
+  tests/test_docs_routing.py (link graph via scripts/check_markdown_links.py --all,
+  snapshot budgets, gap-row targets)
 reorg design: HARNESS_REORG_DESIGN.md   migration registry: governance/DOCUMENTATION_MIGRATION_AND_RETIREMENT.md
 ```
 
@@ -103,10 +105,11 @@ for the cadence, deletion conditions, and current Phase-1 debt.
 
 | Gap | Impact | Temporary route | Resolution target |
 | --- | --- | --- | --- |
-| live-script registry lives inside HARVESTAPI_PLAYBOOK.md | script discovery detours through a provider doc | playbook §committed 脚本注册表 | R2 → [../scripts/README.md](../scripts/README.md) |
-| ~60 TRACK_D increment docs flat at docs/ top level | active contracts drowned in increments | [INDEX.md](INDEX.md) Tier 3 | R3 archive + module distribution |
-| deliverable CSVs have no manifest | delivery locations are tribal knowledge | workspace [../../PROGRESS.md](../../PROGRESS.md) | R4 deliverables/MANIFEST.md |
-| module indexes still Phase-1 (link to flat paths) | third hop lands on flat files | each module README | R3 onwards, one module at a time |
+| ~60 Track C/D increment docs flat at docs/ top level | active contracts drowned in increments | [INDEX.md](INDEX.md) Tier 3 (all bannered 2026-07-22) | per-module migration passes (registry-tracked) |
+| module indexes still Phase-1 (link to flat paths) | third hop lands on flat files | each module README | per-module passes, one module at a time |
+
+Closed 2026-07-22: live-script registry → [../scripts/README.md](../scripts/README.md) (R2);
+deliverables manifest → [../deliverables/MANIFEST.md](../deliverables/MANIFEST.md) (R4).
 
 ## Phase-1 Validation
 

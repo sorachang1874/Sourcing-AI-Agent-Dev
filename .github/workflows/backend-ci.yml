@@ -95,6 +95,11 @@ jobs:
           SOURCING_REQUIRE_PG_STORE_TESTS: "1"
           SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS: "1"
         run: |
+          # Docs routing gates (harness reorg R5): status banners + local link
+          # graph + snapshot budgets. Offline; run first so docs drift fails fast.
+          python -m pytest -q \
+            tests/test_markdown_status.py \
+            tests/test_docs_routing.py
           python -m pytest -q \
             tests/test_api_auth.py \
             tests/test_api_server_identity.py \
