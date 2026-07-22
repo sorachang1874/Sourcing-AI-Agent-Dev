@@ -40984,39 +40984,46 @@ class SourcingOrchestrator:
                 reason="explicit_job_scope",
                 max_sync_work="no global blocked workflow cleanup",
             )
-        if profile_prefetch_refill_enabled and _tick_ctx.profile_refill_submit_observed_this_tick:
-            profile_prefetch_refill = _skipped_phase(
-                "profile_prefetch_refill",
-                owner="profile_refill_daemon",
-                reason="profile_refill_submit_budget_exhausted",
-                max_sync_work="profile refill already submitted provider work in this recovery tick",
-            )
-        elif profile_prefetch_refill_enabled and _tick_ctx.profile_refill_command_planned_this_tick:
-            profile_prefetch_refill = _skipped_phase(
-                "profile_prefetch_refill",
-                owner="profile_refill_daemon",
-                reason="profile_refill_command_handoff_to_owner",
-                max_sync_work="profile refill already planned typed commands in this tick; owner phase will claim them",
-            )
-        elif profile_prefetch_refill_enabled:
-            profile_prefetch_refill = _run_recovery_phase(
-                "profile_prefetch_refill",
-                owner="profile_refill_daemon",
-                max_sync_work="registry scan/replan/claim/provider submit only",
-                callback=lambda: self._run_profile_prefetch_refill_queue_once(
-                    {
-                        **payload,
-                        "profile_prefetch_refill_phase": "profile_prefetch_refill",
-                    }
+        # Step 2b slice 4: main refill ladder onto the registry seam — the
+        # 4-variant guard reads only ctx state (enabled flag + the two lifted
+        # *_this_tick fields), byte-identical skip records.
+        profile_prefetch_refill = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="profile_prefetch_refill",
+                default_owner="profile_refill_daemon",
+                default_max_sync_work="no profile refill work",
+                guard=lambda ctx: (
+                    SkipDecision(
+                        reason="profile_refill_submit_budget_exhausted",
+                        max_sync_work="profile refill already submitted provider work in this recovery tick",
+                    )
+                    if ctx.profile_prefetch_refill_enabled and ctx.profile_refill_submit_observed_this_tick
+                    else SkipDecision(
+                        reason="profile_refill_command_handoff_to_owner",
+                        max_sync_work="profile refill already planned typed commands in this tick; owner phase will claim them",
+                    )
+                    if ctx.profile_prefetch_refill_enabled and ctx.profile_refill_command_planned_this_tick
+                    else True
+                    if ctx.profile_prefetch_refill_enabled
+                    else SkipDecision(
+                        reason="profile_prefetch_refill_disabled_by_payload",
+                        max_sync_work="no profile refill work",
+                    )
                 ),
-            )
-        else:
-            profile_prefetch_refill = _skipped_phase(
-                "profile_prefetch_refill",
-                owner="profile_refill_daemon",
-                reason="profile_prefetch_refill_disabled_by_payload",
-                max_sync_work="no profile refill work",
-            )
+                body=lambda ctx: ctx.run_phase(
+                    "profile_prefetch_refill",
+                    owner="profile_refill_daemon",
+                    max_sync_work="registry scan/replan/claim/provider submit only",
+                    callback=lambda: ctx.orchestrator._run_profile_prefetch_refill_queue_once(
+                        {
+                            **ctx.payload,
+                            "profile_prefetch_refill_phase": "profile_prefetch_refill",
+                        }
+                    ),
+                ),
+            ),
+            _tick_ctx,
+        )
         _tick_ctx.profile_refill_submit_observed_this_tick = (
             _tick_ctx.profile_refill_submit_observed_this_tick or profile_refill_worker_submit_observed(profile_prefetch_refill)
         )
