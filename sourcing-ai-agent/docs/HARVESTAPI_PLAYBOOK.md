@@ -553,19 +553,11 @@ Anthropic 当前 snapshot 的 former enrich 已验证：
 - ACwA（成员 dataset）→slug（profile item）的 join 顺序：resolved-url 直查 → 精确 (first,last) → currentCompany 消歧 → 规范化（音符/括号/CJK 语序）→ 姓末 token 变体；同名冲突保持未合并（错合并比缺 profile 更糟）。
 - driver 判重用文档的 `profile_fetched` 标志，禁止用 url 哈希（slug 双形态会让哈希判重静默失效导致全量重抓）。
 
-### Committed live-ops 脚本（2026-07-20，禁止再造 /tmp ad-hoc）
+### Committed live-ops 脚本
 
-- `scripts/live_apify_dataset_salvage.py` — 把已付费的孤儿 Apify dataset（job 取消未物化）采纳为 candidate documents + 合并快照；复用 `candidate_materialization` 的 ingest/consolidate 与 connector 的 profile 匹配/缓存键；信封形状对齐 OpenAI salvage 先例。
-- `scripts/live_profile_fetch_slot_fill.py` — 并发 slot-fill profile fetch（4–8 批，只抓 candidate_documents 减去缓存命中的缺失 url；connector 侧二次缓存防重；断言 live 双闸否则 fail closed）。
-- `scripts/live_candidate_profile_enrich.py` — 把缓存 profile 的 headline/location/experience/education/languages 回填进 candidate documents（分层 L2/L3 信号的输入；幂等、先备份）。
-- `scripts/live_layering_run.py` — 对 salvage 快照跑华人分层（`allow_candidate_documents_source=True`，CLI 暂无此旗标；DeepSeek 复核走 MODEL_PROVIDER_* env）。
-- `scripts/live_former_lane_run.py` — former lane per-function 分片查询（library 路径，绕开 daemon 依赖；复用产品 planner 的 per-function shard plan，payload 先验证再派发：`pastCompanies` 单 URL + 单 functionIds、无 keywords；产出 salvage 形状的 `former_<shard_id>.json`）。
-- `scripts/live_scoped_lane_run.py` — 关键词 scoped 名册（per-status × per-function 单元查询，`searchQuery` 保留；存在原因＝产品两条路径的合同缺口：full_company_roster 静默丢关键词、scoped_search_roster 合并 functionIds）。
-- `scripts/live_xfirst_seed_build.py` — Layer 1-3 → X-First seed_inputs（从 profile envelope 直取完整 profile facts：全部工作经历含描述、About 全文分段、教育、projects、patents 等，affiliation facts 带 current/historical 时间性，evidence_ref 绑定快照）。
-- `scripts/live_grok_collection_run.py` — Grok 采集驱动（CWD 固定在 `~/.grok` 防 "Device not configured"，--limit 先 smoke 再全量，默认 48 workers）。
-- `scripts/live_luna_judge_run.py` — DeepSeek judge 驱动（committed transport + binding；经 runner `extra_source_context` 钩子向 judge 输入注入 raw LinkedIn profile 全文 + 字段字典 + 引用白名单说明；v1 citation/pins/reducer 不动）。
-- `scripts/live_xfirst_export_csv.py` — 13 列导出（CRM 8 列 + X-First 5 列）；区分"待采集/无X账号/无X账号·据profile"、seed_fact 引用渲染进证据摘要、支持 judge 结果回填与账号冲突标注。
-- 规则：live 运维动作凡两次以上出现就必须落成 committed 脚本进本目录，并在本节登记；/tmp 脚本视为事故温床。
+注册表已迁至 [../scripts/README.md](../scripts/README.md)（canonical，2026-07-22 起）。
+规则不变：live 运维动作凡两次以上出现就必须落成 committed 脚本并在注册表登记；
+/tmp 脚本视为事故温床。本 playbook 保留 provider 知识与现场纪律。
 
 ### Judge 输入合同（2026-07-20，operator 指令定型）
 

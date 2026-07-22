@@ -1,5 +1,11 @@
 # X-first Researcher Sourcing
 
+> Status: Current package README; the dense status narrative below is scheduled for
+> R3 slimming (workspace reorg). 当前工作状态以 workspace 快照为准：
+> [../PROGRESS.md](../PROGRESS.md) · [../NEXT_TODO.md](../NEXT_TODO.md)；包规则见
+> [AGENTS.md](AGENTS.md)；judge/导出脚本注册表见
+> [../sourcing-ai-agent/scripts/README.md](../sourcing-ai-agent/scripts/README.md)。
+
 This standalone sibling explores an X-first, public-professional evidence lane for AI researcher discovery. Its product
 goal is compatible with `sourcing-ai-agent`, but its discovery owner, provisional identity, and artifact lifecycle are
 separate so X can be evaluated without changing LinkedIn-first canonical person ownership.
