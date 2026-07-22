@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
 
-from .workflow_smoke import HostedWorkflowSmokeClient
+from .hosted_smoke_surface import HostedWorkflowSmokeClient
 
 DEFAULT_EXPLAIN_CASES: list[dict[str, Any]] = [
     {

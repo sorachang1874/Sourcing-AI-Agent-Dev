@@ -20,12 +20,8 @@ from sourcing_agent.scripted_test_runtime import (
     isolated_hosted_test_runtime,
 )
 from sourcing_agent.settings import load_settings
-from sourcing_agent.workflow_smoke import (
-    HostedWorkflowSmokeClient,
-    load_smoke_cases,
-    run_hosted_smoke_matrix,
-    summarize_smoke_timings,
-)
+from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient, load_smoke_cases
+from sourcing_agent.workflow_smoke import run_hosted_smoke_matrix, summarize_smoke_timings
 
 
 class SmokeMatrixShutdownRequested(Exception):

@@ -23,9 +23,8 @@ from sourcing_agent.workflow_explain_matrix import (
     run_hosted_explain_case,
     run_hosted_explain_matrix,
 )
+from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient, load_smoke_cases
 from sourcing_agent.workflow_smoke import (
-    HostedWorkflowSmokeClient,
-    load_smoke_cases,
     run_hosted_smoke_case,
     run_hosted_smoke_matrix,
     summarize_smoke_timings,

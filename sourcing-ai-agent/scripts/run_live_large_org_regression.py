@@ -7,11 +7,8 @@ import os
 import sys
 from typing import Any
 
-from sourcing_agent.workflow_smoke import (
-    HostedWorkflowSmokeClient,
-    load_smoke_cases,
-    run_hosted_smoke_case,
-)
+from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient, load_smoke_cases
+from sourcing_agent.workflow_smoke import run_hosted_smoke_case
 
 
 DEFAULT_CASES = ["xai_full_roster", "xai_coding_all_members_scoped"]

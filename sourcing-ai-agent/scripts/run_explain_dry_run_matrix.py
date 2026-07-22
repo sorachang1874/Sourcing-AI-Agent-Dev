@@ -16,7 +16,7 @@ from sourcing_agent.workflow_explain_matrix import (
     load_explain_cases,
     run_hosted_explain_matrix,
 )
-from sourcing_agent.workflow_smoke import HostedWorkflowSmokeClient
+from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient
 
 
 def _normalized_runtime_env(case: dict[str, object]) -> dict[str, str]:

@@ -23,7 +23,8 @@ from sourcing_agent.scripted_test_runtime import (
     patched_environment,
     validate_isolated_runtime_env_contract,
 )
-from sourcing_agent.workflow_smoke import HostedWorkflowSmokeClient, load_smoke_cases, run_hosted_smoke_matrix
+from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient, load_smoke_cases
+from sourcing_agent.workflow_smoke import run_hosted_smoke_matrix
 
 
 def _connectable_postgres_dsn() -> str:
