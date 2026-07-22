@@ -1,5 +1,7 @@
 # 新 Codex Desktop Session 启动 Prompt（Track C / Track D）
 
+> Status: Implementation record (Track C increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 ```text
 你现在接管 sourcing-ai-agent 的 Track C / Track D；另一个活跃 session 独占 X-First，禁止触碰
 x-first-researcher-sourcing/。

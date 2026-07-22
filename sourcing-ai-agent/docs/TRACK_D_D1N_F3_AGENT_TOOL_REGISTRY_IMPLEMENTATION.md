@@ -1,5 +1,7 @@
 # Track D D1n F3 Agent Tool Registry Fixed-Forward
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-17
 
 Status: fixed-forward author candidate. A fresh pinned non-author review is required before any live-provider,

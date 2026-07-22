@@ -1,5 +1,7 @@
 # Parallel roadmap consultation request
 
+> Status: Reference (consult transcript, 2026-07-14 era). Decisions were promoted into their owning docs; do not treat dated numbers here as current.
+
 Purpose: architecture
 Secondary question sets: none
 Authority: ADVISORY_ONLY

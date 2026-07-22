@@ -1,5 +1,7 @@
 # Track D D1n F1 Action Result Schema Implementation
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-17
 
 Status: fixed-forward author candidate; fresh pinned non-author review is required. This document is implementation

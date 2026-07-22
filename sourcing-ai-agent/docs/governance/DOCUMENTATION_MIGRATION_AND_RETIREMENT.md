@@ -28,6 +28,16 @@ No document is moved merely because a destination directory now exists.
 
 ## Phase-1 Registry
 
+> Update (2026-07-22, harness reorg R1-R3): the status-banner gate
+> (`tests/test_markdown_status.py`) is now fully green — 81 files bannered by family
+> (.coord ephemeral / pro-consults reference / Track C+D increment records).
+> `PROGRESS.md` and `docs/NEXT_TODO.md` are superseded redirect stubs; workspace-root
+> `PROGRESS.md`/`NEXT_TODO.md` are the bounded snapshots. `ARCHITECTURE.md`/`MODULES.md`
+> re-bannered PENDING REFRESH. Bulk relocation of the ~60 flat Track C/D increment docs
+> is deliberately DEFERRED to per-module passes (moving them wholesale would break
+> pinned-review scopes and dozens of relative links in one shot — against the
+> "one module at a time" adoption rule); each pass updates its row here.
+
 | Current path/class | Owning route | Phase-1 state | Canonical replacement | Required check before move/retirement | Owner/target |
 | --- | --- | --- | --- | --- | --- |
 | `docs/INDEX.md` | Project documentation governance | `inventory_only` | none; remains status/tier authority | New router adoption is proven and every active doc has a module/status route | Repository maintainers; later phase |

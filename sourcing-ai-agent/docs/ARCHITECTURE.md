@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+> Status: Reference — 2026-04 content, PENDING REFRESH (flagged in docs/INDEX.md). Where it conflicts with code or Tier 1 contracts, code and contracts win.
 
 
 ## 1. 设计原则

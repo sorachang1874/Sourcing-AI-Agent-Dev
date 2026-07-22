@@ -1,5 +1,7 @@
 # Track D D1n V1 acquisition-plan preview implementation
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: author candidate; fresh pinned non-author review pending. This document is implementation evidence, not a
 formal `GO`, and it does not authorize model or provider execution.
 

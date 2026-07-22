@@ -1,5 +1,7 @@
 # Track D D3c2c — Activity / terminal-evidence physical surface characterization
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: **characterization-only; no product code, migration, schema, runtime activation, provider/model call, or served
 Agent population.**
 

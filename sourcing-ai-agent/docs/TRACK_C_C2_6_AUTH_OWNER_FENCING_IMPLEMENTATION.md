@@ -1,5 +1,7 @@
 # Track C C2.6 authenticated canonical-owner fencing
 
+> Status: Implementation record (Track C increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: scoped review `NO-GO`; fixed-forward implementation is tracked by
 `TRACK_C_C2_7_CONDITIONAL_OWNER_CLOSURE_IMPLEMENTATION.md`.
 

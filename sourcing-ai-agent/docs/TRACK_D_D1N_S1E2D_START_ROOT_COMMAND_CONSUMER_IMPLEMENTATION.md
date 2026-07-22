@@ -1,5 +1,7 @@
 # Track D D1n S1e2d — acquisition-start v2 root-command consumer compatibility
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: author implementation candidate; non-live; no provider/model/network invocation; no served registry change;
 fresh independent review pending.
 

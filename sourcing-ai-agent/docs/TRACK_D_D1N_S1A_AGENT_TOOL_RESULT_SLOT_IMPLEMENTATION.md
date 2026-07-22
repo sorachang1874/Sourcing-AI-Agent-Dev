@@ -1,5 +1,7 @@
 # Track D D1n S1a — Agent tool result occurrence / terminal-winner implementation
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-17
 
 Status: author implementation and PostgreSQL evidence complete; fresh pinned non-author review pending. This is not a

@@ -1,5 +1,7 @@
 # Track D D1n S1f0a — pinned Ultra review response
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 > Candidate: `64a7dfc8f84f416a166a6ded69c666c7e50e523e`
 > Review: `runtime/reviews/20260718T103535Z_Track_D_D1n_S1f0a_filter_projection_publication_owner_decision.md`
 > Verdict: `NO-GO`, new findings `P0/P1/P2/P3 = 0/10/2/2`; residual R-019/R-029.

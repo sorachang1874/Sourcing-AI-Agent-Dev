@@ -1,5 +1,7 @@
 # Track D D1n S1e2c — formal review partial response
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: second partial implementation response to the formal S1e2c `NO-GO` artifact
 `runtime/reviews/20260718T062908Z_Track_D_D1n_S1e2c_start_result_accept_f0e7210.md`.
 

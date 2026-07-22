@@ -1,5 +1,7 @@
 # Track D D1l Projection Read Action Schema Activation
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-16
 
 Status: pinned independent review `NO-GO`; fixed-forward and re-review required before live/W6/manual/product signoff.

@@ -1,5 +1,7 @@
 # Track D D1n S1d — result link-policy carrier
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-17
 
 Status: the correctly scoped pinned Ultra review of `bacae9e..3b235fd` was a valid `NO-GO 0/1/4/0`. The bounded

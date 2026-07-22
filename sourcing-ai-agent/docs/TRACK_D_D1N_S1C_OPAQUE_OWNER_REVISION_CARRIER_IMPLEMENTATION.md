@@ -1,5 +1,7 @@
 # Track D D1n S1c — opaque physical-owner revision carrier
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-17
 
 Status: committed author candidate at `bacae9e80c8c0593b6c8c436b06e68777ade6d54`; fresh pinned review is pending.

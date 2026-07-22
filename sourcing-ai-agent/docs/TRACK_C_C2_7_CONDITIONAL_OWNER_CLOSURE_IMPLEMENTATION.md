@@ -1,5 +1,7 @@
 # Track C C2.7 conditional-owner closure
 
+> Status: Implementation record (Track C increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: pinned review `NO-GO`; the criteria preflight finding is fixed forward
 by `TRACK_C_C2_8_CRITERIA_OWNER_PREFLIGHT_TOTALITY_IMPLEMENTATION.md`.
 

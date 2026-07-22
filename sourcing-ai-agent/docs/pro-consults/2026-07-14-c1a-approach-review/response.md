@@ -1,3 +1,5 @@
+> Status: Reference (consult transcript, 2026-07-14 era). Decisions were promoted into their owning docs; do not treat dated numbers here as current.
+
 BEGIN_ARTIFACT path=sourcing-ai-agent/docs/pro-consults/2026-07-14-c1a-approach-review/response.md
 
 ADVISORY_ONLY — not an independent-review artifact or formal GO.

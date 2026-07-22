@@ -1,5 +1,7 @@
 # Track C C2.5 Authenticated Request-Scope Closure
 
+> Status: Implementation record (Track C increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 > AUTHOR IMPLEMENTATION ONLY — formal independent review is pending. This is
 > not a review artifact, GO verdict, live-provider authorization, or milestone
 > signoff.

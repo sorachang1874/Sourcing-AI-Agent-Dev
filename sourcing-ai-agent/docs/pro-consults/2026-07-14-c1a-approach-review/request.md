@@ -1,5 +1,7 @@
 # Track C C1a approach-review request
 
+> Status: Reference (consult transcript, 2026-07-14 era). Decisions were promoted into their owning docs; do not treat dated numbers here as current.
+
 ADVISORY_ONLY — not an independent-review artifact or formal GO.
 
 Use the GitHub app already active in this conversation for a read-only, commit-pinned approach review.

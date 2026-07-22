@@ -1,5 +1,7 @@
 # Track C C2.8 criteria owner-preflight totality
 
+> Status: Implementation record (Track C increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: author fixed-forward after an invalid fresh review run surfaced two
 substantive findings; a new pinned independent review is required before
 live/manual/product/milestone signoff.

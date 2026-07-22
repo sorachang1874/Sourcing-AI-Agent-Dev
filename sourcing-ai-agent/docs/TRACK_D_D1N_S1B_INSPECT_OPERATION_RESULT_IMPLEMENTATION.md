@@ -1,5 +1,7 @@
 # Track D D1n S1b — `inspect_operation` physical-owner result adapter
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Date: 2026-07-17
 
 Status: third fixed-forward author response active. The first bundled Ultra artifact remains reference-only

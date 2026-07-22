@@ -1,5 +1,7 @@
 # Track D D1n S1e2b — formal review response
 
+> Status: Implementation/decision record (Track D increment). Review state and current authority are routed via docs/INDEX.md Tier 3; scheduled for module distribution (reorg R3+).
+
 Status: fixed-forward implementation response to the latest formal S1e2b `NO-GO` artifact
 `runtime/reviews/20260719T211500Z_Track_D_D1n_S1e2b_fixed-forward_A-I_integrated_closure_rerun3.md` (5 substantive P1
 + 1 P2, `4f246b3..7183714`), closed by the FF-I round-2 batch recorded below. Finding 1 of that artifact was a review

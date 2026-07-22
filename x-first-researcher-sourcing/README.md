@@ -1,7 +1,7 @@
 # X-first Researcher Sourcing
 
-> Status: Current package README; the dense status narrative below is scheduled for
-> R3 slimming (workspace reorg). 当前工作状态以 workspace 快照为准：
+> Status: Current package README (slimmed 2026-07-22; frozen narrative in
+> docs/README_STATUS_ARCHIVE_2026-07-22.md). 当前工作状态以 workspace 快照为准：
 > [../PROGRESS.md](../PROGRESS.md) · [../NEXT_TODO.md](../NEXT_TODO.md)；包规则见
 > [AGENTS.md](AGENTS.md)；judge/导出脚本注册表见
 > [../sourcing-ai-agent/scripts/README.md](../sourcing-ai-agent/scripts/README.md)。
@@ -10,157 +10,23 @@ This standalone sibling explores an X-first, public-professional evidence lane f
 goal is compatible with `sourcing-ai-agent`, but its discovery owner, provisional identity, and artifact lifecycle are
 separate so X can be evaluated without changing LinkedIn-first canonical person ownership.
 
-## Current status
+## Current status (bounded summary)
 
-`fixture_default + adaptive_live_exploration + no_promotion_claim` — fixture validation still performs no Grok, X,
-provider, model, credential, network, database, CRM, export, or outreach call. A seven-wave bounded campaign has now
-mechanically observed 702 native-X calls and retained 99 candidate rows / 98 case-insensitive unique handles. It used
-no business candidate, observation, answer-length, or per-wave call ceiling; the operator paused after a current-team
-frontier and a residual coverage audit fell to `5/104` then `1/70` new unique handles per raw call. A private v5 replay
-recomputed all seven v3 raw-session sources, bound each emitted assistant terminal JSON and system prompt, and mapped every
-terminal object's byte span to its source assistant chunks. It requires the chunk containing the terminal JSON's
-opening `{` to occur after every native-X start/completion event, binds every evidence association to its enclosing
-candidate subject, revalidates persisted URL-author/status-id bindings, preserves native-X thread evidence, and keeps
-every candidate field explicitly
-`model_mediated_unverified`. The `0600`
-merged artifact has SHA-256
-`4f27d046c8618e424c1f24b7dcf4978b71799284d03e75d77054dc4ab6a0d19a`. Its formal stop result is still
-`insufficient_proof / continue_expansion`, not exhausted. Exact Post bodies remain unreplayable, Bios/IDs are
-model-mediated rather than source-bound, and the original `~/.grok` copies remain below the owner-only contract;
-therefore hydration, product promotion, and supported API batching remain `NO-GO`. A
-corrected live `gpt-5.6-luna` request also validated the intended
-China/Asia professional-experience proxy semantics on four cases, but it is feasibility evidence rather than a formal
-semantic-v2.2 live gate. The formal Luna canary now has a separate receipt-first v2 offline implementation: legacy v1
-validation is frozen to semantic v2.1 assets, while v2 binds current semantic v2.2 and persists exact observed
-route/model/payload/timing/HTTP-or-failure receipts. It has not been executed live and still requires independent GO.
+> Full status narrative (frozen 2026-07-22): [docs/README_STATUS_ARCHIVE_2026-07-22.md](docs/README_STATUS_ARCHIVE_2026-07-22.md).
+> 后续状态更新写 workspace [../PROGRESS.md](../PROGRESS.md)，不再回填本节。
 
-A separate Google DeepMind large-lab challenger has produced four rejected but replayable diagnostics. The latest v4
-provider run completed normally in 111.982 seconds and used 35 unique native-X calls to return 14 rows / 13 unique
-handles and 20 X status evidence proposals; four rows were `current lab + current pretraining`. This was not Bio-only:
-all 20 evidence items had status URLs. The session failed before promotion because the v1 discovery policy rejected two
-organization-level `from:GoogleDeepMind` keyword queries, all 20 native timestamps used X's RFC `GMT` form, one status
-row was mislabelled as Bio without topology, and two conflicting rows shared one handle. No candidate-scoped `from:`
-query occurred. Only one positive Reply query was attempted, so Reply discovery remains a measured weak cell.
-
-The v5 implementation passed pinned non-author review at `5005c75` with `P0=0 / P1=0 / P2=1 / GO`; the residual is
-that typed thread-fetch arguments do not prove how a thread first entered the discovery turn. It is designed around
-the v4 facts rather than a fixed answer quota. Its append-only
-effective-prompt row can bind a casefold-unique official-account allowlist for any lab; the v2 session policy accepts
-exactly one positive, entry-bound official handle only in keyword search and continues to reject candidate, negated,
-multiple, semantic, and unknown-handle `from:` forms. The current result policy can convert only an exact
-round-trippable native-X IMF-fixdate `GMT` timestamp to canonical UTC ISO-8601 `Z` and can replace only a strict-UTF-8
-`281..560`-code-point model-reported excerpt with its exact first 280-code-point display prefix, while preserving
-hash-bound raw bytes and adding deterministic caveats. It does not repair malformed Bio/Post topology, select semantic
-windows, change typed supports/states/confidence, or merge duplicate handles. The v5 prompt requires four distinct positive Reply
-cells and a terminal casefold-dedup/topology preflight, with no business candidate, observation, query, or call cap.
-Discovery-only projection never applies the hydration surface gate and always overwrites model OK/PARTIAL status text
-with the operator-owned unproven reason: raw arguments can prove strategy cells were attempted, but not per-query yield
-or population convergence. Old normalization v2/v1-plus-artifact, normalization-only result-v3, pre-normalization v3,
-and result-v2 bundles remain replay-only under their recorded digests.
-
-The first reviewed v5 process did not produce a search sample. It failed after `8.156s` with Grok CLI `Not signed in`,
-zero model events, zero native-X calls, no fallback/timeout/technical limit, and a bundle replay result of `[]`. The
-request had correctly copied and SHA-bound one OAuth file, but its access token had expired `17,107.869606s` before
-process start. The previous v4 process had used the same expired bytes successfully inside a disposable home, which is
-consistent with refresh-token state being rotated there and then deleted. A bounded local repair now selects exactly
-one current Grok 0.2.101 xAI OIDC row, validates its issuer/client/locator and identity-bound JWT payload without
-claiming signature verification, and uses the earlier of metadata expiry and JWT `exp`. The access window must cover
-the grant TTL plus the complete process/grace window and a 600-second margin; it is checked before grant creation,
-before prompt/run-root work, and again on the copied auth before grant consumption. A durable owner-only active-use
-claim permits only one run or recovery to own an auth digest at a time; grant consumption publishes that claim first,
-and only a successful auth audit followed by durable ephemeral-home deletion resolves it. A separate per-auth-digest
-taint marker blocks future grants if the provider mutates, deletes, makes the copy unreadable, or exits abnormally
-after the gated target was authorized to run. Failures before target release cleanly consume the one-shot grant but do
-not unnecessarily taint unchanged OAuth bytes. A legacy recovery claim is origin-marked: missing home plus a durable
-provider ledger is conservatively tainted because the pre-D2 cleanup order cannot be proven. No refreshed secret state
-is copied back. This attempt is
-excluded from every recall/precision/performance comparison and the consumed grant cannot be reused. See
-`docs/live-evidence/2026-07-15-google-deepmind-v5-oauth-lifecycle-failure.md`.
-
-After a fresh user OAuth login and the reviewed D2 lifecycle repair, one replacement v5 run completed 43/43 native-X
-calls in 166.160 seconds with no fallback, timeout, stderr, or technical-limit event. Its terminal diagnostic contained
-20 unique candidate handles and 37 evidence rows, but one excerpt was 319 Unicode code points against the 280 hard
-maximum. The only validator error was `evidence_value_invalid:7:1`, so the entire result correctly remained
-`result_contract_invalid` and is excluded from campaign and formal quality metrics. Relative to the invalid v4
-diagnostic, candidate yield per call improved 25.2%, evidence count increased 85.0%, seconds per candidate improved
-3.6%, and cost per candidate increased 2.1%; positive Reply queries increased from one to five. An append-only v5.1
-successor kept the query strategy intact while targeting 240-code-point excerpts and auditing every row before terminal
-output. Its exact retry completed `40/40` native-X calls and returned `17` candidates / `32` evidence rows, but one
-excerpt still had `297` code points; prompt-only enforcement therefore remained unreliable. A normalization v3 now
-implements the narrow audited display-prefix repair above, with complete-result atomic validation and legacy v2 replay.
-It requires a new pinned `GO`, request, and one-shot grant before another retry. See
-`docs/live-evidence/2026-07-16-google-deepmind-v5-replacement-diagnostic.md`.
-See also `docs/live-evidence/2026-07-16-google-deepmind-v5-1-excerpt-preflight-diagnostic.md`.
-
-A later direct compact-discovery matrix separated native-X discovery from profile/evidence hydration. Three
-tool-separated Google DeepMind strategy shards (broad, topology-first, and historical/project-first) used 142
-ledger-confirmed policy-valid native-X calls and produced a 93-handle case-insensitive union. Topology added 21 leads
-over the broad shard; historical/project added another 26. A policy-clean function/role negative-space retry then
-added three from 23 calls, raising the validated diagnostic union to 96. Its model terminal falsely claimed truncation
-and a deadline; receipt-owned projection removed those claims while preserving three domain-coverage limitations and
-`PARTIAL` status. The merged three-base-shard evidence mix is not Bio-led: 139/181 distinct
-candidate reference signatures (76.8%) are status surfaces, including self-Posts, mentions, Replies, official Posts,
-and quotes. A new compact schema/runtime/merge lane removes model-authored call counts, requires exact profile/status
-references plus subject/author binding, preserves independent lab/pretraining temporal proposals, and has no business
-lead or source-reference cap.
-
-Profile hydration then exposed a separate tool-compliance failure mode. One schema-valid 49-row response made zero
-native-X calls and was discarded; another 44-row response made exactly 44 `x_user_search` calls and retained 42 exact
-matches. Among those exact matches, id/display-name/Bio coverage was 100%/100%/95.2%, while location, external URL,
-professional category, and X organization-affiliation badge coverage were all zero. Tool compliance was non-monotonic
-across 1/4/8/44/49-input trials, so the reusable method is ledger-gated adaptive splitting, not a guessed static batch
-maximum. See `docs/GROK_COMPACT_DISCOVERY_AND_PROFILE_HYDRATION.md` and
-`docs/live-evidence/2026-07-16-gdm-compact-strategy-matrix.md`.
-
-Adaptive replay later closed the original 49-input gap without borrowing its model-only fields: all 93 inputs have
-compliant completed-tool evidence, with 91 exact matches and two not-found rows. Aggregate matched-field coverage is
-bound in the candidate-free machine receipt beside the live-evidence document; it remains diagnostic, not
-source-bound profile truth.
-
-The repaired compact/hydration contracts bind every shard and batch to campaign, target descriptor, policy and
-source-union/input-set digests. Discovery union accepts only receipt-projected shards, reconciles non-null platform
-ids before handles, records reversible handle-history proposals, quarantines handle reuse without mixing evidence,
-and preserves input-shard digests plus lead/reference membership. Null ids remain explicit provisional identities.
-Hydration accepts only a typed session/batch receipt with paired completed call lifecycles and terminal ordering; raw
-call-shaped dictionaries cannot prove X-native execution. Operator projection now owns batch and record repair claims
-and runs before full status coherence.
-
-The first vertical slice covers OpenAI with:
-
-- 24 completely synthetic external accounts;
-- 96 synthetic observations;
-- eight explicit query families;
-- stable platform user IDs and handle history;
-- opaque provisional person IDs;
-- raw observations and evidence proposals only;
-- explicit non-exhaustiveness and zero protected-trait output.
-
-A provider-free source-neutral mapping controller now freezes the calibrated large-lab query method without a lab,
-candidate, model, or business-volume cap. Its default Wave P is empirical grain `3`, two exact champion keyword calls
-per candidate, exact manifest+policy plan reconstruction, literal per-call URL blocks, and six-file raw-session
-replay. Frontier/Luna/metric consumers replay typed retained-source projections; unexecuted and rejected batches stay
-separate from sparse evidence; exact `x_thread_fetch` hydration binds descriptor host, author, Post ID, and text bytes;
-caller Luna output is diagnostic-only and a deterministic candidate-by-axis reducer preserves frozen priors; campaign
-facts now use a replayed append-only predecessor frontier, semantic strategy digest, and campaign-wide
-mapping/hydration identity registry. Diagnostic Luna cannot authorize an upgrade or structural stop, even at complete
-review coverage; receipt-first semantic execution is the next required authority gate. Historical calibration sessions remain exploratory because they did
-not retain the typed precommit required for `commit_allowed`; see
-`docs/SOURCE_NEUTRAL_MAPPING_CONTROLLER.md`.
-
-All URLs use the reserved `.invalid` domain. No real person, handle, post, or X URL appears in the fixture.
-
-An additional Stage 1 offline slice now validates synthetic capability-probe request/result envelopes. It remains
-account-level and fixture-only: its only positive verdict is `fixture_contract_validated`, and it explicitly records
-`x_native_access_proven=false`. See `docs/ARCHITECTURE.md` and `docs/STAGE1_CAPABILITY_FIXTURE_CONTRACT.md`.
-
-A bounded Stage 2A field-capability slice now adds an exact source-neutral 14-field registry, a separately supplied
-fixture selection manifest, and four closed offline envelopes for experiment request, collection, pre-collection
-capability expectation, and deterministic conformance evaluation. Its four synthetic tasks end
-`1 completed / 2 quarantined / 1 failed`: only replayable profile/Post records can establish exact or bounded fields;
-conflicting ids and handle rename quarantine, while CLI-like metadata-only tool traces leave every field
-`unverified`. The expectation is fixture-scenario input, not accuracy gold or human adjudication. The slice performs
-zero external calls and is not a live hydration claim. See
-`docs/STAGE2_FIELD_CAPABILITY_CONTRACT.md`.
+- Mode: `fixture_default + adaptive_live_exploration + no_promotion_claim` — fixture
+  validation performs no Grok/X/provider/model/network/DB/CRM/export call.
+- Seven-wave bounded campaign: 702 native-X calls, 99 candidate rows / 98 unique
+  handles; stop result `insufficient_proof / continue_expansion` (not exhausted).
+- v5 private replay binds terminal JSON to source chunks (pinned non-author review
+  `5005c75`: P0=0/P1=0/P2=1/GO). Bios/IDs remain model-mediated: hydration, product
+  promotion, and supported API batching stay **NO-GO**.
+- Luna judge: v1 frozen to semantic v2.1; receipt-first v2 (semantic v2.2) is
+  offline-implemented, not yet executed live, requires independent GO.
+- The 2026-07-20/21 production judge waves (GDM/TML/OpenAI etc.) ran in the
+  sourcing-ai-agent pipeline via the committed script chain (registry:
+  [../sourcing-ai-agent/scripts/README.md](../sourcing-ai-agent/scripts/README.md)).
 
 ## Population boundary
 
