@@ -47,13 +47,23 @@ from typing import Any, Callable, Protocol, runtime_checkable
 # "local_apply_closure_queue" while every other branch reports
 # "profile_local_apply_command_owner"), so the guard returns the full triple.
 # ---------------------------------------------------------------------------
+_SKIP_RESULT_UNSET = object()
+
+
 @dataclass(frozen=True)
 class SkipDecision:
-    """A guard's decision to skip a phase with a fully computed skip record."""
+    """A guard's decision to skip a phase with a fully computed skip record.
+
+    ``skip_result`` (Step 2b slice 8) covers the result-vs-record divergence
+    the workflow_resume/post_completion ladders pin: the skip RECORD is still
+    emitted through ``ctx.skipped_phase`` (oracle-visible), but the phase's
+    RESULT handed back to the tick is the given value (e.g. ``[]``) instead of
+    the record dict. Unset => the record is the result (previous behavior)."""
 
     reason: str
     max_sync_work: str
     owner: str | None = None  # None => use the phase's default_owner
+    skip_result: Any = _SKIP_RESULT_UNSET
 
 
 # ``wants_to_run`` returns ``True`` to run, or a ``SkipDecision`` to skip.
@@ -255,12 +265,15 @@ def run_registry_phase(phase: RecoveryPhase, ctx: TickContext) -> Any:
     if decision is True:
         return phase.run(ctx)
     if isinstance(decision, SkipDecision):
-        return ctx.skipped_phase(
+        skip_record = ctx.skipped_phase(
             phase.name,
             owner=decision.owner or phase.default_owner,
             reason=decision.reason,
             max_sync_work=decision.max_sync_work,
         )
+        if decision.skip_result is not _SKIP_RESULT_UNSET:
+            return decision.skip_result
+        return skip_record
     raise TypeError(
         f"recovery phase {phase.name!r} wants_to_run returned {type(decision).__name__}, "
         "expected True or SkipDecision"

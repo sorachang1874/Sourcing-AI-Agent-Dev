@@ -41550,26 +41550,17 @@ class SourcingOrchestrator:
             workflow_resume_barrier = _daemon_owned_workflow_resume_barrier(
                 "daemon_owned_work_open_before_workflow_resume"
             )
-        if workflow_resume_barrier:
-            workflow_resume = []
-            _skipped_phase(
-                "workflow_resume",
-                owner="workflow_resume_controller",
-                reason=str(workflow_resume_barrier.get("reason") or "daemon_owned_work_open_before_workflow_resume"),
-                max_sync_work=(
-                    "workflow resume yields after same-tick durable daemon work without rescanning open work"
-                    if bool(workflow_resume_barrier.get("skip_expensive_open_work_scan"))
-                    else "workflow resume waits until job-scoped daemon-owned work is clear"
-                ),
-            )
-        else:
-            workflow_resume = _run_recovery_phase(
+        # Step 2b slice 8: workflow_resume onto the registry seam — the FIRST
+        # result-vs-record divergent phase (skip emits the record but hands []
+        # back to the tick), expressed via SkipDecision.skip_result.
+        def _workflow_resume_body(ctx: TickContext) -> Any:
+            return ctx.run_phase(
                 "workflow_resume",
                 owner="workflow_resume_controller",
                 max_sync_work="bounded workflow state resume only",
-                callback=lambda: self._resume_blocked_workflows_after_recovery(
+                callback=lambda: ctx.orchestrator._resume_blocked_workflows_after_recovery(
                     summary,
-                    explicit_job_id=explicit_job_id if workflow_resume_explicit_job else "",
+                    explicit_job_id=ctx.explicit_job_id if workflow_resume_explicit_job else "",
                     stale_job_scope_job_id=workflow_stale_scope_job_id,
                     include_stale_acquiring=workflow_auto_resume_enabled,
                     stale_after_seconds=workflow_resume_stale_after_seconds,
@@ -41581,6 +41572,29 @@ class SourcingOrchestrator:
                 ),
                 default_result=[],
             )
+
+        workflow_resume = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="workflow_resume",
+                default_owner="workflow_resume_controller",
+                default_max_sync_work="bounded workflow state resume only",
+                guard=lambda ctx, _barrier=workflow_resume_barrier: (
+                    SkipDecision(
+                        reason=str(_barrier.get("reason") or "daemon_owned_work_open_before_workflow_resume"),
+                        max_sync_work=(
+                            "workflow resume yields after same-tick durable daemon work without rescanning open work"
+                            if bool(_barrier.get("skip_expensive_open_work_scan"))
+                            else "workflow resume waits until job-scoped daemon-owned work is clear"
+                        ),
+                        skip_result=[],
+                    )
+                    if _barrier
+                    else True
+                ),
+                body=_workflow_resume_body,
+            ),
+            _tick_ctx,
+        )
         # Fold the durable-intent drain's per-job scoped resume results into the
         # tick's accumulated workflow_resume list (a real takeover for a job the
         # generic resume's default stale window would have skipped this tick).
@@ -41591,33 +41605,41 @@ class SourcingOrchestrator:
                 if isinstance(item, dict) and str(item.get("status") or "") not in {"", "skipped"}
             )
         post_completion_reconcile_enabled = _coerce_bool(payload.get("post_completion_reconcile_enabled"), True)
-        if post_completion_reconcile_enabled and not workflow_resume_barrier:
-            post_completion_reconcile = _run_recovery_phase(
-                "post_completion_reconcile",
-                owner="completed_workflow_reconcile",
-                max_sync_work="bounded completed-workflow reconcile only",
-                callback=lambda: self._reconcile_completed_workflows_after_recovery(
-                    summary,
-                    explicit_job_id=explicit_job_id,
+        post_completion_reconcile = run_registry_phase(
+            CallbackRecoveryPhase(
+                name="post_completion_reconcile",
+                default_owner="completed_workflow_reconcile",
+                default_max_sync_work="bounded completed-workflow reconcile only",
+                guard=lambda ctx, _enabled=post_completion_reconcile_enabled, _barrier=workflow_resume_barrier: (
+                    True
+                    if _enabled and not _barrier
+                    else SkipDecision(
+                        reason=(
+                            "daemon_owned_work_open_before_post_completion_reconcile"
+                            if _barrier
+                            else "post_completion_reconcile_disabled_by_payload"
+                        ),
+                        max_sync_work=(
+                            "completed-workflow reconcile waits until job-scoped daemon-owned work is clear"
+                            if _barrier
+                            else "no completed-workflow reconcile work"
+                        ),
+                        skip_result=[],
+                    )
                 ),
-                default_result=[],
-            )
-        else:
-            post_completion_reconcile = []
-            _skipped_phase(
-                "post_completion_reconcile",
-                owner="completed_workflow_reconcile",
-                reason=(
-                    "daemon_owned_work_open_before_post_completion_reconcile"
-                    if workflow_resume_barrier
-                    else "post_completion_reconcile_disabled_by_payload"
+                body=lambda ctx: ctx.run_phase(
+                    "post_completion_reconcile",
+                    owner="completed_workflow_reconcile",
+                    max_sync_work="bounded completed-workflow reconcile only",
+                    callback=lambda: ctx.orchestrator._reconcile_completed_workflows_after_recovery(
+                        summary,
+                        explicit_job_id=ctx.explicit_job_id,
+                    ),
+                    default_result=[],
                 ),
-                max_sync_work=(
-                    "completed-workflow reconcile waits until job-scoped daemon-owned work is clear"
-                    if workflow_resume_barrier
-                    else "no completed-workflow reconcile work"
-                ),
-            )
+            ),
+            _tick_ctx,
+        )
         excel_intake_recovery = run_registry_phase(
             CallbackRecoveryPhase(
                 name="excel_intake_recovery",
