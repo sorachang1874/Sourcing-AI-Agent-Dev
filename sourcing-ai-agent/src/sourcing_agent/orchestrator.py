@@ -466,6 +466,9 @@ from .recovery_phases import (
     TickContext,
     build_drain_group_phases,
     build_recovery_phase_registry,
+    merge_profile_refill_results,
+    phase_work_observed,
+    profile_refill_owner_drain_payload,
     run_registry_phase,
 )
 from .recovery_sidecar import (
@@ -40611,68 +40614,6 @@ class SourcingOrchestrator:
             }
             return skipped
 
-        def _phase_work_observed(*results: Any) -> bool:
-            for result in results:
-                if isinstance(result, dict):
-                    for key in (
-                        "claimed_count",
-                        "completed_count",
-                        "failed_count",
-                        "dispatched_url_count",
-                        "queued_worker_count",
-                        "executed_count",
-                        "executed_command_count",
-                        "recorded_count",
-                        "planned_command_count",
-                        "planned_worker_count",
-                        "planned_url_count",
-                        "converted_count",
-                        "round_count",
-                    ):
-                        if _coerce_int(result.get(key), 0) > 0:
-                            return True
-                    continue
-                if isinstance(result, list) and result:
-                    return True
-            return False
-
-        def _profile_refill_owner_drain_payload(result: Any) -> dict[str, Any]:
-            if not isinstance(result, dict):
-                return {}
-            direct = dict(result.get("profile_command_owner_drain") or {})
-            if direct:
-                return direct
-            merged: dict[str, Any] = {}
-            for group in list(result.get("groups") or []):
-                if not isinstance(group, dict):
-                    continue
-                group_drain = dict(group.get("profile_command_owner_drain") or {})
-                if not group_drain:
-                    continue
-                merged.setdefault("status", group_drain.get("status"))
-                merged.setdefault("reason", group_drain.get("reason"))
-                merged["command_count"] = _coerce_int(merged.get("command_count"), 0) + _coerce_int(
-                    group_drain.get("command_count"),
-                    0,
-                )
-                merged["executed_command_count"] = _coerce_int(
-                    merged.get("executed_command_count"),
-                    0,
-                ) + _coerce_int(group_drain.get("executed_command_count"), 0)
-                merged["dispatched_url_count"] = _coerce_int(
-                    merged.get("dispatched_url_count"),
-                    0,
-                ) + _coerce_int(group_drain.get("dispatched_url_count"), 0)
-                merged["queued_worker_count"] = _coerce_int(
-                    merged.get("queued_worker_count"),
-                    0,
-                ) + _coerce_int(group_drain.get("queued_worker_count"), 0)
-                merged["deferred_url_count"] = _coerce_int(
-                    merged.get("deferred_url_count"),
-                    0,
-                ) + _coerce_int(group_drain.get("deferred_url_count"), 0)
-            return merged
-
         def _worker_phase_handoff_required(result: Any) -> bool:
             """True when this recovery tick consumed worker terminal evidence.
 
@@ -40741,90 +40682,6 @@ class SourcingOrchestrator:
             if isinstance(value, list):
                 return any(_phase_budget_yield_requested(item) for item in value)
             return False
-
-        def _merge_profile_refill_results(primary: Any, secondary: Any) -> dict[str, Any]:
-            primary_payload = dict(primary or {}) if isinstance(primary, dict) else {}
-            secondary_payload = dict(secondary or {}) if isinstance(secondary, dict) else {}
-            if not primary_payload:
-                return secondary_payload
-            if not secondary_payload:
-                return primary_payload
-            merged = dict(secondary_payload)
-            groups = list(primary_payload.get("groups") or []) + list(secondary_payload.get("groups") or [])
-            if groups:
-                merged["groups"] = groups
-            selected_states = []
-            for value in list(primary_payload.get("selected_refill_states") or []) + list(
-                secondary_payload.get("selected_refill_states") or []
-            ):
-                normalized = str(value or "").strip()
-                if normalized and normalized not in selected_states:
-                    selected_states.append(normalized)
-            if selected_states:
-                merged["selected_refill_states"] = selected_states
-            for key in (
-                "group_count",
-                "inspected_group_count",
-                "active_group_count",
-                "retry_wait_blocked_group_count",
-                "dispatched_url_count",
-                "queued_worker_count",
-                "deferred_url_count",
-                "planned_command_count",
-                "planned_worker_count",
-                "planned_url_count",
-            ):
-                merged[key] = _coerce_int(primary_payload.get(key), 0) + _coerce_int(
-                    secondary_payload.get(key),
-                    0,
-                )
-            for key in (
-                "phase_budget_ms",
-                "dispatch_worker_limit",
-                "refill_item_limit",
-                "refill_durable_unit_max_urls",
-                "refill_provider_envelope_max_urls",
-            ):
-                primary_value = primary_payload.get(key)
-                secondary_value = secondary_payload.get(key)
-                if secondary_value not in (None, ""):
-                    merged[key] = secondary_value
-                elif primary_value not in (None, ""):
-                    merged[key] = primary_value
-            if "nonblocking_submit" in primary_payload or "nonblocking_submit" in secondary_payload:
-                merged["nonblocking_submit"] = bool(
-                    secondary_payload.get("nonblocking_submit", primary_payload.get("nonblocking_submit"))
-                )
-            status_values = {
-                str(primary_payload.get("status") or "").strip().lower(),
-                str(secondary_payload.get("status") or "").strip().lower(),
-            }
-            if "failed" in status_values:
-                merged["status"] = "failed"
-            elif _phase_work_observed(primary_payload, secondary_payload):
-                merged["status"] = "active"
-            elif "skipped" in status_values and len(status_values - {"", "skipped"}) == 0:
-                merged["status"] = "skipped"
-            else:
-                merged["status"] = "idle"
-            reasons = [
-                str(primary_payload.get("reason") or "").strip(),
-                str(secondary_payload.get("reason") or "").strip(),
-            ]
-            if str(primary_payload.get("status") or "").strip().lower() == "skipped" and reasons[0] in {
-                "pre_worker_refill_not_requested",
-                "job_scope_missing",
-            }:
-                reasons[0] = ""
-            if str(secondary_payload.get("status") or "").strip().lower() == "skipped" and reasons[1] in {
-                "post_worker_refill_not_requested",
-                "job_scope_missing",
-            }:
-                reasons[1] = ""
-            merged["reason"] = "+".join(reason for reason in reasons if reason) or str(merged.get("reason") or "")
-            merged["pre_worker_recovery"] = primary_payload
-            merged["post_worker_recovery"] = secondary_payload
-            return merged
 
         def _runtime_heartbeat_summary(value: Any) -> dict[str, Any]:
             if isinstance(value, dict):
@@ -41022,7 +40879,7 @@ class SourcingOrchestrator:
         def _profile_refill_worker_submit_observed(result: Any) -> bool:
             if not isinstance(result, dict):
                 return False
-            owner_drain = _profile_refill_owner_drain_payload(result)
+            owner_drain = profile_refill_owner_drain_payload(result)
             return (
                 _coerce_int(result.get("queued_worker_count"), 0) > 0
                 or _coerce_int(result.get("dispatched_url_count"), 0) > 0
@@ -41170,7 +41027,7 @@ class SourcingOrchestrator:
             _tick_ctx.profile_refill_command_planned_this_tick
             or _profile_refill_command_planned_observed(profile_prefetch_refill)
         )
-        profile_prefetch_refill = _merge_profile_refill_results(
+        profile_prefetch_refill = merge_profile_refill_results(
             pre_worker_profile_prefetch_refill,
             profile_prefetch_refill,
         )
@@ -41294,7 +41151,7 @@ class SourcingOrchestrator:
         )
         provider_control_open_work: dict[str, Any] = {}
         profile_refill_event_level_materialization_followup = {"status": "skipped", "reason": "job_scope_missing"}
-        profile_refill_work_observed = _phase_work_observed(profile_prefetch_refill)
+        profile_refill_work_observed = phase_work_observed(profile_prefetch_refill)
         if (
             explicit_job_id
             and profile_prefetch_refill_enabled
@@ -41349,7 +41206,7 @@ class SourcingOrchestrator:
                     else "no job-scoped event-level drain after profile refill"
                 ),
             )
-        profile_refill_event_work_observed = _phase_work_observed(profile_refill_event_level_materialization_followup)
+        profile_refill_event_work_observed = phase_work_observed(profile_refill_event_level_materialization_followup)
         board_visible_ready_before_local_apply = (
             explicit_job_id.strip()
             and not worker_recovery_handoff_required
@@ -41437,7 +41294,7 @@ class SourcingOrchestrator:
                     }
                 ),
             )
-        local_apply_backlog_work_observed = _phase_work_observed(local_apply_backlog)
+        local_apply_backlog_work_observed = phase_work_observed(local_apply_backlog)
         legacy_materialization_adapter_enabled = _legacy_materialization_adapter_enabled_for_payload(payload)
         legacy_materialization_adapter = run_registry_phase(
             CallbackRecoveryPhase(
@@ -41472,7 +41329,7 @@ class SourcingOrchestrator:
             ),
             _tick_ctx,
         )
-        legacy_materialization_adapter_work_observed = _phase_work_observed(legacy_materialization_adapter)
+        legacy_materialization_adapter_work_observed = phase_work_observed(legacy_materialization_adapter)
         event_level_materialization_followup = {"status": "skipped", "reason": "job_scope_missing"}
         if (
             explicit_job_id
@@ -41541,7 +41398,7 @@ class SourcingOrchestrator:
         if (
             explicit_job_id
             and profile_prefetch_refill_enabled
-            and _phase_work_observed(
+            and phase_work_observed(
                 local_apply_backlog,
                 event_level_materialization_followup,
                 profile_refill_event_level_materialization_followup,
@@ -41578,7 +41435,7 @@ class SourcingOrchestrator:
                     if explicit_job_id
                     and profile_prefetch_refill_enabled
                     and _tick_ctx.profile_refill_submit_observed_this_tick
-                    and _phase_work_observed(
+                    and phase_work_observed(
                         local_apply_backlog,
                         event_level_materialization_followup,
                         profile_refill_event_level_materialization_followup,
@@ -41617,11 +41474,11 @@ class SourcingOrchestrator:
             ),
             _tick_ctx,
         )
-        event_level_work_observed = _phase_work_observed(event_level_materialization_followup)
+        event_level_work_observed = phase_work_observed(event_level_materialization_followup)
         same_tick_visibility_handoff_required = (
             worker_recovery_handoff_required
             or _tick_ctx.profile_refill_submit_observed_this_tick
-            or _phase_work_observed(profile_url_terminal_record_command_owner)
+            or phase_work_observed(profile_url_terminal_record_command_owner)
             or legacy_materialization_adapter_work_observed
         )
         same_tick_durable_work_observed = (
@@ -41637,7 +41494,7 @@ class SourcingOrchestrator:
                 else "profile_refill_submit_handoff_to_next_tick"
                 if _tick_ctx.profile_refill_submit_observed_this_tick
                 else "profile_url_terminal_record_handoff_to_next_tick"
-                if _phase_work_observed(profile_url_terminal_record_command_owner)
+                if phase_work_observed(profile_url_terminal_record_command_owner)
                 else "profile_refill_event_drain_owned_local_apply_this_tick"
                 if profile_refill_event_work_observed
                 else "legacy_materialization_adapter_handoff_to_next_tick"
@@ -41651,7 +41508,7 @@ class SourcingOrchestrator:
                 else "profile refill already submitted provider work in this tick; local-apply, board-visible apply, and full compaction remain queued"
                 if _tick_ctx.profile_refill_submit_observed_this_tick
                 else "profile URL terminal-record owner already consumed registry state writes in this tick; local-apply, board-visible apply, and full compaction remain queued"
-                if _phase_work_observed(profile_url_terminal_record_command_owner)
+                if phase_work_observed(profile_url_terminal_record_command_owner)
                 else "profile refill event-level drain already consumed a bounded local-apply/board-visible unit; "
                 "remaining durable visibility and compaction work stays queued for the next daemon tick"
                 if profile_refill_event_work_observed
@@ -41815,7 +41672,7 @@ class SourcingOrchestrator:
                 max_sync_work="claim and execute ready projection.board_visible_patch.publish workflow_commands only",
                 callback=lambda: self._run_board_visible_apply_queue_once(payload),
             )
-        board_visible_apply_work_observed = _phase_work_observed(board_visible_apply)
+        board_visible_apply_work_observed = phase_work_observed(board_visible_apply)
         if same_tick_durable_work_observed:
             run_scope_projection_finalize = _skipped_phase(
                 "run_scope_projection_finalize",
@@ -41840,7 +41697,7 @@ class SourcingOrchestrator:
                 max_sync_work="claim and execute ready projection.run_scope.finalize workflow_commands only",
                 callback=lambda: self._drain_run_scope_projection_finalize_commands(payload),
             )
-        run_scope_projection_finalize_work_observed = _phase_work_observed(run_scope_projection_finalize)
+        run_scope_projection_finalize_work_observed = phase_work_observed(run_scope_projection_finalize)
         post_projection_workflow_resume: list[dict[str, Any]] = []
         post_projection_workflow_resume_barrier = {}
         post_projection_resume_trigger = ""
@@ -41943,7 +41800,7 @@ class SourcingOrchestrator:
                 max_sync_work="bounded full snapshot compaction items only",
                 callback=lambda: self._run_snapshot_full_materialization_queue_once(payload),
             )
-        snapshot_full_materialization_work_observed = _phase_work_observed(snapshot_full_materialization)
+        snapshot_full_materialization_work_observed = phase_work_observed(snapshot_full_materialization)
         projection_facet_layering_enabled = _coerce_bool(
             payload.get("projection_facet_layering_enabled"),
             True,
@@ -41999,7 +41856,7 @@ class SourcingOrchestrator:
                 max_sync_work="bounded projection facet/layering build chunks only",
                 callback=lambda: self._run_projection_facet_layering_queue_once(payload),
             )
-        projection_facet_layering_work_observed = _phase_work_observed(projection_facet_layering)
+        projection_facet_layering_work_observed = phase_work_observed(projection_facet_layering)
         projection_person_search_index_enabled = _coerce_bool(
             payload.get("projection_person_search_index_enabled"),
             True,
@@ -42065,7 +41922,7 @@ class SourcingOrchestrator:
                 max_sync_work="claim and execute ready projection.person_search_index.build workflow_commands only",
                 callback=lambda: self._run_projection_person_search_index_queue_once(payload),
             )
-        projection_person_search_index_work_observed = _phase_work_observed(projection_person_search_index)
+        projection_person_search_index_work_observed = phase_work_observed(projection_person_search_index)
         collection_authoritative_merge_enabled = _coerce_bool(
             payload.get("collection_authoritative_merge_enabled"),
             True,
@@ -42333,7 +42190,7 @@ class SourcingOrchestrator:
         if (
             explicit_job_id
             and profile_prefetch_refill_enabled
-            and _phase_work_observed(remote_event_followup, post_followup_event_level_materialization_followup)
+            and phase_work_observed(remote_event_followup, post_followup_event_level_materialization_followup)
             and not _tick_ctx.profile_refill_submit_observed_this_tick
         ):
             post_followup_profile_prefetch_refill = _run_recovery_phase(
@@ -42365,7 +42222,7 @@ class SourcingOrchestrator:
                     if explicit_job_id
                     and profile_prefetch_refill_enabled
                     and _tick_ctx.profile_refill_submit_observed_this_tick
-                    and _phase_work_observed(remote_event_followup, post_followup_event_level_materialization_followup)
+                    and phase_work_observed(remote_event_followup, post_followup_event_level_materialization_followup)
                     else "no_remote_event_profile_refill_opportunity"
                     if explicit_job_id
                     else "job_scope_missing"

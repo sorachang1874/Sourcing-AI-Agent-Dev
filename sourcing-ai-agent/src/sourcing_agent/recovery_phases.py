@@ -265,3 +265,174 @@ def run_registry_phase(phase: RecoveryPhase, ctx: TickContext) -> Any:
         f"recovery phase {phase.name!r} wants_to_run returned {type(decision).__name__}, "
         "expected True or SkipDecision"
     )
+
+
+# ---------------------------------------------------------------------------
+# Step 2b slice 2 (B2, 2026-07-22): profile-refill cascade helpers promoted
+# from run_worker_recovery_once closures to module-level PURE functions
+# (verbatim bodies; the tiny int coercion is replicated locally because
+# the import direction forbids reaching back into orchestrator).
+# ---------------------------------------------------------------------------
+def _coerce_int(value: Any, default: int) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    raw = str(value).strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def phase_work_observed(*results: Any) -> bool:
+    for result in results:
+        if isinstance(result, dict):
+            for key in (
+                "claimed_count",
+                "completed_count",
+                "failed_count",
+                "dispatched_url_count",
+                "queued_worker_count",
+                "executed_count",
+                "executed_command_count",
+                "recorded_count",
+                "planned_command_count",
+                "planned_worker_count",
+                "planned_url_count",
+                "converted_count",
+                "round_count",
+            ):
+                if _coerce_int(result.get(key), 0) > 0:
+                    return True
+            continue
+        if isinstance(result, list) and result:
+            return True
+    return False
+
+
+def profile_refill_owner_drain_payload(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {}
+    direct = dict(result.get("profile_command_owner_drain") or {})
+    if direct:
+        return direct
+    merged: dict[str, Any] = {}
+    for group in list(result.get("groups") or []):
+        if not isinstance(group, dict):
+            continue
+        group_drain = dict(group.get("profile_command_owner_drain") or {})
+        if not group_drain:
+            continue
+        merged.setdefault("status", group_drain.get("status"))
+        merged.setdefault("reason", group_drain.get("reason"))
+        merged["command_count"] = _coerce_int(merged.get("command_count"), 0) + _coerce_int(
+            group_drain.get("command_count"),
+            0,
+        )
+        merged["executed_command_count"] = _coerce_int(
+            merged.get("executed_command_count"),
+            0,
+        ) + _coerce_int(group_drain.get("executed_command_count"), 0)
+        merged["dispatched_url_count"] = _coerce_int(
+            merged.get("dispatched_url_count"),
+            0,
+        ) + _coerce_int(group_drain.get("dispatched_url_count"), 0)
+        merged["queued_worker_count"] = _coerce_int(
+            merged.get("queued_worker_count"),
+            0,
+        ) + _coerce_int(group_drain.get("queued_worker_count"), 0)
+        merged["deferred_url_count"] = _coerce_int(
+            merged.get("deferred_url_count"),
+            0,
+        ) + _coerce_int(group_drain.get("deferred_url_count"), 0)
+    return merged
+
+
+
+def merge_profile_refill_results(primary: Any, secondary: Any) -> dict[str, Any]:
+    primary_payload = dict(primary or {}) if isinstance(primary, dict) else {}
+    secondary_payload = dict(secondary or {}) if isinstance(secondary, dict) else {}
+    if not primary_payload:
+        return secondary_payload
+    if not secondary_payload:
+        return primary_payload
+    merged = dict(secondary_payload)
+    groups = list(primary_payload.get("groups") or []) + list(secondary_payload.get("groups") or [])
+    if groups:
+        merged["groups"] = groups
+    selected_states = []
+    for value in list(primary_payload.get("selected_refill_states") or []) + list(
+        secondary_payload.get("selected_refill_states") or []
+    ):
+        normalized = str(value or "").strip()
+        if normalized and normalized not in selected_states:
+            selected_states.append(normalized)
+    if selected_states:
+        merged["selected_refill_states"] = selected_states
+    for key in (
+        "group_count",
+        "inspected_group_count",
+        "active_group_count",
+        "retry_wait_blocked_group_count",
+        "dispatched_url_count",
+        "queued_worker_count",
+        "deferred_url_count",
+        "planned_command_count",
+        "planned_worker_count",
+        "planned_url_count",
+    ):
+        merged[key] = _coerce_int(primary_payload.get(key), 0) + _coerce_int(
+            secondary_payload.get(key),
+            0,
+        )
+    for key in (
+        "phase_budget_ms",
+        "dispatch_worker_limit",
+        "refill_item_limit",
+        "refill_durable_unit_max_urls",
+        "refill_provider_envelope_max_urls",
+    ):
+        primary_value = primary_payload.get(key)
+        secondary_value = secondary_payload.get(key)
+        if secondary_value not in (None, ""):
+            merged[key] = secondary_value
+        elif primary_value not in (None, ""):
+            merged[key] = primary_value
+    if "nonblocking_submit" in primary_payload or "nonblocking_submit" in secondary_payload:
+        merged["nonblocking_submit"] = bool(
+            secondary_payload.get("nonblocking_submit", primary_payload.get("nonblocking_submit"))
+        )
+    status_values = {
+        str(primary_payload.get("status") or "").strip().lower(),
+        str(secondary_payload.get("status") or "").strip().lower(),
+    }
+    if "failed" in status_values:
+        merged["status"] = "failed"
+    elif phase_work_observed(primary_payload, secondary_payload):
+        merged["status"] = "active"
+    elif "skipped" in status_values and len(status_values - {"", "skipped"}) == 0:
+        merged["status"] = "skipped"
+    else:
+        merged["status"] = "idle"
+    reasons = [
+        str(primary_payload.get("reason") or "").strip(),
+        str(secondary_payload.get("reason") or "").strip(),
+    ]
+    if str(primary_payload.get("status") or "").strip().lower() == "skipped" and reasons[0] in {
+        "pre_worker_refill_not_requested",
+        "job_scope_missing",
+    }:
+        reasons[0] = ""
+    if str(secondary_payload.get("status") or "").strip().lower() == "skipped" and reasons[1] in {
+        "post_worker_refill_not_requested",
+        "job_scope_missing",
+    }:
+        reasons[1] = ""
+    merged["reason"] = "+".join(reason for reason in reasons if reason) or str(merged.get("reason") or "")
+    merged["pre_worker_recovery"] = primary_payload
+    merged["post_worker_recovery"] = secondary_payload
+    return merged
+
