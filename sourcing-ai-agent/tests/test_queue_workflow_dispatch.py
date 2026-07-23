@@ -792,6 +792,15 @@ class QueueWorkflowDispatchTest(PGControlPlaneStoreTestMixin, unittest.TestCase)
                 "target_company": "Google",
             }
         )
+        self.store.save_job(
+            job_id=source_job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=dict(plan_result.get("request") or {}),
+            plan_payload={},
+            summary_payload={"message": "completed"},
+        )
         review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
 
         queued = self.orchestrator.queue_workflow(
