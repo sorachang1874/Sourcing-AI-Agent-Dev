@@ -15,7 +15,6 @@ GRANDFATHERED = frozenset([
     "test_asset_catalog.py",
     "test_asset_consolidation_cold_archive_manifest.py",
     "test_asset_consolidation_repair_apply.py",
-    "test_asset_coverage_backfill.py",
     "test_asset_governance.py",
     "test_asset_logger.py",
     "test_asset_paths.py",
