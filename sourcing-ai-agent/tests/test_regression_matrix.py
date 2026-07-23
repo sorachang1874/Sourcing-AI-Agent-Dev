@@ -186,6 +186,23 @@ def test_orchestrator_change_selects_recovery_tick_oracle() -> None:
     assert any("results" in label or "orchestrator" in label.lower() for label in labels)
 
 
+def test_enrichment_change_selects_batch_division_characterization_oracle() -> None:
+    # WS7 ruling-① (2026-07-23): the fetch-profile batch-division ladder in
+    # enrichment.py is pinned by the plan-record characterization oracle; an
+    # enrichment edit must route to the oracle and the scheduler contract guards,
+    # not only the paired suite (recovery_phases -> tick-oracle precedent).
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/enrichment.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_fetch_profile_batch_characterization.py" in labels
+    assert "paired::tests/test_profile_prefetch_scheduler_contract.py" in labels
+    assert "paired::tests/test_enrichment.py" in labels
+
+
 def test_recovery_phases_change_selects_recovery_tick_oracle() -> None:
     labels = {
         invocation.label

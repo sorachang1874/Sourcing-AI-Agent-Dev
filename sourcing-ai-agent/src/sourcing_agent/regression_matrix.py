@@ -336,6 +336,30 @@ _RECOVERY_PHASES_SUITES = (
         reason="worker recovery daemon drives the recovery tick that iterates the phase registry",
     ),
 )
+# enrichment.py owns the fetch-profile batch-division ladder pinned by the WS7
+# ruling-① plan-record characterization oracle (2026-07-23); edits there must
+# re-run the oracle alongside the paired enrichment suite, mirroring the
+# recovery_phases -> tick-oracle precedent.
+_ENRICHMENT_RELATED_PATHS = {
+    "src/sourcing_agent/enrichment.py",
+}
+_ENRICHMENT_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_enrichment.py",
+        args=("tests/test_enrichment.py",),
+        reason="paired test for enrichment.py",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_fetch_profile_batch_characterization.py",
+        args=("tests/test_fetch_profile_batch_characterization.py",),
+        reason="WS7 ruling-① plan-record oracle pins the fetch-profile batch-division ladder",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_profile_prefetch_scheduler_contract.py",
+        args=("tests/test_profile_prefetch_scheduler_contract.py",),
+        reason="profile-prefetch scheduler R1-R7 contract guards ride every enrichment edit",
+    ),
+)
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
     # T-008 remap: operation/agent contract band + orchestrator-extracted
@@ -497,6 +521,11 @@ def infer_pytest_invocations(
         if path in _RECOVERY_PHASES_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _RECOVERY_PHASES_SUITES:
+                add(invocation)
+            continue
+        if path in _ENRICHMENT_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _ENRICHMENT_SUITES:
                 add(invocation)
             continue
         if path == "src/sourcing_agent/orchestrator.py":
