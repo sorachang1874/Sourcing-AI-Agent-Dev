@@ -555,5 +555,938 @@ class RecoveryTickWholeTickCharacterizationTest(
         self.assertTrue(total_row["budget_exhausted"])
 
 
+
+class RecoveryTickYieldLadderSalvageTest(PGDurableRuntimeTestMixin, unittest.TestCase):
+    """Additive yield/priority-ladder pins — salvage wave 3 (2026-07-22).
+
+    Ported verbatim from the frozen test_pipeline.py (R-009 salvage-then-delete;
+    work-list docs/governance/RECOVERY_BAND_OWNERSHIP_2026-07-22.md group 3):
+    the pinned reasons (board_visible_apply_ready_prioritized,
+    daemon_owned_work_open_before_workflow_resume,
+    local_apply_or_board_visible_work_consumed_this_tick, visibility-cap and
+    idle-refill ladders) existed only in orchestrator.py with no modern pin.
+    ADDITIVE ONLY: the base characterization class is untouched; this class
+    duplicates its small fixture (standalone, so base tests do not re-run
+    through inheritance).
+    """
+
+    setUp = RecoveryTickWholeTickCharacterizationTest.setUp
+    tearDown = RecoveryTickWholeTickCharacterizationTest.tearDown
+
+    def test_run_worker_recovery_once_refills_profile_slots_before_local_apply_and_yields_workflow_resume(self) -> None:
+        order: list[str] = []
+
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                order.append("worker_recovery")
+                return {
+                    "owner_id": "provider-event",
+                    "recoverable_count": 1,
+                    "claimed_count": 1,
+                    "executed_count": 1,
+                    "jobs": [{"job_id": "job_provider_event", "claimed_count": 1, "executed_count": 1}],
+                }
+
+        def _drain_local_apply(payload):
+            order.append("local_apply")
+            return {"status": "active", "claimed_count": 1, "completed_count": 1}
+
+        def _refill_profile_prefetch(payload):
+            order.append("profile_prefetch_refill")
+            return {"status": "idle", "dispatched_url_count": 0}
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "cleanup_blocked_workflow_residue",
+                return_value={"status": "skipped", "reason": "test"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                side_effect=_drain_local_apply,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                side_effect=_refill_profile_prefetch,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_resume_blocked_workflows_after_recovery",
+                side_effect=AssertionError("workflow resume must yield after same-tick durable local apply"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflows_after_recovery",
+                return_value=[],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "test"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "idle"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                return_value={"status": "idle"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "test"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "test"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "owner_id": "provider-event",
+                    "workflow_auto_resume_enabled": True,
+                    "workflow_queue_auto_takeover_enabled": False,
+                }
+            )
+
+        self.assertEqual(recovery["status"], "completed")
+        self.assertLess(order.index("profile_prefetch_refill"), order.index("local_apply"))
+        self.assertNotIn("workflow_resume", order)
+        self.assertEqual(dict(recovery.get("local_apply_backlog") or {}).get("completed_count"), 1)
+        self.assertEqual(len(list(recovery.get("workflow_resume") or [])), 0)
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertEqual(
+            phases["workflow_resume"]["reason"],
+            "local_apply_or_board_visible_work_consumed_this_tick",
+        )
+
+    def test_run_worker_recovery_once_caps_visibility_drain_while_provider_control_work_is_open(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "provider-event",
+                    "recoverable_count": 1,
+                    "claimed_count": 1,
+                    "executed_count": 1,
+                    "jobs": [{"job_id": "job_provider_event_open", "claimed_count": 1, "executed_count": 1}],
+                }
+
+        provider_open_work = {
+            "daemon_owned_open_work_count": 48,
+            "pending_worker_count": 1,
+            "profile_refill_open_item_count": 47,
+            "profile_refill_state_counts": {"deferred_coalescing": 47},
+        }
+        local_apply_payloads: list[dict[str, object]] = []
+        event_level_calls: list[dict[str, object]] = []
+
+        def _local_apply(payload):
+            local_apply_payloads.append(dict(payload or {}))
+            return {"status": "idle", "claimed_count": 0, "completed_count": 0}
+
+        def _event_level(**kwargs):
+            event_level_calls.append(dict(kwargs))
+            return {"status": "idle", "claimed_count": 0, "completed_count": 0}
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={
+                    "status": "idle",
+                    "reason": "tail_coalescing_wait",
+                    "group_count": 0,
+                    "dispatched_url_count": 0,
+                    "queued_worker_count": 0,
+                    "deferred_url_count": 47,
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_job_scoped_recovery_open_work_summary",
+                return_value=provider_open_work,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                side_effect=_local_apply,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                side_effect=_event_level,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_resume_blocked_workflows_after_recovery",
+                return_value=[],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflows_after_recovery",
+                return_value=[],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_provider_event_open",
+                    "profile_prefetch_refill_before_worker_recovery": True,
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "snapshot_full_materialization_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": False,
+                }
+            )
+
+        self.assertTrue(local_apply_payloads)
+        self.assertTrue(event_level_calls)
+        self.assertTrue(
+            all(int(payload.get("local_apply_closure_item_limit") or 0) == 1 for payload in local_apply_payloads)
+        )
+        self.assertTrue(all(int(call.get("local_apply_limit") or 0) == 1 for call in event_level_calls))
+        self.assertTrue(all(int(call.get("board_visible_limit") or 0) == 1 for call in event_level_calls))
+        self.assertEqual(dict(recovery.get("local_apply_backlog") or {}).get("status"), "idle")
+        self.assertEqual(dict(recovery.get("provider_control_open_work") or {}).get("pending_worker_count"), 1)
+
+    def test_run_worker_recovery_once_refills_profile_slots_after_event_level_apply_opens_work(self) -> None:
+        order: list[str] = []
+
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                order.append("worker_recovery")
+                return {
+                    "owner_id": "event-level-refill",
+                    "recoverable_count": 0,
+                    "claimed_count": 0,
+                    "executed_count": 0,
+                    "jobs": [],
+                }
+
+        def _profile_refill(payload):
+            order.append("profile_refill")
+            if order.count("profile_refill") == 1:
+                return {"status": "idle", "dispatched_url_count": 0, "queued_worker_count": 0}
+            return {"status": "active", "dispatched_url_count": 50, "queued_worker_count": 1}
+
+        def _local_apply(payload):
+            order.append("local_apply")
+            return {"status": "active", "claimed_count": 1, "completed_count": 1}
+
+        def _event_level(**kwargs):
+            source = str(kwargs.get("source") or "")
+            order.append(f"event_level:{source}")
+            if source == "worker_recovery_tick_after_remote_event_followup":
+                return {"status": "idle", "claimed_count": 0, "completed_count": 0}
+            return {"status": "active", "claimed_count": 1, "completed_count": 1}
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                side_effect=_profile_refill,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                side_effect=_local_apply,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                side_effect=_event_level,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_job_scoped_recovery_open_work_summary",
+                return_value={"daemon_owned_open_work_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_resume_blocked_workflows_after_recovery",
+                return_value=[],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflows_after_recovery",
+                return_value=[],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_event_level_refill",
+                    "explicit_job_followup_rounds": 0,
+                    "snapshot_full_materialization_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": False,
+                }
+        )
+
+        self.assertEqual(order.count("profile_refill"), 2)
+        profile_refill_indexes = [
+            index for index, value in enumerate(order) if value == "profile_refill"
+        ]
+        self.assertLess(order.index("local_apply"), profile_refill_indexes[1])
+        post_refill = dict(recovery.get("post_event_level_profile_prefetch_refill") or {})
+        self.assertEqual(post_refill["status"], "active")
+        self.assertEqual(post_refill["dispatched_url_count"], 50)
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertEqual(phases["post_event_level_profile_prefetch_refill"]["owner"], "profile_refill_daemon")
+
+    def test_run_worker_recovery_once_does_not_drain_after_idle_profile_refill(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "phase-metrics",
+                    "recoverable_count": 0,
+                    "claimed_count": 0,
+                    "executed_count": 0,
+                    "candidate_count": 0,
+                    "jobs": [],
+                }
+
+        event_level_calls: list[dict[str, object]] = []
+
+        def _event_level_drain(**kwargs):
+            event_level_calls.append(dict(kwargs))
+            return {
+                "status": "active",
+                "claimed_count": 1,
+                "completed_count": 1,
+                "candidate_count": 50,
+                "card_count": 50,
+            }
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={
+                    "status": "idle",
+                    "reason": "no_ready_profile_refill_items",
+                    "dispatched_url_count": 0,
+                    "queued_worker_count": 0,
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                return_value={
+                    "status": "active",
+                    "reason": "local_apply_closure_item_queue",
+                    "claimed_count": 1,
+                    "completed_count": 1,
+                    "candidate_count": 50,
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                side_effect=_event_level_drain,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_idle_profile_refill",
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "snapshot_full_materialization_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": False,
+                }
+            )
+
+        sources = [str(call.get("source") or "") for call in event_level_calls]
+        self.assertNotIn("worker_recovery_tick_after_profile_refill", sources)
+        self.assertNotIn("worker_recovery_tick_after_local_apply_backlog", sources)
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertEqual(phases["profile_refill_event_level_materialization_followup"]["reason"], "no_profile_refill_event_work")
+        self.assertEqual(phases["local_apply_backlog"]["status"], "active")
+        self.assertEqual(
+            phases["event_level_materialization_followup"]["reason"],
+            "local_apply_or_board_visible_work_consumed_this_tick",
+        )
+
+    def test_run_worker_recovery_once_prioritizes_ready_board_visible_before_local_apply(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "phase-metrics",
+                    "recoverable_count": 0,
+                    "claimed_count": 0,
+                    "executed_count": 0,
+                    "jobs": [],
+                }
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={"status": "idle", "dispatched_url_count": 0, "queued_worker_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.store,
+                "list_ready_job_materialization_items",
+                return_value=[{"item_id": "board-visible-ready"}],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                side_effect=AssertionError("ready board-visible work must publish before claiming more local apply"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                side_effect=AssertionError("ready board-visible work must not go through event-level local apply"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "active", "claimed_count": 1, "completed_count": 1, "candidate_count": 40},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                side_effect=AssertionError("board-visible publication must yield full compaction"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_board_visible_priority",
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": False,
+                }
+            )
+
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertEqual(phases["local_apply_backlog"]["reason"], "board_visible_apply_ready_prioritized")
+        self.assertEqual(phases["event_level_materialization_followup"]["reason"], "board_visible_apply_ready_prioritized")
+        self.assertEqual(phases["board_visible_apply"]["counts"]["completed_count"], 1)
+        self.assertEqual(phases["snapshot_full_materialization"]["reason"], "board_visible_apply_consumed_this_tick")
+
+    def test_run_worker_recovery_once_does_not_let_remote_wait_poll_block_ready_board_visible(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "phase-metrics",
+                    "recoverable_count": 1,
+                    "claimed_count": 1,
+                    "executed_count": 1,
+                    "jobs": [
+                        {
+                            "job_id": "job_remote_wait_poll",
+                            "claimed_count": 1,
+                            "executed_count": 1,
+                            "completion_callback_count": 1,
+                            "completion_callback_results": [
+                                {"status": "skipped", "reason": "worker_not_completed"}
+                            ],
+                            "daemon_events": [
+                                {
+                                    "cycle": 1,
+                                    "lane_id": "enrichment_specialist",
+                                    "worker_key": "harvest_profile_batch::pending",
+                                    "status": "queued",
+                                    "attempt": 1,
+                                }
+                            ],
+                        }
+                    ],
+                }
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={"status": "idle", "dispatched_url_count": 0, "queued_worker_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.store,
+                "list_ready_job_materialization_items",
+                return_value=[{"item_id": "board-visible-ready"}],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                side_effect=AssertionError("remote-wait polling must not claim local apply before ready board-visible"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                side_effect=AssertionError("remote-wait polling must not route ready board-visible through local apply"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_job_scoped_recovery_open_work_summary",
+                return_value={"daemon_owned_open_work_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "active", "claimed_count": 1, "completed_count": 1, "candidate_count": 50},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                side_effect=AssertionError("board-visible publication must yield full compaction"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_remote_wait_poll",
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": False,
+                }
+            )
+
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertFalse(recovery["durable_work_handoff_yield"])
+        self.assertEqual(phases["local_apply_backlog"]["reason"], "board_visible_apply_ready_prioritized")
+        self.assertEqual(phases["board_visible_apply"]["counts"]["completed_count"], 1)
+        self.assertEqual(phases["snapshot_full_materialization"]["reason"], "board_visible_apply_consumed_this_tick")
+
+    def test_run_worker_recovery_once_yields_standalone_visibility_after_event_level_work(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "phase-metrics",
+                    "recoverable_count": 0,
+                    "claimed_count": 0,
+                    "executed_count": 0,
+                    "jobs": [],
+                }
+
+        def _event_level_drain(**kwargs):
+            self.assertEqual(str(kwargs.get("source") or ""), "worker_recovery_tick_after_local_apply_backlog")
+            return {
+                "status": "active",
+                "claimed_count": 1,
+                "completed_count": 1,
+                "candidate_count": 80,
+                "card_count": 80,
+            }
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={
+                    "status": "idle",
+                    "reason": "no_ready_profile_refill_items",
+                    "dispatched_url_count": 0,
+                    "queued_worker_count": 0,
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_job_scoped_recovery_open_work_summary",
+                return_value={"daemon_owned_open_work_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                side_effect=_event_level_drain,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "active", "claimed_count": 1, "completed_count": 1},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                side_effect=AssertionError("full compaction must yield to the next tick"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_event_level_yield",
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": False,
+                }
+            )
+
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertTrue(recovery["durable_work_handoff_yield"])
+        self.assertTrue(recovery["next_tick_requested"])
+        self.assertEqual(phases["event_level_materialization_followup"]["counts"]["candidate_count"], 80)
+        self.assertEqual(phases["board_visible_apply"]["counts"]["completed_count"], 1)
+        self.assertEqual(
+            phases["snapshot_full_materialization"]["reason"],
+            "local_apply_or_board_visible_work_consumed_this_tick",
+        )
+        self.assertEqual(
+            phases["workflow_resume"]["reason"],
+            "local_apply_or_board_visible_work_consumed_this_tick",
+        )
+
+    def test_run_worker_recovery_once_defers_resume_while_daemon_owned_work_open(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "phase-metrics",
+                    "recoverable_count": 0,
+                    "claimed_count": 0,
+                    "executed_count": 0,
+                    "jobs": [],
+                }
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={"status": "idle", "dispatched_url_count": 0, "queued_worker_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_job_scoped_recovery_open_work_summary",
+                return_value={
+                    "status": "active",
+                    "reason": "job_scope_open_work",
+                    "job_id": "job_daemon_open",
+                    "daemon_owned_open_work_count": 2,
+                    "open_work_count": 3,
+                    "profile_refill_open_item_count": 2,
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_resume_blocked_workflows_after_recovery",
+                side_effect=AssertionError("workflow resume must wait for daemon-owned queues to drain"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflows_after_recovery",
+                side_effect=AssertionError("completed reconcile must wait for daemon-owned queues to drain"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": "job_daemon_open",
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "snapshot_full_materialization_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": True,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": True,
+                }
+            )
+
+        self.assertEqual(recovery["workflow_resume"], [])
+        self.assertEqual(recovery["post_completion_reconcile"], [])
+        phases = dict(recovery.get("recovery_phase_metrics") or {})
+        self.assertEqual(phases["workflow_resume"]["reason"], "daemon_owned_work_open_before_workflow_resume")
+        self.assertEqual(
+            phases["post_completion_reconcile"]["reason"],
+            "daemon_owned_work_open_before_post_completion_reconcile",
+        )
+
 if __name__ == "__main__":
     unittest.main()
