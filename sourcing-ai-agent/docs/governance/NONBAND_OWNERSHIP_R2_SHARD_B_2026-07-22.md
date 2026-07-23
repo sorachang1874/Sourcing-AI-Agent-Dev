@@ -1,5 +1,14 @@
 # Non-band forensics R2 — shard B (test_pipeline.py, def line > 15000, band-excluded)
 
+> Status: ACTIVE salvage work-list（R-009 salvage-then-delete 第二轮；分片 B=130 件:87 SUPERSEDED/43 SALVAGE→14 港组/0 ARCH-RETIRED/0 UNCLEAR；方法与裁决语义同 RECOVERY_BAND_OWNERSHIP_2026-07-22.md）。
+
+```
+status: active          owner: operator
+canonical-path: sourcing-ai-agent/docs/governance/NONBAND_OWNERSHIP_R2_SHARD_B_2026-07-22.md
+ratified: 2026-07-22
+last-verified: 2026-07-22
+```
+
 130 tests. Method: prior-session digest (patched symbols / salient assert strings / modern-suite
 string coverage) + src-aliveness sweep + targeted assert-window reads. Key fact: **zero dead
 symbols** — every called/patched method and every contract string still exists in
