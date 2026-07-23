@@ -811,5 +811,151 @@ class QueueWorkflowDispatchTest(PGControlPlaneStoreTestMixin, unittest.TestCase)
         self.assertTrue(execution_preferences.get("force_fresh_run"))
 
 
+    def test_queue_workflow_reuses_authoritative_registry_snapshot_without_family_match(self) -> None:
+        snapshot_id = "20260413T010101"
+        _, candidate_doc_path = self._write_company_snapshot_candidate_documents(
+            target_company="Anthropic",
+            snapshot_id=snapshot_id,
+            candidates=[
+                Candidate(
+                    candidate_id="cand_registry_current",
+                    name_en="Infra Generalist",
+                    display_name="Infra Generalist",
+                    category="employee",
+                    target_company="Anthropic",
+                    organization="Anthropic",
+                    employment_status="current",
+                    role="Engineer",
+                    focus_areas="infrastructure systems",
+                    linkedin_url="https://www.linkedin.com/in/infra-generalist/",
+                ).to_record(),
+                Candidate(
+                    candidate_id="cand_registry_former",
+                    name_en="Alignment Former",
+                    display_name="Alignment Former",
+                    category="employee",
+                    target_company="Anthropic",
+                    organization="Anthropic",
+                    employment_status="former",
+                    role="Researcher",
+                    focus_areas="alignment safety",
+                    linkedin_url="https://www.linkedin.com/in/alignment-former/",
+                ).to_record(),
+            ],
+        )
+        registry_row = self._upsert_authoritative_org_registry(
+            target_company="Anthropic",
+            snapshot_id=snapshot_id,
+            candidate_count=2,
+            source_path=str(candidate_doc_path),
+            current_ready=True,
+            former_ready=True,
+            current_count=1,
+            former_count=1,
+        )
+
+        queued = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 做安全和对齐方向的人。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["安全", "对齐"],
+                "top_k": 8,
+                "skip_plan_review": True,
+            }
+        )
+
+        self.assertEqual(queued["status"], "queued")
+        # FLIPPED 2026-07-22 (4b forensics): under the unified query-shaped
+        # strategy (WS1 Step 3) this scoped request dispatches delta on the
+        # registry baseline; the test's core contract — the authoritative
+        # registry is chosen WITHOUT a family match — is the reuse_basis pin.
+        self.assertEqual(queued["dispatch"]["strategy"], "delta_from_snapshot")
+        self.assertEqual(queued["dispatch"]["matched_snapshot_id"], snapshot_id)
+        self.assertEqual(int(queued["dispatch"]["matched_registry_id"] or 0), int(registry_row["registry_id"] or 0))
+        self.assertEqual(queued["dispatch"]["reuse_basis"], "organization_asset_registry_lane_coverage")
+        self.assertEqual(queued["dispatch"]["matched_job_id"], "")
+        # Delta dispatch does not pin reuse-only; the registry preference is
+        # carried by reuse_basis above.
+        self.assertFalse(queued["dispatch"]["force_reuse_snapshot_only"])
+        self.assertEqual(
+            queued["dispatch"]["request_family_match_explanation"]["selection_mode"],
+            "organization_asset_registry_lane_coverage",
+        )
+
+        queued_job = self.store.get_job(str(queued.get("job_id") or ""))
+        assert queued_job is not None
+        execution_preferences = dict(dict(queued_job.get("request") or {}).get("execution_preferences") or {})
+        # Delta carries the baseline binding, not the reuse-only pin.
+        self.assertEqual(execution_preferences.get("delta_baseline_snapshot_id"), snapshot_id)
+        # reuse_existing_roster was the reuse-only pin; delta does not set it.
+        self.assertNotIn("reuse_existing_roster", execution_preferences)
+        # The old tail pinned reuse-only run semantics (zero acquisition tasks
+        # on run_queued_workflow); under the unified delta dispatch the run
+        # legitimately executes delta acquisition — run-level delta behavior
+        # is owned by the hosted smoke delta rows and the acquisition suites.
+
+    def test_queue_workflow_registry_reuse_requires_delta_when_former_lane_missing(self) -> None:
+        snapshot_id = "20260413T020202"
+        _, candidate_doc_path = self._write_company_snapshot_candidate_documents(
+            target_company="Anthropic",
+            snapshot_id=snapshot_id,
+            candidates=[
+                Candidate(
+                    candidate_id="cand_registry_only_current",
+                    name_en="Current Only",
+                    display_name="Current Only",
+                    category="employee",
+                    target_company="Anthropic",
+                    organization="Anthropic",
+                    employment_status="current",
+                    role="Engineer",
+                    focus_areas="infrastructure systems",
+                    linkedin_url="https://www.linkedin.com/in/current-only/",
+                ).to_record(),
+            ],
+        )
+        self._upsert_authoritative_org_registry(
+            target_company="Anthropic",
+            snapshot_id=snapshot_id,
+            candidate_count=1,
+            source_path=str(candidate_doc_path),
+            current_ready=True,
+            former_ready=False,
+            current_count=1,
+            former_count=0,
+        )
+
+        queued = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 的前员工。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["former"],
+                "top_k": 6,
+                "skip_plan_review": True,
+            }
+        )
+
+        self.assertEqual(queued["status"], "queued")
+        # FLIPPED 2026-07-22 (4b forensics): B1 unified the former lane onto
+        # per-function shard delta — a missing former lane now dispatches
+        # delta_from_snapshot on the registry baseline instead of a new job
+        # with an acquisition-strategy override.
+        self.assertEqual(queued["dispatch"]["strategy"], "delta_from_snapshot")
+        # Delta binds the registry baseline snapshot instead of leaving the
+        # match empty.
+        self.assertEqual(queued["dispatch"]["matched_snapshot_id"], snapshot_id)
+        self.assertGreater(int(queued["dispatch"]["matched_registry_id"] or 0), 0)
+
+        queued_job = self.store.get_job(str(queued.get("job_id") or ""))
+        assert queued_job is not None
+        execution_preferences = dict(dict(queued_job.get("request") or {}).get("execution_preferences") or {})
+        # The former override still rides the delta request (probe-verified);
+        # delta additionally binds the baseline snapshot ids.
+        self.assertEqual(execution_preferences.get("acquisition_strategy_override"), "former_employee_search")
+        self.assertEqual(execution_preferences.get("delta_baseline_snapshot_id"), snapshot_id)
+
 if __name__ == "__main__":
     unittest.main()
