@@ -23,6 +23,7 @@ from pathlib import Path
 
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, EvidenceRecord, JobRequest, make_evidence_id
 from sourcing_agent.durable_runtime import legacy_job_operation_id, legacy_job_workflow_run_id
 from sourcing_agent.model_provider import DeterministicModelClient
@@ -913,6 +914,687 @@ class CompletedReconcileAndOpenWorkTest(PGControlPlaneStoreTestMixin, unittest.T
                 for event in structured_events
             )
         )
+
+
+    # -- shard-B port groups B+C (2026-07-22): outreach-layering reconcile
+    # retry/continue loop + the per-kind completed-workflow reconcile drains
+    # (reconciled_search_seed / reconciled_company_roster, no-candidate-delta
+    # skip) — durable-command-surface calibration risk was flagged; ported
+    # verbatim first.
+
+    def test_background_outreach_layering_reconcile_retries_completion_lease_inflight(self) -> None:
+        with (
+            unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "OUTREACH_LAYERING_BACKGROUND_RECONCILE_MAX_ATTEMPTS": "3",
+                    "OUTREACH_LAYERING_BACKGROUND_RECONCILE_RETRY_SECONDS": "0",
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflow_if_needed",
+                side_effect=[
+                    {
+                        "job_id": "job_outreach_layering_retry",
+                        "status": "skipped",
+                        "reason": "completed_workflow_reconcile_inflight",
+                    },
+                    {
+                        "job_id": "job_outreach_layering_retry",
+                        "status": "reconciled_outreach_layering",
+                    },
+                ],
+            ) as reconcile,
+        ):
+            result = self.orchestrator._run_background_outreach_layering_reconcile(
+                job_id="job_outreach_layering_retry",
+                source="workflow_completion",
+            )
+
+        self.assertEqual(result["status"], "reconciled_outreach_layering")
+        self.assertEqual(result["attempt_count"], 2)
+        self.assertTrue(result["background_retry"])
+        self.assertEqual(reconcile.call_count, 2)
+
+    def test_background_outreach_layering_reconcile_continues_after_adjacent_reconcile(self) -> None:
+        job_id = "job_outreach_layering_after_adjacent_reconcile"
+        request_payload = {
+            "raw_user_request": "Find current and former researchers",
+            "target_company": "Acme",
+            "target_scope": "full_company_asset",
+        }
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request_payload,
+            plan_payload={},
+            summary_payload={
+                "candidate_source": {"snapshot_id": "snapshot-adjacent-reconcile"},
+                "outreach_layering": {
+                    "status": "scheduled",
+                    "snapshot_id": "snapshot-adjacent-reconcile",
+                    "reason": "deferred_for_asset_population_fast_path",
+                },
+            },
+            artifact_path="",
+        )
+        initial_event_count = len(self.store.list_job_events(job_id))
+        with (
+            unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "OUTREACH_LAYERING_BACKGROUND_RECONCILE_MAX_ATTEMPTS": "3",
+                    "OUTREACH_LAYERING_BACKGROUND_RECONCILE_RETRY_SECONDS": "0",
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflow_if_needed",
+                side_effect=[
+                    {"job_id": job_id, "status": "reconciled_harvest_prefetch"},
+                    {"job_id": job_id, "status": "reconciled_outreach_layering"},
+                ],
+            ) as reconcile,
+        ):
+            result = self.orchestrator._run_background_outreach_layering_reconcile(
+                job_id=job_id,
+                source="workflow_completion",
+            )
+
+        self.assertEqual(result["status"], "reconciled_outreach_layering")
+        self.assertEqual(result["attempt_count"], 2)
+        self.assertTrue(result["background_retry"])
+        self.assertEqual(reconcile.call_count, 2)
+        retry_events = [
+            event
+            for event in self.store.list_job_events(job_id)[initial_event_count:]
+            if str(dict(event.get("payload") or {}).get("retry_reason") or "")
+            == "background_outreach_layering_pending_after_adjacent_reconcile"
+        ]
+        self.assertEqual(len(retry_events), 1)
+
+    def test_reconcile_completed_workflow_after_background_search_seed(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_search_seed_reconcile"
+        snapshot_dir = self.settings.company_assets_dir / "reflectionai" / "snapshot-search-reconcile"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+            linkedin_company_url="https://www.linkedin.com/company/reflectionai/",
+        )
+        (discovery_dir / "entries.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "seed_key": "baseline",
+                        "full_name": "Baseline Lead",
+                        "source_type": "harvest_profile_search",
+                        "source_query": "Reflection AI infra",
+                        "profile_url": "https://www.linkedin.com/in/baseline-lead/",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (discovery_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": "Reflection AI",
+                    "company_identity": identity.to_record(),
+                    "entry_count": 1,
+                    "query_summaries": [
+                        {
+                            "query": "Reflection AI infra",
+                            "bundle_id": "bundle-infra",
+                            "source_family": "people_search",
+                            "execution_mode": "web_search",
+                            "mode": "web_search",
+                            "status": "queued",
+                            "seed_entry_count": 0,
+                        }
+                    ],
+                    "errors": [],
+                    "accounts_used": [],
+                    "stop_reason": "queued_background_search",
+                    "queued_query_count": 1,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        Candidate(
+                            candidate_id="baseline-candidate",
+                            name_en="Baseline Lead",
+                            display_name="Baseline Lead",
+                            category="employee",
+                            target_company="Reflection AI",
+                            organization="Reflection AI",
+                            employment_status="current",
+                            role="Infrastructure Engineer",
+                            focus_areas="infra systems",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        artifact_path = self.settings.jobs_dir / f"{job_id}.result.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(json.dumps({"job_id": job_id, "summary": {}}, ensure_ascii=False), encoding="utf-8")
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Workflow completed.",
+                "candidate_source": {"snapshot_id": snapshot_dir.name},
+                "background_reconcile": {},
+            },
+            artifact_path=str(artifact_path),
+        )
+        worker_handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="bundle-infra::01",
+            stage="acquiring",
+            span_name="search_bundle:bundle-infra",
+            budget_payload={"max_results": 10},
+            input_payload={"query_spec": {"query": "Reflection AI infra"}},
+            metadata={
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker_handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed"},
+            output_payload={
+                "summary": {
+                    "query": "Reflection AI infra",
+                    "bundle_id": "bundle-infra",
+                    "source_family": "people_search",
+                    "execution_mode": "web_search",
+                    "mode": "web_search",
+                    "status": "completed",
+                    "seed_entry_count": 1,
+                },
+                "entries": [
+                    {
+                        "seed_key": "new-lead",
+                        "full_name": "Infra Builder",
+                        "headline": "Platform Engineer",
+                        "source_type": "web_search",
+                        "source_query": "Reflection AI infra",
+                        "profile_url": "https://www.linkedin.com/in/infra-builder/",
+                    }
+                ],
+                "errors": [],
+            },
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_apply_background_search_seed_workers_to_snapshot",
+            side_effect=AssertionError("completed workflow search-seed worker-summary merge is retired"),
+        ):
+            reconcile = self.orchestrator._reconcile_completed_workflow_if_needed(job_id)
+
+        self.assertEqual(str(reconcile.get("status") or ""), "skipped")
+        self.assertEqual(
+            str(reconcile.get("reason") or ""),
+            "search_seed_reconcile_requires_durable_local_apply_closure_item",
+        )
+        self.assertEqual(int(reconcile.get("local_apply_closure_item_count") or 0), 0)
+        self.assertEqual(int(reconcile.get("search_seed_discovery_item_count") or 0), 0)
+        refreshed_job = self.store.get_job(job_id)
+        assert refreshed_job is not None
+        search_reconcile = dict(dict(refreshed_job.get("summary") or {}).get("background_reconcile") or {}).get(
+            "search_seed"
+        )
+        self.assertFalse(search_reconcile)
+        updated_entries = json.loads((discovery_dir / "entries.json").read_text())
+        self.assertEqual(len(updated_entries), 1)
+        updated_summary = json.loads((discovery_dir / "summary.json").read_text())
+        self.assertEqual(int(updated_summary["queued_query_count"]), 1)
+        candidate_doc = json.loads(candidate_doc_path.read_text())
+        self.assertEqual(int(candidate_doc["candidate_count"]), 1)
+        structured_events = [
+            dict(event.get("payload") or {})
+            for event in self.store.list_job_events(job_id)
+            if dict(event.get("payload") or {}).get("event_family") == "completed_workflow_reconcile"
+        ]
+        self.assertTrue(
+            any(str(event.get("phase") or "") == "worker_summary_merge_retired" for event in structured_events)
+        )
+
+    def test_completed_search_seed_no_candidate_delta_skips_prefetch_and_materialize(self) -> None:
+        request_payload = {
+            "raw_user_request": "帮我找OpenAI做Infra方向的人",
+            "target_company": "OpenAI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["Infra"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_search_seed_no_candidate_delta"
+        snapshot_dir = self.settings.company_assets_dir / "openai" / "snapshot-search-no-delta"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="OpenAI",
+            canonical_name="OpenAI",
+            company_key="openai",
+            linkedin_slug="openai",
+            linkedin_company_url="https://www.linkedin.com/company/openai/",
+        )
+        baseline_entry = {
+            "seed_key": "baseline-infra",
+            "full_name": "Baseline Infra",
+            "source_type": "harvest_profile_search",
+            "source_query": "OpenAI Infra",
+            "profile_url": "https://www.linkedin.com/in/baseline-infra/",
+        }
+        (discovery_dir / "entries.json").write_text(
+            json.dumps([baseline_entry], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (discovery_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": "OpenAI",
+                    "company_identity": identity.to_record(),
+                    "entry_count": 1,
+                    "query_summaries": [],
+                    "errors": [],
+                    "accounts_used": [],
+                    "stop_reason": "provider_people_search_fallback",
+                    "queued_query_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        Candidate(
+                            candidate_id="baseline-infra-candidate",
+                            name_en="Baseline Infra",
+                            display_name="Baseline Infra",
+                            category="employee",
+                            target_company="OpenAI",
+                            organization="OpenAI",
+                            employment_status="current",
+                            role="Infrastructure Engineer",
+                            linkedin_url="https://www.linkedin.com/in/baseline-infra/",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        artifact_path = self.settings.jobs_dir / f"{job_id}.result.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(json.dumps({"job_id": job_id, "summary": {}}, ensure_ascii=False), encoding="utf-8")
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Workflow completed.",
+                "candidate_source": {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": snapshot_dir.name,
+                    "asset_view": "canonical_merged",
+                    "source_path": str(candidate_doc_path),
+                    "candidate_count": 1,
+                },
+                "background_reconcile": {},
+            },
+            artifact_path=str(artifact_path),
+        )
+        worker_handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="former::seed_queries::01",
+            stage="acquiring",
+            span_name="search_bundle:former-seed",
+            budget_payload={"max_results": 10},
+            input_payload={"query_spec": {"query": "Infra"}},
+            metadata={
+                "recovery_kind": "search_seed_discovery",
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker_handle,
+            status="completed",
+            checkpoint_payload={
+                "stage": "completed",
+                "recovery_kind": "search_seed_discovery",
+                "provider_name": "dataforseo_google_organic",
+            },
+            output_payload={
+                "summary": {
+                    "query": "Infra",
+                    "bundle_id": "seed_queries",
+                    "source_family": "public_web_search",
+                    "execution_mode": "low_cost_web_search",
+                    "mode": "web_search",
+                    "status": "completed",
+                    "result_count": 9,
+                    "linkedin_result_count": 0,
+                    "seed_entry_count": 0,
+                },
+                "entries": [],
+                "errors": [],
+                "seed_entry_count": 0,
+            },
+        )
+
+        enqueue = self.orchestrator._enqueue_local_apply_closure_item_for_completed_worker_result(
+            {"worker_id": worker_handle.worker_id, "worker_status": "completed", "source": "unit_test"}
+        )
+        self.assertEqual(str(enqueue.get("status") or ""), "enqueued")
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_queue_background_profile_prefetch_from_search_seed_snapshot",
+                side_effect=AssertionError("zero-delta search seed must not queue profile prefetch"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_inline_incremental_sync_for_running_job",
+                side_effect=AssertionError("zero-delta search seed must not full materialize"),
+            ),
+        ):
+            queue_result = self.orchestrator._run_local_apply_closure_item_queue_once(
+                {"job_id": job_id, "local_apply_closure_item_limit": 1}
+            )
+
+        self.assertEqual(int(queue_result.get("completed_count") or 0), 1)
+        reconcile = dict(dict(queue_result["items"][0]).get("callback_result") or {})
+        self.assertEqual(reconcile["status"], "reconciled_search_seed")
+        self.assertEqual(reconcile["sync_status"], "skipped")
+        self.assertEqual(reconcile["sync_reason"], "search_seed_no_candidate_delta")
+        worker = self.store.get_agent_worker(worker_id=worker_handle.worker_id)
+        assert worker is not None
+        inline_ingest = dict(dict(worker.get("output") or {}).get("inline_incremental_ingest") or {})
+        self.assertEqual(inline_ingest["sync_reason"], "search_seed_no_candidate_delta")
+        refreshed_job = self.store.get_job(job_id)
+        assert refreshed_job is not None
+        search_reconcile = dict(dict(refreshed_job.get("summary") or {}).get("background_reconcile") or {}).get(
+            "search_seed"
+        )
+        self.assertEqual(int(search_reconcile["added_entry_count"]), 0)
+        self.assertEqual(
+            str(dict(search_reconcile.get("profile_prefetch") or {}).get("reason") or ""),
+            "search_seed_no_candidate_delta",
+        )
+        self.assertEqual(len(json.loads((discovery_dir / "entries.json").read_text(encoding="utf-8"))), 1)
+
+    def test_reconcile_completed_workflow_after_background_company_roster(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Manus AI people",
+            "target_company": "Manus AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_company_roster_reconcile"
+        snapshot_dir = self.settings.company_assets_dir / "manusai" / "snapshot-company-roster-reconcile"
+        shard_snapshot_dir = snapshot_dir / "harvest_company_employees" / "shards" / "all_people"
+        shard_harvest_dir = shard_snapshot_dir / "harvest_company_employees"
+        shard_harvest_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="Manus AI",
+            canonical_name="Manus AI",
+            company_key="manusai",
+            linkedin_slug="manus-ai",
+            linkedin_company_url="https://www.linkedin.com/company/manus-ai/",
+        )
+        dataset_items_path = shard_harvest_dir / "harvest_company_employees_queue_dataset_items.json"
+        dataset_items_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "manus_member_1",
+                        "linkedinUrl": "https://www.linkedin.com/in/manus-member-1/",
+                        "firstName": "Ada",
+                        "lastName": "Planner",
+                        "summary": "Engineer at Manus AI",
+                        "currentPositions": [
+                            {
+                                "companyName": "Manus AI",
+                                "title": "Software Engineer",
+                                "current": True,
+                            }
+                        ],
+                        "location": {"linkedinText": "San Francisco Bay Area"},
+                        "_meta": {
+                            "pagination": {
+                                "totalElements": 1,
+                                "totalPages": 1,
+                                "pageNumber": 1,
+                                "previousElements": 0,
+                                "pageSize": 25,
+                            },
+                            "query": {
+                                "currentCompanies": ["https://www.linkedin.com/company/manus-ai/"],
+                            },
+                        },
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (shard_harvest_dir / "harvest_company_employees_queue_summary.json").write_text(
+            json.dumps(
+                {
+                    "logical_name": "harvest_company_employees",
+                    "company_identity": identity.to_record(),
+                    "status": "completed",
+                    "requested_pages": 1,
+                    "requested_item_limit": 25,
+                    "company_filters": {},
+                    "artifact_paths": {"dataset_items": str(dataset_items_path)},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        artifact_path = self.settings.jobs_dir / f"{job_id}.result.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(json.dumps({"job_id": job_id, "summary": {}}, ensure_ascii=False), encoding="utf-8")
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Workflow completed.",
+                "candidate_source": {"snapshot_id": snapshot_dir.name},
+                "background_reconcile": {},
+            },
+            artifact_path=str(artifact_path),
+        )
+        worker_handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="acquisition_specialist",
+            worker_key="harvest_company_employees::manusai::all_people",
+            stage="acquiring",
+            span_name="harvest_company_employees:manusai:all_people",
+            budget_payload={"max_pages": 1, "page_limit": 25},
+            input_payload={"company_identity": identity.to_record()},
+            metadata={
+                "recovery_kind": "harvest_company_employees",
+                "identity": identity.to_record(),
+                "snapshot_dir": str(shard_snapshot_dir),
+                "root_snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+                "max_pages": 1,
+                "page_limit": 25,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker_handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed"},
+            output_payload={
+                "summary": {
+                    "company_identity": identity.to_record(),
+                    "status": "completed",
+                    "requested_pages": 1,
+                    "requested_item_limit": 25,
+                    "company_filters": {},
+                    "snapshot_dir": str(shard_snapshot_dir),
+                    "root_snapshot_dir": str(snapshot_dir),
+                    "shard_id": "all_people",
+                    "title": "All People",
+                    "strategy_id": "small_org_roster",
+                }
+            },
+        )
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_queue_background_profile_prefetch_from_available_baselines",
+                return_value={
+                    "status": "queued",
+                    "requested_url_count": 1,
+                    "dispatched_url_count": 1,
+                    "cached_profile_count": 0,
+                    "queued_worker_count": 1,
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_synchronize_snapshot_candidate_documents",
+                return_value={
+                    "status": "completed",
+                    "candidate_count": 1,
+                    "evidence_count": 1,
+                    "artifact_dir": str(snapshot_dir / "normalized_artifacts"),
+                    "artifact_paths": {
+                        "materialized_candidate_documents": str(
+                            snapshot_dir / "normalized_artifacts" / "materialized_candidate_documents.json"
+                        )
+                    },
+                    "state_updates": {},
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_outreach_layering_after_acquisition",
+                return_value={
+                    "status": "completed",
+                    "snapshot_id": snapshot_dir.name,
+                    "layer_counts": {"layer_0_roster": 1},
+                },
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_execute_retrieval",
+                return_value={
+                    "job_id": job_id,
+                    "status": "completed",
+                    "summary": {"message": "Workflow completed after company-roster reconcile."},
+                    "artifact_path": str(artifact_path),
+                },
+            ),
+        ):
+            reconcile = self.orchestrator._reconcile_completed_workflow_if_needed(job_id)
+
+        self.assertEqual(reconcile["status"], "reconciled_company_roster")
+        candidate_doc = json.loads((snapshot_dir / "candidate_documents.json").read_text())
+        self.assertGreaterEqual(int(candidate_doc["candidate_count"]), 1)
+        self.assertTrue(
+            any(str(item.get("name_en") or "") == "Ada Planner" for item in list(candidate_doc.get("candidates") or []))
+        )
+        refreshed_job = self.store.get_job(job_id)
+        assert refreshed_job is not None
+        company_reconcile = dict(dict(refreshed_job.get("summary") or {}).get("background_reconcile") or {}).get(
+            "company_roster"
+        )
+        self.assertEqual(int(company_reconcile["applied_worker_count"]), 1)
+        self.assertEqual(int(dict(company_reconcile.get("profile_prefetch") or {}).get("queued_worker_count") or 0), 1)
 
 if __name__ == "__main__":
     unittest.main()
