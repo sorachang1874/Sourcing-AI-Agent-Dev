@@ -17,6 +17,7 @@ the same change.
 import json
 import os
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -409,6 +410,169 @@ class AcquisitionResumeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def test_superseded_worker_is_terminal_for_acquisition_resume(self) -> None:
         self.assertTrue(_worker_is_terminal_for_acquisition_resume({"status": "superseded"}))
 
+
+    def test_resume_blocked_workflow_after_workers_complete(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find former xAI employees",
+            "target_company": "xAI",
+            "categories": ["former_employee"],
+            "employment_statuses": ["former"],
+            "organization_keywords": ["xAI"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_resume_blocked"
+        snapshot_dir = self.settings.company_assets_dir / "xai" / "snapshot-resume"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting for queued workers", "blocked_task": "acquire_full_roster"},
+        )
+
+        handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="relationship_web::01",
+            stage="acquiring",
+            span_name="search_bundle:relationship_web",
+            budget_payload={"max_results": 10},
+            input_payload={
+                "query_spec": {
+                    "bundle_id": "relationship_web",
+                    "query": "xAI former employee",
+                    "source_family": "public_web_search",
+                },
+                "query": "xAI former employee",
+                "index": 1,
+            },
+            metadata={
+                "index": 1,
+                "identity": CompanyIdentity(
+                    requested_name="xAI",
+                    canonical_name="xAI",
+                    company_key="xai",
+                    linkedin_slug="xai",
+                    linkedin_company_url="https://www.linkedin.com/company/xai/",
+                ).to_record(),
+                "snapshot_dir": str(snapshot_dir),
+                "discovery_dir": str(discovery_dir),
+                "employment_status": "former",
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+                "result_limit": 10,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed", "raw_path": str(discovery_dir / "web_query_01.json")},
+            output_payload={
+                "summary": {"query": "xAI former employee", "status": "completed"},
+                "entries": [],
+                "errors": [],
+            },
+        )
+
+        self.store.replace_bootstrap_data(
+            [
+                Candidate(
+                    candidate_id="cand_resume_1",
+                    name_en="Former XAI Engineer",
+                    display_name="Former XAI Engineer",
+                    category="former_employee",
+                    target_company="xAI",
+                    organization="xAI",
+                    employment_status="former",
+                    role="Engineer",
+                    focus_areas="systems",
+                )
+            ],
+            [
+                EvidenceRecord(
+                    evidence_id=make_evidence_id(
+                        "cand_resume_1", "seed", "xAI former employee", "https://example.com/xai"
+                    ),
+                    candidate_id="cand_resume_1",
+                    source_type="web_search",
+                    title="xAI former employee",
+                    url="https://example.com/xai",
+                    summary="Synthetic evidence for resume test.",
+                    source_dataset="test",
+                    source_path=str(snapshot_dir / "synthetic_evidence.json"),
+                )
+            ],
+        )
+
+        identity = CompanyIdentity(
+            requested_name="xAI",
+            canonical_name="xAI",
+            company_key="xai",
+            linkedin_slug="xai",
+            linkedin_company_url="https://www.linkedin.com/company/xai/",
+        )
+        original_execute_task = self.acquisition_engine.execute_task
+
+        def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved identity.",
+                    payload={"snapshot_dir": str(snapshot_dir)},
+                    state_updates={
+                        "company_identity": identity,
+                        "snapshot_id": snapshot_dir.name,
+                        "snapshot_dir": snapshot_dir,
+                    },
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"{task.task_type} completed.",
+                payload={},
+                state_updates={},
+            )
+
+        self.acquisition_engine.execute_task = fake_execute_task
+        try:
+            resume = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        # CALIBRATED 2026-07-22 (wave 1b, RECOVERY_BAND_OWNERSHIP recipe): the
+        # terminal flip is completion-policy gated and asynchronous now — the
+        # resume call reports running while the policy verifies the produced
+        # results, then the store settles to completed. Poll the durable row
+        # instead of expecting an inline terminal payload.
+        self.assertEqual(resume["job_status"], "running")
+        stored_job = self.store.get_job(job_id)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            stored_job = self.store.get_job(job_id)
+            if str((stored_job or {}).get("status")) == "completed":
+                break
+            time.sleep(0.2)
+        assert stored_job is not None
+        self.assertEqual(stored_job["status"], "completed")
+        acquisition_progress = dict(dict(stored_job.get("summary") or {}).get("acquisition_progress") or {})
+        self.assertEqual(acquisition_progress.get("status"), "completed")
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertGreaterEqual(len(snapshot["results"]), 1)
 
 if __name__ == "__main__":
     unittest.main()
