@@ -361,7 +361,7 @@ class RosterLanePlanningTest(unittest.TestCase):
 
         self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
         policy = dict(acquire_task.metadata["company_employee_shard_policy"] or {})
-        self.assertEqual(str(policy.get("strategy_id") or ""), "adaptive_us_technical_partition")
+        self.assertEqual(str(policy.get("strategy_id") or ""), "unified_function_partition")
         self.assertEqual(policy.get("root_filters", {}).get("locations"), ["Germany"])
         # The generic technical default now also owns its partition axis through
         # request_function_ids: engineering/research are ALWAYS planned as

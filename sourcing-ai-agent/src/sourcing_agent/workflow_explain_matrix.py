@@ -88,7 +88,7 @@ DEFAULT_EXPLAIN_CASES: list[dict[str, Any]] = [
             "org_scale_band": "large",
             "default_acquisition_mode": "scoped_search_roster",
             "plan_primary_strategy_type": "full_company_roster",
-            "plan_company_employee_shard_strategy": "adaptive_us_technical_partition",
+            "plan_company_employee_shard_strategy": "unified_function_partition",
             "plan_company_employee_shard_policy_allow_overflow_partial": True,
             "dispatch_strategy": "new_job",
             "current_lane": "live_acquisition",

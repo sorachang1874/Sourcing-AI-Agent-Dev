@@ -1,6 +1,9 @@
 import unittest
 
 from sourcing_agent.company_shard_planning import (
+    LEGACY_ADAPTIVE_ROSTER_PARTITION_STRATEGY_ID,
+    UNIFIED_ROSTER_PARTITION_STRATEGY_ID,
+    is_unified_roster_partition_strategy,
     FORMER_FUNCTION_SHARD_PLAN_MARKER,
     build_default_company_employee_shard_policy,
     build_request_scoped_former_search_shard_plan,
@@ -15,7 +18,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
             page_limit=25,
         )
 
-        self.assertEqual(policy["strategy_id"], "adaptive_us_technical_partition")
+        self.assertEqual(policy["strategy_id"], UNIFIED_ROSTER_PARTITION_STRATEGY_ID)
         self.assertEqual(policy["root_filters"], {"locations": ["United States"]})
         self.assertEqual(policy["request_function_ids"], ["8", "24"])
         self.assertEqual(policy["partition_rules"], [])
@@ -28,7 +31,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
             page_limit=25,
         )
 
-        self.assertEqual(policy["strategy_id"], "adaptive_us_technical_partition")
+        self.assertEqual(policy["strategy_id"], UNIFIED_ROSTER_PARTITION_STRATEGY_ID)
         self.assertEqual(policy["root_filters"], {"locations": ["United States"]})
         self.assertEqual(policy["request_function_ids"], ["8", "24"])
         self.assertEqual(policy["partition_rules"], [])
@@ -39,7 +42,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
             page_limit=25,
         )
 
-        self.assertEqual(policy["strategy_id"], "adaptive_us_technical_partition")
+        self.assertEqual(policy["strategy_id"], UNIFIED_ROSTER_PARTITION_STRATEGY_ID)
         self.assertEqual(policy["root_filters"], {"locations": ["United States"]})
         self.assertEqual(policy["request_function_ids"], ["8", "24"])
         self.assertEqual(policy["partition_rules"], [])
@@ -313,6 +316,20 @@ class FormerFilterHintsCompanyUrlNormalizationTest(unittest.TestCase):
             ["https://www.linkedin.com/company/googledeepmind/", "https://www.linkedin.com/company/deepmind/"],
         )
         self.assertNotIn("_dropped_non_url_company_references", hints)
+
+
+
+
+class UnifiedStrategyDualAcceptTest(unittest.TestCase):
+    """WS1 write-default retirement (2026-07-23): the dual-accept owner."""
+
+    def test_both_ids_are_unified_and_write_default_is_new(self) -> None:
+        self.assertTrue(is_unified_roster_partition_strategy(UNIFIED_ROSTER_PARTITION_STRATEGY_ID))
+        self.assertTrue(is_unified_roster_partition_strategy(LEGACY_ADAPTIVE_ROSTER_PARTITION_STRATEGY_ID))
+        self.assertFalse(is_unified_roster_partition_strategy("request_function_partition"))
+        self.assertFalse(is_unified_roster_partition_strategy(""))
+        policy = build_default_company_employee_shard_policy(max_pages=10, page_limit=25)
+        self.assertEqual(policy["strategy_id"], UNIFIED_ROSTER_PARTITION_STRATEGY_ID)
 
 
 if __name__ == "__main__":

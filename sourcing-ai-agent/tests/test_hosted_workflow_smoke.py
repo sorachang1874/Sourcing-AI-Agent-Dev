@@ -970,7 +970,7 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             )
             self.assertEqual(
                 by_case["xai_full_roster_live"]["summary"]["plan_company_employee_shard_strategy"],
-                "adaptive_us_technical_partition",
+                "unified_function_partition",
             )
             self.assertTrue(
                 by_case["xai_full_roster_live"]["summary"]["plan_company_employee_shard_policy_allow_overflow_partial"]
@@ -1573,7 +1573,7 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             self.assertEqual((record.get("explain") or {}).get("plan_primary_strategy_type"), "full_company_roster")
             self.assertEqual(
                 (record.get("explain") or {}).get("plan_company_employee_shard_strategy"),
-                "adaptive_us_technical_partition",
+                "unified_function_partition",
             )
             self.assertTrue(
                 (record.get("explain") or {}).get("plan_company_employee_shard_policy_allow_overflow_partial")

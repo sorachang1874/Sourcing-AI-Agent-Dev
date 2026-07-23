@@ -263,6 +263,19 @@ _WORKFLOW_EXPLAIN_RELATED_PATHS = {
 _COMMAND_KERNEL_RELATED_PATHS = {
     "src/sourcing_agent/command_kernel.py",
 }
+# cli_parsers.py is the argparse-only configurator registry extracted from
+# cli.py (WS2 slice 2, 2026-07-22); both route to the paired CLI suite.
+_CLI_RELATED_PATHS = {
+    "src/sourcing_agent/cli.py",
+    "src/sourcing_agent/cli_parsers.py",
+}
+_CLI_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_cli.py",
+        args=("tests/test_cli.py",),
+        reason="CLI command registry / parser configurators changed",
+    ),
+)
 _COMMAND_KERNEL_SUITES = (
     PytestInvocation(
         label="paired::tests/test_durable_runtime.py",
@@ -378,6 +391,9 @@ _ASSET_GOVERNANCE_RELATED_PATHS = {
     "src/sourcing_agent/organization_execution_profile.py",
 }
 _PUBLIC_WEB_RELATED_PATHS = {
+    # company_public_web_action_mixin.py is the verbatim family move of the
+    # orchestrator's track-d public-web action band (WS2 slice 3, 2026-07-22).
+    "src/sourcing_agent/company_public_web_action_mixin.py",
     "src/sourcing_agent/linkedin_url_normalization.py",
     "src/sourcing_agent/public_web_quality.py",
     "src/sourcing_agent/public_web_search.py",
@@ -462,6 +478,11 @@ def infer_pytest_invocations(
             # candidate-artifacts focus; the god-file materialization focus
             # retired with tests/test_pipeline.py (T-008).
             add(_STORAGE_AND_CONTROL_PLANE_SUITES[2])
+            continue
+        if path in _CLI_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _CLI_SUITES:
+                add(invocation)
             continue
         if path in _COMMAND_KERNEL_RELATED_PATHS:
             saw_backend_change = True

@@ -10,6 +10,7 @@ from .cohort_provider_compiler import COHORT_PROVIDER_MANIFEST_VERSION, CohortPr
 from .cohort_selection import CohortSelectionValidationError, explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
+    is_unified_roster_partition_strategy,
     build_default_company_employee_shard_policy,
     build_request_scoped_company_employee_query_plan,
     build_request_scoped_former_search_shard_plan,
@@ -236,7 +237,10 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
 
 def _external_company_employee_shard_strategy(strategy_id: str) -> str:
     normalized = str(strategy_id or "").strip()
-    if normalized == "adaptive_us_technical_partition":
+    # Dual-accept (WS1 write-default retirement 2026-07-23): new plans mint
+    # the unified id, stored plans may still carry the legacy id; both map to
+    # the same stable external display id.
+    if is_unified_roster_partition_strategy(normalized):
         return "adaptive_us_function_partition"
     return normalized
 
@@ -244,7 +248,7 @@ def _external_company_employee_shard_strategy(strategy_id: str) -> str:
 def _external_company_employee_root_filters(strategy_id: str, root_filters: dict[str, Any]) -> dict[str, Any]:
     normalized = str(strategy_id or "").strip()
     filters = dict(root_filters or {})
-    if normalized == "adaptive_us_technical_partition":
+    if is_unified_roster_partition_strategy(normalized):
         filters.pop("function_ids", None)
         filters.pop("exclude_function_ids", None)
     return filters
@@ -257,7 +261,7 @@ def _external_company_employee_partition_patch(
 ) -> dict[str, Any]:
     normalized = str(strategy_id or "").strip()
     normalized_patch = dict(patch or {})
-    if normalized != "adaptive_us_technical_partition":
+    if not is_unified_roster_partition_strategy(normalized):
         return normalized_patch
     root_function_ids = [str(item).strip() for item in list(dict(root_filters or {}).get("function_ids") or []) if str(item).strip()]
     excluded = {

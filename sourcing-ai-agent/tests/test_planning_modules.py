@@ -1788,7 +1788,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertTrue(plan.acquisition_strategy.cost_policy.get("former_broad_past_company_only"))
         self.assertEqual(acquire_task.metadata["max_pages"], 100)
         self.assertEqual(acquire_task.metadata["page_limit"], 25)
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "unified_function_partition")
         self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
         self.assertEqual(
             acquire_task.metadata["company_employee_shard_policy"]["root_filters"],
@@ -1913,7 +1913,7 @@ class PlanningModulesTest(unittest.TestCase):
 
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
         self.assertEqual(acquire_task.metadata["max_pages"], 100)
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "unified_function_partition")
         self.assertTrue(acquire_task.metadata["include_former_search_seed"])
         self.assertEqual(
             shard_policy.get("root_filters"),
@@ -1996,7 +1996,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertFalse(plan.acquisition_strategy.cost_policy.get("keyword_priority_only"))
         self.assertFalse(plan.acquisition_strategy.cost_policy.get("former_keyword_queries_only"))
         self.assertTrue(plan.acquisition_strategy.cost_policy.get("former_broad_past_company_only"))
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "unified_function_partition")
         self.assertEqual(shard_policy.get("request_function_ids"), ["8", "24"])
         self.assertEqual(shard_policy.get("keyword_shards"), [])
         self.assertEqual(shard_policy.get("partition_rules"), [])
@@ -2051,7 +2051,7 @@ class PlanningModulesTest(unittest.TestCase):
         acquire_task = updated_plan["acquisition_tasks"][0]
         shard_policy = dict(acquire_task["metadata"].get("company_employee_shard_policy") or {})
 
-        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "unified_function_partition")
         self.assertEqual(shard_policy.get("request_function_ids"), ["8", "24"])
         self.assertEqual(shard_policy.get("keyword_shards"), [])
         self.assertNotIn("function_ids", shard_policy.get("root_filters", {}))

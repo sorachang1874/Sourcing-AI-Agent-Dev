@@ -45,6 +45,22 @@ DEFAULT_COMPANY_EMPLOYEE_ROSTER_LOCATIONS = ["United States"]
 # from adaptive probe partitions.
 REQUEST_FUNCTION_PARTITION_STRATEGY_ID = "request_function_partition"
 
+# WS1 write-default retirement (2026-07-23): the unified roster policy mints
+# UNIFIED_ROSTER_PARTITION_STRATEGY_ID; the legacy id survives only on stored
+# rows/plans minted before the flip. Comparators must go through
+# is_unified_roster_partition_strategy (single owner of the dual-accept) —
+# never compare either literal directly. Removal condition for the legacy id:
+# zero non-terminal stored rows/plans carry it (pgLegacy hard-count retest).
+UNIFIED_ROSTER_PARTITION_STRATEGY_ID = "unified_function_partition"
+LEGACY_ADAPTIVE_ROSTER_PARTITION_STRATEGY_ID = "adaptive_us_technical_partition"
+
+
+def is_unified_roster_partition_strategy(strategy_id: object) -> bool:
+    return str(strategy_id or "").strip() in {
+        UNIFIED_ROSTER_PARTITION_STRATEGY_ID,
+        LEGACY_ADAPTIVE_ROSTER_PARTITION_STRATEGY_ID,
+    }
+
 # Internal filter_hints marker stamped ONLY by
 # ``build_request_scoped_former_search_shard_plan`` on plan-derived per-function
 # former shards.  The Harvest profile-search connector's payload mapping is
@@ -439,10 +455,11 @@ def build_default_company_employee_shard_policy(
         dict.fromkeys(str(item).strip() for item in list(request_function_ids or []) if str(item).strip())
     ) or list(TECHNICAL_ROSTER_FUNCTION_IDS)
     base = {
-        # Legacy strategy identifier retained so stored baselines, delta
-        # coverage rows, and review display mappings keep matching; the policy
-        # shape itself is the unified per-function contract above.
-        "strategy_id": "adaptive_us_technical_partition",
+        # WS1 write-default retirement (2026-07-23): new policies mint the
+        # unified id; stored rows carrying the legacy id keep matching through
+        # is_unified_roster_partition_strategy (read-side shim — remove when
+        # no non-terminal row carries the legacy id).
+        "strategy_id": UNIFIED_ROSTER_PARTITION_STRATEGY_ID,
         "scope_note": (
             f"Unified probe-driven {location_title} roster partition. Each selected function id "
             "is probed and fetched as its own shard root — never one combined multi-function query — "
