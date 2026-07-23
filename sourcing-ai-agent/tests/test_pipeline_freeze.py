@@ -17,8 +17,8 @@ from pathlib import Path
 PIPELINE = Path(__file__).resolve().parent / "test_pipeline.py"
 
 # Frozen at the 2026-07-22 salvage-decision baseline. Shrink-only.
-MAX_TESTS = 8
-MAX_LINES = 1458
+MAX_TESTS = 4
+MAX_LINES = 959
 
 
 class PipelineFreezeTest(unittest.TestCase):

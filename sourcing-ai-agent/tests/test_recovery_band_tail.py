@@ -30,7 +30,8 @@ from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_paths import canonicalize_company_key
 from sourcing_agent.company_registry import normalize_company_key
 from sourcing_agent.connectors import CompanyIdentity, CompanyRosterSnapshot
-from sourcing_agent.domain import AcquisitionTask, JobRequest
+from sourcing_agent.durable_runtime import legacy_job_operation_id, legacy_job_workflow_run_id
+from sourcing_agent.domain import AcquisitionTask, Candidate, JobRequest
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import (
     SourcingOrchestrator,
@@ -40,6 +41,7 @@ from sourcing_agent.orchestrator import (
 from sourcing_agent.planning import build_sourcing_plan
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.semantic_provider import LocalSemanticProvider
+from sourcing_agent.cli import run_server_runtime_watchdog_once
 from sourcing_agent.service_daemon import WorkerDaemonService
 from sourcing_agent.settings import (
     AppSettings,
@@ -1408,6 +1410,599 @@ class RecoveryBandTailTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(provider_limiter["budget"], 1)
         self.assertEqual(provider_limiter["available_count"], 0)
 
+
+
+    # -- final band-tail four (2026-07-22): watchdog stale-shared bootstrap,
+    # stage1-preview-before-post-profile-tail ordering, segmented-roster
+    # inline callback for completed local shards, and the board-visible
+    # daemon-owned open-work count.
+
+    def _write_company_snapshot_candidate_documents(
+        self,
+        *,
+        target_company: str,
+        snapshot_id: str,
+        candidates: list[dict[str, object]],
+    ) -> tuple[Path, Path]:
+        normalized_key = normalize_company_key(target_company)
+        company_key = canonicalize_company_key(target_company) or normalized_key
+        identity = {
+            "requested_name": target_company,
+            "canonical_name": target_company,
+            "company_key": company_key,
+            "linkedin_slug": company_key,
+            "aliases": [normalized_key] if normalized_key and normalized_key != company_key else [],
+        }
+        company_dir = Path(self.tempdir.name) / "company_assets" / company_key
+        snapshot_dir = company_dir / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "target_company": target_company,
+                        "snapshot_id": snapshot_id,
+                        "company_identity": identity,
+                    },
+                    "target_company": target_company,
+                    "snapshot_id": snapshot_id,
+                    "candidates": candidates,
+                    "evidence": [],
+                    "candidate_count": len(candidates),
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "identity.json").write_text(
+            json.dumps(identity, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id,
+                    "company_identity": identity,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id,
+                    "company_identity": identity,
+                    "target_company": target_company,
+                    "company_key": company_key,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "retrieval_index_summary.json").write_text(
+            json.dumps({"status": "built"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return snapshot_dir, candidate_doc_path
+
+    def test_server_runtime_watchdog_bootstraps_stale_shared_recovery(self) -> None:
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "run_hosted_runtime_watchdog_once",
+            return_value={
+                "status": "completed",
+                "mode": "hosted",
+                "worker_recovery": {"status": "completed"},
+                "hosted_dispatch": [],
+            },
+        ) as hosted_mock:
+            result = run_server_runtime_watchdog_once(self.orchestrator)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["mode"], "hosted")
+        hosted_mock.assert_called_once()
+        hosted_payload = dict(hosted_mock.call_args[0][0] or {})
+        self.assertEqual(hosted_payload["hosted_runtime_watchdog_service_name"], "server-runtime-watchdog")
+        self.assertEqual(hosted_payload["shared_service_name"], "worker-recovery-daemon")
+
+    def test_run_worker_recovery_once_publishes_stage1_preview_before_post_profile_tail(self) -> None:
+        class _FakeDaemon:
+            def run_once(self) -> dict[str, object]:
+                return {
+                    "owner_id": "stage1-preview-bridge",
+                    "recoverable_count": 0,
+                    "claimed_count": 0,
+                    "executed_count": 0,
+                    "jobs": [],
+                }
+
+        request_payload = {
+            "raw_user_request": "Find Google Gemini former researchers",
+            "target_company": "Google",
+            "target_scope": "full_company_asset",
+            "categories": ["researcher", "engineer"],
+            "employment_statuses": ["former"],
+            "keywords": ["Gemini"],
+            "top_k": 10,
+            "execution_preferences": {"delta_baseline_snapshot_id": "20260511T000000"},
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = "job_stage1_preview_bridge_tail_open"
+        snapshot_dir, candidate_doc_path = self._write_company_snapshot_candidate_documents(
+            target_company="Google",
+            snapshot_id="snapshot-google-stage1-preview-bridge",
+            candidates=[
+                Candidate(
+                    candidate_id="cand_google_gemini_bridge",
+                    name_en="Google Gemini Bridge",
+                    display_name="Google Gemini Bridge",
+                    category="former_employee",
+                    target_company="Google",
+                    organization="Google",
+                    employment_status="former",
+                    role="Gemini Research Scientist",
+                    linkedin_url="https://www.linkedin.com/in/google-gemini-bridge/",
+                ).to_record()
+            ],
+        )
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={
+                "message": "Waiting for post-profile materialization.",
+                "acquisition_progress": {
+                    "latest_state": {
+                        "snapshot_id": snapshot_dir.name,
+                        "snapshot_dir": str(snapshot_dir),
+                        "candidate_doc_path": str(candidate_doc_path),
+                    }
+                },
+            },
+        )
+        self.store.upsert_job_result_lifecycle(
+            job_id=job_id,
+            fields={
+                "target_company": "Google",
+                "current_snapshot_id": snapshot_dir.name,
+                "projection_source_snapshot_id": snapshot_dir.name,
+                "baseline_snapshot_id": "20260511T000000",
+                "served_candidate_count": 0,
+                "expected_candidate_count": 1,
+                "delta_profile_progress_applicable": True,
+                "delta_profile_required_count": 1,
+                "delta_profile_fetched_count": 0,
+                "stage1_former_search_returned_count": 1,
+                "stage1_deduped_candidate_count": 1,
+                "stage1_deduped_profile_url_count": 1,
+                "stage1_profile_fetch_required_count": 1,
+                "stage1_profile_fetched_count": 0,
+                "metadata": {
+                    "delta_profile_denominator_promoted": True,
+                    "stage1_terminal_promoted_at": "2026-05-13T00:00:00+00:00",
+                },
+                "source_validation_status": "validated",
+            },
+        )
+        self.store.upsert_job_materialization_item(
+            item_id="local_apply_stage1_preview_bridge_tail_open",
+            job_id=job_id,
+            target_company="Google",
+            snapshot_id=snapshot_dir.name,
+            item_kind="local_apply_closure",
+            source="worker_completion_event",
+            reason="harvest_profile_batch_completed_needs_local_apply_closure",
+            status="queued",
+            phase="queued",
+            source_worker_ids=[881],
+            metadata={"recovery_kind": "harvest_profile_batch", "snapshot_dir": str(snapshot_dir)},
+        )
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_build_worker_recovery_daemon",
+                return_value=_FakeDaemon(),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_search_seed_discovery_query_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_profile_prefetch_refill_queue_once",
+                return_value={"status": "idle", "dispatched_url_count": 0, "queued_worker_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_local_apply_backlog_drain_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_drain_event_level_materialization_for_job",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_board_visible_apply_queue_once",
+                return_value={"status": "idle", "claimed_count": 0, "completed_count": 0},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_snapshot_full_materialization_queue_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_recover_stale_excel_intake_jobs_once",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_remote_event_followup_rounds",
+                side_effect=lambda **kwargs: (
+                    kwargs["summary"],
+                    kwargs["workflow_resume"],
+                    kwargs["post_completion_reconcile"],
+                    {"status": "skipped", "reason": "unit"},
+                ),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_emit_runtime_heartbeats_after_recovery",
+                return_value={"status": "skipped", "reason": "unit"},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_resume_blocked_workflows_after_recovery",
+                side_effect=AssertionError("Stage 1 preview bridge must not resume finalization"),
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_reconcile_completed_workflows_after_recovery",
+                side_effect=AssertionError("Stage 1 preview bridge must not reconcile completion"),
+            ),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": job_id,
+                    "explicit_job_followup_rounds": 0,
+                    "search_seed_discovery_enabled": False,
+                    "snapshot_full_materialization_enabled": False,
+                    "excel_intake_recovery_enabled": False,
+                    "post_recovery_housekeeping_enabled": False,
+                    "workflow_auto_resume_enabled": True,
+                    "workflow_resume_explicit_job": True,
+                    "workflow_queue_auto_takeover_enabled": False,
+                    "post_completion_reconcile_enabled": True,
+                }
+            )
+
+        bridge = dict(recovery.get("stage1_preview_recovery") or {})
+        self.assertEqual(str(bridge.get("status") or ""), "completed")
+        self.assertEqual(recovery["workflow_resume"], [])
+        latest_job = self.store.get_job(job_id) or {}
+        self.assertEqual(str(latest_job.get("status") or ""), "blocked")
+        summary = dict(latest_job.get("summary") or {})
+        stage1_preview = dict(summary.get("stage1_preview") or {})
+        self.assertEqual(str(stage1_preview.get("status") or ""), "ready")
+        self.assertTrue(str(stage1_preview.get("artifact_path") or ""))
+        terminal_resume = dict(summary.get("terminal_stage_artifact_resume") or {})
+        self.assertTrue(bool(terminal_resume.get("preview_only_recovery")))
+
+    def test_execute_segmented_harvest_company_roster_workers_emits_inline_callback_for_completed_local_shards(
+        self,
+    ) -> None:
+        request_payload = {
+            "raw_user_request": "Find MiroMind.ai people",
+            "target_company": "MiroMind.ai",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_segmented_inline_company_roster_callback"
+        snapshot_dir = self.settings.company_assets_dir / "miromindai" / "snapshot-segmented-inline-callback"
+        shard_snapshot_dir = snapshot_dir / "harvest_company_employees" / "shards" / "us_core"
+        shard_harvest_dir = shard_snapshot_dir / "harvest_company_employees"
+        shard_harvest_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="MiroMind.ai",
+            canonical_name="MiroMind.ai",
+            company_key="miromindai",
+            linkedin_slug="miromind-ai",
+            linkedin_company_url="https://www.linkedin.com/company/miromind-ai/",
+        )
+        dataset_items_path = shard_harvest_dir / "harvest_company_employees_queue_dataset_items.json"
+        dataset_items_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "miromind_member_1",
+                        "linkedinUrl": "https://www.linkedin.com/in/miromind-member-1/",
+                        "firstName": "Mira",
+                        "lastName": "Agent",
+                        "summary": "Research Engineer at MiroMind.ai",
+                        "currentPositions": [
+                            {
+                                "companyName": "MiroMind.ai",
+                                "title": "Research Engineer",
+                                "current": True,
+                            }
+                        ],
+                        "location": {"linkedinText": "San Francisco Bay Area"},
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (shard_harvest_dir / "harvest_company_employees_queue_summary.json").write_text(
+            json.dumps(
+                {
+                    "logical_name": "harvest_company_employees",
+                    "company_identity": identity.to_record(),
+                    "status": "completed",
+                    "requested_pages": 1,
+                    "requested_item_limit": 25,
+                    "company_filters": {"locations": ["United States"]},
+                    "artifact_paths": {"dataset_items": str(dataset_items_path)},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Acquiring"},
+        )
+        completed_worker = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="acquisition_specialist",
+            worker_key="harvest_company_employees::miromindai::us_core",
+            stage="acquiring",
+            span_name="harvest_company_employees:miromindai:us_core",
+            budget_payload={"max_pages": 1, "page_limit": 25},
+            input_payload={"company_identity": identity.to_record()},
+            metadata={
+                "recovery_kind": "harvest_company_employees",
+                "identity": identity.to_record(),
+                "snapshot_dir": str(shard_snapshot_dir),
+                "root_snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+                "company_filters": {"locations": ["United States"]},
+                "max_pages": 1,
+                "page_limit": 25,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        queued_worker = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="acquisition_specialist",
+            worker_key="harvest_company_employees::miromindai::global_rest",
+            stage="acquiring",
+            span_name="harvest_company_employees:miromindai:global_rest",
+            budget_payload={"max_pages": 4, "page_limit": 25},
+            input_payload={"company_identity": identity.to_record()},
+            metadata={
+                "recovery_kind": "harvest_company_employees",
+                "identity": identity.to_record(),
+                "snapshot_dir": str(snapshot_dir / "harvest_company_employees" / "shards" / "global_rest"),
+                "root_snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+                "company_filters": {},
+                "max_pages": 4,
+                "page_limit": 25,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            completed_worker,
+            status="completed",
+            checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_company_employees"},
+            output_payload={
+                "summary": {
+                    "company_identity": identity.to_record(),
+                    "status": "completed",
+                    "requested_pages": 1,
+                    "requested_item_limit": 25,
+                    "company_filters": {"locations": ["United States"]},
+                    "snapshot_dir": str(shard_snapshot_dir),
+                    "root_snapshot_dir": str(snapshot_dir),
+                    "shard_id": "us_core",
+                    "title": "United States",
+                    "strategy_id": "small_org_roster",
+                }
+            },
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            queued_worker,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_harvest", "recovery_kind": "harvest_company_employees"},
+            output_payload={"summary": {"status": "queued"}},
+        )
+
+        completed_result = {
+            "worker_id": completed_worker.worker_id,
+            "worker_status": "completed",
+            "summary": {
+                "company_identity": identity.to_record(),
+                "status": "completed",
+                "snapshot_dir": str(shard_snapshot_dir),
+                "root_snapshot_dir": str(snapshot_dir),
+            },
+        }
+        queued_result = {
+            "worker_id": queued_worker.worker_id,
+            "worker_status": "queued",
+            "summary": {
+                "company_identity": identity.to_record(),
+                "status": "queued",
+                "snapshot_dir": str(snapshot_dir / "harvest_company_employees" / "shards" / "global_rest"),
+                "root_snapshot_dir": str(snapshot_dir),
+            },
+        }
+
+        with (
+            unittest.mock.patch.object(
+                self.acquisition_engine,
+                "_execute_harvest_company_roster_worker",
+                side_effect=[completed_result, queued_result],
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_queue_background_profile_prefetch_from_available_baselines",
+                return_value={"status": "queued", "queued_worker_count": 1},
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_synchronize_snapshot_candidate_documents",
+                side_effect=AssertionError("segmented inline callback should defer sync while same-kind worker remains queued"),
+            ),
+        ):
+            summary = self.acquisition_engine._execute_segmented_harvest_company_roster_workers(
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                shards=[
+                    {
+                        "shard_id": "us_core",
+                        "title": "United States",
+                        "strategy_id": "small_org_roster",
+                        "company_filters": {"locations": ["United States"]},
+                        "max_pages": 1,
+                        "page_limit": 25,
+                    },
+                    {
+                        "shard_id": "global_rest",
+                        "title": "Global",
+                        "strategy_id": "small_org_roster",
+                        "company_filters": {},
+                        "max_pages": 4,
+                        "page_limit": 25,
+                    },
+                ],
+                job_id=job_id,
+                request_payload=request.to_record(),
+                plan_payload=plan_payload,
+                runtime_mode="workflow",
+                allow_shared_provider_cache=True,
+            )
+
+        self.assertEqual(int(summary.get("queued_count") or 0), 1)
+        self.assertEqual(int(summary.get("completed_count") or 0), 1)
+        self.assertFalse((snapshot_dir / "candidate_documents.json").exists())
+        refreshed_worker = self.store.get_agent_worker(worker_id=completed_worker.worker_id)
+        assert refreshed_worker is not None
+        output = dict(refreshed_worker.get("output") or {})
+        self.assertFalse(dict(output.get("inline_incremental_ingest") or {}))
+        # CALIBRATED 2026-07-22 (durable command surface): the inline
+        # callback enqueues a queued local-apply command, not a
+        # materialization item.
+        commands = self.store.list_workflow_commands(
+            workflow_run_id=legacy_job_workflow_run_id(job_id)
+        )
+        closure_commands = [
+            command
+            for command in commands
+            if str(command.get("command_type") or "") == "linkedin.local_profile_delta.apply"
+            and str(command.get("status") or "") == "queued"
+        ]
+        self.assertEqual(len(closure_commands), 1)
+        closure_payload = dict(closure_commands[0].get("payload") or {})
+        closure_metadata = dict(closure_payload.get("materialization_metadata") or {})
+        self.assertEqual(closure_metadata.get("worker_kind"), "company_roster")
+        self.assertEqual(
+            dict(closure_metadata.get("provider_completion_result") or {}).get("source"),
+            "segmented_harvest_company_roster_inprocess",
+        )
+
+    def test_job_scoped_recovery_open_work_counts_board_visible_delta_apply_as_daemon_owned(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find OpenAI infra people",
+            "target_company": "OpenAI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_open_work_board_visible_delta_apply"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={},
+            artifact_path=str(Path(self.tempdir.name) / "company_assets" / "openai" / "snapshot-open-work"),
+        )
+        self.store.upsert_job_materialization_item(
+            item_id="job-open-work|delta|board-visible",
+            job_id=job_id,
+            target_company="OpenAI",
+            snapshot_id="snapshot-open-work",
+            item_kind="board_visible_delta_apply",
+            status="queued",
+            phase="queued",
+            candidate_ids=["candidate-1"],
+        )
+        self.store.upsert_job_materialization_item(
+            item_id="job-open-work|snapshot|full",
+            job_id=job_id,
+            target_company="OpenAI",
+            snapshot_id="snapshot-open-work",
+            item_kind="snapshot_full_materialization",
+            status="queued",
+            phase="queued",
+        )
+
+        summary = self.orchestrator._job_scoped_recovery_open_work_summary(job_id=job_id)
+
+        self.assertEqual(summary["materialization_open_item_count"], 2)
+        self.assertEqual(summary["daemon_owned_materialization_open_item_count"], 1)
+        self.assertEqual(summary["background_materialization_open_item_count"], 1)
+        self.assertEqual(summary["daemon_owned_open_work_count"], 1)
+        # CALIBRATED 2026-07-22: the anti-spoofing contract counts the
+        # completed-looking-but-not-terminal workflow itself (no durable run,
+        # job_terminal false) as one open non-daemon unit alongside the
+        # snapshot item.
+        self.assertEqual(summary["workflow_open_count"], 1)
+        self.assertFalse(summary["job_terminal"])
+        self.assertEqual(summary["non_daemon_open_work_count"], 2)
+        self.assertEqual(summary["materialization_kind_counts"]["board_visible_delta_apply"], 1)
+        self.assertEqual(summary["materialization_kind_counts"]["snapshot_full_materialization"], 1)
 
 if __name__ == "__main__":
     unittest.main()
