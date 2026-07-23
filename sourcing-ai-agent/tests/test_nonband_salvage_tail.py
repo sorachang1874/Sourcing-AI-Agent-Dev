@@ -28,6 +28,7 @@ from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_paths import canonicalize_company_key
 from sourcing_agent.company_registry import normalize_company_key
 from sourcing_agent.connectors import CompanyIdentity, CompanyRosterSnapshot
+from sourcing_agent.company_shard_planning import build_default_company_employee_shard_policy
 from sourcing_agent.domain import AcquisitionTask, Candidate, JobRequest
 from sourcing_agent.enrichment import MultiSourceEnrichmentResult
 from sourcing_agent.model_provider import DeterministicModelClient
@@ -513,6 +514,11 @@ class NonBandSalvageTailTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "strategy_type": "full_company_roster",
                 "include_former_search_seed": True,
                 "cost_policy": {"allow_company_employee_api": False, "allow_cached_roster_fallback": False},
+                # pgLegacy deletion (2026-07-23): mirror the planner's minted
+                # unified policy — policy-less roster tasks now fail closed.
+                "company_employee_shard_policy": build_default_company_employee_shard_policy(
+                    max_pages=10, page_limit=50
+                ),
             },
         )
         started_at = time.monotonic()
@@ -628,6 +634,11 @@ class NonBandSalvageTailTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "strategy_type": "full_company_roster",
                 "include_former_search_seed": False,
                 "cost_policy": {"allow_company_employee_api": True},
+                # pgLegacy deletion (2026-07-23): mirror the planner's minted
+                # unified policy — policy-less roster tasks now fail closed.
+                "company_employee_shard_policy": build_default_company_employee_shard_policy(
+                    max_pages=10, page_limit=50
+                ),
             },
         )
         with unittest.mock.patch.object(

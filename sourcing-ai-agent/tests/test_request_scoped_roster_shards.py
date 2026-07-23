@@ -772,6 +772,13 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "strategy_type": "full_company_roster",
                 "include_former_search_seed": False,
                 "cost_policy": {"allow_company_employee_api": True},
+                # pgLegacy deletion (2026-07-23): mirror the planner, which
+                # mints the unified policy on every roster task — policy-less
+                # tasks now fail closed instead of adopting request shards.
+                "company_employee_shard_policy": build_default_company_employee_shard_policy(
+                    max_pages=10,
+                    page_limit=50,
+                ),
                 **dict(metadata or {}),
             },
         )
@@ -915,6 +922,27 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
         return execution, fetch_calls
 
+    def test_policy_less_roster_task_fails_closed(self) -> None:
+        # pgLegacy deletion (2026-07-23): the silent no-policy fallback that
+        # adopted request-plan shards is retired. Every live plan mints the
+        # unified policy (planning.py/plan_review.py) and the last
+        # non-terminal pre-policy carriers were terminalized; a policy-less,
+        # shard-less roster task is malformed input and must not proceed —
+        # plain deletion would have widened into the unsharded root fetch.
+        execution = self.acquisition_engine._acquire_full_roster(
+            self._task({"company_employee_shard_policy": {}}),
+            {"company_identity": self.identity, "snapshot_dir": Path(self.tempdir.name)},
+            JobRequest.from_payload(
+                {
+                    "raw_user_request": "Lovable full roster",
+                    "query": "Lovable roster",
+                    "target_company": "Lovable",
+                }
+            ),
+        )
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.payload.get("reason"), "company_employee_shard_policy_missing")
+
     def test_former_only_strategy_routes_to_the_former_lane_not_keyword_pool(self) -> None:
         # WS1 Step 2a (2026-07-22): standalone former-only requests must take
         # the SAME per-function former lane as the full-roster companion seed.
@@ -1054,8 +1082,14 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         # F7: the dual-function member keeps BOTH shards' provenance.
         bob = by_url["https://www.linkedin.com/in/bob-both/"]
         self.assertEqual(bob["function_ids"], ["24", "8"])
-        self.assertEqual(bob["source_shard_ids"], ["function_24", "function_8"])
-        self.assertEqual(bob["source_shard_id"], "function_24")
+        # pgLegacy deletion (2026-07-23): shard ids are the unified policy
+        # planner's slugs — the bare function_N ids were the retired
+        # request-plan adoption path's artifact, never the production shape.
+        self.assertEqual(
+            bob["source_shard_ids"],
+            ["function_24__united_states_researcher", "function_8__united_states_engineer"],
+        )
+        self.assertEqual(bob["source_shard_id"], "function_24__united_states_researcher")
         self.assertEqual(by_url["https://www.linkedin.com/in/ada-research/"]["function_ids"], ["24"])
         self.assertEqual(by_url["https://www.linkedin.com/in/cara-eng/"]["function_ids"], ["8"])
         # F8: the two opaque lookalike rows (no stable identity) both survive.
@@ -1063,7 +1097,7 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(len(opaque_rows), 2)
         self.assertEqual(
             sorted(str(entry.get("source_shard_id") or "") for entry in opaque_rows),
-            ["function_24", "function_8"],
+            ["function_24__united_states_researcher", "function_8__united_states_engineer"],
         )
         # Artifact manifest records which function lane produced which members.
         summary_payload = json.loads((roster_snapshot.summary_path).read_text(encoding="utf-8"))
@@ -1071,12 +1105,14 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(summary_payload["completion_status"], "completed")
         self.assertEqual(summary_payload["stop_reason"], "completed_segmented")
         shard_rows = {str(row.get("shard_id") or ""): dict(row) for row in summary_payload["shard_summaries"]}
-        self.assertEqual(sorted(shard_rows), ["function_24", "function_8"])
-        self.assertEqual(shard_rows["function_24"]["unique_entry_count"], 3)
-        self.assertEqual(shard_rows["function_8"]["unique_entry_count"], 2)
-        self.assertEqual(shard_rows["function_8"]["duplicate_entry_count"], 1)
-        self.assertFalse(shard_rows["function_24"]["partial_result"])
-        self.assertFalse(shard_rows["function_8"]["partial_result"])
+        self.assertEqual(
+            sorted(shard_rows), ["function_24__united_states_researcher", "function_8__united_states_engineer"]
+        )
+        self.assertEqual(shard_rows["function_24__united_states_researcher"]["unique_entry_count"], 3)
+        self.assertEqual(shard_rows["function_8__united_states_engineer"]["unique_entry_count"], 2)
+        self.assertEqual(shard_rows["function_8__united_states_engineer"]["duplicate_entry_count"], 1)
+        self.assertFalse(shard_rows["function_24__united_states_researcher"]["partial_result"])
+        self.assertFalse(shard_rows["function_8__united_states_engineer"]["partial_result"])
         # F1: the expected shard set is durably recorded for recovery.
         plan_path = (
             self.settings.company_assets_dir
@@ -1088,16 +1124,18 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertTrue(plan_path.exists())
         plan_payload = json.loads(plan_path.read_text(encoding="utf-8"))
         self.assertEqual(plan_payload["status"], "planned")
-        self.assertEqual(plan_payload["strategy_id"], REQUEST_FUNCTION_PARTITION_STRATEGY_ID)
+        # Policy-path plan persists the partition as reason + policy strategy;
+        # the top-level strategy_id was the retired request-plan adoption shape.
+        self.assertEqual(plan_payload["reason"], "request_function_partition")
         self.assertEqual(
             sorted(str(item.get("shard_id") or "") for item in plan_payload["shards"]),
-            ["function_24", "function_8"],
+            ["function_24__united_states_researcher", "function_8__united_states_engineer"],
         )
         self.assertEqual(
             _expected_segmented_company_roster_shard_ids(
                 self.settings.company_assets_dir / "lovable" / "snapshot-request-scoped"
             ),
-            ["function_24", "function_8"],
+            ["function_24__united_states_researcher", "function_8__united_states_engineer"],
         )
 
     def test_capped_function_shard_keeps_roster_partial(self) -> None:
@@ -1114,11 +1152,11 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         summary_payload = json.loads((roster_snapshot.summary_path).read_text(encoding="utf-8"))
         self.assertEqual(summary_payload["completion_status"], "partial")
         self.assertEqual(summary_payload["stop_reason"], "partial_segmented")
-        self.assertEqual(summary_payload["truncated_shard_ids"], ["function_8"])
+        self.assertEqual(summary_payload["truncated_shard_ids"], ["function_8__united_states_engineer"])
         shard_rows = {str(row.get("shard_id") or ""): dict(row) for row in summary_payload["shard_summaries"]}
-        self.assertTrue(shard_rows["function_8"]["partial_result"])
-        self.assertTrue(shard_rows["function_8"]["provider_cap_hit"])
-        self.assertFalse(shard_rows["function_24"]["partial_result"])
+        self.assertTrue(shard_rows["function_8__united_states_engineer"]["partial_result"])
+        self.assertTrue(shard_rows["function_8__united_states_engineer"]["provider_cap_hit"])
+        self.assertFalse(shard_rows["function_24__united_states_researcher"]["partial_result"])
 
     def test_recovery_stays_partial_until_every_expected_shard_is_terminal(self) -> None:
         execution, _fetch_calls = self._run_roster(_cohort_request_payload(target_company="Lovable"))
@@ -1129,8 +1167,8 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         # gone (still pending) while function_24 is complete, and the root
         # snapshot has not been materialized yet.
         shard_root = snapshot_dir / "harvest_company_employees" / "shards"
-        self.assertTrue((shard_root / "function_8").exists())
-        shutil.rmtree(shard_root / "function_8")
+        self.assertTrue((shard_root / "function_8__united_states_engineer").exists())
+        shutil.rmtree(shard_root / "function_8__united_states_engineer")
         for stale_root_artifact in (
             "harvest_company_employees_merged.json",
             "harvest_company_employees_visible.json",
@@ -1153,7 +1191,7 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             type(self.acquisition_engine.harvest_company_connector),
             "fetch_company_roster",
             side_effect=lambda *_args, **_kwargs: self._snapshot(
-                shard_root / "function_24",
+                shard_root / "function_24__united_states_researcher",
                 [
                     {
                         "full_name": "Ada Research",
@@ -1178,7 +1216,7 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             )
         )
         self.assertEqual(restored_summary["completion_status"], "partial")
-        self.assertEqual(restored_summary["missing_shard_ids"], ["function_8"])
+        self.assertEqual(restored_summary["missing_shard_ids"], ["function_8__united_states_engineer"])
 
     def test_planner_emitted_metadata_shards_drive_the_same_lane(self) -> None:
         planner_shards = build_request_scoped_company_employee_query_plan(

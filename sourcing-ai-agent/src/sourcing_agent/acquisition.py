@@ -2130,12 +2130,22 @@ class AcquisitionEngine:
                 enforced_policy["request_function_ids"] = list(enforced_function_ids)
             company_employee_shard_policy = enforced_policy
         if not company_employee_shards and not company_employee_shard_policy:
-            # Legacy tasks planned before the unified policy existed: the
-            # request-scoped plan still owns the lane and expands into one
-            # shard per selected function id.
-            company_employee_shards = list(request_roster_plan.get("shards") or [])
-            if company_employee_shards:
-                shard_plan_reason = "request_scoped_shards"
+            # pgLegacy deletion (2026-07-23): every live plan mints the unified
+            # shard policy (planning.py / plan_review.py), and the last
+            # non-terminal pre-policy carriers were terminalized (hard counts
+            # zero). A policy-less, shard-less roster task fails closed — the
+            # retired silent adoption of request-plan shards would otherwise
+            # hide malformed tasks, and proceeding without it would widen into
+            # the unsharded root fetch.
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail=(
+                    "Roster acquisition requires company_employee_shard_policy or explicit shards; "
+                    "policy-less legacy tasks are retired (pgLegacy deletion, 2026-07-23)."
+                ),
+                payload={"reason": "company_employee_shard_policy_missing"},
+            )
         unsharded_company_filters = dict(request_roster_plan.get("company_filters") or {})
         job_id = str(state.get("job_id") or "")
         request_payload = job_request.to_record()
@@ -5096,7 +5106,10 @@ class AcquisitionEngine:
 
         shard_specs: list[dict[str, Any]] = []
         for index, shard in enumerate(shards, start=1):
-            shard_id = _normalize_shard_id(str(shard.get("shard_id") or "shard"))
+            # The planner owns shard-id minting; re-normalizing here collapsed
+            # its double-underscore ids and broke the expected-vs-recorded
+            # completion comparison (2026-07-23). Normalize only as fallback.
+            shard_id = str(shard.get("shard_id") or "").strip() or _normalize_shard_id("shard")
             shard_title = str(shard.get("title") or "").strip()
             shard_snapshot_dir = shard_root / shard_id
             shard_snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -7574,7 +7587,7 @@ def _normalize_company_employee_shards(value: Any) -> list[dict[str, Any]]:
     for index, item in enumerate(value, start=1):
         if not isinstance(item, dict):
             continue
-        shard_id = _normalize_shard_id(str(item.get("shard_id") or f"shard_{index}"))
+        shard_id = str(item.get("shard_id") or "").strip() or _normalize_shard_id(f"shard_{index}")
         if not shard_id or shard_id in seen_ids:
             continue
         seen_ids.add(shard_id)
