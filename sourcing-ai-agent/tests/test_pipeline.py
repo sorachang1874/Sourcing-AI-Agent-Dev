@@ -14426,45 +14426,6 @@ class PipelineTest(unittest.TestCase):
         request_payload = dict(captured.get("request_payload") or {})
         self.assertEqual(request_payload.get("target_company"), "Google")
 
-    def test_run_worker_recovery_once_auto_resumes_stale_acquiring_workflow(self) -> None:
-        request_payload = {
-            "raw_user_request": "Find Reflection AI infra members",
-            "target_company": "Reflection AI",
-            "categories": ["employee"],
-            "employment_statuses": ["current"],
-            "keywords": ["infra"],
-            "top_k": 3,
-        }
-        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
-        stale_job_id = "job_stale_auto_resume"
-        self.store.save_job(
-            job_id=stale_job_id,
-            job_type="workflow",
-            status="running",
-            stage="acquiring",
-            request_payload=request_payload,
-            plan_payload=plan_payload,
-            summary_payload={"message": "stale acquiring heartbeat"},
-        )
-
-        with unittest.mock.patch.object(
-            self.orchestrator,
-            "_resume_acquiring_workflow_if_ready",
-            return_value={"job_id": stale_job_id, "status": "resumed"},
-        ) as resume_mock:
-            recovery = self.orchestrator.run_worker_recovery_once(
-                {
-                    "workflow_resume_stale_after_seconds": 0,
-                    "workflow_resume_limit": 10,
-                    "workflow_auto_resume_enabled": True,
-                }
-            )
-
-        resume_mock.assert_any_call(stale_job_id)
-        self.assertTrue(
-            any(str(item.get("job_id") or "") == stale_job_id for item in list(recovery.get("workflow_resume") or []))
-        )
-
     def test_workflow_supervisor_uses_immediate_worker_recovery_when_runner_is_dead(self) -> None:
         request_payload = {
             "raw_user_request": "Find Humans& infra members",

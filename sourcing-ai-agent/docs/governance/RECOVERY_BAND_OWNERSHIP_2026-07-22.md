@@ -10,7 +10,7 @@ last-verified: 2026-07-22
 ```
 
 > Salvage work-list for the R-009 salvage-then-delete disposition (master plan WS3 Tier 3).
-> **Wave 1a landed 2026-07-22**（5/11 组 1 件入 `tests/test_acquisition_resume.py`）；余 6 件（skips_completed_acquisition_tasks、blocked ×3、planning_continues、auto_resumes_stale）单测复现三类现代合同位移——①deferred materialization 下 `asset_population.available` 不再即时为真 ②blocked-resume 后 job_status 停 running（异步完成）③tick 不再内联调 `_resume_acquiring_workflow_if_ready`（疑 takeover-intent 重路由）——**1b 波逐件法证：先探实再判合同位移 vs 真回归**。
+> **Wave 1a landed 2026-07-22**（5/11 组 1 件入 `tests/test_acquisition_resume.py`）；余 6 件（skips_completed_acquisition_tasks、blocked ×3、planning_continues、auto_resumes_stale）单测复现三类现代合同位移——①deferred materialization 下 `asset_population.available` 不再即时为真 ②blocked-resume 后 job_status 停 running（异步完成）③tick 不再内联调 `_resume_acquiring_workflow_if_ready`——**1b 已结案 2026-07-22**：确认 takeover-intent 重路由（resume 相位 `include_stale_acquiring=workflow_auto_resume_enabled` + durable intent drain），行为覆盖在 `test_recovery_takeover_intent.py`（invariant3 stale0 takeover on plain tick + :402 auto_resume 参数）——原件 pin 的是旧内联机制,改判 SUPERSEDED 并入 T-004 语义退役。①② 待 1b 续（先探 deferred-materialization/异步完成的现代覆盖再判）。
 > Verdict semantics: SUPERSEDED rows may be deleted with an index tombstone citing the modern test;
 > SALVAGE-CANDIDATE rows must be ported before deletion; UNCLEAR rows need a ruling.
 
