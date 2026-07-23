@@ -30,15 +30,6 @@ _STORAGE_AND_CONTROL_PLANE_SUITES = (
         args=("tests/test_candidate_artifacts.py", "-k", "materialization or generation or hot_cache"),
         reason="materialization shard and hot-cache behavior",
     ),
-    PytestInvocation(
-        label="pipeline-materialization-focus",
-        args=(
-            "tests/test_pipeline.py",
-            "-k",
-            "(materialization or generation or shard or registry) and not queue_workflow",
-        ),
-        reason="pipeline generation and registry integration",
-    ),
 )
 
 _ASSET_IMPORT_SUITES = (
@@ -95,18 +86,6 @@ _ORCHESTRATOR_AND_RESULTS_SUITES = (
         label="control-plane-live",
         args=("tests/test_control_plane_live_postgres.py",),
         reason="orchestrator/control-plane PG contract",
-    ),
-    PytestInvocation(
-        label="pipeline-orchestrator-focus",
-        args=(
-            "tests/test_pipeline.py",
-            "-k",
-            (
-                "manual_review or plan_review or query_dispatch or agent_runtime or organization_asset_registry "
-                "or execution_profile or frontend_history"
-            ),
-        ),
-        reason="orchestrator workflow integration and control-plane handoff",
     ),
     PytestInvocation(
         label="results-api-focus",
@@ -203,16 +182,16 @@ _PUBLIC_WEB_SUITES = (
 
 _PRODUCT_JOURNEY_SUITES = (
     PytestInvocation(
-        label="product-journey-regression",
+        # The god-file journey suite retired with tests/test_pipeline.py
+        # (T-008); the hosted simulate smoke matrix is the modern end-to-end
+        # journey equivalent.
+        label="hosted-journey-smoke",
         args=(
-            "tests/test_results_api.py",
-            "tests/test_frontend_history_recovery.py",
-            "tests/test_company_asset_supplement.py",
-            "tests/test_pipeline.py",
+            "tests/test_hosted_workflow_smoke.py",
             "-k",
-            "manual_review or supplement or target_candidate or export",
+            "default_explain_matrix or hosted_simulate_smoke_matrix_completes_across_small_medium_large_orgs",
         ),
-        reason="results, supplement/manual-review writeback, and frontend history product flow",
+        reason="hosted end-to-end journey regression (modern replacement for the god-file journey suite)",
     ),
     PytestInvocation(
         label="frontend-build",
@@ -234,6 +213,21 @@ _STORAGE_RELATED_PATHS = {
     "src/sourcing_agent/storage.py",
     "src/sourcing_agent/control_plane_live_postgres.py",
     "src/sourcing_agent/control_plane_postgres.py",
+    # Store-layer split modules (T-008 remap: rode the god-file fallback).
+    "src/sourcing_agent/control_plane_repository.py",
+    "src/sourcing_agent/control_plane_serde.py",
+    "src/sourcing_agent/control_plane_time.py",
+    "src/sourcing_agent/json_contract.py",
+    "src/sourcing_agent/request_ownership.py",
+    "src/sourcing_agent/repositories/criteria_confidence.py",
+    "src/sourcing_agent/repositories/crm_core.py",
+    "src/sourcing_agent/repositories/linkedin_profile_registry.py",
+    "src/sourcing_agent/repositories/manual_review.py",
+    "src/sourcing_agent/repositories/model_invocation_envelopes.py",
+    "src/sourcing_agent/repositories/person_company_assets.py",
+    "src/sourcing_agent/repositories/public_web.py",
+    "src/sourcing_agent/repositories/serving_projection.py",
+    "src/sourcing_agent/repositories/workflow_runtime.py",
 }
 _ASSET_IMPORT_RELATED_PATHS = {
     "src/sourcing_agent/asset_sync.py",
@@ -247,6 +241,7 @@ _ARTIFACT_RELATED_PATHS = {
 }
 _WORKFLOW_SMOKE_RELATED_PATHS = {
     "src/sourcing_agent/workflow_smoke.py",
+    "src/sourcing_agent/hosted_smoke_surface.py",
     "src/sourcing_agent/workflow_explain_matrix.py",
     "src/sourcing_agent/smoke_runtime_seed.py",
     "src/sourcing_agent/scripted_provider_scenario.py",
@@ -330,6 +325,37 @@ _RECOVERY_PHASES_SUITES = (
 )
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
+    # T-008 remap: operation/agent contract band + orchestrator-extracted
+    # modules that previously rode the god-file fallback.
+    "src/sourcing_agent/candidate_source_resolver.py",
+    "src/sourcing_agent/harvest_support.py",
+    "src/sourcing_agent/harvest_offline_harness.py",
+    "src/sourcing_agent/acquisition_plan_preview.py",
+    "src/sourcing_agent/acquisition_start_command_acceptance.py",
+    "src/sourcing_agent/acquisition_start_v2.py",
+    "src/sourcing_agent/acquisition_start_v2_control.py",
+    "src/sourcing_agent/acquisition_start_v2_create_postgres.py",
+    "src/sourcing_agent/acquisition_start_v2_postgres.py",
+    "src/sourcing_agent/acquisition_start_v2_result_postgres.py",
+    "src/sourcing_agent/action_contract_identity.py",
+    "src/sourcing_agent/action_request_schema.py",
+    "src/sourcing_agent/action_result_schema.py",
+    "src/sourcing_agent/action_target_binding.py",
+    "src/sourcing_agent/agent_canary_registry.py",
+    "src/sourcing_agent/agent_contract_activation.py",
+    "src/sourcing_agent/agent_contract_identity.py",
+    "src/sourcing_agent/agent_operation_query_postgres.py",
+    "src/sourcing_agent/agent_projection_query.py",
+    "src/sourcing_agent/agent_tool_registry.py",
+    "src/sourcing_agent/agent_tool_result_postgres.py",
+    "src/sourcing_agent/agent_tool_result_slot.py",
+    "src/sourcing_agent/crm_contract.py",
+    "src/sourcing_agent/filter_projection_publication_owner.py",
+    "src/sourcing_agent/model_route_registry.py",
+    "src/sourcing_agent/model_usage.py",
+    "src/sourcing_agent/projection_search_index_contract.py",
+    "src/sourcing_agent/provider_task_runtime.py",
+    "src/sourcing_agent/workflow_progressed_child_contract.py",
     "src/sourcing_agent/acquisition_command_owner.py",
     "src/sourcing_agent/profile_fetch_owner.py",
     "src/sourcing_agent/api.py",
@@ -433,8 +459,9 @@ def infer_pytest_invocations(
             continue
         if path in _ARTIFACT_RELATED_PATHS:
             saw_backend_change = True
+            # candidate-artifacts focus; the god-file materialization focus
+            # retired with tests/test_pipeline.py (T-008).
             add(_STORAGE_AND_CONTROL_PLANE_SUITES[2])
-            add(_STORAGE_AND_CONTROL_PLANE_SUITES[3])
             continue
         if path in _COMMAND_KERNEL_RELATED_PATHS:
             saw_backend_change = True

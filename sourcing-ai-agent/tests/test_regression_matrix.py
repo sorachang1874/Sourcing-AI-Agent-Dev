@@ -42,7 +42,6 @@ KNOWN_UNMAPPED_LEGACY = (
     "src/sourcing_agent/person_identity.py",
     "src/sourcing_agent/planning.py",
     "src/sourcing_agent/process_supervision.py",
-    "src/sourcing_agent/public_candidate_facets.py",
     "src/sourcing_agent/public_web_signal_identity.py",
     "src/sourcing_agent/publication_planning.py",
     "src/sourcing_agent/recovery_contract.py",
@@ -74,7 +73,7 @@ def test_infer_pytest_invocations_for_storage_changes_selects_high_signal_suites
     assert "control-plane-live" in labels
     assert "control-plane-postgres" in labels
     assert "candidate-artifacts-focus" in labels
-    assert "pipeline-materialization-focus" in labels
+    # god-file focus retired with tests/test_pipeline.py (T-008, 2026-07-22)
 
 
 def test_infer_pytest_invocations_for_cloud_import_changes_selects_import_suites() -> None:
@@ -113,7 +112,7 @@ def test_infer_pytest_invocations_for_orchestrator_changes_selects_orchestrator_
     )
     labels = {invocation.label for invocation in invocations}
     assert "control-plane-live" in labels
-    assert "pipeline-orchestrator-focus" in labels
+    # god-file focus retired with tests/test_pipeline.py (T-008, 2026-07-22)
     assert "results-api-focus" in labels
     assert "workflow-explain-focus" in labels
     assert "hosted-workflow-smoke-focus" not in labels
@@ -164,7 +163,7 @@ def test_infer_pytest_invocations_for_product_journey_frontend_changes_selects_j
         repo_root=_repo_root(),
     )
     labels = {invocation.label for invocation in invocations}
-    assert "product-journey-regression" in labels
+    # god-file journey suite retired with tests/test_pipeline.py (T-008, 2026-07-22)
     assert "frontend-build" in labels
 
 
