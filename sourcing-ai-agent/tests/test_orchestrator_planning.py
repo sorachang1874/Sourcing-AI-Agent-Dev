@@ -357,6 +357,67 @@ class OrchestratorPlanningTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertIn("Gemini", planned["request"]["organization_keywords"])
         self.assertEqual(planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"], "Google")
 
+    # -- shard-A port group G7 (2026-07-22): parenthetical normalization
+    # edge — the Chinese full-parenthetical scaffold must not survive as a
+    # keyword nor be reintroduced by AI-first normalization.
+
+    def test_request_normalization_does_not_keep_full_parenthetical_chinese_scaffold_as_keyword(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我Google做多模态（在Veo和Nano Banana团队）的人",
+                "target_company": "Google",
+            }
+        )
+
+        request_keywords = list(plan_result["request"]["keywords"] or [])
+        self.assertIn("Veo", request_keywords)
+        self.assertIn("Nano Banana", request_keywords)
+        self.assertNotIn("在Veo和Nano Banana团队", request_keywords)
+        search_seed_queries = list(plan_result["plan"]["acquisition_strategy"]["search_seed_queries"] or [])
+        self.assertNotIn("在Veo和Nano Banana团队", search_seed_queries)
+
+    def test_ai_first_request_normalization_does_not_reintroduce_parenthetical_wrapper_phrase(self) -> None:
+        class RequestNormalizingModelClient(DeterministicModelClient):
+            def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
+                return {
+                    "target_company": "Google",
+                    "employment_statuses": ["current", "former"],
+                    "organization_keywords": ["Google DeepMind", "Veo", "Nano Banana"],
+                    "keywords": ["multimodal", "Veo", "Nano Banana"],
+                    "must_have_facets": ["multimodal"],
+                    "scope_disambiguation": {
+                        "inferred_scope": "both",
+                        "sub_org_candidates": ["Google DeepMind", "Veo", "Nano Banana"],
+                        "confidence": 0.82,
+                    },
+                }
+
+        orchestrator = SourcingOrchestrator(
+            catalog=self.catalog,
+            store=self.store,
+            jobs_dir=f"{self.tempdir.name}/jobs",
+            model_client=RequestNormalizingModelClient(),
+            semantic_provider=self.semantic_provider,
+            acquisition_engine=AcquisitionEngine(
+                self.catalog, self.settings, self.store, RequestNormalizingModelClient()
+            ),
+        )
+
+        plan_result = orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我Google做多模态（在Veo和Nano Banana团队）的人",
+                "target_company": "Google",
+            }
+        )
+
+        request_keywords = list(plan_result["request"]["keywords"] or [])
+        self.assertIn("multimodal", request_keywords)
+        self.assertIn("Veo", request_keywords)
+        self.assertIn("Nano Banana", request_keywords)
+        self.assertNotIn("在Veo和Nano Banana团队", request_keywords)
+        search_seed_queries = list(plan_result["plan"]["acquisition_strategy"]["search_seed_queries"] or [])
+        self.assertFalse(any("在Veo和Nano Banana团队" in query for query in search_seed_queries))
+
     def test_plan_workflow_task_metadata_carries_effective_request(self) -> None:
         planned = self.orchestrator.plan_workflow(
             {
