@@ -79,6 +79,18 @@ class AcquisitionResumeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         runtime_env_patcher.start()
         self.addCleanup(runtime_env_patcher.stop)
 
+    def _settle_completed(self, job_id: str) -> dict:
+        stored_job = self.store.get_job(job_id)
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            stored_job = self.store.get_job(job_id)
+            if str((stored_job or {}).get("status")) == "completed":
+                break
+            time.sleep(0.2)
+        assert stored_job is not None
+        self.assertEqual(stored_job["status"], "completed")
+        return stored_job
+
     def test_resume_running_workflow_reclaims_stale_job_lease_when_runner_is_dead(self) -> None:
         request_payload = {
             "raw_user_request": "Find Reflection AI infra members",
@@ -573,6 +585,329 @@ class AcquisitionResumeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertIsNotNone(snapshot)
         assert snapshot is not None
         self.assertGreaterEqual(len(snapshot["results"]), 1)
+
+    def test_resume_running_planning_workflow_continues_from_acquisition_when_planning_completed(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee", "former_employee"],
+            "keywords": ["infra"],
+            "top_k": 3,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow({**request_payload, "skip_plan_review": True})["plan"]
+        job_id = "job_resume_running_planning"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="planning",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Workflow is running"},
+        )
+        self.store.append_job_event(job_id, "planning", "queued", "Workflow created from user request.")
+        self.store.append_job_event(job_id, "planning", "completed", "Planning stage completed.")
+
+        original_run_from_acquisition = self.orchestrator._run_workflow_from_acquisition
+        captured: dict[str, object] = {}
+
+        # Calibrated 2026-07-22: the real method grew assume_job_run_lock
+        # (Phase 4 lock threading); absorb future keyword growth.
+        def fake_run_from_acquisition(job_id_arg, request_arg, plan_arg, *, resume_mode=False, **_kwargs):
+            captured["job_id"] = job_id_arg
+            captured["resume_mode"] = resume_mode
+            captured["request"] = request_arg
+            captured["plan"] = plan_arg
+            self.store.save_job(
+                job_id=job_id_arg,
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload=request_arg.to_record(),
+                plan_payload=plan_arg.to_record(),
+                summary_payload={"message": "Recovered from stale planning runner."},
+            )
+            return {"status": "completed"}
+
+        self.orchestrator._run_workflow_from_acquisition = fake_run_from_acquisition
+        try:
+            resume = self.orchestrator._resume_planning_workflow_if_ready(job_id)
+        finally:
+            self.orchestrator._run_workflow_from_acquisition = original_run_from_acquisition
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        self.assertEqual(resume["resume_mode"], "running_planning_to_acquisition_recovery")
+        self.assertTrue(bool(resume["planning_completed"]))
+        self.assertEqual(captured["job_id"], job_id)
+        self.assertTrue(bool(captured["resume_mode"]))
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+
+    def test_resume_running_workflow_skips_completed_acquisition_tasks_and_defers_materialization(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Acme infra researchers",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 1,
+            "analysis_stage_mode": "two_stage",
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = "job_resume_checkpoint_skip"
+        company_dir = self.settings.company_assets_dir / "acme"
+        snapshot_dir = company_dir / "20260410T120000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        manifest_path = snapshot_dir / "manifest.json"
+        identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+            linkedin_slug="acme",
+            linkedin_company_url="https://www.linkedin.com/company/acme/",
+        )
+        candidate = Candidate(
+            candidate_id="cand_resume_checkpoint",
+            name_en="Alice Infra",
+            display_name="Alice Infra",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Research Engineer",
+            focus_areas="infra systems",
+            linkedin_url="https://www.linkedin.com/in/alice-infra",
+            source_dataset="checkpoint_test",
+        )
+        evidence = EvidenceRecord(
+            evidence_id=make_evidence_id(
+                candidate.candidate_id,
+                "checkpoint_test",
+                "Acme infra",
+                candidate.linkedin_url,
+            ),
+            candidate_id=candidate.candidate_id,
+            source_type="linkedin_profile",
+            title="Acme infra",
+            url=candidate.linkedin_url,
+            summary="Checkpoint recovery candidate",
+            source_dataset="checkpoint_test",
+            source_path=str(candidate_doc_path),
+        )
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": snapshot_dir.name,
+                        "company_identity": identity.to_record(),
+                    },
+                    "candidates": [candidate.to_record()],
+                    "evidence": [evidence.to_record()],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "company_identity": identity.to_record(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (snapshot_dir / "identity.json").write_text(json.dumps(identity.to_record(), ensure_ascii=False, indent=2))
+
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={"message": "Workflow runner died during acquisition"},
+        )
+
+        tasks_by_type = {task.task_type: task for task in plan.acquisition_tasks}
+        acquisition_state = {
+            "snapshot_id": snapshot_dir.name,
+            "snapshot_dir": snapshot_dir,
+            "company_identity": identity,
+        }
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["resolve_company_identity"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["resolve_company_identity"].task_id,
+                status="completed",
+                detail="Resolved company identity.",
+                payload={"snapshot_dir": str(snapshot_dir)},
+                state_updates=dict(acquisition_state),
+            ),
+            acquisition_state=dict(acquisition_state),
+        )
+        acquisition_state["candidates"] = [candidate]
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["acquire_full_roster"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["acquire_full_roster"].task_id,
+                status="completed",
+                detail="Acquired roster.",
+                payload={"candidate_count": 1},
+                state_updates={"candidates": [candidate]},
+            ),
+            acquisition_state=dict(acquisition_state),
+        )
+        acquisition_state["candidate_doc_path"] = candidate_doc_path
+        acquisition_state["evidence"] = [evidence]
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["enrich_linkedin_profiles"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["enrich_linkedin_profiles"].task_id,
+                status="completed",
+                detail="Enriched LinkedIn profiles.",
+                payload={"candidate_doc_path": str(candidate_doc_path)},
+                state_updates={
+                    "candidate_doc_path": candidate_doc_path,
+                    "linkedin_stage_candidate_doc_path": candidate_doc_path,
+                    "linkedin_stage_completed": True,
+                    "candidates": [candidate],
+                    "evidence": [evidence],
+                },
+            ),
+            acquisition_state=dict(acquisition_state),
+        )
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["enrich_public_web_signals"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["enrich_public_web_signals"].task_id,
+                status="completed",
+                detail="Enriched public-web signals.",
+                payload={"candidate_doc_path": str(candidate_doc_path)},
+                state_updates={
+                    "candidate_doc_path": candidate_doc_path,
+                    "public_web_stage_candidate_doc_path": candidate_doc_path,
+                    "public_web_stage_completed": True,
+                    "candidates": [candidate],
+                    "evidence": [evidence],
+                },
+            ),
+            acquisition_state={
+                **dict(acquisition_state),
+                "candidate_doc_path": candidate_doc_path,
+                "linkedin_stage_candidate_doc_path": candidate_doc_path,
+                "linkedin_stage_completed": True,
+            },
+        )
+
+        executed_task_types: list[str] = []
+        original_execute_task = self.acquisition_engine.execute_task
+        try:
+            with unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_outreach_layering_after_acquisition",
+                return_value={},
+            ):
+
+                def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):
+                    executed_task_types.append(task.task_type)
+                    self.assertIn(task.task_type, {"normalize_asset_snapshot", "build_retrieval_index"})
+                    self.assertEqual(str(state.get("candidate_doc_path")), str(candidate_doc_path))
+                    self.assertEqual(len(list(state.get("candidates") or [])), 1)
+                    self.assertEqual(len(list(state.get("evidence") or [])), 1)
+                    if task.task_type == "normalize_asset_snapshot":
+                        manifest_path.write_text(
+                            json.dumps(
+                                {
+                                    "snapshot_id": snapshot_dir.name,
+                                    "company_identity": identity.to_record(),
+                                },
+                                ensure_ascii=False,
+                                indent=2,
+                            )
+                        )
+                        return AcquisitionExecution(
+                            task_id=task.task_id,
+                            status="completed",
+                            detail="Normalized snapshot.",
+                            payload={"manifest_path": str(manifest_path)},
+                            state_updates={"manifest_path": manifest_path},
+                        )
+                    (snapshot_dir / "retrieval_index_summary.json").write_text(
+                        json.dumps({"status": "built"}, ensure_ascii=False, indent=2)
+                    )
+                    return AcquisitionExecution(
+                        task_id=task.task_id,
+                        status="completed",
+                        detail="Built retrieval index.",
+                        payload={"retrieval_index_summary": str(snapshot_dir / "retrieval_index_summary.json")},
+                        state_updates={},
+                    )
+
+                self.acquisition_engine.execute_task = fake_execute_task
+                resume = self.orchestrator._resume_running_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        self.assertEqual(resume["status"], "resumed")
+        # CALIBRATED 2026-07-22 (wave 1b recipe): the all-tasks-skipped resume
+        # completes inline when nothing re-executes; the settle-poll tolerates
+        # either the inline or the async policy-gated flavor.
+        self.assertIn(resume["job_status"], {"running", "completed"})
+        stored_job = self._settle_completed(job_id)
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(executed_task_types, [])
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        skipped_task_ids = {
+            str((event.get("payload") or {}).get("task_id") or "")
+            for event in list(snapshot["events"])
+            if str(event.get("status") or "") == "skipped"
+        }
+        expected_skipped = {
+            tasks_by_type[task_type].task_id
+            for task_type in (
+                "resolve_company_identity",
+                "acquire_full_roster",
+                "enrich_linkedin_profiles",
+                "enrich_public_web_signals",
+                "normalize_asset_snapshot",
+                "build_retrieval_index",
+            )
+            # public-web stage 2 is a two_stage/require_stage2_confirmation
+            # opt-in since the planner evolution (R-035 finding).
+            if task_type in tasks_by_type
+        }
+        self.assertTrue(expected_skipped.issubset(skipped_task_ids))
+        # CALIBRATED 2026-07-22 (wave 1b mechanism 1): deferred materialization
+        # means asset-population availability arrives with the background
+        # materialization pass, not inline with completion — drive one
+        # recovery tick to run it, then assert availability.
+        asset_population = dict(snapshot.get("asset_population") or {})
+        if not asset_population.get("available"):
+            self.orchestrator.run_worker_recovery_once({"explicit_job_id": job_id})
+            refreshed = self.orchestrator.get_job_results(job_id)
+            asset_population = dict((refreshed or {}).get("asset_population") or {})
+        self.assertTrue(asset_population.get("available"))
+        self.assertGreaterEqual(int(asset_population.get("candidate_count") or 0), 1)
 
 if __name__ == "__main__":
     unittest.main()
