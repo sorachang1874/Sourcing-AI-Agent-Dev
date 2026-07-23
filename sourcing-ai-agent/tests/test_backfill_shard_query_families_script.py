@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 import scripts.backfill_acquisition_shard_query_families as backfill_script
+from scripts.backfill_profile_fetched_flags import reconcile_candidate_documents
 from sourcing_agent.asset_reuse_planning import build_salvage_manifest_shard_registry_records
 
 
@@ -138,6 +139,41 @@ class SalvageManifestRecordBuilderTest(unittest.TestCase):
                 "passthrough_candidate_documents_are_not_provider_receipts",
             },
         )
+
+    def test_profile_fetched_reconciliation_is_evidence_only(self) -> None:
+        import hashlib
+
+        snap = Path(self.tempdir.name) / "snap"
+        (snap / "harvest_profiles").mkdir(parents=True)
+        url = "https://www.linkedin.com/in/with-envelope"
+        sha_key = hashlib.sha1(url.encode()).hexdigest()[:16]
+        (snap / "harvest_profiles" / f"{sha_key}.json").write_text(json.dumps({"item": {"emails": []}}))
+        (snap / "harvest_profiles" / "cid42.json").write_text(json.dumps({"item": {"emails": ["x@y.z"]}}))
+        (snap / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        {"candidate_id": "a1", "display_name": "NoEvidence", "linkedin_url": "https://x/no"},
+                        {"candidate_id": "b2", "display_name": "ShaMatch", "linkedin_url": url},
+                        {"candidate_id": "cid42", "display_name": "IdMatch", "profile_fetched": True},
+                    ]
+                }
+            )
+        )
+        dry = reconcile_candidate_documents(snap, dry_run=True)
+        self.assertEqual((dry["flag_flips"], dry["mode_stamps"]), (1, 1))
+        self.assertFalse(dry["written"])
+        real = reconcile_candidate_documents(snap, dry_run=False)
+        self.assertTrue(real["written"])
+        rows = json.loads((snap / "candidate_documents.json").read_text())["candidates"]
+        by_name = {r["display_name"]: r for r in rows}
+        self.assertNotIn("profile_fetched", by_name["NoEvidence"])  # evidence-only: untouched
+        self.assertTrue(by_name["ShaMatch"]["profile_fetched"])
+        self.assertEqual(by_name["ShaMatch"]["profile_mode"], "full_details_no_email")
+        self.assertEqual(by_name["ShaMatch"]["profile_merge_path"], "salvage_hash_joined")
+        # envelope with emails: flag already true stays; mode NOT stamped as no_email
+        self.assertNotIn("profile_mode", by_name["IdMatch"])
+        self.assertTrue((snap / "candidate_documents.json.pre_flag_backfill_bak").exists())
 
     def test_profile_only_manifest_registers_nothing(self) -> None:
         records, skipped = build_salvage_manifest_shard_registry_records(
