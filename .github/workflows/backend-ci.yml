@@ -14,9 +14,9 @@ on:
 # (testcontainers pg-contract, browser gates, scripted large-org, live) run as
 # separate opt-in jobs / locally via make. mypy gates via the shrink-only
 # ratchet (scripts/check_mypy_ratchet.py + configs/mypy_ratchet_baseline.json,
-# 81 budgeted errors as of 2026-07-22; the old '87' comment had silently
-# drifted — 6 errors were fixed incidentally by 82d69a1 with no artifact
-# noticing, which is exactly what the ratchet prevents). (Note: ruff F401
+# ZERO budgeted errors as of 2026-07-22 — the 81-error burn-down completed;
+# the ratchet now guards against ANY new typed-file error, and the old '87'
+# comment-drift incident is why counts live in the baseline, not comments). (Note: ruff F401
 # auto-fix is unsafe here — it strips re-export imports; re-exports are
 # guarded with `# noqa: F401`.)
 jobs:

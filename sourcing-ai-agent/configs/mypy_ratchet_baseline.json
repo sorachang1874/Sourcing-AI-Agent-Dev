@@ -4,19 +4,8 @@
   "mypy_version": "1.20.2 (.venv-tests, resolved by scripts/run_python_quality.sh resolve_tool)",
   "invocation": "bash scripts/run_python_quality.sh typecheck",
   "tool_mypy_config_sha256_16": "510442fc03a87356",
-  "total_errors": 27,
+  "total_errors": 0,
   "policy": "Shrink-only ratchet (operator decision 2026-07-22): counts may only decrease and the baseline must be shrunk in the same change; new (file,error-code) keys fail; every module extracted from a listed file enters [tool.mypy].files with a zero budget and disallow_untyped_defs. Sanctioned re-baselines (config/scope changes) must regenerate _meta and say so in the commit message."
  },
- "budgets": {
-  "src/sourcing_agent/orchestrator.py": {
-   "arg-type": 8,
-   "assignment": 2,
-   "attr-defined": 2,
-   "call-overload": 8,
-   "index": 2,
-   "no-redef": 1,
-   "operator": 3,
-   "type-var": 1
-  }
- }
+ "budgets": {}
 }

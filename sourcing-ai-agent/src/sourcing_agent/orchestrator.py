@@ -10883,15 +10883,15 @@ class SourcingOrchestrator:
                         base_slots[slot_index]["active"] = False
                     removed_member_keys.append(member_key)
                 continue
-            existing_index = existing_indices[0] if existing_indices else None
+            delta_slot_index: int | None = existing_indices[0] if existing_indices else None
             if len(existing_indices) > 1:
                 for duplicate_index in existing_indices[1:]:
                     base_slots[duplicate_index]["active"] = False
-            existing_record = dict(base_slots[existing_index].get("record") or {}) if existing_index is not None else {}
-            if existing_index is None:
+            existing_record = dict(base_slots[delta_slot_index].get("record") or {}) if delta_slot_index is not None else {}
+            if delta_slot_index is None:
                 merged_record = dict(delta_record)
                 added_member_keys.append(member_key)
-                existing_index = len(base_slots)
+                delta_slot_index = len(base_slots)
                 base_slots.append(
                     {
                         "member_key": member_key,
@@ -10900,7 +10900,7 @@ class SourcingOrchestrator:
                         "active": True,
                     }
                 )
-                key_to_slot_indices[member_key].append(existing_index)
+                key_to_slot_indices[member_key].append(delta_slot_index)
             else:
                 merged_record = self._merge_authoritative_detail_and_result_record(
                     authoritative_record=delta_record,
@@ -10909,10 +10909,10 @@ class SourcingOrchestrator:
                 if merged_record != existing_record:
                     updated_member_keys.append(member_key)
             merged_candidate_id = str(dict(merged_record).get("candidate_id") or delta_candidate_id or "").strip()
-            base_evidence = list(base_slots[existing_index].get("evidence") or []) if existing_index is not None else []
+            base_evidence = list(base_slots[delta_slot_index].get("evidence") or [])
             delta_evidence = list(delta_evidence_lookup.get(delta_candidate_id) or [])
-            base_slots[existing_index]["record"] = merged_record
-            base_slots[existing_index]["evidence"] = self._merge_evidence_records_for_candidate(
+            base_slots[delta_slot_index]["record"] = merged_record
+            base_slots[delta_slot_index]["evidence"] = self._merge_evidence_records_for_candidate(
                 base_evidence,
                 delta_evidence,
                 candidate_id=merged_candidate_id,
@@ -11076,10 +11076,10 @@ class SourcingOrchestrator:
                 continue
             if fast_path and raw_records_by_member_key:
                 member_key = self._asset_population_overlay_member_key_from_record(record)
-                raw_record = raw_records_by_member_key.get(member_key)
-                if raw_record:
+                stored_raw_record = raw_records_by_member_key.get(member_key)
+                if stored_raw_record:
                     record = self._merge_authoritative_detail_and_result_record(
-                        authoritative_record=raw_record,
+                        authoritative_record=stored_raw_record,
                         raw_result_record=record,
                     )
             overlay_records.append(record)
@@ -13237,8 +13237,8 @@ class SourcingOrchestrator:
         full_candidate_ids = _dedupe_texts(full_candidate_ids)
         candidate_count = len(full_candidate_ids) if full_candidate_ids else sync_candidate_count
         sync_artifact_summary = (
-            dict(sync_result.get("artifact_summary"))
-            if isinstance(dict(sync_result or {}).get("artifact_summary"), dict)
+            dict(artifact_summary_payload)
+            if isinstance((artifact_summary_payload := dict(sync_result or {}).get("artifact_summary")), dict)
             else {}
         )
         card_materialization_summary = (
@@ -24484,6 +24484,7 @@ class SourcingOrchestrator:
                     or not materialized_path.exists()
                     or candidate_doc_count > loaded_current_candidate_count
                 )
+                and snapshot_dir is not None
                 and candidate_doc_path is not None
                 and candidate_doc_path.exists()
             ):
@@ -51642,28 +51643,32 @@ class SourcingOrchestrator:
                 or []
             )
             collector_inputs_source = (
-                input_payload.get("collector_inputs")
-                if isinstance(input_payload.get("collector_inputs"), dict)
-                else explicit_command_payload.get("collector_inputs")
-                if isinstance(explicit_command_payload.get("collector_inputs"), dict)
+                inputs_candidate
+                if isinstance((inputs_candidate := input_payload.get("collector_inputs")), dict)
+                else explicit_inputs_candidate
+                if isinstance((explicit_inputs_candidate := explicit_command_payload.get("collector_inputs")), dict)
                 else {}
             )
             collector_documents_source = (
-                input_payload.get("collector_documents")
-                if isinstance(input_payload.get("collector_documents"), list)
-                else input_payload.get("collector_payloads")
-                if isinstance(input_payload.get("collector_payloads"), list)
-                else explicit_command_payload.get("collector_documents")
-                if isinstance(explicit_command_payload.get("collector_documents"), list)
+                documents_candidate
+                if isinstance((documents_candidate := input_payload.get("collector_documents")), list)
+                else payloads_candidate
+                if isinstance((payloads_candidate := input_payload.get("collector_payloads")), list)
+                else explicit_documents_candidate
+                if isinstance(
+                    (explicit_documents_candidate := explicit_command_payload.get("collector_documents")), list
+                )
                 else []
             )
             collector_sources_source = (
-                input_payload.get("collector_sources")
-                if isinstance(input_payload.get("collector_sources"), list)
-                else input_payload.get("collector_source_urls")
-                if isinstance(input_payload.get("collector_source_urls"), list)
-                else explicit_command_payload.get("collector_sources")
-                if isinstance(explicit_command_payload.get("collector_sources"), list)
+                sources_candidate
+                if isinstance((sources_candidate := input_payload.get("collector_sources")), list)
+                else source_urls_candidate
+                if isinstance((source_urls_candidate := input_payload.get("collector_source_urls")), list)
+                else explicit_sources_candidate
+                if isinstance(
+                    (explicit_sources_candidate := explicit_command_payload.get("collector_sources")), list
+                )
                 else []
             )
             command_payload = {
@@ -57962,7 +57967,7 @@ class SourcingOrchestrator:
                 source_run_ids = [str(item or "").strip() for item in list(asset.get("source_run_ids") or [])]
                 run_id = next((item for item in source_run_ids if item), "historical-company-public-web-assets")
             assets_by_run_id[run_id].append(asset)
-        aggregate = {
+        aggregate: dict[str, Any] = {
             "synced_asset_count": 0,
             "synced_evidence_count": 0,
             "company_asset_ids": [],
@@ -65989,8 +65994,9 @@ class SourcingOrchestrator:
             str(stage_payload.get("ready_at") or "").strip(),
             str(stage_payload.get("started_at") or "").strip(),
         ]
-        parsed_values = [_parse_timestamp(value) for value in timestamp_values if value]
-        parsed_values = [value for value in parsed_values if value is not None]
+        parsed_values = [
+            parsed for value in timestamp_values if value and (parsed := _parse_timestamp(value)) is not None
+        ]
         if not parsed_values:
             return False
         return max(parsed_values) < job_created_at - timedelta(seconds=2)
@@ -66948,7 +66954,7 @@ class SourcingOrchestrator:
         ).strip()
         if not target_company:
             return {}
-        candidate_source = {
+        candidate_source: dict[str, Any] = {
             "source_kind": str(result_view.get("source_kind") or "company_snapshot").strip() or "company_snapshot",
             "target_company": target_company,
             "snapshot_id": snapshot_id,
@@ -73587,7 +73593,7 @@ class SourcingOrchestrator:
             apply_result,
             completed_workers,
         ):
-            profile_prefetch = {
+            profile_prefetch: dict[str, Any] = {
                 "status": "skipped",
                 "reason": "search_seed_no_candidate_delta",
                 "requested_url_count": 0,
@@ -75568,7 +75574,7 @@ class SourcingOrchestrator:
                         "outreach_layering": layering_summary,
                     },
                 )
-            resume_result = {
+            resume_result: dict[str, Any] = {
                 "status": "deferred" if sync_status == "deferred" else "completed",
                 "artifact": retrieval_artifact,
                 "sync_result": sync_result,
@@ -75854,7 +75860,7 @@ class SourcingOrchestrator:
             )
 
         if not self._search_seed_apply_has_candidate_delta(search_seed_update, pending_workers):
-            search_seed_profile_prefetch = {
+            search_seed_profile_prefetch: dict[str, Any] = {
                 "status": "skipped",
                 "reason": "search_seed_no_candidate_delta",
                 "requested_url_count": 0,
@@ -75971,7 +75977,7 @@ class SourcingOrchestrator:
             }
 
         # Phase B — outside the per-job writer lock: profile prefetch.
-        search_seed_profile_prefetch: dict[str, Any] = {}
+        search_seed_profile_prefetch = {}
         search_seed_snapshot = search_seed_update.get("search_seed_snapshot")
         if isinstance(search_seed_snapshot, SearchSeedSnapshot):
             try:
