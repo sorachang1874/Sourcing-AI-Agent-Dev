@@ -28,6 +28,7 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_pipeline_freeze.py", "R-009 resurrection guard: the deleted god-file must never return (salvage-delete completed 2026-07-22)"),
     ("tests/test_serving_mesh_boundary.py", "Block (a) resolver extraction structural guards: Edge B stays broken + resolver dependency direction (SERVING_MESH_OWNERSHIP_BOUNDARY.md §5)"),
     ("tests/test_monolith_regrowth.py", "WS2 slice-3 anti-regrowth ratchet: monoliths only shrink (the +8.4k regrowth lesson)"),
+    ("tests/test_backfill_shard_query_families_script.py", "live-ops backfill script: --dry-run is fully read-only (2026-07-23 rebuild-write defect)"),
     ("tests/test_api_auth.py", "C2.1 auth foundation contract"),
     ("tests/test_api_server_identity.py", "server identity contract"),
     ("tests/test_user_private_reads.py", "user-scoped read isolation contract"),

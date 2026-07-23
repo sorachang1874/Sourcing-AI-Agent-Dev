@@ -96,6 +96,17 @@ def main() -> None:
     if bool(args.rebuild_from_assets):
         for company in companies:
             for snapshot_id in snapshot_ids:
+                if bool(args.dry_run):
+                    # Rebuild writes registry rows; dry-run must stay read-only,
+                    # so report the planned ingestion instead of running it.
+                    rebuild_results.append(
+                        {
+                            "target_company": company,
+                            "snapshot_id": snapshot_id,
+                            "skipped_dry_run": True,
+                        }
+                    )
+                    continue
                 rebuild_results.append(
                     {
                         "target_company": company,
