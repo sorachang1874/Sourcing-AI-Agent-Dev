@@ -115,7 +115,8 @@ jobs:
             tests/test_live_schema_write_fence.py \
             tests/test_strategy_contract_preflight.py \
             tests/test_pipeline_freeze.py \
-            tests/test_serving_mesh_boundary.py
+            tests/test_serving_mesh_boundary.py \
+            tests/test_monolith_regrowth.py
           python -m pytest -q \
             tests/test_api_auth.py \
             tests/test_api_server_identity.py \
