@@ -23,7 +23,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # file -> (max_lines, slack). slack absorbs mechanical churn (imports,
 # comments) without letting real regrowth hide; keep it small.
 _MONOLITH_BUDGETS = {
-    "src/sourcing_agent/orchestrator.py": 82300,
+    # orchestrator: track-d band re-homed to company_public_web_action_mixin
+    # (2026-07-22, slice 3); budget captured.
+    "src/sourcing_agent/orchestrator.py": 81100,
     "src/sourcing_agent/storage.py": 13000,
     "src/sourcing_agent/enrichment.py": 12800,
     "src/sourcing_agent/workflow_smoke.py": 10300,
