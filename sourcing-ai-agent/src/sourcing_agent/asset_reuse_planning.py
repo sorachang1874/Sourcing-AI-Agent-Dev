@@ -1729,6 +1729,25 @@ def build_acquisition_shard_registry_record(
     normalized_filters = _normalize_scope_filters(company_filters or {})
     normalized_query = _normalize_query_text(search_query or normalized_filters.get("search_query"))
     metadata_payload = _merge_query_family_metadata(dict(metadata or {}), search_query=search_query or normalized_query)
+    # WS7 promote prerequisite (operator ruling 3, 2026-07-22): the record
+    # carries the COMPLETE normalized request filter set — including the axes
+    # the signature columns do not project (job_titles, seniority, keywords,
+    # every exclude_* axis) — under a reserved metadata key, so the AI
+    # promote judgment (and any coverage audit) reads exact request
+    # parameters instead of re-deriving them from summaries. Column
+    # promotion happens with the AI-promote consumer.
+    full_request_filters = dict(normalize_company_filters(company_filters or {}))
+    for extra_axis in ("keywords", "exclude_keywords"):
+        extra_values = [
+            str(item).strip() for item in list((company_filters or {}).get(extra_axis) or []) if str(item).strip()
+        ]
+        if extra_values:
+            # normalize_company_filters drops these axes (same schema gap as
+            # the provider payload mapping — Step 4b blocker); the recording
+            # contract preserves them verbatim.
+            full_request_filters[extra_axis] = extra_values
+    if full_request_filters:
+        metadata_payload = {**metadata_payload, "request_filters": full_request_filters}
     signature_payload = {
         "target_company": resolve_company_alias_key(target_company),
         "lane": _normalize_text(lane).lower(),
@@ -2004,7 +2023,12 @@ def ensure_acquisition_shard_registry_for_snapshot(
                 result_count=_safe_int(
                     harvest_summary.get("visible_entry_count") or harvest_summary.get("raw_entry_count")
                 ),
-                estimated_total_count=0,
+                # WS7 recording fix (2026-07-22): the root branch hardcoded 0
+                # while live summaries carry probe estimates — read them.
+                estimated_total_count=_safe_int(
+                    dict(harvest_summary.get("probe_summary") or {}).get("estimated_total_count")
+                    or harvest_summary.get("estimated_total_count")
+                ),
                 status="completed",
                 source_path=str(harvest_summary_path),
                 metadata=harvest_summary,

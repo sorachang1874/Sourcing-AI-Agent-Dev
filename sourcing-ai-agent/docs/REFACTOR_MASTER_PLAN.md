@@ -86,6 +86,7 @@ last-verified: 2026-07-22 (B0a+B0b done)
     ②**Slot 即时填充**＝completion 事件唤醒 refill daemon 立即 bounded tick（保留 "callbacks are not executors" owner 设计,5s poll 降级为兜底）;目标时延 <1s;验收用现有 `refill_saturation`/`unfilled_available_slot_count`+事件时间戳。
     ③**AI promote 两道闸**＝storage lineage guard 保 fail-closed 硬前置（回放安全性不交 AI）,AI 只在 guard 放行候选内判 promote/reject;**前置批＝shard 记录补齐**（完整请求参数+payload 快照+estimated_total+lineage backfill——与 NEXT_TODO 遗留 backfill 并轨）。
     ④**失败语义**＝batch 划分回退现行规则梯（记录 fallback 审计）;promote 判定不可用即不晋升保 incumbent（fail-closed）——调度是效率问题可回退,晋升是资产正确性问题必须保守。
+- **W7.1 前置批（shard 记录补齐）第一刀 DONE 2026-07-22**：`build_acquisition_shard_registry_record` 全量请求过滤面入 `metadata.request_filters`（含 signature 列不投影的 job_titles/seniority/exclude 轴与 normalize 丢弃的 keywords——与 4b 载荷缺口同源,记录侧先保全）;root 分支 estimated_total 从 probe 摘要读取（修硬编码 0）;合同测试 pin 入 test_asset_coverage_backfill。**余**:provider payload 快照捕获（采集执行侧写入,随 4b/探针批）、存量 lineage backfill（scripts/backfill_acquisition_shard_query_families --dry-run 先行,NEXT_TODO 并轨）。
 - **W7.2+ 实施批**：characterization 先行（状态机/调度器改造前先钉现行为基线）；simulate 模式全链路验证；live 验证等 HarvestAPI 配额恢复 + operator 明示（红线不变）。
 
 ## 7. 批次序列与状态（执行时打勾，replace-not-append）

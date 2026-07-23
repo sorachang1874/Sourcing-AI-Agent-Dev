@@ -194,5 +194,44 @@ class AssetCoverageBackfillTest(PGControlPlaneStoreTestMixin, unittest.TestCase)
         self.assertEqual(result["results"][0]["status"], "skipped_existing_population_coverage")
 
 
+
+class ShardRecordingContractTest(unittest.TestCase):
+    """WS7 promote prerequisite (operator ruling 3, 2026-07-22): the shard
+    registry record preserves the COMPLETE request filter set — including the
+    axes the signature columns do not project and the axes
+    normalize_company_filters drops (keywords) — under
+    metadata.request_filters, and the estimated total flows from probe
+    summaries instead of a hardcoded zero (live rows had estimated_total=0,
+    WS7_STRONG_AGENT_RECON_2026-07-22.md §2.4)."""
+
+    def test_record_preserves_full_request_filters_and_estimate(self) -> None:
+        record = build_acquisition_shard_registry_record(
+            target_company="OpenAI",
+            company_key="openai",
+            snapshot_id="20260722T000000",
+            lane="company_employees",
+            employment_scope="current",
+            strategy_type="full_company_roster",
+            shard_id="root",
+            shard_title="Root",
+            search_query="",
+            company_filters={
+                "locations": ["United States"],
+                "exclude_locations": ["India"],
+                "function_ids": ["8"],
+                "job_titles": ["Engineer"],
+                "seniority_level_ids": ["4"],
+                "keywords": ["RL"],
+            },
+            result_count=10,
+            estimated_total_count=500,
+        )
+        request_filters = dict(record["metadata"]["request_filters"])
+        self.assertEqual(request_filters.get("job_titles"), ["Engineer"])
+        self.assertEqual(request_filters.get("seniority_level_ids"), ["4"])
+        self.assertEqual(request_filters.get("keywords"), ["RL"])
+        self.assertEqual(request_filters.get("exclude_locations"), ["India"])
+        self.assertEqual(record["estimated_total_count"], 500)
+
 if __name__ == "__main__":
     unittest.main()
