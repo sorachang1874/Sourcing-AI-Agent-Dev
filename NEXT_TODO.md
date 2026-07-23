@@ -18,7 +18,7 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 
 | Item | Gate | Route |
 |---|---|---|
-| Refactor continuation: **B0a+B0b+B1 DONE 2026-07-22** (former lane unified at dispatch+merge+planning; R-010/R-034 closed; preflight+ratchet+provenance gates live); next = B2 (Track A slice 1 Step 2b cascade migration, characterization-first + test_pipeline salvage start) | launch each session via `/refactor-goal` | [REFACTOR_MASTER_PLAN.md](sourcing-ai-agent/docs/REFACTOR_MASTER_PLAN.md) §7 |
+| Refactor continuation: **B0a+B0b+B1+B2 core+B3 core DONE 2026-07-22**（Step 3 size 转向退役 `a7b1b1b`；Block (a) resolver 抽取+梯队批1 `6bc844d`/`e713971`；拆分波1 smoke+harvest `588d784`/`bcdb035`；**mypy 81→0** `535d089`；R-035 关闭 `8bb7137`；法证打捞三件+PG 重试真缺陷根修 `93ba0f6`；god-file 425/39,459）; next = B2 尾（~25 簇归属核验→god-file 删除关 R-009）+ B3 尾（cli.py 子命令注册表化）+ B4/B5 + WS7.0 侦察批 | launch each session via `/refactor-goal` | [REFACTOR_MASTER_PLAN.md](sourcing-ai-agent/docs/REFACTOR_MASTER_PLAN.md) §7 |
 | Parked 23 delivered-job commands: per-job re-enqueue vs cancel | re-enqueue-safe under legacy deletion (pgLegacy Q2 verified); operator decides keep-vs-cancel | neutralization ledger (operator memory) |
 
 ## Blocked on external walls
