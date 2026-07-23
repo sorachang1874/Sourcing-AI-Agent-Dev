@@ -80,7 +80,12 @@ last-verified: 2026-07-22 (B0a+B0b done)
 ### 阶段门（先入档后动刀）
 
 - **W7.0 侦察批（read-only，可与 B4/B5 并行）**：现行 fetch-profile 状态机/调度/batch 划分规则实测画像（通信成本、Slot 空转、尾部 batch 损耗量化）；promote 判断现行硬规则清单与历史错误 promote 案例取证；X-First 方向划分规则与维护方法调研；HarvestAPI actors 预算模型（1~2 轮预算的量化定义）。
-- **W7.1 设计议案批**：每项合同级设计（batch 划分 AI 化、promote 判断 AI 化、行为层接口、补偿机制原子）出议案 → AskUserQuestion 请 operator 裁决 → 评审门 → 实施。**禁止无裁决动刀**。
+- **W7.1 设计议案批**：每项合同级设计出议案 → AskUserQuestion 请 operator 裁决 → 评审门 → 实施。**禁止无裁决动刀**。
+  - **首批四裁决 RATIFIED 2026-07-22**（recon 18 问中最高杠杆四项,余下 14 问随各议案分批请示）：
+    ①**AI batch 划分器座次**＝独立 plan 阶段直接产出 `dispatch_item_specs`（批数 4-8+每批成员+可解释 reason）;现行规则梯退位为**验收器**（每批≤300、总批≤8、R7 reason 审计、R5/R6 wave 语义保留）;前置＝先钉 scheduler plan-record characterization。
+    ②**Slot 即时填充**＝completion 事件唤醒 refill daemon 立即 bounded tick（保留 "callbacks are not executors" owner 设计,5s poll 降级为兜底）;目标时延 <1s;验收用现有 `refill_saturation`/`unfilled_available_slot_count`+事件时间戳。
+    ③**AI promote 两道闸**＝storage lineage guard 保 fail-closed 硬前置（回放安全性不交 AI）,AI 只在 guard 放行候选内判 promote/reject;**前置批＝shard 记录补齐**（完整请求参数+payload 快照+estimated_total+lineage backfill——与 NEXT_TODO 遗留 backfill 并轨）。
+    ④**失败语义**＝batch 划分回退现行规则梯（记录 fallback 审计）;promote 判定不可用即不晋升保 incumbent（fail-closed）——调度是效率问题可回退,晋升是资产正确性问题必须保守。
 - **W7.2+ 实施批**：characterization 先行（状态机/调度器改造前先钉现行为基线）；simulate 模式全链路验证；live 验证等 HarvestAPI 配额恢复 + operator 明示（红线不变）。
 
 ## 7. 批次序列与状态（执行时打勾，replace-not-append）
