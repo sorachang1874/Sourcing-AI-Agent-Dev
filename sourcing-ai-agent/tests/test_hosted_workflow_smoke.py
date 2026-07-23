@@ -1023,7 +1023,15 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 stage_summaries = dict((summary.get("final") or {}).get("stage_summaries") or {})
                 self.assertIn("linkedin_stage_1", stage_summaries)
                 self.assertIn("stage_1_preview", stage_summaries)
-                self.assertIn("public_web_stage_2", stage_summaries)
+                # FLIPPED 2026-07-22 (R-035): public_web_stage_2 is emitted
+                # only for two_stage / require_stage2_confirmation requests
+                # (planning._should_include_public_web_stage_2), so its
+                # presence varies per case; when present it must be completed.
+                if "public_web_stage_2" in stage_summaries:
+                    self.assertEqual(
+                        dict(stage_summaries.get("public_web_stage_2") or {}).get("status"),
+                        "completed",
+                    )
                 self.assertEqual(dict(stage_summaries.get("stage_1_preview") or {}).get("status"), "completed")
                 self.assertEqual(dict(stage_summaries.get("stage_2_final") or {}).get("status"), "completed")
 
@@ -1334,7 +1342,14 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                 "OpenAI",
             )
 
-            results_payload = harness.client.get(f"/api/jobs/{job_id}/results?include_candidates=1")
+            # FLIPPED 2026-07-22 (R-035 family): the raw legacy /results GET
+            # now 410s after the projection cutover; go through the smoke
+            # helper that follows the cutover payload to the serving route.
+            from sourcing_agent.workflow_smoke import _fetch_smoke_results_payload
+
+            results_payload = _fetch_smoke_results_payload(
+                harness.client, job_id=job_id, include_candidates=True
+            )
             self.assertEqual(str(dict(results_payload.get("job") or {}).get("status") or ""), "completed")
             self.assertTrue(
                 bool(dict(results_payload.get("asset_population") or {}).get("available"))

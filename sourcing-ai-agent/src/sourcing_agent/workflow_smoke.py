@@ -8621,6 +8621,14 @@ def run_hosted_smoke_case(
         dashboard_payload=dashboard_payload,
         candidate_page_payload=candidate_page_payload,
     )
+    if not dict(results.get("workflow_stage_summaries") or {}):
+        # Post legacy-results cutover (410 -> projection route) the results
+        # payload no longer carries workflow_stage_summaries; the progress
+        # surface owns them. Backfill once here so every downstream report
+        # (stage digest, raw summaries, wall-clock) reads one shape.
+        progress_stage_summaries = dict(final_progress_payload.get("workflow_stage_summaries") or {})
+        if progress_stage_summaries:
+            results = {**results, "workflow_stage_summaries": progress_stage_summaries}
     result_asset_population = dict(results.get("asset_population") or {})
     default_results_mode = str((results.get("effective_execution_semantics") or {}).get("default_results_mode") or "")
     asset_population_available = bool(result_asset_population.get("available")) or (
