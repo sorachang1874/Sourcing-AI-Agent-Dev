@@ -196,7 +196,13 @@ class AcquisitionPrefetchContractsTest(PGControlPlaneStoreTestMixin, unittest.Te
         self.assertEqual(execution.payload["queued_harvest_worker_count"], 0)
         self.assertEqual(execution.payload["stop_reason"], "")
         self.assertEqual(len(workers), 1)
-        self.assertEqual(workers[0]["status"], "failed")
+        # CALIBRATED 2026-07-22 (WS7 recon §1.4 contract): submit failure no
+        # longer fails the worker — the worker completes with the failed URLs
+        # recorded in its output summary (url-level failure log; the unified
+        # retry rides the registry retry gate).
+        self.assertEqual(workers[0]["status"], "completed")
+        worker_summary = dict(dict(workers[0].get("output") or {}).get("summary") or {})
+        self.assertIn("https://www.linkedin.com/in/failed-harvest/", list(worker_summary.get("failed_urls") or []))
         self.assertIn("Remote end closed connection", workers[0]["output"]["summary"]["message"])
         self.assertEqual(
             workers[0]["output"]["summary"]["failed_urls"],
