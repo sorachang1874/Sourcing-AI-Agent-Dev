@@ -12,6 +12,7 @@ from .company_shard_planning import (
     build_default_company_employee_shard_policy,
     build_request_scoped_company_employee_query_plan,
     build_request_scoped_former_search_shard_plan,
+    build_request_scoped_keyword_union_shard_policy,
     resolve_roster_lane_function_ids,
 )
 from .domain import (
@@ -627,6 +628,21 @@ def _build_acquisition_tasks(
             page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
             exclude_target_locations=request.exclude_target_locations,
         )
+    scoped_keyword_union_shard_policy: dict[str, Any] = {}
+    if acquisition_strategy.strategy_type == "scoped_search_roster":
+        # WS1 Step 4a (2026-07-22): a scoped request mints its keyword-union
+        # shard policy at plan time (reviewable contract; execution cutover is
+        # Step 4b — until then the seed-pool path still executes, and this
+        # policy is the pinned migration target).
+        scoped_keyword_union_shard_policy = build_request_scoped_keyword_union_shard_policy(
+            keywords=list(acquisition_strategy.search_seed_queries or [])
+            or list((acquisition_strategy.filter_hints or {}).get("keywords") or []),
+            function_ids=list(roster_function_ids or []),
+            locations=request.target_locations,
+            exclude_locations=request.exclude_target_locations,
+            max_pages=roster_max_pages,
+            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+        )
     former_function_shard_plan: dict[str, Any] = {}
     if acquisition_strategy.strategy_type == "former_employee_search":
         # WS1 Step 2b-ii (2026-07-22): a former-ONLY plan mints the same
@@ -703,6 +719,11 @@ def _build_acquisition_tasks(
                 "company_employee_shards": [],
                 "company_employee_shard_policy": company_employee_shard_policy,
                 "company_employee_shard_strategy": company_employee_shard_strategy,
+                **(
+                    {"scoped_keyword_union_shard_policy": scoped_keyword_union_shard_policy}
+                    if scoped_keyword_union_shard_policy
+                    else {}
+                ),
                 **(
                     {"former_function_shard_plan": former_function_shard_plan}
                     if former_function_shard_plan

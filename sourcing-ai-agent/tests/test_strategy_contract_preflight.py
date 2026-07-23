@@ -122,6 +122,33 @@ class UnificationFlipTargetPinsTest(unittest.TestCase):
     of these fails, either the unification step just landed (update the pin in
     the same change) or strategy selection regressed (investigate)."""
 
+    def test_step4a_scoped_request_plan_mints_keyword_union_policy(self) -> None:
+        # WS1 Step 4a (2026-07-22): a scoped request's roster task carries the
+        # request-scoped keyword_union shard policy — the reviewable plan-time
+        # contract for the Step 4b execution cutover (design lineage: 233a31a
+        # + tombstone T-001). Until 4b lands, execution still runs the
+        # seed-pool path; this pin guards the migration target's shape.
+        planned = _plan(
+            {
+                "raw_user_request": "OpenAI Pre-train direction people",
+                "query": "OpenAI Pre-train people",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["Pre-train"],
+            }
+        )
+        self.assertEqual(planned.acquisition_strategy.strategy_type, "scoped_search_roster")
+        roster_task = next(
+            task for task in planned.acquisition_tasks if task.task_type == "acquire_full_roster"
+        )
+        policy = dict(roster_task.metadata.get("scoped_keyword_union_shard_policy") or {})
+        self.assertEqual(policy.get("mode"), "keyword_union")
+        self.assertEqual(policy.get("strategy_id"), "request_scoped_keyword_union")
+        rule_ids = [str(item.get("rule_id") or "") for item in list(policy.get("keyword_shards") or [])]
+        self.assertIn("kw_pre_train", rule_ids)
+        self.assertTrue(policy.get("allow_overflow_partial"))
+
     def test_step3_org_size_never_steers_strategy(self) -> None:
         # FLIPPED 2026-07-22 (WS1 Step 3): the org-profile steering branches
         # are retired — the SAME request yields the SAME strategy with or

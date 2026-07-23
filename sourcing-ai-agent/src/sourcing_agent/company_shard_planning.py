@@ -170,6 +170,66 @@ def build_request_scoped_company_employee_query_plan(
     }
 
 
+def build_request_scoped_keyword_union_shard_policy(
+    *,
+    keywords: Iterable[str] | None,
+    function_ids: Iterable[str] | None,
+    locations: list[str] | None = None,
+    exclude_locations: Iterable[str] | None = None,
+    max_pages: int,
+    page_limit: int,
+) -> dict[str, Any]:
+    """Request-scoped keyword_union shard policy (WS1 Step 4a, 2026-07-22).
+
+    A scoped (directional/keyword-constrained) request expresses its recall as
+    a UNION of keyword-scoped queries inside the same probe-driven roster
+    machinery every other lane uses — this policy is the plan-time contract
+    for that unification (design intent preserved from 233a31a / tombstone
+    T-001; execution cutover is Step 4b). Each request keyword becomes one
+    keyword shard rule; function ids and the location axes live in the root
+    scope so every keyword shard inherits them. ``locations`` follows the
+    roster lane's single-writer semantics (None -> United States, [] ->
+    opt-out); probe/cap/overflow honesty is owned by the shared
+    keyword_union planner (root under cap short-circuits to one shard).
+    """
+
+    normalized_keywords = list(
+        dict.fromkeys(" ".join(str(item or "").split()) for item in list(keywords or []) if str(item or "").strip())
+    )
+    if not normalized_keywords:
+        return {}
+    resolved_locations, resolved_exclude_locations, location_filters = _request_scoped_location_filters(
+        locations,
+        list(exclude_locations or []),
+    )
+    normalized_function_ids = list(
+        dict.fromkeys(str(item).strip() for item in list(function_ids or []) if str(item).strip())
+    )
+    root_filters: dict[str, Any] = {key: list(values) for key, values in location_filters.items()}
+    if normalized_function_ids:
+        root_filters["function_ids"] = list(normalized_function_ids)
+    keyword_shards = [
+        {
+            "rule_id": f"kw_{_normalize_shard_id(keyword)}",
+            "title": keyword,
+            "include_patch": {"keywords": [keyword]},
+        }
+        for keyword in normalized_keywords
+    ]
+    return {
+        "strategy_id": "request_scoped_keyword_union",
+        "mode": "keyword_union",
+        "scope_note": "Scoped request keyword-union recall (WS1 Step 4a plan contract)",
+        "root_title": "Scoped keyword root",
+        "root_filters": root_filters,
+        "keyword_shards": keyword_shards,
+        "request_function_ids": list(normalized_function_ids),
+        "allow_overflow_partial": True,
+        "max_pages": int(max_pages),
+        "page_limit": int(page_limit),
+    }
+
+
 def build_request_scoped_former_search_shard_plan(
     *,
     function_ids: Iterable[str] | None,
