@@ -14,6 +14,7 @@ last-verified: 2026-07-22 (B0a+B0b done)
 1. **重构续章**：把 acquire 策略统一到「按参数分 shard（location、functionID、employment_status…）保 recall」的 canonical 抽象；Track A 单体分解重开；测试退役与 god-file 拆分；mypy 81 清零。
 2. **harness 持续完善**：lane 单源、测试溯源门、mypy 棘轮、文档门——每次踩坑固化为 gate/registry，不留口头教训。
 3. **playbook 回流**：把本仓库验证过的做法蒸馏进 `github.com/sorachang1874` 的 ai-assisted-engineering-playbook（sibling repo，重整前先 pull）。
+4. **强 Agent 改造**（长期）：fetch-profile 全链路（状态机/调度/批次/promote 判断/补偿机制）与后链路行为层的 AI-Native 化——WS7（§6.5），operator 指令 2026-07-22。
 
 ## 1. 已批准的裁决（2026-07-22，不再重议）
 
@@ -65,6 +66,23 @@ last-verified: 2026-07-22 (B0a+B0b done)
 - playbook 回流批次：先 `git pull` sibling repo，再把已验证模式蒸馏成 playbook 条目（候选：probe-cost-before-execute、guarded-promotion dry-run 预测、写入栅栏 fail-closed 模式、salvage 收据纪律、多 agent 侦察→批评家→补缺工作流形态、residual ledger 棘轮）。
 - 记忆升维：跨会话事实进 memory/，会话内进 BOARD，durable 进 git——三层不混。
 
+
+## 6.5 工作流 WS7 — 强 Agent 改造（长期；operator 指令 2026-07-22，本节为唯一权威转录）
+
+### 权威指令（口述转录，逐条保真）
+
+1. **fetch profile 状态机与调度器**：调度器即时填充 Slot，降低通信成本与因未及时发送请求带来的效率损失。
+2. **AI-Native 批次划分**：fetch profile 的 batch 划分不再靠规则，让 AI 自主划分 4-8 批，目标在 1~2 轮 HarvestAPI actors 预算内完成，避免既往尾部小 batch 降低效率的问题；**保留**既有的 url 级失败记录 + 最后统一发起一次重试的做法。
+3. **AI-Native materialize→promote 判断**：从 materialize 到 promote 为 canonical 的逻辑判断 AI-Native 化。广召回打法更需要对 HarvestAPI 请求参数（location、functionID、Keywords 等）做精细记录并做 AI-Native 判断，而非依靠硬性规则（历史上硬规则出过错误 promote）。
+4. **原子化后的完整补偿机制**：各环节充分抽象与原子化之后，建立完整的重试/recovery 机制——补充 acquire、补充 fetch、补充 materialize、补充 promote、对执行失败的记录 recovery。
+5. **后链路行为层抽象（两层）**：①个人基本信息补充层——如经 Grok 定位 X 账号与 Bio，**执行一次足够**；②特定方向信息收集与判断层——按需执行（例：pre-train 研究方向、TBD 组织/团队方向、Gemini 模型方向、Codex 产品方向）。X-First 项目对方向划分已有规则与维护方法，**动刀前先了解**（入口 `x-first-researcher-sourcing/AGENTS.md`）。semantic scholar（论文与研究方向的获取、总结）未来纳入同一「定位来源→收集→判断」抽象方法论。目标 = 数据资产更完整的后链路。
+
+### 阶段门（先入档后动刀）
+
+- **W7.0 侦察批（read-only，可与 B4/B5 并行）**：现行 fetch-profile 状态机/调度/batch 划分规则实测画像（通信成本、Slot 空转、尾部 batch 损耗量化）；promote 判断现行硬规则清单与历史错误 promote 案例取证；X-First 方向划分规则与维护方法调研；HarvestAPI actors 预算模型（1~2 轮预算的量化定义）。
+- **W7.1 设计议案批**：每项合同级设计（batch 划分 AI 化、promote 判断 AI 化、行为层接口、补偿机制原子）出议案 → AskUserQuestion 请 operator 裁决 → 评审门 → 实施。**禁止无裁决动刀**。
+- **W7.2+ 实施批**：characterization 先行（状态机/调度器改造前先钉现行为基线）；simulate 模式全链路验证；live 验证等 HarvestAPI 配额恢复 + operator 明示（红线不变）。
+
 ## 7. 批次序列与状态（执行时打勾，replace-not-append）
 
 碰撞矩阵：backend-ci.yml/Makefile 仅 R0 批触碰；seed_discovery.py 归策略批（R-010 退役骑行）；test 文件按批次独占。评审门协议：实现+定向测试+pin commit+记录评审请求后**继续下一批**，verdict 等 chshapi 配额；NO-GO 只冻结所涉 scope 晋升。
@@ -80,6 +98,8 @@ last-verified: 2026-07-22 (B0a+B0b done)
   - harvest harness 抽取前探测（2026-07-22,方法先于执行）：带实测 4866-6251（1,386 行,与侦察一致）;**闭包比侦察估计大**——带外依赖 8 符号：`HarvestExecutionArtifact/Result`（:558/:567 共享核心类型,需先抽 `harvest_execution_types.py` 双方共导+connectors 兼容回导）、`_SCRIPTED_SAMPLE_*_CACHE` ×2（:64-65 band 专用,随带走）、纯小函数 ×3（`_profile_cache_key` 6L/`_offline_profile_identifier` 7L/`_payload_cache_key` 4L,按复制先例）、**`_harvest_profile_match_context`（:3568,31L+`_harvest_profile_payload_layers`/`_harvest_profile_layered_value` 家族闭包,4 调用点跨带内外——不可复制不可反向导入,需先量测家族全闭包再定归属**）;带内被带外引用 4 入口（`_build_offline_harvest_body`/`_build_scripted_harvest_result`/`_scripted_float_first`/`_scripted_status_ready_epoch_ms`,connectors→harness 单向合法）。切法：①先抽 types 模块 ②量测 match-context 家族闭包定归属 ③band 整体搬+3 小函数复制+4 入口回导。
 - [ ] **B4 — 策略 Step 4 ＋ 切片 3 回涨归位＋棘轮 ＋ mypy B/C 族 ＋ 拆分第二波**
 - [ ] **B5 — 策略 Step 5 设计议案（operator 裁决后动）＋ test_pipeline 删除关 R-009 ＋ playbook 回流大批**
+- [ ] **B6 — WS7.0 侦察批**（read-only，可与 B4/B5 并行；产出四份实测画像入 §6.5）
+- [ ] **B7+ — WS7 设计议案与实施批**（每项 operator 裁决后动；characterization 先行）
 - 常驻：溯源祖父基线烧减、mypy 烧减、ledger/快照/记忆维护。
 - 继承的收口跟进（见 NEXT_TODO Now 区）：shard lineage backfill、profile_fetched 对账、8 条 stalled running 终态化、2 个 stale pending review sessions 裁决（后两者是 WS1 删除条件前置）。
 
