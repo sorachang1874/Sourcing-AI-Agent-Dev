@@ -670,6 +670,33 @@ def _asset_membership_summary_from_rows(rows: list[dict[str, Any]] | None) -> di
     }
 
 
+
+def is_transient_control_plane_error(error: BaseException | None) -> bool:
+    """Classify store failures that a caller may retry with backoff.
+
+    The PG-pure store wraps write failures as RuntimeError with the psycopg
+    error as __cause__; transient classes (connection loss, lock/serialization
+    pressure) surface as psycopg.OperationalError. The legacy SQLite
+    "database is locked" message is honored for any straggler paths. Central
+    owner of this classification — retry loops must not re-derive it.
+    """
+
+    seen: set[int] = set()
+    current = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        try:
+            import psycopg
+        except ImportError:
+            psycopg = None  # type: ignore[assignment]
+        if psycopg is not None and isinstance(current, psycopg.OperationalError):
+            return True
+        if type(current).__name__ == "OperationalError" and "database is locked" in str(current).lower():
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
 class ControlPlaneStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)

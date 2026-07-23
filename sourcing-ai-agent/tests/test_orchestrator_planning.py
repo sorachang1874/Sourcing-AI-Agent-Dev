@@ -277,13 +277,17 @@ class OrchestratorPlanningTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
             ["19"],
         )
+        # FLIPPED 2026-07-22 (WS1 Step 3): the hard-large default profile no
+        # longer steers strategy; the Gemini sub-org scope preference (a scope
+        # rule, not a size fork — recall via multi-company-page roster) decides
+        # this query, and the profile stays advisory.
         self.assertEqual(
             planned["plan"]["acquisition_strategy"]["strategy_type"],
-            "scoped_search_roster",
+            "full_company_roster",
         )
         self.assertEqual(
             planned["plan"]["acquisition_strategy"]["filter_hints"]["current_companies"],
-            ["Google"],
+            ["https://www.linkedin.com/company/google/", "https://www.linkedin.com/company/deepmind/"],
         )
         self.assertEqual(
             planned["plan"]["organization_execution_profile"]["default_acquisition_mode"],
@@ -291,6 +295,67 @@ class OrchestratorPlanningTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         )
 
 
+
+    def test_plan_workflow_materializes_intent_axes_only_request_normalization(self) -> None:
+        # Ported from the frozen test_pipeline.py (forensic salvage 2026-07-22).
+        # Calibrated: acquisition_lane_policy.keyword_priority_only no longer
+        # passes through to execution_preferences — that semantic is derived
+        # from the strategy/keyword shape in acquisition_strategy cost_policy
+        # (keyword_priority_only := scoped_search_roster + keyword hints), so
+        # the old passthrough assertion is retired with this note.
+        class RequestNormalizingModelClient(DeterministicModelClient):
+            def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
+                return {
+                    "intent_axes": {
+                        "population_boundary": {
+                            "categories": ["employee"],
+                            "employment_statuses": ["current", "former"],
+                        },
+                        "scope_boundary": {
+                            "target_company": "Google",
+                            "organization_keywords": ["Google DeepMind", "Gemini"],
+                            "scope_disambiguation": {
+                                "inferred_scope": "both",
+                                "sub_org_candidates": ["Google DeepMind", "Gemini"],
+                                "confidence": 0.81,
+                            },
+                        },
+                        "acquisition_lane_policy": {
+                            "keyword_priority_only": True,
+                        },
+                        "fallback_policy": {
+                            "provider_people_search_query_strategy": "all_queries_union",
+                            "run_former_search_seed": True,
+                        },
+                        "thematic_constraints": {
+                            "must_have_primary_role_buckets": ["product_management"],
+                            "keywords": ["Gemini"],
+                        },
+                    }
+                }
+
+        client = RequestNormalizingModelClient()
+        orchestrator = SourcingOrchestrator(
+            catalog=self.catalog,
+            store=self.store,
+            jobs_dir=f"{self.tempdir.name}/jobs",
+            model_client=client,
+            semantic_provider=self.semantic_provider,
+            acquisition_engine=AcquisitionEngine(self.catalog, self.settings, self.store, client),
+        )
+
+        planned = orchestrator.plan_workflow({"raw_user_request": "我想找Gemini的产品经理"})
+
+        self.assertEqual(planned["request"]["target_company"], "Google")
+        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
+        self.assertEqual(
+            planned["request"]["execution_preferences"]["provider_people_search_query_strategy"],
+            "all_queries_union",
+        )
+        self.assertTrue(planned["request"]["execution_preferences"]["run_former_search_seed"])
+        self.assertIn("Gemini", planned["request"]["organization_keywords"])
+        self.assertEqual(planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"], "Google")
 
     def test_plan_workflow_task_metadata_carries_effective_request(self) -> None:
         planned = self.orchestrator.plan_workflow(

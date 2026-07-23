@@ -638,7 +638,7 @@ from .snapshot_state import (
 from .snapshot_state import (
     read_json_list as _read_json_list,
 )
-from .storage import ControlPlaneStore, _build_asset_membership_row
+from .storage import ControlPlaneStore, is_transient_control_plane_error, _build_asset_membership_row
 from .storage import _json_safe_payload as _storage_json_safe_payload
 from .worker_daemon import PersistentWorkerRecoveryDaemon
 from .worker_scheduler import effective_worker_status, summarize_scheduler
@@ -43483,8 +43483,11 @@ class SourcingOrchestrator:
                 try:
                     self._persist_workflow_runtime_controls(normalized_job_id, controls_payload)
                     return
-                except sqlite3.OperationalError as exc:
-                    if "database is locked" not in str(exc).lower() or attempt + 1 >= attempts:
+                except Exception as exc:
+                    # PG-era calibration (2026-07-22, salvaged from the frozen
+                    # sqlite3-only handler that had stopped matching anything):
+                    # transient-vs-permanent is owned by the store's classifier.
+                    if not is_transient_control_plane_error(exc) or attempt + 1 >= attempts:
                         return
                     time.sleep(delay)
                     delay = min(delay * 2.0, 1.0)

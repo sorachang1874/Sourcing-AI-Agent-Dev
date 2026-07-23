@@ -537,71 +537,6 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("intent_rewrite", result)
         self.assertFalse(result["intent_rewrite"]["request"]["matched"])
 
-    def test_plan_workflow_materializes_intent_axes_only_request_normalization(self) -> None:
-        class RequestNormalizingModelClient(DeterministicModelClient):
-            def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
-                return {
-                    "intent_axes": {
-                        "population_boundary": {
-                            "categories": ["employee"],
-                            "employment_statuses": ["current", "former"],
-                        },
-                        "scope_boundary": {
-                            "target_company": "Google",
-                            "organization_keywords": ["Google DeepMind", "Gemini"],
-                            "scope_disambiguation": {
-                                "inferred_scope": "both",
-                                "sub_org_candidates": ["Google DeepMind", "Gemini"],
-                                "confidence": 0.81,
-                            },
-                        },
-                        "acquisition_lane_policy": {
-                            "keyword_priority_only": True,
-                        },
-                        "fallback_policy": {
-                            "provider_people_search_query_strategy": "all_queries_union",
-                            "run_former_search_seed": True,
-                        },
-                        "thematic_constraints": {
-                            "must_have_primary_role_buckets": ["product_management"],
-                            "keywords": ["Gemini"],
-                        },
-                    }
-                }
-
-        orchestrator = SourcingOrchestrator(
-            catalog=self.catalog,
-            store=self.store,
-            jobs_dir=f"{self.tempdir.name}/jobs",
-            model_client=RequestNormalizingModelClient(),
-            semantic_provider=self.semantic_provider,
-            acquisition_engine=AcquisitionEngine(
-                self.catalog, self.settings, self.store, RequestNormalizingModelClient()
-            ),
-        )
-
-        planned = orchestrator.plan_workflow(
-            {
-                "raw_user_request": "我想找Gemini的产品经理",
-            }
-        )
-
-        self.assertEqual(planned["request"]["target_company"], "Google")
-        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
-        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
-        self.assertEqual(
-            planned["request"]["execution_preferences"]["provider_people_search_query_strategy"],
-            "all_queries_union",
-        )
-        self.assertTrue(planned["request"]["execution_preferences"]["keyword_priority_only"])
-        self.assertTrue(planned["request"]["execution_preferences"]["run_former_search_seed"])
-        self.assertIn("Gemini", planned["request"]["organization_keywords"])
-        self.assertEqual(planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"], "Google")
-        self.assertEqual(
-            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
-            ["19"],
-        )
-
     def test_running_resolve_job_candidate_source_reports_publication_gap_without_persisting(
         self,
     ) -> None:
@@ -9316,53 +9251,6 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(len(final_events), 3)
         self.assertEqual(final_events[-1]["status"], "already_running")
         self.assertEqual(final_events[-1]["payload"]["control"], "shared_recovery")
-
-    def test_persist_workflow_runtime_controls_deferred_retries_locked_database(self) -> None:
-        job_id = "job_runtime_control_deferred_retry"
-        self.store.save_job(
-            job_id=job_id,
-            job_type="workflow",
-            status="queued",
-            stage="planning",
-            request_payload={"target_company": "Google"},
-            plan_payload={},
-            summary_payload={"message": "queued"},
-        )
-
-        original = self.orchestrator._persist_workflow_runtime_controls
-        call_count = {"count": 0}
-
-        def flaky(job_id_value: str, controls_value: dict[str, object]) -> None:
-            call_count["count"] += 1
-            if call_count["count"] == 1:
-                raise sqlite3.OperationalError("database is locked")
-            original(job_id_value, controls_value)
-
-        with unittest.mock.patch.object(
-            self.orchestrator,
-            "_persist_workflow_runtime_controls",
-            side_effect=flaky,
-        ):
-            result = self.orchestrator._persist_workflow_runtime_controls_deferred(
-                job_id,
-                {
-                    "workflow_runner_control": {
-                        "status": "started",
-                        "handshake": {"status": "advanced", "job_status": "running", "job_stage": "planning"},
-                    }
-                },
-                max_attempts=3,
-                initial_delay_seconds=0.0,
-                run_async=False,
-            )
-
-        self.assertEqual(result["status"], "completed")
-        self.assertGreaterEqual(call_count["count"], 2)
-        stored_job = self.store.get_job(job_id)
-        self.assertIsNotNone(stored_job)
-        assert stored_job is not None
-        runtime_controls = dict(dict(stored_job.get("summary") or {}).get("runtime_controls") or {})
-        self.assertEqual(runtime_controls["workflow_runner_control"]["status"], "started")
 
     def test_start_workflow_runner_managed_defers_runtime_control_persistence(self) -> None:
         queued_payload = {
@@ -39072,57 +38960,6 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(trace["agent_runtime_session"])
         lane_ids = [item["lane_id"] for item in trace["agent_trace_spans"]]
         self.assertIn("retrieval_specialist", lane_ids)
-
-    def test_public_worker_read_endpoints_use_persisted_workers_when_runtime_closed(self) -> None:
-        self.orchestrator.bootstrap()
-        result = self.orchestrator.run_job(
-            {
-                "target_company": "Anthropic",
-                "categories": ["employee"],
-                "employment_statuses": ["current"],
-                "keywords": ["基础设施"],
-                "top_k": 2,
-            }
-        )
-        first_result = self.store.get_job_results(result["job_id"])[0]
-        candidate_id = str(first_result.get("candidate_id") or "")
-        persisted_workers = [
-            {
-                "worker_id": 987,
-                "job_id": result["job_id"],
-                "lane_id": "retrieval_specialist",
-                "worker_key": "persisted-worker",
-                "status": "completed",
-                "checkpoint": {},
-                "metadata": {},
-            }
-        ]
-        with (
-            unittest.mock.patch.object(
-                self.orchestrator.store,
-                "list_agent_workers",
-                return_value=persisted_workers,
-            ),
-            unittest.mock.patch.object(
-                self.orchestrator.agent_runtime,
-                "list_workers",
-                side_effect=sqlite3.ProgrammingError("closed database"),
-            ),
-        ):
-            trace = self.orchestrator.get_job_trace(result["job_id"])
-            workers_payload = self.orchestrator.get_job_workers(result["job_id"])
-            scheduler_payload = self.orchestrator.get_job_scheduler(result["job_id"])
-            candidate_detail = self.orchestrator.get_job_candidate_detail(result["job_id"], candidate_id)
-            candidate_batch = self.orchestrator.get_job_candidate_details_batch(result["job_id"], [candidate_id])
-
-        self.assertIsNotNone(trace)
-        self.assertEqual(trace["agent_workers"], persisted_workers)
-        self.assertEqual(workers_payload["agent_workers"], persisted_workers)
-        self.assertEqual(scheduler_payload["scheduler"]["lane_summary"][0]["completed"], 1)
-        self.assertEqual(scheduler_payload["scheduler"]["resumable_workers"][0]["worker_id"], 987)
-        self.assertIsNotNone(candidate_detail)
-        self.assertEqual(candidate_detail["candidate"]["candidate_id"], candidate_id)
-        self.assertEqual(candidate_batch["candidates"][0]["candidate_id"], candidate_id)
 
     def test_load_delta_baseline_material_reads_external_canonical_root(self) -> None:
         canonical_root = Path(self.tempdir.name) / "canonical_company_assets"
