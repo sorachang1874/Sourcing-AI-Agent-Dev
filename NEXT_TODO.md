@@ -10,7 +10,7 @@ budget: ≤120 lines, replace-not-append; each row links its owning doc; done ro
 | Item | State | Route |
 |---|---|---|
 | Salvage lineage backfill **DONE 2026-07-23**: 3 行落库并核验（google fn8=2096/fn24=250 与清单 candidates_in=2346 吻合,tml root=220;run id+完整 request_filters 入 metadata）经新 `--from-salvage-manifest` 路径（`161b73b`,dry-run 全只读;旧 `--rebuild-from-assets` 不识 salvage 布局且 dry-run 曾会写库——均已修）。**余一契约缺口**：openai/tml 的 profile-detail 批无 registry lane 契约值（显式 skip 记录在案）——新 lane 值属过审事项,已并入评审队列 | R-033 + salvage report §5 |
-| profile_fetched flag reconciliation: openai 20 closures + tml Full-mode upgrades not yet visible in counts | envelopes merged into authoritative snapshots' harvest_profiles; flags/PG counts need the supplement flow | company_asset_supplement + R-033 |
+| profile_fetched 对账 **DONE 2026-07-23**（`df1997d` 新 committed 脚本,证据制匹配:openai +20 flag/+20 mode,tml +10 flag/+204 Full-mode 可见;备份留存;ledger 已刷新）。**⚠️ 待操作者确认的副作用**：tml authority 指针经 ledger 刷新从 `20260719T183049`（simulate 时代原始快照）翻至 `20260722T113432`（salvage 真实快照,含本会话回填的 lineage 行）——方向与 R-033/google cutover 一致但系 side effect;另 26 个 tml 历史快照被注册为非权威行;openai 分数重算 80.59→79.09（公式漂移,非 flag 变化所致）。如需回退:仅翻两行 authoritative 位 | company_asset_supplement + R-033 |
 | HarvestAPI capability-boundary probe round | designed, EXECUTES when quota returns | [HARVESTAPI_PLAYBOOK](sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md) §能力边界 |
 
 ## Next (approved sequence)
