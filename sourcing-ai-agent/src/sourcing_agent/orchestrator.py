@@ -10,7 +10,6 @@ import math
 import os
 import re
 import socket
-import sqlite3
 import sys
 import threading
 import time
@@ -90,6 +89,7 @@ from .candidate_materialization import (
     evidence_key,
     remap_evidence_candidate,
 )
+from .candidate_source_resolver import CandidateSourceResolver, CandidateSourceResolverDeps
 from .canonicalization import canonicalize_company_records
 from .cohort_provider_compiler import (
     CohortProviderCompilationError,
@@ -456,6 +456,7 @@ from .public_candidate_facets import (
 )
 from .query_intent_policy import list_business_rewrite_policy_catalog
 from .query_intent_rewrite import interpret_query_intent_rewrite, summarize_query_intent_rewrite
+from .query_signal_knowledge import role_buckets_from_text as _shared_role_buckets_from_text
 from .recovery_drain_registry import (
     DEFAULT_RECOVERY_DRAIN_BINDINGS,
     build_recovery_drain_registry,
@@ -467,10 +468,9 @@ from .recovery_phases import (
     build_drain_group_phases,
     build_recovery_phase_registry,
     merge_profile_refill_results,
+    phase_work_observed,
     profile_refill_command_planned_observed,
     profile_refill_worker_submit_observed,
-    phase_work_observed,
-    profile_refill_owner_drain_payload,
     run_registry_phase,
 )
 from .recovery_sidecar import (
@@ -521,6 +521,9 @@ from .request_matching import (
     source_request_matches_hard_identity,
 )
 from .request_normalization import (
+    _suppress_dedicated_field_keyword_terms as _shared_suppress_dedicated_field_keyword_terms,
+)
+from .request_normalization import (
     build_request_preview_payload as _shared_build_request_preview_payload,
 )
 from .request_normalization import (
@@ -547,10 +550,6 @@ from .request_normalization import (
 from .request_normalization import (
     supplement_request_query_signals as _shared_supplement_request_query_signals,
 )
-from .request_normalization import (
-    _suppress_dedicated_field_keyword_terms as _shared_suppress_dedicated_field_keyword_terms,
-)
-from .query_signal_knowledge import role_buckets_from_text as _shared_role_buckets_from_text
 from .request_ownership import exact_job_owner_matches as _exact_job_owner_matches
 from .rerun_policy import decide_rerun_policy
 from .result_diff import build_result_diff
@@ -563,7 +562,6 @@ from .results_store import (
     read_snapshot_materialized_candidate_window,
     read_snapshot_publishable_email_lookup,
 )
-from .candidate_source_resolver import CandidateSourceResolver, CandidateSourceResolverDeps
 from .retrieval_runtime import (
     OUTREACH_LAYER_KEY_BY_INDEX,
     candidate_source_is_snapshot_authoritative,
@@ -638,7 +636,7 @@ from .snapshot_state import (
 from .snapshot_state import (
     read_json_list as _read_json_list,
 )
-from .storage import ControlPlaneStore, is_transient_control_plane_error, _build_asset_membership_row
+from .storage import ControlPlaneStore, _build_asset_membership_row, is_transient_control_plane_error
 from .storage import _json_safe_payload as _storage_json_safe_payload
 from .worker_daemon import PersistentWorkerRecoveryDaemon
 from .worker_scheduler import effective_worker_status, summarize_scheduler
@@ -10887,7 +10885,9 @@ class SourcingOrchestrator:
             if len(existing_indices) > 1:
                 for duplicate_index in existing_indices[1:]:
                     base_slots[duplicate_index]["active"] = False
-            existing_record = dict(base_slots[delta_slot_index].get("record") or {}) if delta_slot_index is not None else {}
+            existing_record = (
+                dict(base_slots[delta_slot_index].get("record") or {}) if delta_slot_index is not None else {}
+            )
             if delta_slot_index is None:
                 merged_record = dict(delta_record)
                 added_member_keys.append(member_key)
@@ -40797,7 +40797,8 @@ class SourcingOrchestrator:
             _tick_ctx,
         )
         _tick_ctx.profile_refill_submit_observed_this_tick = (
-            _tick_ctx.profile_refill_submit_observed_this_tick or profile_refill_worker_submit_observed(profile_prefetch_refill)
+            _tick_ctx.profile_refill_submit_observed_this_tick
+            or profile_refill_worker_submit_observed(profile_prefetch_refill)
         )
         _tick_ctx.profile_refill_command_planned_this_tick = (
             _tick_ctx.profile_refill_command_planned_this_tick
@@ -41001,6 +41002,7 @@ class SourcingOrchestrator:
             and not profile_refill_event_work_observed
             and _ready_board_visible_apply_item_exists()
         )
+
         def _local_apply_backlog_body(ctx: TickContext) -> Any:
             provider_control_open_work = _provider_control_open_work_summary()
             backlog_limit, _ = _provider_control_visibility_limits(
@@ -41322,6 +41324,7 @@ class SourcingOrchestrator:
             workflow_resume_barrier = _daemon_owned_workflow_resume_barrier(
                 "daemon_owned_work_open_before_workflow_resume"
             )
+
         # Step 2b slice 8: workflow_resume onto the registry seam — the FIRST
         # result-vs-record divergent phase (skip emits the record but hands []
         # back to the tick), expressed via SkipDecision.skip_result.
@@ -42219,7 +42222,6 @@ class SourcingOrchestrator:
             "runtime_heartbeat": runtime_heartbeat,
             "runtime_metrics": runtime_metrics_payload,
         }
-
 
     def _run_explicit_job_followup_rounds(
         self,
@@ -51669,9 +51671,7 @@ class SourcingOrchestrator:
                 else source_urls_candidate
                 if isinstance((source_urls_candidate := input_payload.get("collector_source_urls")), list)
                 else explicit_sources_candidate
-                if isinstance(
-                    (explicit_sources_candidate := explicit_command_payload.get("collector_sources")), list
-                )
+                if isinstance((explicit_sources_candidate := explicit_command_payload.get("collector_sources")), list)
                 else []
             )
             command_payload = {

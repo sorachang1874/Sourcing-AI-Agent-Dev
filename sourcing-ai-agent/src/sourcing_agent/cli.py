@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -3414,810 +3414,764 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    if args.command == "show-control-plane-runtime":
-        print(json.dumps(build_control_plane_runtime_summary(), ensure_ascii=False, indent=2))
+    handler = _CLI_COMMAND_HANDLERS.get(str(args.command or ""))
+    if handler is None:
+        parser.error(f"unknown command: {args.command}")
         return
-    if args.command == "run-target-candidate-public-web-experiment":
-        print(json.dumps(run_target_candidate_public_web_experiment_command(args), ensure_ascii=False, indent=2))
-        return
-    if args.command == "evaluate-public-web-quality":
-        result = evaluate_public_web_quality_command(args)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        if result.get("status") == "failed":
-            sys.exit(1)
-        return
-    if args.command == "refresh-company-public-web-assets":
-        orchestrator = build_orchestrator()
-        collector_inputs: dict[str, Any] = {}
-        collector_sources: list[Any] = []
-        if str(args.collector_input_json or "").strip():
-            collector_input_path = Path(str(args.collector_input_json).strip()).expanduser()
-            collector_payload = json.loads(collector_input_path.read_text(encoding="utf-8"))
-            collector_inputs = dict(collector_payload.get("collector_inputs") or collector_payload)
-        if str(args.collector_source_json or "").strip():
-            collector_source_path = Path(str(args.collector_source_json).strip()).expanduser()
-            collector_source_payload = json.loads(collector_source_path.read_text(encoding="utf-8"))
-            if isinstance(collector_source_payload, dict):
-                raw_sources = collector_source_payload.get("collector_sources")
-                collector_sources = list(raw_sources or []) if isinstance(raw_sources, list) else []
-            elif isinstance(collector_source_payload, list):
-                collector_sources = list(collector_source_payload)
-        collector_sources.extend(
-            str(item or "").strip() for item in list(args.collector_source_url or []) if str(item or "").strip()
-        )
-        payload = {
+    handler(args)
+
+
+def _cli_cmd_show_control_plane_runtime(args: argparse.Namespace) -> None:
+    print(json.dumps(build_control_plane_runtime_summary(), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_run_target_candidate_public_web_experiment(args: argparse.Namespace) -> None:
+    print(json.dumps(run_target_candidate_public_web_experiment_command(args), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_evaluate_public_web_quality(args: argparse.Namespace) -> None:
+    result = evaluate_public_web_quality_command(args)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if result.get("status") == "failed":
+        sys.exit(1)
+    return
+
+
+def _cli_cmd_refresh_company_public_web_assets(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    collector_inputs: dict[str, Any] = {}
+    collector_sources: list[Any] = []
+    if str(args.collector_input_json or "").strip():
+        collector_input_path = Path(str(args.collector_input_json).strip()).expanduser()
+        collector_payload = json.loads(collector_input_path.read_text(encoding="utf-8"))
+        collector_inputs = dict(collector_payload.get("collector_inputs") or collector_payload)
+    if str(args.collector_source_json or "").strip():
+        collector_source_path = Path(str(args.collector_source_json).strip()).expanduser()
+        collector_source_payload = json.loads(collector_source_path.read_text(encoding="utf-8"))
+        if isinstance(collector_source_payload, dict):
+            raw_sources = collector_source_payload.get("collector_sources")
+            collector_sources = list(raw_sources or []) if isinstance(raw_sources, list) else []
+        elif isinstance(collector_source_payload, list):
+            collector_sources = list(collector_source_payload)
+    collector_sources.extend(
+        str(item or "").strip() for item in list(args.collector_source_url or []) if str(item or "").strip()
+    )
+    payload = {
+        "target_company": str(args.target_company or "").strip(),
+        "source_families": [str(item or "").strip() for item in list(args.source_family or []) if str(item or "").strip()],
+        "seed_urls": [str(item or "").strip() for item in list(args.seed_url or []) if str(item or "").strip()],
+        "options": {
+            "max_assets": max(1, int(args.max_assets or 50)),
+            "collection_mode": str(args.collection_mode or "seed_url_only").strip() or "seed_url_only",
+            "max_queries": max(1, int(args.max_queries or 6)),
+            "max_results_per_query": max(1, int(args.max_results_per_query or 10)),
+            "discover_collector_sources": bool(args.discover_collector_sources),
+            "max_discovered_collector_sources": max(1, int(args.max_discovered_collector_sources or 12)),
+        },
+        "force_refresh": bool(args.force_refresh),
+        "requested_by": str(args.requested_by or "cli").strip() or "cli",
+        "run_id": str(args.run_id or "").strip(),
+    }
+    if collector_inputs:
+        payload["collector_inputs"] = collector_inputs
+    if collector_sources:
+        payload["collector_sources"] = collector_sources
+    result = orchestrator.refresh_company_public_web_assets(payload)
+    if str(args.output or "").strip():
+        output_path = Path(str(args.output).strip()).expanduser()
+        if not output_path.is_absolute():
+            output_path = AssetCatalog.discover().project_root / output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_list_company_public_web_assets(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.list_company_public_web_assets(
+        {
             "target_company": str(args.target_company or "").strip(),
-            "source_families": [str(item or "").strip() for item in list(args.source_family or []) if str(item or "").strip()],
-            "seed_urls": [str(item or "").strip() for item in list(args.seed_url or []) if str(item or "").strip()],
-            "options": {
-                "max_assets": max(1, int(args.max_assets or 50)),
-                "collection_mode": str(args.collection_mode or "seed_url_only").strip() or "seed_url_only",
-                "max_queries": max(1, int(args.max_queries or 6)),
-                "max_results_per_query": max(1, int(args.max_results_per_query or 10)),
-                "discover_collector_sources": bool(args.discover_collector_sources),
-                "max_discovered_collector_sources": max(1, int(args.max_discovered_collector_sources or 12)),
-            },
-            "force_refresh": bool(args.force_refresh),
-            "requested_by": str(args.requested_by or "cli").strip() or "cli",
-            "run_id": str(args.run_id or "").strip(),
+            "company_key": str(args.company_key or "").strip(),
+            "source_family": str(args.source_family or "").strip(),
+            "status": str(args.status or "").strip(),
+            "limit": max(1, int(args.limit or 100)),
         }
-        if collector_inputs:
-            payload["collector_inputs"] = collector_inputs
-        if collector_sources:
-            payload["collector_sources"] = collector_sources
-        result = orchestrator.refresh_company_public_web_assets(payload)
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_store_command_group_1(args: argparse.Namespace) -> None:
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    store = build_runtime_store(settings)
+    if args.command == "backfill-linkedin-profile-registry":
+        checkpoint_path = (
+            Path(args.checkpoint_path).expanduser() if str(args.checkpoint_path or "").strip() else None
+        )
+
+        def _progress(payload: dict[str, object]) -> None:
+            print(json.dumps({"progress": payload}, ensure_ascii=False))
+
+        result = backfill_linkedin_profile_registry(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            company=str(args.company or "").strip(),
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            resume=not bool(args.no_resume),
+            checkpoint_path=checkpoint_path,
+            progress_interval=max(1, int(args.progress_interval or 1)),
+            progress_callback=_progress,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "backfill-organization-asset-registry":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        if not companies:
+            raise SystemExit("backfill-organization-asset-registry requires at least one --company")
+        results = []
+        for company in companies:
+            results.append(
+                backfill_organization_asset_registry_for_company(
+                    runtime_dir=settings.runtime_dir,
+                    store=store,
+                    target_company=company,
+                    asset_view=str(args.asset_view or "canonical_merged"),
+                )
+            )
+        print(
+            json.dumps(
+                {
+                    "asset_view": str(args.asset_view or "canonical_merged"),
+                    "results": results,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "backfill-authoritative-population-coverage":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        result = backfill_authoritative_population_coverage(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=companies,
+            asset_view=str(args.asset_view or "canonical_merged"),
+            include_non_authoritative=bool(args.include_non_authoritative),
+            dry_run=not bool(args.apply),
+            force=bool(args.force),
+            limit=max(1, int(args.limit or 1000)),
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "repair-authoritative-serving-generation":
+        result = repair_authoritative_serving_generation(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            company=str(args.company or "").strip(),
+            queries=[str(item or "").strip() for item in list(args.query or []) if str(item or "").strip()],
+            asset_view=str(args.asset_view or "canonical_merged"),
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            repair_snapshot_id=str(args.repair_snapshot_id or "").strip(),
+            build_profile=str(args.build_profile or "foreground_fast").strip() or "foreground_fast",
+            output_dir=args.output_dir or None,
+            apply=bool(args.apply),
+        )
         if str(args.output or "").strip():
             output_path = Path(str(args.output).strip()).expanduser()
             if not output_path.is_absolute():
-                output_path = AssetCatalog.discover().project_root / output_path
+                output_path = catalog.project_root / output_path
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    if args.command == "list-company-public-web-assets":
+    if args.command == "normalize-authoritative-source-provenance":
+        result = normalize_authoritative_source_provenance(
+            store=store,
+            company=str(args.company or "").strip(),
+            asset_view=str(args.asset_view or "canonical_merged"),
+            apply=bool(args.apply),
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            if not output_path.is_absolute():
+                output_path = catalog.project_root / output_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "backfill-job-result-lifecycle":
         orchestrator = build_orchestrator()
-        result = orchestrator.list_company_public_web_assets(
+
+        def _progress(job_id: str, stats: Any) -> None:
+            if args.verbose:
+                payload = stats.to_dict() if hasattr(stats, "to_dict") else dict(stats or {})
+                payload["job_id"] = str(job_id or "")
+                print(json.dumps({"progress": payload}, ensure_ascii=False))
+
+        result = backfill_job_result_lifecycle(
+            orchestrator=orchestrator,
+            dry_run=bool(args.dry_run),
+            batch_size=max(1, int(args.batch_size or 100)),
+            progress_callback=_progress,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "backfill-snapshot-full-materialization-items":
+        orchestrator = build_orchestrator()
+
+        def _progress(job_id: str, stats: Any) -> None:
+            if args.verbose:
+                payload = stats.to_dict() if hasattr(stats, "to_dict") else dict(stats or {})
+                payload["job_id"] = str(job_id or "")
+                print(json.dumps({"progress": payload}, ensure_ascii=False))
+
+        result = backfill_snapshot_full_materialization_items(
+            orchestrator=orchestrator,
+            dry_run=not bool(args.apply),
+            limit=max(1, int(args.limit or 100000)),
+            batch_size=max(1, int(args.batch_size or 100)),
+            progress_callback=_progress,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "backfill-local-apply-closure-items":
+        orchestrator = build_orchestrator()
+        result = orchestrator.backfill_local_apply_closure_items(
             {
-                "target_company": str(args.target_company or "").strip(),
-                "company_key": str(args.company_key or "").strip(),
-                "source_family": str(args.source_family or "").strip(),
-                "status": str(args.status or "").strip(),
-                "limit": max(1, int(args.limit or 100)),
+                "dry_run": not bool(args.apply),
+                "job_id": str(args.job_id or "").strip(),
+                "local_apply_backlog_worker_limit": max(1, int(args.limit or 100)),
+                "local_apply_backlog_job_scan_limit": max(1, int(args.job_scan_limit or 500)),
             }
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    if args.command in {
-        "backfill-linkedin-profile-registry",
-        "backfill-organization-asset-registry",
-        "backfill-authoritative-population-coverage",
-        "repair-authoritative-serving-generation",
-        "normalize-authoritative-source-provenance",
-        "backfill-job-result-lifecycle",
-        "backfill-snapshot-full-materialization-items",
-        "backfill-local-apply-closure-items",
-        "repair-excel-intake-artifacts",
-        "backfill-search-seed-discovery-items",
-        "rebuild-runtime-control-plane",
-        "repair-company-candidate-artifacts",
-        "repair-paginated-candidate-artifacts",
-        "backfill-structured-timeline",
-        "repair-profile-signal-projection",
-        "show-linkedin-profile-registry-metrics",
-    }:
+    if args.command == "repair-excel-intake-artifacts":
+        orchestrator = build_orchestrator()
+        result = orchestrator.repair_excel_intake_artifacts(
+            {
+                "job_id": str(args.job_id or "").strip(),
+                "dry_run": not bool(args.apply),
+                "run_now": bool(args.run_now),
+                "source": "repair_excel_intake_artifacts_cli",
+            }
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "backfill-search-seed-discovery-items":
+        orchestrator = build_orchestrator()
+        result = orchestrator.backfill_search_seed_discovery_query_items(
+            {
+                "dry_run": not bool(args.apply),
+                "job_id": str(args.job_id or "").strip(),
+                "search_seed_discovery_worker_limit": max(1, int(args.limit or 100)),
+                "search_seed_discovery_job_scan_limit": max(1, int(args.job_scan_limit or 500)),
+            }
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "rebuild-runtime-control-plane":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        result = rebuild_runtime_control_plane(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=companies or None,
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            rebuild_missing_artifacts=not bool(args.skip_missing_artifact_repair),
+            rebuild_company_assets=not bool(args.skip_company_assets),
+            rebuild_jobs=not bool(args.skip_jobs),
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "repair-company-candidate-artifacts":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        result = repair_missing_company_candidate_artifacts(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=companies or None,
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            force_rebuild_artifacts=bool(args.force_rebuild),
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "repair-paginated-candidate-artifacts":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        result = repair_paginated_candidate_artifacts_from_materialized(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=companies or None,
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            asset_view=str(args.asset_view or "canonical_merged"),
+            include_history=bool(args.include_history),
+            dry_run=bool(args.dry_run),
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "backfill-structured-timeline":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        result = backfill_structured_timeline_for_company_assets(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=companies or None,
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            backfill_profile_registry=not bool(args.skip_profile_registry_backfill),
+            profile_resume=not bool(args.profile_no_resume),
+            profile_progress_interval=max(1, int(args.profile_progress_interval or 1)),
+            refresh_registry=not bool(args.skip_registry_refresh),
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "repair-profile-signal-projection":
+        companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+        result = repair_projected_profile_signals_in_company_candidate_artifacts(
+            runtime_dir=settings.runtime_dir,
+            companies=companies or None,
+            snapshot_id=str(args.snapshot_id or "").strip(),
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "show-linkedin-profile-registry-metrics":
+        metrics = store.repos.linkedin_profile_registry.get_metrics(lookback_hours=max(0, int(args.lookback_hours or 0)))
+        print(json.dumps(metrics, ensure_ascii=False, indent=2))
+        return
+
+
+def _cli_cmd_export_control_plane_snapshot(args: argparse.Namespace) -> None:
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    runtime_dir = (
+        Path(str(args.runtime_dir or "").strip()).expanduser()
+        if str(args.runtime_dir or "").strip()
+        else settings.runtime_dir
+    )
+    output_path = (
+        Path(str(args.output or "").strip()).expanduser()
+        if str(args.output or "").strip()
+        else runtime_dir / "object_sync" / "control_plane" / "control_plane_snapshot.json"
+    )
+    sqlite_path = (
+        Path(str(args.sqlite_path or "").strip()).expanduser()
+        if str(args.sqlite_path or "").strip()
+        else None
+    )
+    print(
+        json.dumps(
+            export_control_plane_snapshot(
+                runtime_dir=runtime_dir,
+                output_path=output_path,
+                sqlite_path=sqlite_path,
+                tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
+                include_all_sqlite_tables=bool(args.all_sqlite_tables),
+                source_backend=str(args.source_backend or "postgres"),
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return
+
+
+def _cli_cmd_sync_control_plane_postgres(args: argparse.Namespace) -> None:
+    try:
+        if str(args.snapshot or "").strip():
+            summary = sync_control_plane_snapshot_to_postgres(
+                snapshot_path=str(args.snapshot or "").strip(),
+                dsn=str(args.dsn or "").strip(),
+                tables=(
+                    [str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()]
+                    or None
+                ),
+                truncate_first=bool(args.truncate_first),
+                validate_postgres=bool(args.validate_postgres),
+            )
+        else:
+            catalog = AssetCatalog.discover()
+            settings = load_settings(catalog.project_root)
+            runtime_dir = (
+                Path(str(args.runtime_dir or "").strip()).expanduser()
+                if str(args.runtime_dir or "").strip()
+                else settings.runtime_dir
+            )
+            sqlite_path = (
+                Path(str(args.sqlite_path or "").strip()).expanduser()
+                if str(args.sqlite_path or "").strip()
+                else settings.db_path
+            )
+            state_path = (
+                Path(str(args.state_path or "").strip()).expanduser()
+                if str(args.state_path or "").strip()
+                else None
+            )
+            summary = sync_runtime_control_plane_to_postgres(
+                runtime_dir=runtime_dir,
+                sqlite_path=sqlite_path,
+                dsn=str(args.dsn or "").strip(),
+                tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
+                truncate_first=bool(args.truncate_first),
+                state_path=state_path,
+                min_interval_seconds=float(args.min_interval_seconds or 0.0),
+                force=bool(args.force),
+                include_all_sqlite_tables=bool(args.all_sqlite_tables),
+                validate_postgres=bool(args.validate_postgres),
+                direct_stream=bool(args.direct_stream),
+                chunk_size=int(args.chunk_size or 0),
+                commit_every_chunks=int(args.commit_every_chunks or 0),
+                progress_every_chunks=int(args.progress_every_chunks or 0),
+                chunk_pause_seconds=float(args.chunk_pause_seconds or 0.0),
+            )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(
+        json.dumps(
+            summary,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return
+
+
+def _cli_cmd_store_command_group_2(args: argparse.Namespace) -> None:
+    bundle_manager = build_asset_bundle_manager()
+    if args.command == "export-company-snapshot-bundle":
+        print(
+            json.dumps(
+                bundle_manager.export_company_snapshot_bundle(
+                    args.company,
+                    snapshot_id=args.snapshot_id,
+                    output_dir=args.output_dir or None,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "export-company-handoff-bundle":
+        print(
+            json.dumps(
+                bundle_manager.export_company_handoff_bundle(
+                    args.company,
+                    output_dir=args.output_dir or None,
+                    include_live_tests=not args.without_live_tests,
+                    include_manual_review=not args.without_manual_review,
+                    include_jobs=not args.without_jobs,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "export-control-plane-snapshot-bundle":
+        print(
+            json.dumps(
+                bundle_manager.export_control_plane_snapshot_bundle(output_dir=args.output_dir or None),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command in {"build-company-candidate-artifacts", "rebuild-company-serving-view"}:
         catalog = AssetCatalog.discover()
         settings = load_settings(catalog.project_root)
         store = build_runtime_store(settings)
-        if args.command == "backfill-linkedin-profile-registry":
-            checkpoint_path = (
-                Path(args.checkpoint_path).expanduser() if str(args.checkpoint_path or "").strip() else None
+        print(
+            json.dumps(
+                build_company_candidate_artifacts(
+                    runtime_dir=settings.runtime_dir,
+                    store=store,
+                    target_company=args.company,
+                    snapshot_id=args.snapshot_id,
+                    output_dir=args.output_dir or None,
+                    preferred_source_snapshot_ids=[
+                        str(item or "").strip()
+                        for item in list(args.preferred_source_snapshot_id or [])
+                        if str(item or "").strip()
+                    ],
+                    build_profile=str(args.build_profile or "default").strip() or "default",
+                ),
+                ensure_ascii=False,
+                indent=2,
             )
-
-            def _progress(payload: dict[str, object]) -> None:
-                print(json.dumps({"progress": payload}, ensure_ascii=False))
-
-            result = backfill_linkedin_profile_registry(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                company=str(args.company or "").strip(),
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                resume=not bool(args.no_resume),
-                checkpoint_path=checkpoint_path,
-                progress_interval=max(1, int(args.progress_interval or 1)),
-                progress_callback=_progress,
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "backfill-organization-asset-registry":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            if not companies:
-                raise SystemExit("backfill-organization-asset-registry requires at least one --company")
-            results = []
-            for company in companies:
-                results.append(
-                    backfill_organization_asset_registry_for_company(
-                        runtime_dir=settings.runtime_dir,
-                        store=store,
-                        target_company=company,
-                        asset_view=str(args.asset_view or "canonical_merged"),
-                    )
-                )
-            print(
-                json.dumps(
-                    {
-                        "asset_view": str(args.asset_view or "canonical_merged"),
-                        "results": results,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "backfill-authoritative-population-coverage":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            result = backfill_authoritative_population_coverage(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                companies=companies,
-                asset_view=str(args.asset_view or "canonical_merged"),
-                include_non_authoritative=bool(args.include_non_authoritative),
-                dry_run=not bool(args.apply),
-                force=bool(args.force),
-                limit=max(1, int(args.limit or 1000)),
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "repair-authoritative-serving-generation":
-            result = repair_authoritative_serving_generation(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                company=str(args.company or "").strip(),
-                queries=[str(item or "").strip() for item in list(args.query or []) if str(item or "").strip()],
-                asset_view=str(args.asset_view or "canonical_merged"),
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                repair_snapshot_id=str(args.repair_snapshot_id or "").strip(),
-                build_profile=str(args.build_profile or "foreground_fast").strip() or "foreground_fast",
-                output_dir=args.output_dir or None,
-                apply=bool(args.apply),
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "normalize-authoritative-source-provenance":
-            result = normalize_authoritative_source_provenance(
-                store=store,
-                company=str(args.company or "").strip(),
-                asset_view=str(args.asset_view or "canonical_merged"),
-                apply=bool(args.apply),
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "backfill-job-result-lifecycle":
-            orchestrator = build_orchestrator()
-
-            def _progress(job_id: str, stats: Any) -> None:
-                if args.verbose:
-                    payload = stats.to_dict() if hasattr(stats, "to_dict") else dict(stats or {})
-                    payload["job_id"] = str(job_id or "")
-                    print(json.dumps({"progress": payload}, ensure_ascii=False))
-
-            result = backfill_job_result_lifecycle(
-                orchestrator=orchestrator,
-                dry_run=bool(args.dry_run),
-                batch_size=max(1, int(args.batch_size or 100)),
-                progress_callback=_progress,
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "backfill-snapshot-full-materialization-items":
-            orchestrator = build_orchestrator()
-
-            def _progress(job_id: str, stats: Any) -> None:
-                if args.verbose:
-                    payload = stats.to_dict() if hasattr(stats, "to_dict") else dict(stats or {})
-                    payload["job_id"] = str(job_id or "")
-                    print(json.dumps({"progress": payload}, ensure_ascii=False))
-
-            result = backfill_snapshot_full_materialization_items(
-                orchestrator=orchestrator,
-                dry_run=not bool(args.apply),
-                limit=max(1, int(args.limit or 100000)),
-                batch_size=max(1, int(args.batch_size or 100)),
-                progress_callback=_progress,
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "backfill-local-apply-closure-items":
-            orchestrator = build_orchestrator()
-            result = orchestrator.backfill_local_apply_closure_items(
-                {
-                    "dry_run": not bool(args.apply),
-                    "job_id": str(args.job_id or "").strip(),
-                    "local_apply_backlog_worker_limit": max(1, int(args.limit or 100)),
-                    "local_apply_backlog_job_scan_limit": max(1, int(args.job_scan_limit or 500)),
-                }
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "repair-excel-intake-artifacts":
-            orchestrator = build_orchestrator()
-            result = orchestrator.repair_excel_intake_artifacts(
-                {
-                    "job_id": str(args.job_id or "").strip(),
-                    "dry_run": not bool(args.apply),
-                    "run_now": bool(args.run_now),
-                    "source": "repair_excel_intake_artifacts_cli",
-                }
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "backfill-search-seed-discovery-items":
-            orchestrator = build_orchestrator()
-            result = orchestrator.backfill_search_seed_discovery_query_items(
-                {
-                    "dry_run": not bool(args.apply),
-                    "job_id": str(args.job_id or "").strip(),
-                    "search_seed_discovery_worker_limit": max(1, int(args.limit or 100)),
-                    "search_seed_discovery_job_scan_limit": max(1, int(args.job_scan_limit or 500)),
-                }
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "rebuild-runtime-control-plane":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            result = rebuild_runtime_control_plane(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                companies=companies or None,
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                rebuild_missing_artifacts=not bool(args.skip_missing_artifact_repair),
-                rebuild_company_assets=not bool(args.skip_company_assets),
-                rebuild_jobs=not bool(args.skip_jobs),
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "repair-company-candidate-artifacts":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            result = repair_missing_company_candidate_artifacts(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                companies=companies or None,
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                force_rebuild_artifacts=bool(args.force_rebuild),
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "repair-paginated-candidate-artifacts":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            result = repair_paginated_candidate_artifacts_from_materialized(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                companies=companies or None,
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                asset_view=str(args.asset_view or "canonical_merged"),
-                include_history=bool(args.include_history),
-                dry_run=bool(args.dry_run),
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "backfill-structured-timeline":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            result = backfill_structured_timeline_for_company_assets(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                companies=companies or None,
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                backfill_profile_registry=not bool(args.skip_profile_registry_backfill),
-                profile_resume=not bool(args.profile_no_resume),
-                profile_progress_interval=max(1, int(args.profile_progress_interval or 1)),
-                refresh_registry=not bool(args.skip_registry_refresh),
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "repair-profile-signal-projection":
-            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
-            result = repair_projected_profile_signals_in_company_candidate_artifacts(
-                runtime_dir=settings.runtime_dir,
-                companies=companies or None,
-                snapshot_id=str(args.snapshot_id or "").strip(),
-            )
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-            return
-        if args.command == "show-linkedin-profile-registry-metrics":
-            metrics = store.repos.linkedin_profile_registry.get_metrics(lookback_hours=max(0, int(args.lookback_hours or 0)))
-            print(json.dumps(metrics, ensure_ascii=False, indent=2))
-            return
-
-    if args.command == "export-control-plane-snapshot":
+        )
+        return
+    if args.command == "audit-company-serving-view":
         catalog = AssetCatalog.discover()
         settings = load_settings(catalog.project_root)
-        runtime_dir = (
-            Path(str(args.runtime_dir or "").strip()).expanduser()
-            if str(args.runtime_dir or "").strip()
-            else settings.runtime_dir
-        )
-        output_path = (
-            Path(str(args.output or "").strip()).expanduser()
-            if str(args.output or "").strip()
-            else runtime_dir / "object_sync" / "control_plane" / "control_plane_snapshot.json"
-        )
-        sqlite_path = (
-            Path(str(args.sqlite_path or "").strip()).expanduser()
-            if str(args.sqlite_path or "").strip()
-            else None
-        )
+        store = build_runtime_store(settings)
         print(
             json.dumps(
-                export_control_plane_snapshot(
-                    runtime_dir=runtime_dir,
-                    output_path=output_path,
-                    sqlite_path=sqlite_path,
-                    tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
-                    include_all_sqlite_tables=bool(args.all_sqlite_tables),
-                    source_backend=str(args.source_backend or "postgres"),
+                audit_company_serving_view(
+                    runtime_dir=settings.runtime_dir,
+                    store=store,
+                    company=args.company,
+                    snapshot_id=args.snapshot_id,
+                    asset_view=args.asset_view,
+                    job_id=args.job_id,
+                    sample_pages=int(args.sample_pages or 0),
                 ),
                 ensure_ascii=False,
                 indent=2,
             )
         )
         return
-
-    if args.command == "sync-control-plane-postgres":
-        try:
-            if str(args.snapshot or "").strip():
-                summary = sync_control_plane_snapshot_to_postgres(
-                    snapshot_path=str(args.snapshot or "").strip(),
-                    dsn=str(args.dsn or "").strip(),
-                    tables=(
-                        [str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()]
-                        or None
-                    ),
-                    truncate_first=bool(args.truncate_first),
-                    validate_postgres=bool(args.validate_postgres),
-                )
-            else:
-                catalog = AssetCatalog.discover()
-                settings = load_settings(catalog.project_root)
-                runtime_dir = (
-                    Path(str(args.runtime_dir or "").strip()).expanduser()
-                    if str(args.runtime_dir or "").strip()
-                    else settings.runtime_dir
-                )
-                sqlite_path = (
-                    Path(str(args.sqlite_path or "").strip()).expanduser()
-                    if str(args.sqlite_path or "").strip()
-                    else settings.db_path
-                )
-                state_path = (
-                    Path(str(args.state_path or "").strip()).expanduser()
-                    if str(args.state_path or "").strip()
-                    else None
-                )
-                summary = sync_runtime_control_plane_to_postgres(
-                    runtime_dir=runtime_dir,
-                    sqlite_path=sqlite_path,
-                    dsn=str(args.dsn or "").strip(),
-                    tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
-                    truncate_first=bool(args.truncate_first),
-                    state_path=state_path,
-                    min_interval_seconds=float(args.min_interval_seconds or 0.0),
-                    force=bool(args.force),
-                    include_all_sqlite_tables=bool(args.all_sqlite_tables),
-                    validate_postgres=bool(args.validate_postgres),
-                    direct_stream=bool(args.direct_stream),
-                    chunk_size=int(args.chunk_size or 0),
-                    commit_every_chunks=int(args.commit_every_chunks or 0),
-                    progress_every_chunks=int(args.progress_every_chunks or 0),
-                    chunk_pause_seconds=float(args.chunk_pause_seconds or 0.0),
-                )
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
+    if args.command == "audit-hot-cache-serving-artifacts":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        payload = audit_candidate_artifact_hot_cache(
+            runtime_dir=settings.runtime_dir,
+            companies=list(args.company or []),
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            asset_view=str(args.asset_view or "canonical_merged").strip() or "canonical_merged",
+            limit=max(0, int(args.limit or 0)),
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            if not output_path.is_absolute():
+                output_path = catalog.project_root / output_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if args.command == "cleanup-hot-cache-serving-artifacts":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        store = build_runtime_store(settings)
+        payload = cleanup_candidate_artifact_hot_cache(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=list(args.company or []),
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            dry_run=not bool(args.apply),
+            drop_compatibility_exports=not bool(args.keep_compatibility_exports),
+            ttl_seconds=max(0, int(args.ttl_seconds or 0)),
+            size_budget_bytes=max(0, int(args.size_budget_bytes or 0)),
+            max_bytes_per_company=max(0, int(args.max_bytes_per_company or 0)),
+            keep_latest_snapshots_per_company=max(1, int(args.keep_latest_snapshots_per_company or 1)),
+            max_generations_per_scope=max(0, int(args.max_generations_per_scope or 0)),
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            if not output_path.is_absolute():
+                output_path = catalog.project_root / output_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if args.command == "audit-authoritative-reuse-planning":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        store = build_runtime_store(settings)
+        payload = audit_authoritative_reuse_planning_many(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            company=args.company,
+            queries=list(args.query or []),
+            asset_view=args.asset_view,
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            if not output_path.is_absolute():
+                output_path = catalog.project_root / output_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if args.command == "audit-authoritative-reuse-planning-matrix":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        store = build_runtime_store(settings)
+        matrix_path = Path(str(args.matrix).strip()).expanduser()
+        if not matrix_path.is_absolute():
+            matrix_path = catalog.project_root / matrix_path
+        matrix_payload = json.loads(matrix_path.read_text(encoding="utf-8"))
+        payload = audit_authoritative_reuse_planning_matrix(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            matrix=matrix_payload if isinstance(matrix_payload, dict) else {},
+            default_asset_view=args.asset_view,
+            include_full_audit=not bool(args.summary_only),
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            if not output_path.is_absolute():
+                output_path = catalog.project_root / output_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        if bool(args.strict) and payload.get("status") == "failed_expectations":
+            sys.exit(2)
+        return
+    if args.command == "compare-authoritative-reuse-planning-matrix":
+        left_path = Path(str(args.left).strip()).expanduser()
+        right_path = Path(str(args.right).strip()).expanduser()
+        left_payload = json.loads(left_path.read_text(encoding="utf-8"))
+        right_payload = json.loads(right_path.read_text(encoding="utf-8"))
+        payload = compare_authoritative_reuse_planning_matrix_reports(
+            left=left_payload if isinstance(left_payload, dict) else {},
+            right=right_payload if isinstance(right_payload, dict) else {},
+            compare_fields=list(args.field or []) or None,
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        if bool(args.strict) and payload.get("status") == "drift":
+            sys.exit(2)
+        return
+    if args.command == "repoint-job-result-view":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        store = build_runtime_store(settings)
         print(
             json.dumps(
-                summary,
+                repoint_job_result_view(
+                    runtime_dir=settings.runtime_dir,
+                    store=store,
+                    job_id=args.job_id,
+                    company=args.company,
+                    snapshot_id=args.snapshot_id,
+                    asset_view=args.asset_view,
+                    policy=args.policy,
+                    reason=args.reason,
+                    apply=bool(args.apply),
+                ),
                 ensure_ascii=False,
                 indent=2,
             )
         )
         return
-
-    if args.command in {
-        "export-company-snapshot-bundle",
-        "export-company-handoff-bundle",
-        "export-control-plane-snapshot-bundle",
-        "build-company-candidate-artifacts",
-        "rebuild-company-serving-view",
-        "audit-company-serving-view",
-        "audit-hot-cache-serving-artifacts",
-        "cleanup-hot-cache-serving-artifacts",
-        "audit-authoritative-reuse-planning",
-        "audit-authoritative-reuse-planning-matrix",
-        "compare-authoritative-reuse-planning-matrix",
-        "repoint-job-result-view",
-        "audit-job-result-view-consistency",
-        "segment-company-outreach-layers",
-        "complete-company-assets",
-        "supplement-company-assets",
-        "restore-asset-bundle",
-        "upload-asset-bundle",
-        "publish-candidate-generation",
-        "delete-asset-bundle",
-        "download-asset-bundle",
-        "import-cloud-assets",
-        "hydrate-candidate-generation",
-    }:
-        bundle_manager = build_asset_bundle_manager()
-        if args.command == "export-company-snapshot-bundle":
-            print(
-                json.dumps(
-                    bundle_manager.export_company_snapshot_bundle(
-                        args.company,
-                        snapshot_id=args.snapshot_id,
-                        output_dir=args.output_dir or None,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "export-company-handoff-bundle":
-            print(
-                json.dumps(
-                    bundle_manager.export_company_handoff_bundle(
-                        args.company,
-                        output_dir=args.output_dir or None,
-                        include_live_tests=not args.without_live_tests,
-                        include_manual_review=not args.without_manual_review,
-                        include_jobs=not args.without_jobs,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "export-control-plane-snapshot-bundle":
-            print(
-                json.dumps(
-                    bundle_manager.export_control_plane_snapshot_bundle(output_dir=args.output_dir or None),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command in {"build-company-candidate-artifacts", "rebuild-company-serving-view"}:
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            print(
-                json.dumps(
-                    build_company_candidate_artifacts(
-                        runtime_dir=settings.runtime_dir,
-                        store=store,
-                        target_company=args.company,
-                        snapshot_id=args.snapshot_id,
-                        output_dir=args.output_dir or None,
-                        preferred_source_snapshot_ids=[
-                            str(item or "").strip()
-                            for item in list(args.preferred_source_snapshot_id or [])
-                            if str(item or "").strip()
-                        ],
-                        build_profile=str(args.build_profile or "default").strip() or "default",
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "audit-company-serving-view":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            print(
-                json.dumps(
-                    audit_company_serving_view(
-                        runtime_dir=settings.runtime_dir,
-                        store=store,
-                        company=args.company,
-                        snapshot_id=args.snapshot_id,
-                        asset_view=args.asset_view,
-                        job_id=args.job_id,
-                        sample_pages=int(args.sample_pages or 0),
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "audit-hot-cache-serving-artifacts":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            payload = audit_candidate_artifact_hot_cache(
-                runtime_dir=settings.runtime_dir,
-                companies=list(args.company or []),
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                asset_view=str(args.asset_view or "canonical_merged").strip() or "canonical_merged",
-                limit=max(0, int(args.limit or 0)),
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-            return
-        if args.command == "cleanup-hot-cache-serving-artifacts":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            payload = cleanup_candidate_artifact_hot_cache(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                companies=list(args.company or []),
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                dry_run=not bool(args.apply),
-                drop_compatibility_exports=not bool(args.keep_compatibility_exports),
-                ttl_seconds=max(0, int(args.ttl_seconds or 0)),
-                size_budget_bytes=max(0, int(args.size_budget_bytes or 0)),
-                max_bytes_per_company=max(0, int(args.max_bytes_per_company or 0)),
-                keep_latest_snapshots_per_company=max(1, int(args.keep_latest_snapshots_per_company or 1)),
-                max_generations_per_scope=max(0, int(args.max_generations_per_scope or 0)),
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-            return
-        if args.command == "audit-authoritative-reuse-planning":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            payload = audit_authoritative_reuse_planning_many(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                company=args.company,
-                queries=list(args.query or []),
-                asset_view=args.asset_view,
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-            return
-        if args.command == "audit-authoritative-reuse-planning-matrix":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            matrix_path = Path(str(args.matrix).strip()).expanduser()
-            if not matrix_path.is_absolute():
-                matrix_path = catalog.project_root / matrix_path
-            matrix_payload = json.loads(matrix_path.read_text(encoding="utf-8"))
-            payload = audit_authoritative_reuse_planning_matrix(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                matrix=matrix_payload if isinstance(matrix_payload, dict) else {},
-                default_asset_view=args.asset_view,
-                include_full_audit=not bool(args.summary_only),
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-            if bool(args.strict) and payload.get("status") == "failed_expectations":
-                sys.exit(2)
-            return
-        if args.command == "compare-authoritative-reuse-planning-matrix":
-            left_path = Path(str(args.left).strip()).expanduser()
-            right_path = Path(str(args.right).strip()).expanduser()
-            left_payload = json.loads(left_path.read_text(encoding="utf-8"))
-            right_payload = json.loads(right_path.read_text(encoding="utf-8"))
-            payload = compare_authoritative_reuse_planning_matrix_reports(
-                left=left_payload if isinstance(left_payload, dict) else {},
-                right=right_payload if isinstance(right_payload, dict) else {},
-                compare_fields=list(args.field or []) or None,
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-            if bool(args.strict) and payload.get("status") == "drift":
-                sys.exit(2)
-            return
-        if args.command == "repoint-job-result-view":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            print(
-                json.dumps(
-                    repoint_job_result_view(
-                        runtime_dir=settings.runtime_dir,
-                        store=store,
-                        job_id=args.job_id,
-                        company=args.company,
-                        snapshot_id=args.snapshot_id,
-                        asset_view=args.asset_view,
-                        policy=args.policy,
-                        reason=args.reason,
-                        apply=bool(args.apply),
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "audit-job-result-view-consistency":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            store = build_runtime_store(settings)
-            payload = audit_job_result_view_consistency(
-                runtime_dir=settings.runtime_dir,
-                store=store,
-                job_id=str(args.job_id or "").strip(),
-                company=str(args.company or "").strip(),
-                asset_view=str(args.asset_view or "canonical_merged").strip() or "canonical_merged",
-                limit=max(1, int(args.limit or 200)),
-                apply=bool(args.apply),
-            )
-            if str(args.output or "").strip():
-                output_path = Path(str(args.output).strip()).expanduser()
-                if not output_path.is_absolute():
-                    output_path = catalog.project_root / output_path
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-            return
-        if args.command == "segment-company-outreach-layers":
-            catalog = AssetCatalog.discover()
-            settings = load_settings(catalog.project_root)
-            model_client = None
-            if not args.no_ai:
-                provider = str(args.provider or "auto").strip().lower()
-                if provider == "qwen":
-                    if not settings.qwen.enabled:
-                        raise SystemExit(
-                            "Qwen is not enabled; provide qwen api key/base_url in runtime/secrets/providers.local.json"
-                        )
-                    model_client = QwenResponsesModelClient(settings.qwen)
-                elif provider == "openai":
-                    if not settings.model_provider.enabled:
-                        raise SystemExit(
-                            "OpenAI-compatible provider is not enabled; check model_provider config in runtime/secrets/providers.local.json"
-                        )
-                    model_client = OpenAICompatibleChatModelClient(settings.model_provider)
-                else:
-                    model_client = build_model_client(settings.model_provider, settings.qwen)
-            result = analyze_company_outreach_layers(
-                runtime_dir=settings.runtime_dir,
-                target_company=args.company,
-                snapshot_id=args.snapshot_id,
-                view=args.asset_view,
-                query=args.query,
-                model_client=model_client,
-                max_ai_verifications=max(0, int(args.max_ai_verifications or 0)),
-                ai_workers=max(1, int(args.ai_workers or 1)),
-                ai_max_retries=max(0, int(args.ai_max_retries or 0)),
-                ai_retry_backoff_seconds=max(0.0, float(args.ai_retry_backoff_seconds or 0.0)),
-                output_dir=args.output_dir or None,
-            )
-            if args.summary_only:
-                compact = {
-                    "status": str(result.get("status") or ""),
-                    "target_company": str(result.get("target_company") or ""),
-                    "snapshot_id": str(result.get("snapshot_id") or ""),
-                    "asset_view": str(result.get("asset_view") or ""),
-                    "ai_prompt_template_version": str((result.get("ai_prompt_template") or {}).get("version") or ""),
-                    "candidate_count": int(result.get("candidate_count") or 0),
-                    "layer_counts": {
-                        "layer_0_roster": int((result.get("layers") or {}).get("layer_0_roster", {}).get("count") or 0),
-                        "layer_1_name_signal": int(
-                            (result.get("layers") or {}).get("layer_1_name_signal", {}).get("count") or 0
-                        ),
-                        "layer_2_greater_china_region_experience": int(
-                            (result.get("layers") or {}).get("layer_2_greater_china_region_experience", {}).get("count")
-                            or 0
-                        ),
-                        "layer_3_mainland_china_experience_or_chinese_language": int(
-                            (result.get("layers") or {})
-                            .get("layer_3_mainland_china_experience_or_chinese_language", {})
-                            .get("count")
-                            or 0
-                        ),
-                    },
-                    "legacy_layer_count_aliases": {
-                        "layer_2_greater_china_experience": int(
-                            (result.get("layers") or {}).get("layer_2_greater_china_experience", {}).get("count") or 0
-                        ),
-                        "layer_3_mainland_or_chinese_language": int(
-                            (result.get("layers") or {}).get("layer_3_mainland_or_chinese_language", {}).get("count")
-                            or 0
-                        ),
-                    },
-                    "cumulative_layer_counts": dict(result.get("cumulative_layer_counts") or {}),
-                    "final_layer_distribution": dict(result.get("final_layer_distribution") or {}),
-                    "ai_verification": dict(result.get("ai_verification") or {}),
-                    "analysis_paths": dict(result.get("analysis_paths") or {}),
-                }
-                print(json.dumps(compact, ensure_ascii=False, indent=2))
-                return
-            print(
-                json.dumps(
-                    result,
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "complete-company-assets":
-            manager = build_asset_completion_manager()
-            print(
-                json.dumps(
-                    manager.complete_company_assets(
-                        target_company=args.company,
-                        snapshot_id=args.snapshot_id,
-                        profile_detail_limit=args.profile_detail_limit,
-                        exploration_limit=args.exploration_limit,
-                        build_artifacts=not args.without_artifacts,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "supplement-company-assets":
-            manager = build_asset_supplement_manager()
-            if args.import_local_bootstrap_package:
-                print(
-                    json.dumps(
-                        manager.import_local_bootstrap_package(
-                            target_company=args.company,
-                            snapshot_id=args.snapshot_id,
-                            sync_project_local_package=not args.skip_project_local_package_sync,
-                            build_artifacts=not args.without_artifacts,
-                        ),
-                        ensure_ascii=False,
-                        indent=2,
+    if args.command == "audit-job-result-view-consistency":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        store = build_runtime_store(settings)
+        payload = audit_job_result_view_consistency(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            job_id=str(args.job_id or "").strip(),
+            company=str(args.company or "").strip(),
+            asset_view=str(args.asset_view or "canonical_merged").strip() or "canonical_merged",
+            limit=max(1, int(args.limit or 200)),
+            apply=bool(args.apply),
+        )
+        if str(args.output or "").strip():
+            output_path = Path(str(args.output).strip()).expanduser()
+            if not output_path.is_absolute():
+                output_path = catalog.project_root / output_path
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if args.command == "segment-company-outreach-layers":
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        model_client = None
+        if not args.no_ai:
+            provider = str(args.provider or "auto").strip().lower()
+            if provider == "qwen":
+                if not settings.qwen.enabled:
+                    raise SystemExit(
+                        "Qwen is not enabled; provide qwen api key/base_url in runtime/secrets/providers.local.json"
                     )
-                )
-                return
+                model_client = QwenResponsesModelClient(settings.qwen)
+            elif provider == "openai":
+                if not settings.model_provider.enabled:
+                    raise SystemExit(
+                        "OpenAI-compatible provider is not enabled; check model_provider config in runtime/secrets/providers.local.json"
+                    )
+                model_client = OpenAICompatibleChatModelClient(settings.model_provider)
+            else:
+                model_client = build_model_client(settings.model_provider, settings.qwen)
+        result = analyze_company_outreach_layers(
+            runtime_dir=settings.runtime_dir,
+            target_company=args.company,
+            snapshot_id=args.snapshot_id,
+            view=args.asset_view,
+            query=args.query,
+            model_client=model_client,
+            max_ai_verifications=max(0, int(args.max_ai_verifications or 0)),
+            ai_workers=max(1, int(args.ai_workers or 1)),
+            ai_max_retries=max(0, int(args.ai_max_retries or 0)),
+            ai_retry_backoff_seconds=max(0.0, float(args.ai_retry_backoff_seconds or 0.0)),
+            output_dir=args.output_dir or None,
+        )
+        if args.summary_only:
+            compact = {
+                "status": str(result.get("status") or ""),
+                "target_company": str(result.get("target_company") or ""),
+                "snapshot_id": str(result.get("snapshot_id") or ""),
+                "asset_view": str(result.get("asset_view") or ""),
+                "ai_prompt_template_version": str((result.get("ai_prompt_template") or {}).get("version") or ""),
+                "candidate_count": int(result.get("candidate_count") or 0),
+                "layer_counts": {
+                    "layer_0_roster": int((result.get("layers") or {}).get("layer_0_roster", {}).get("count") or 0),
+                    "layer_1_name_signal": int(
+                        (result.get("layers") or {}).get("layer_1_name_signal", {}).get("count") or 0
+                    ),
+                    "layer_2_greater_china_region_experience": int(
+                        (result.get("layers") or {}).get("layer_2_greater_china_region_experience", {}).get("count")
+                        or 0
+                    ),
+                    "layer_3_mainland_china_experience_or_chinese_language": int(
+                        (result.get("layers") or {})
+                        .get("layer_3_mainland_china_experience_or_chinese_language", {})
+                        .get("count")
+                        or 0
+                    ),
+                },
+                "legacy_layer_count_aliases": {
+                    "layer_2_greater_china_experience": int(
+                        (result.get("layers") or {}).get("layer_2_greater_china_experience", {}).get("count") or 0
+                    ),
+                    "layer_3_mainland_or_chinese_language": int(
+                        (result.get("layers") or {}).get("layer_3_mainland_or_chinese_language", {}).get("count")
+                        or 0
+                    ),
+                },
+                "cumulative_layer_counts": dict(result.get("cumulative_layer_counts") or {}),
+                "final_layer_distribution": dict(result.get("final_layer_distribution") or {}),
+                "ai_verification": dict(result.get("ai_verification") or {}),
+                "analysis_paths": dict(result.get("analysis_paths") or {}),
+            }
+            print(json.dumps(compact, ensure_ascii=False, indent=2))
+            return
+        print(
+            json.dumps(
+                result,
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "complete-company-assets":
+        manager = build_asset_completion_manager()
+        print(
+            json.dumps(
+                manager.complete_company_assets(
+                    target_company=args.company,
+                    snapshot_id=args.snapshot_id,
+                    profile_detail_limit=args.profile_detail_limit,
+                    exploration_limit=args.exploration_limit,
+                    build_artifacts=not args.without_artifacts,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "supplement-company-assets":
+        manager = build_asset_supplement_manager()
+        if args.import_local_bootstrap_package:
             print(
                 json.dumps(
-                    manager.supplement_snapshot(
+                    manager.import_local_bootstrap_package(
                         target_company=args.company,
                         snapshot_id=args.snapshot_id,
-                        rebuild_linkedin_stage_1=bool(args.rebuild_linkedin_stage_1),
-                        run_former_search_seed=bool(args.run_former_search_seed),
-                        former_search_limit=int(args.former_search_limit or 25),
-                        former_search_pages=int(args.former_search_pages or 1),
-                        former_search_queries=list(args.former_query or []),
-                        former_filter_hints={"keywords": list(args.former_keyword or [])},
-                        profile_scope=str(args.profile_scope or "none"),
-                        profile_limit=int(args.profile_limit or 0),
-                        profile_only_missing_detail=bool(args.profile_only_missing_detail)
-                        and not bool(args.profile_all_known_urls),
-                        profile_force_refresh=bool(args.profile_force_refresh),
-                        repair_current_roster_profile_refs=bool(args.repair_current_roster_profile_refs),
-                        repair_current_roster_registry_aliases=bool(args.repair_current_roster_registry_aliases),
+                        sync_project_local_package=not args.skip_project_local_package_sync,
                         build_artifacts=not args.without_artifacts,
                     ),
                     ensure_ascii=False,
@@ -4225,196 +4179,199 @@ def main() -> None:
                 )
             )
             return
-        if args.command == "restore-asset-bundle":
-            print(
-                json.dumps(
-                    bundle_manager.restore_bundle(
-                        args.manifest,
-                        target_runtime_dir=args.target_runtime_dir or None,
-                        conflict=args.conflict,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
+        print(
+            json.dumps(
+                manager.supplement_snapshot(
+                    target_company=args.company,
+                    snapshot_id=args.snapshot_id,
+                    rebuild_linkedin_stage_1=bool(args.rebuild_linkedin_stage_1),
+                    run_former_search_seed=bool(args.run_former_search_seed),
+                    former_search_limit=int(args.former_search_limit or 25),
+                    former_search_pages=int(args.former_search_pages or 1),
+                    former_search_queries=list(args.former_query or []),
+                    former_filter_hints={"keywords": list(args.former_keyword or [])},
+                    profile_scope=str(args.profile_scope or "none"),
+                    profile_limit=int(args.profile_limit or 0),
+                    profile_only_missing_detail=bool(args.profile_only_missing_detail)
+                    and not bool(args.profile_all_known_urls),
+                    profile_force_refresh=bool(args.profile_force_refresh),
+                    repair_current_roster_profile_refs=bool(args.repair_current_roster_profile_refs),
+                    repair_current_roster_registry_aliases=bool(args.repair_current_roster_registry_aliases),
+                    build_artifacts=not args.without_artifacts,
+                ),
+                ensure_ascii=False,
+                indent=2,
             )
-            return
-        storage_client = build_object_storage()
-        if args.command == "upload-asset-bundle":
-            print(
-                json.dumps(
-                    bundle_manager.upload_bundle(
-                        args.manifest,
-                        storage_client,
-                        max_workers=args.max_workers or None,
-                        resume=not args.no_resume,
-                        archive_mode=str(args.archive_mode or "auto"),
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
+        )
+        return
+    if args.command == "restore-asset-bundle":
+        print(
+            json.dumps(
+                bundle_manager.restore_bundle(
+                    args.manifest,
+                    target_runtime_dir=args.target_runtime_dir or None,
+                    conflict=args.conflict,
+                ),
+                ensure_ascii=False,
+                indent=2,
             )
-            return
-        if args.command == "publish-candidate-generation":
-            publish_payload = bundle_manager.publish_candidate_generation(
-                target_company=str(args.company or "").strip(),
-                snapshot_id=str(args.snapshot_id or "").strip(),
-                asset_view=str(args.asset_view or "canonical_merged"),
-                client=storage_client,
-                max_workers=args.max_workers or None,
-                resume=not bool(args.no_resume),
-                include_compatibility_exports=bool(args.include_compatibility_exports),
+        )
+        return
+    storage_client = build_object_storage()
+    if args.command == "upload-asset-bundle":
+        print(
+            json.dumps(
+                bundle_manager.upload_bundle(
+                    args.manifest,
+                    storage_client,
+                    max_workers=args.max_workers or None,
+                    resume=not args.no_resume,
+                    archive_mode=str(args.archive_mode or "auto"),
+                ),
+                ensure_ascii=False,
+                indent=2,
             )
-            if bool(args.skip_hot_cache_governance):
-                publish_payload["hot_cache_governance"] = {"status": "skipped_by_flag"}
-            else:
-                catalog = AssetCatalog.discover()
-                settings = load_settings(catalog.project_root)
-                publish_payload["hot_cache_governance"] = run_hot_cache_governance_cycle(
-                    runtime_dir=settings.runtime_dir,
-                    store=build_runtime_store(settings),
-                    min_interval_seconds=0.0,
-                    force=True,
-                )
-            print(json.dumps(publish_payload, ensure_ascii=False, indent=2))
-            return
-        if args.command == "delete-asset-bundle":
-            delete_summary = bundle_manager.delete_bundle(
-                bundle_kind=args.bundle_kind,
-                bundle_id=args.bundle_id,
-                client=storage_client,
-                max_workers=args.max_workers or None,
-                prune_local_index=not bool(args.keep_local_index),
+        )
+        return
+    if args.command == "publish-candidate-generation":
+        publish_payload = bundle_manager.publish_candidate_generation(
+            target_company=str(args.company or "").strip(),
+            snapshot_id=str(args.snapshot_id or "").strip(),
+            asset_view=str(args.asset_view or "canonical_merged"),
+            client=storage_client,
+            max_workers=args.max_workers or None,
+            resume=not bool(args.no_resume),
+            include_compatibility_exports=bool(args.include_compatibility_exports),
+        )
+        if bool(args.skip_hot_cache_governance):
+            publish_payload["hot_cache_governance"] = {"status": "skipped_by_flag"}
+        else:
+            catalog = AssetCatalog.discover()
+            settings = load_settings(catalog.project_root)
+            publish_payload["hot_cache_governance"] = run_hot_cache_governance_cycle(
+                runtime_dir=settings.runtime_dir,
+                store=build_runtime_store(settings),
+                min_interval_seconds=0.0,
+                force=True,
             )
-            try:
-                catalog = AssetCatalog.discover()
-                settings = load_settings(catalog.project_root)
-                store = build_runtime_store(settings)
-                effective_store_target = str(store.compatibility_shadow_connect_target()).strip() or str(settings.db_path)
-                delete_summary["ledger"] = store.record_cloud_asset_operation(
-                    operation_type="gc_delete_bundle",
+        print(json.dumps(publish_payload, ensure_ascii=False, indent=2))
+        return
+    if args.command == "delete-asset-bundle":
+        delete_summary = bundle_manager.delete_bundle(
+            bundle_kind=args.bundle_kind,
+            bundle_id=args.bundle_id,
+            client=storage_client,
+            max_workers=args.max_workers or None,
+            prune_local_index=not bool(args.keep_local_index),
+        )
+        try:
+            catalog = AssetCatalog.discover()
+            settings = load_settings(catalog.project_root)
+            store = build_runtime_store(settings)
+            effective_store_target = str(store.compatibility_shadow_connect_target()).strip() or str(settings.db_path)
+            delete_summary["ledger"] = store.record_cloud_asset_operation(
+                operation_type="gc_delete_bundle",
+                bundle_kind=str(args.bundle_kind or "").strip(),
+                bundle_id=str(args.bundle_id or "").strip(),
+                status=str(delete_summary.get("status") or ""),
+                sync_run_id=str(delete_summary.get("sync_run_id") or ""),
+                target_runtime_dir=str(bundle_manager.runtime_dir),
+                target_db_path=effective_store_target,
+                summary=delete_summary,
+                metadata={
+                    "keep_local_index": bool(args.keep_local_index),
+                    "max_workers": int(args.max_workers or 0),
+                },
+            )
+        except Exception as exc:
+            delete_summary["ledger"] = {
+                "status": "failed",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        print(
+            json.dumps(
+                delete_summary,
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "download-asset-bundle":
+        print(
+            json.dumps(
+                bundle_manager.download_bundle(
+                    bundle_kind=args.bundle_kind,
+                    bundle_id=args.bundle_id,
+                    client=storage_client,
+                    output_dir=args.output_dir or None,
+                    max_workers=args.max_workers or None,
+                    resume=not args.no_resume,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "import-cloud-assets":
+        storage_client = None
+        if not str(args.manifest or "").strip():
+            storage_client = build_object_storage()
+        print(
+            json.dumps(
+                import_cloud_assets(
+                    bundle_manager=bundle_manager,
+                    manifest_path=str(args.manifest or "").strip(),
                     bundle_kind=str(args.bundle_kind or "").strip(),
                     bundle_id=str(args.bundle_id or "").strip(),
-                    status=str(delete_summary.get("status") or ""),
-                    sync_run_id=str(delete_summary.get("sync_run_id") or ""),
-                    target_runtime_dir=str(bundle_manager.runtime_dir),
-                    target_db_path=effective_store_target,
-                    summary=delete_summary,
-                    metadata={
-                        "keep_local_index": bool(args.keep_local_index),
-                        "max_workers": int(args.max_workers or 0),
-                    },
-                )
-            except Exception as exc:
-                delete_summary["ledger"] = {
-                    "status": "failed",
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            print(
-                json.dumps(
-                    delete_summary,
-                    ensure_ascii=False,
-                    indent=2,
-                )
+                    storage_client=storage_client,
+                    output_dir=args.output_dir or None,
+                    max_workers=args.max_workers or None,
+                    resume=not bool(args.no_resume),
+                    target_runtime_dir=args.target_runtime_dir or None,
+                    conflict=str(args.conflict or "skip"),
+                    target_db_path=args.target_db_path or None,
+                    companies=[
+                        str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()
+                    ],
+                    snapshot_id=str(args.snapshot_id or "").strip(),
+                    asset_view=str(args.asset_view or "canonical_merged"),
+                    generation_key=str(args.generation_key or "").strip(),
+                    prefer_generation=not bool(args.disable_generation_first),
+                    allow_legacy_bundle_fallback=not bool(args.disable_legacy_bundle_fallback),
+                    prefer_local_link=not bool(args.disable_local_link),
+                    run_artifact_repair=not bool(args.skip_artifact_repair),
+                    run_org_warmup=not bool(args.skip_org_warmup),
+                    run_profile_registry_backfill=not bool(args.skip_profile_registry_backfill),
+                    profile_registry_resume=not bool(args.profile_no_resume),
+                    profile_progress_interval=max(1, int(args.profile_progress_interval or 1)),
+                    run_hot_cache_governance=not bool(args.skip_hot_cache_governance),
+                    force_hot_cache_governance=True,
+                ),
+                ensure_ascii=False,
+                indent=2,
             )
-            return
-        if args.command == "download-asset-bundle":
-            print(
-                json.dumps(
-                    bundle_manager.download_bundle(
-                        bundle_kind=args.bundle_kind,
-                        bundle_id=args.bundle_id,
-                        client=storage_client,
-                        output_dir=args.output_dir or None,
-                        max_workers=args.max_workers or None,
-                        resume=not args.no_resume,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "import-cloud-assets":
-            storage_client = None
-            if not str(args.manifest or "").strip():
-                storage_client = build_object_storage()
-            print(
-                json.dumps(
-                    import_cloud_assets(
-                        bundle_manager=bundle_manager,
-                        manifest_path=str(args.manifest or "").strip(),
-                        bundle_kind=str(args.bundle_kind or "").strip(),
-                        bundle_id=str(args.bundle_id or "").strip(),
-                        storage_client=storage_client,
-                        output_dir=args.output_dir or None,
-                        max_workers=args.max_workers or None,
-                        resume=not bool(args.no_resume),
-                        target_runtime_dir=args.target_runtime_dir or None,
-                        conflict=str(args.conflict or "skip"),
-                        target_db_path=args.target_db_path or None,
-                        companies=[
-                            str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()
-                        ],
-                        snapshot_id=str(args.snapshot_id or "").strip(),
-                        asset_view=str(args.asset_view or "canonical_merged"),
-                        generation_key=str(args.generation_key or "").strip(),
-                        prefer_generation=not bool(args.disable_generation_first),
-                        allow_legacy_bundle_fallback=not bool(args.disable_legacy_bundle_fallback),
-                        prefer_local_link=not bool(args.disable_local_link),
-                        run_artifact_repair=not bool(args.skip_artifact_repair),
-                        run_org_warmup=not bool(args.skip_org_warmup),
-                        run_profile_registry_backfill=not bool(args.skip_profile_registry_backfill),
-                        profile_registry_resume=not bool(args.profile_no_resume),
-                        profile_progress_interval=max(1, int(args.profile_progress_interval or 1)),
-                        run_hot_cache_governance=not bool(args.skip_hot_cache_governance),
-                        force_hot_cache_governance=True,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-        if args.command == "hydrate-candidate-generation":
-            storage_client = None
-            if not str(args.manifest or "").strip():
-                storage_client = build_object_storage()
-            print(
-                json.dumps(
-                    hydrate_cloud_generation(
-                        bundle_manager=bundle_manager,
-                        generation_manifest_path=str(args.manifest or "").strip(),
-                        generation_key=str(args.generation_key or "").strip(),
-                        storage_client=storage_client,
-                        target_company=str(args.company or "").strip(),
-                        company_key=str(args.company_key or "").strip(),
-                        snapshot_id=str(args.snapshot_id or "").strip(),
-                        asset_view=str(args.asset_view or "canonical_merged"),
-                        max_workers=args.max_workers or None,
-                        resume=not bool(args.no_resume),
-                        prefer_local_link=not bool(args.disable_local_link),
-                        run_hot_cache_governance=not bool(args.skip_hot_cache_governance),
-                        force_hot_cache_governance=True,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
-
-    if args.command == "launch-detached":
-        launch_command = list(args.launch_command or [])
-        if launch_command and launch_command[0] == "--":
-            launch_command = launch_command[1:]
-        if not launch_command:
-            raise SystemExit("launch-detached requires a command after --")
+        )
+        return
+    if args.command == "hydrate-candidate-generation":
+        storage_client = None
+        if not str(args.manifest or "").strip():
+            storage_client = build_object_storage()
         print(
             json.dumps(
-                launch_detached_command(
-                    command=launch_command,
-                    log_path=str(args.log_path or ""),
-                    cwd=str(args.cwd or ""),
-                    description=str(args.description or ""),
-                    startup_wait_seconds=float(args.startup_wait_seconds or 0.2),
-                    status_path=str(args.status_path or ""),
+                hydrate_cloud_generation(
+                    bundle_manager=bundle_manager,
+                    generation_manifest_path=str(args.manifest or "").strip(),
+                    generation_key=str(args.generation_key or "").strip(),
+                    storage_client=storage_client,
+                    target_company=str(args.company or "").strip(),
+                    company_key=str(args.company_key or "").strip(),
+                    snapshot_id=str(args.snapshot_id or "").strip(),
+                    asset_view=str(args.asset_view or "canonical_merged"),
+                    max_workers=args.max_workers or None,
+                    resume=not bool(args.no_resume),
+                    prefer_local_link=not bool(args.disable_local_link),
+                    run_hot_cache_governance=not bool(args.skip_hot_cache_governance),
+                    force_hot_cache_governance=True,
                 ),
                 ensure_ascii=False,
                 indent=2,
@@ -4422,692 +4379,893 @@ def main() -> None:
         )
         return
 
+
+def _cli_cmd_launch_detached(args: argparse.Namespace) -> None:
+    launch_command = list(args.launch_command or [])
+    if launch_command and launch_command[0] == "--":
+        launch_command = launch_command[1:]
+    if not launch_command:
+        raise SystemExit("launch-detached requires a command after --")
+    print(
+        json.dumps(
+            launch_detached_command(
+                command=launch_command,
+                log_path=str(args.log_path or ""),
+                cwd=str(args.cwd or ""),
+                description=str(args.description or ""),
+                startup_wait_seconds=float(args.startup_wait_seconds or 0.2),
+                status_path=str(args.status_path or ""),
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return
+
+
+def _cli_cmd_bootstrap(args: argparse.Namespace) -> None:
     orchestrator = build_orchestrator()
+    print(json.dumps(orchestrator.bootstrap(), ensure_ascii=False, indent=2))
+    return
 
-    if args.command == "bootstrap":
-        print(json.dumps(orchestrator.bootstrap(), ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "run-job":
+def _cli_cmd_run_job(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    if args.asset_view:
+        payload["asset_view"] = args.asset_view
+    if args.must_have_facet:
+        payload["must_have_facets"] = list(args.must_have_facet)
+    if args.must_have_primary_role_bucket:
+        payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
+    print(json.dumps(orchestrator.run_job(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_plan(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    if args.asset_view:
+        payload["asset_view"] = args.asset_view
+    if args.must_have_facet:
+        payload["must_have_facets"] = list(args.must_have_facet)
+    if args.must_have_primary_role_bucket:
+        payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
+    print(json.dumps(orchestrator.plan_workflow(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_explain_workflow(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    if args.file:
         payload = json.loads(Path(args.file).read_text())
-        if args.asset_view:
-            payload["asset_view"] = args.asset_view
-        if args.must_have_facet:
-            payload["must_have_facets"] = list(args.must_have_facet)
-        if args.must_have_primary_role_bucket:
-            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
-        print(json.dumps(orchestrator.run_job(payload), ensure_ascii=False, indent=2))
-        return
+    elif args.plan_review_id > 0:
+        payload = {"plan_review_id": int(args.plan_review_id)}
+    else:
+        raise SystemExit("explain-workflow requires either --file or --plan-review-id")
+    if args.asset_view:
+        payload["asset_view"] = args.asset_view
+    if args.must_have_facet:
+        payload["must_have_facets"] = list(args.must_have_facet)
+    if args.must_have_primary_role_bucket:
+        payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
+    print(json.dumps(orchestrator.explain_workflow(payload), ensure_ascii=False, indent=2))
+    return
 
-    if args.command == "plan":
-        payload = json.loads(Path(args.file).read_text())
-        if args.asset_view:
-            payload["asset_view"] = args.asset_view
-        if args.must_have_facet:
-            payload["must_have_facets"] = list(args.must_have_facet)
-        if args.must_have_primary_role_bucket:
-            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
-        print(json.dumps(orchestrator.plan_workflow(payload), ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "explain-workflow":
-        if args.file:
-            payload = json.loads(Path(args.file).read_text())
-        elif args.plan_review_id > 0:
-            payload = {"plan_review_id": int(args.plan_review_id)}
-        else:
-            raise SystemExit("explain-workflow requires either --file or --plan-review-id")
-        if args.asset_view:
-            payload["asset_view"] = args.asset_view
-        if args.must_have_facet:
-            payload["must_have_facets"] = list(args.must_have_facet)
-        if args.must_have_primary_role_bucket:
-            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
-        print(json.dumps(orchestrator.explain_workflow(payload), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "intake-excel":
-        print(
-            json.dumps(
-                orchestrator.ingest_excel_contacts(
-                    {
-                        "file_path": str(args.file or "").strip(),
-                        "target_company": str(args.target_company or "").strip(),
-                        "snapshot_id": str(args.snapshot_id or "").strip(),
-                        "attach_to_snapshot": bool(args.attach_to_snapshot),
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return
-
-    if args.command == "continue-excel-intake":
-        payload = json.loads(Path(args.file).read_text())
-        print(json.dumps(orchestrator.continue_excel_intake_review(payload), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "promote-asset-default-pointer":
-        coverage_proof: dict[str, Any] = {}
-        if str(args.coverage_proof_file or "").strip():
-            coverage_proof = json.loads(Path(args.coverage_proof_file).read_text())
-        elif str(args.coverage_proof_json or "").strip():
-            coverage_proof = json.loads(str(args.coverage_proof_json or "{}"))
-        print(
-            json.dumps(
-                orchestrator.promote_asset_default_pointer(
-                    {
-                        "company_key": str(args.company or "").strip(),
-                        "snapshot_id": str(args.snapshot_id or "").strip(),
-                        "scope_kind": str(args.scope_kind or "company").strip(),
-                        "scope_key": str(args.scope_key or "").strip(),
-                        "asset_kind": str(args.asset_kind or "company_asset").strip(),
-                        "lifecycle_status": str(args.lifecycle_status or "canonical").strip(),
-                        "coverage_proof": coverage_proof,
-                        "promoted_by_job_id": str(args.promoted_by_job_id or "").strip(),
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return
-
-    if args.command == "review-plan":
-        if args.file:
-            payload = json.loads(Path(args.file).read_text())
-        else:
-            compiled = orchestrator.compile_plan_review_instruction(
+def _cli_cmd_intake_excel(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.ingest_excel_contacts(
                 {
-                    "review_id": int(args.review_id),
-                    "instruction": str(args.instruction or ""),
-                    "reviewer": str(args.reviewer or ""),
-                    "notes": str(args.notes or ""),
-                    "action": str(args.action or "approved"),
+                    "file_path": str(args.file or "").strip(),
+                    "target_company": str(args.target_company or "").strip(),
+                    "snapshot_id": str(args.snapshot_id or "").strip(),
+                    "attach_to_snapshot": bool(args.attach_to_snapshot),
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return
+
+
+def _cli_cmd_continue_excel_intake(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    print(json.dumps(orchestrator.continue_excel_intake_review(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_promote_asset_default_pointer(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    coverage_proof: dict[str, Any] = {}
+    if str(args.coverage_proof_file or "").strip():
+        coverage_proof = json.loads(Path(args.coverage_proof_file).read_text())
+    elif str(args.coverage_proof_json or "").strip():
+        coverage_proof = json.loads(str(args.coverage_proof_json or "{}"))
+    print(
+        json.dumps(
+            orchestrator.promote_asset_default_pointer(
+                {
+                    "company_key": str(args.company or "").strip(),
+                    "snapshot_id": str(args.snapshot_id or "").strip(),
+                    "scope_kind": str(args.scope_kind or "company").strip(),
+                    "scope_key": str(args.scope_key or "").strip(),
+                    "asset_kind": str(args.asset_kind or "company_asset").strip(),
+                    "lifecycle_status": str(args.lifecycle_status or "canonical").strip(),
+                    "coverage_proof": coverage_proof,
+                    "promoted_by_job_id": str(args.promoted_by_job_id or "").strip(),
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return
+
+
+def _cli_cmd_review_plan(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    if args.file:
+        payload = json.loads(Path(args.file).read_text())
+    else:
+        compiled = orchestrator.compile_plan_review_instruction(
+            {
+                "review_id": int(args.review_id),
+                "instruction": str(args.instruction or ""),
+                "reviewer": str(args.reviewer or ""),
+                "notes": str(args.notes or ""),
+                "action": str(args.action or "approved"),
+            }
+        )
+        if compiled.get("status") == "not_found":
+            raise SystemExit(f"Plan review session {args.review_id} not found")
+        if compiled.get("status") == "invalid":
+            raise SystemExit(str(compiled.get("reason") or "invalid review-plan instruction payload"))
+        if args.preview:
+            print(json.dumps(compiled, ensure_ascii=False, indent=2))
+            return
+        payload = dict(compiled.get("review_payload") or {})
+        reviewed = orchestrator.review_plan_session(payload)
+        if isinstance(reviewed, dict):
+            reviewed["instruction_compiler"] = dict(compiled.get("instruction_compiler") or {})
+            reviewed["intent_rewrite"] = dict(compiled.get("intent_rewrite") or {})
+        print(json.dumps(reviewed, ensure_ascii=False, indent=2))
+        return
+    print(json.dumps(orchestrator.review_plan_session(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_refine_results(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    if args.file:
+        payload = json.loads(Path(args.file).read_text())
+    else:
+        payload = {
+            "job_id": str(args.job_id or ""),
+            "instruction": str(args.instruction or ""),
+        }
+        compiled = orchestrator.compile_post_acquisition_refinement(payload)
+        if compiled.get("status") == "not_found":
+            raise SystemExit(f"Baseline job {args.job_id} not found")
+        if compiled.get("status") == "invalid":
+            raise SystemExit(str(compiled.get("reason") or "invalid refine-results payload"))
+        if args.preview:
+            print(json.dumps(compiled, ensure_ascii=False, indent=2))
+            return
+    print(json.dumps(orchestrator.apply_post_acquisition_refinement(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_plan_reviews(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.list_plan_review_sessions(args.target_company)
+    if args.brief:
+        reviews = []
+        for item in list(result.get("plan_reviews") or []):
+            request_payload = dict(item.get("request") or {})
+            reviews.append(
+                {
+                    "review_id": item.get("review_id"),
+                    "target_company": item.get("target_company"),
+                    "status": item.get("status"),
+                    "risk_level": item.get("risk_level"),
+                    "required_before_execution": item.get("required_before_execution"),
+                    "created_at": item.get("created_at"),
+                    "updated_at": item.get("updated_at"),
+                    "raw_user_request": request_payload.get("raw_user_request"),
                 }
             )
-            if compiled.get("status") == "not_found":
-                raise SystemExit(f"Plan review session {args.review_id} not found")
-            if compiled.get("status") == "invalid":
-                raise SystemExit(str(compiled.get("reason") or "invalid review-plan instruction payload"))
-            if args.preview:
-                print(json.dumps(compiled, ensure_ascii=False, indent=2))
-                return
-            payload = dict(compiled.get("review_payload") or {})
-            reviewed = orchestrator.review_plan_session(payload)
-            if isinstance(reviewed, dict):
-                reviewed["instruction_compiler"] = dict(compiled.get("instruction_compiler") or {})
-                reviewed["intent_rewrite"] = dict(compiled.get("intent_rewrite") or {})
-            print(json.dumps(reviewed, ensure_ascii=False, indent=2))
-            return
-        print(json.dumps(orchestrator.review_plan_session(payload), ensure_ascii=False, indent=2))
-        return
+        result = {"plan_reviews": reviews}
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
 
-    if args.command == "refine-results":
-        if args.file:
-            payload = json.loads(Path(args.file).read_text())
-        else:
-            payload = {
+
+def _cli_cmd_start_workflow(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    if args.file:
+        payload = json.loads(Path(args.file).read_text())
+    elif args.plan_review_id > 0:
+        payload = {"plan_review_id": int(args.plan_review_id)}
+    else:
+        raise SystemExit("start-workflow requires either --file or --plan-review-id")
+    if args.asset_view:
+        payload["asset_view"] = args.asset_view
+    if args.must_have_facet:
+        payload["must_have_facets"] = list(args.must_have_facet)
+    if args.must_have_primary_role_bucket:
+        payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
+    if args.blocking:
+        print(json.dumps(orchestrator.run_workflow_blocking(payload), ensure_ascii=False, indent=2))
+        return
+    if args.no_auto_job_daemon:
+        payload["auto_job_daemon"] = False
+    payload = normalize_workflow_submission_payload(
+        payload,
+        default_runtime_execution_mode=str(args.runtime_execution_mode or "hosted"),
+        hosted_auto_job_daemon=False,
+    )
+    if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):
+        queued = orchestrator.start_workflow_runner_managed(payload)
+    else:
+        hosted_api_base_url = _resolve_hosted_api_base_url(args.hosted_api_base_url)
+        try:
+            queued = _submit_hosted_workflow_request(
+                payload,
+                base_url=hosted_api_base_url,
+                timeout_seconds=float(args.hosted_api_timeout_seconds or 15.0),
+            )
+        except HostedWorkflowSubmissionError as exc:
+            raise SystemExit(
+                "Hosted workflow submission failed. Start `serve` and retry, or use "
+                "`--runtime-execution-mode managed_subprocess` for a standalone local run. "
+                f"Details: {exc}"
+            ) from exc
+    print(json.dumps(queued, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_execute_workflow(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    recovery_payload: dict[str, object] | None = None
+    if args.auto_job_daemon:
+        recovery_payload = {"auto_job_daemon": True}
+    print(
+        json.dumps(
+            {
+                "event": "workflow_runner_started",
                 "job_id": str(args.job_id or ""),
-                "instruction": str(args.instruction or ""),
-            }
-            compiled = orchestrator.compile_post_acquisition_refinement(payload)
-            if compiled.get("status") == "not_found":
-                raise SystemExit(f"Baseline job {args.job_id} not found")
-            if compiled.get("status") == "invalid":
-                raise SystemExit(str(compiled.get("reason") or "invalid refine-results payload"))
-            if args.preview:
-                print(json.dumps(compiled, ensure_ascii=False, indent=2))
-                return
-        print(json.dumps(orchestrator.apply_post_acquisition_refinement(payload), ensure_ascii=False, indent=2))
-        return
+                "auto_job_daemon": bool(args.auto_job_daemon),
+            },
+            ensure_ascii=False,
+        ),
+        file=sys.stderr,
+        flush=True,
+    )
+    result = orchestrator.run_queued_workflow(args.job_id, recovery_payload=recovery_payload)
+    print(
+        json.dumps(
+            {
+                "event": "workflow_runner_finished",
+                "job_id": str(args.job_id or ""),
+                "status": str(result.get("status") or ""),
+                "stage": str(result.get("artifact", {}).get("summary", {}).get("stage") or ""),
+            },
+            ensure_ascii=False,
+        ),
+        file=sys.stderr,
+        flush=True,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
 
-    if args.command == "show-plan-reviews":
-        result = orchestrator.list_plan_review_sessions(args.target_company)
-        if args.brief:
-            reviews = []
-            for item in list(result.get("plan_reviews") or []):
-                request_payload = dict(item.get("request") or {})
-                reviews.append(
-                    {
-                        "review_id": item.get("review_id"),
-                        "target_company": item.get("target_company"),
-                        "status": item.get("status"),
-                        "risk_level": item.get("risk_level"),
-                        "required_before_execution": item.get("required_before_execution"),
-                        "created_at": item.get("created_at"),
-                        "updated_at": item.get("updated_at"),
-                        "raw_user_request": request_payload.get("raw_user_request"),
-                    }
-                )
-            result = {"plan_reviews": reviews}
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "start-workflow":
-        if args.file:
-            payload = json.loads(Path(args.file).read_text())
-        elif args.plan_review_id > 0:
-            payload = {"plan_review_id": int(args.plan_review_id)}
-        else:
-            raise SystemExit("start-workflow requires either --file or --plan-review-id")
-        if args.asset_view:
-            payload["asset_view"] = args.asset_view
-        if args.must_have_facet:
-            payload["must_have_facets"] = list(args.must_have_facet)
-        if args.must_have_primary_role_bucket:
-            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
-        if args.blocking:
-            print(json.dumps(orchestrator.run_workflow_blocking(payload), ensure_ascii=False, indent=2))
-            return
-        if args.no_auto_job_daemon:
-            payload["auto_job_daemon"] = False
-        payload = normalize_workflow_submission_payload(
-            payload,
-            default_runtime_execution_mode=str(args.runtime_execution_mode or "hosted"),
-            hosted_auto_job_daemon=False,
-        )
-        if workflow_runtime_uses_managed_runner(payload.get("runtime_execution_mode")):
-            queued = orchestrator.start_workflow_runner_managed(payload)
-        else:
-            hosted_api_base_url = _resolve_hosted_api_base_url(args.hosted_api_base_url)
-            try:
-                queued = _submit_hosted_workflow_request(
-                    payload,
-                    base_url=hosted_api_base_url,
-                    timeout_seconds=float(args.hosted_api_timeout_seconds or 15.0),
-                )
-            except HostedWorkflowSubmissionError as exc:
-                raise SystemExit(
-                    "Hosted workflow submission failed. Start `serve` and retry, or use "
-                    "`--runtime-execution-mode managed_subprocess` for a standalone local run. "
-                    f"Details: {exc}"
-                ) from exc
-        print(json.dumps(queued, ensure_ascii=False, indent=2))
-        return
+def _cli_cmd_supervise_workflow(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            {
+                "event": "workflow_runner_started",
+                "job_id": str(args.job_id or ""),
+                "auto_job_daemon": bool(args.auto_job_daemon),
+                "mode": "supervisor",
+            },
+            ensure_ascii=False,
+        ),
+        file=sys.stderr,
+        flush=True,
+    )
+    result = orchestrator.run_workflow_supervisor(
+        args.job_id,
+        auto_job_daemon=bool(args.auto_job_daemon),
+        poll_seconds=float(args.poll_seconds or 2.0),
+        max_ticks=int(args.max_ticks or 0),
+    )
+    print(
+        json.dumps(
+            {
+                "event": "workflow_runner_finished",
+                "job_id": str(args.job_id or ""),
+                "status": str(result.get("status") or ""),
+                "stage": str(result.get("stage") or ""),
+                "mode": "supervisor",
+            },
+            ensure_ascii=False,
+        ),
+        file=sys.stderr,
+        flush=True,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
 
-    if args.command == "execute-workflow":
-        recovery_payload: dict[str, object] | None = None
-        if args.auto_job_daemon:
-            recovery_payload = {"auto_job_daemon": True}
-        print(
-            json.dumps(
+
+def _cli_cmd_show_job(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.get_job_results(args.job_id)
+    if result is None:
+        raise SystemExit(f"Job {args.job_id} not found")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_progress(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.get_job_progress(args.job_id)
+    if result is None:
+        raise SystemExit(f"Job {args.job_id} not found")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_system_progress(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.get_system_progress(
                 {
-                    "event": "workflow_runner_started",
-                    "job_id": str(args.job_id or ""),
-                    "auto_job_daemon": bool(args.auto_job_daemon),
-                },
-                ensure_ascii=False,
+                    "active_limit": args.active_limit,
+                    "object_sync_limit": args.object_sync_limit,
+                    "profile_registry_lookback_hours": args.profile_registry_lookback_hours,
+                    "force_refresh": bool(args.force_refresh),
+                }
             ),
-            file=sys.stderr,
-            flush=True,
+            ensure_ascii=False,
+            indent=2,
         )
-        result = orchestrator.run_queued_workflow(args.job_id, recovery_payload=recovery_payload)
-        print(
-            json.dumps(
+    )
+    return
+
+
+def _cli_cmd_show_trace(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.get_job_trace(args.job_id)
+    if result is None:
+        raise SystemExit(f"Job {args.job_id} not found")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_workers(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.get_job_workers(args.job_id)
+    if result is None:
+        raise SystemExit(f"Job {args.job_id} not found")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_scheduler(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    result = orchestrator.get_job_scheduler(args.job_id)
+    if result is None:
+        raise SystemExit(f"Job {args.job_id} not found")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_cleanup_workflow_duplicates(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.cleanup_duplicate_inflight_workflows(
                 {
-                    "event": "workflow_runner_finished",
-                    "job_id": str(args.job_id or ""),
-                    "status": str(result.get("status") or ""),
-                    "stage": str(result.get("artifact", {}).get("summary", {}).get("stage") or ""),
-                },
-                ensure_ascii=False,
+                    "target_company": args.target_company,
+                    "active_limit": args.active_limit,
+                }
             ),
-            file=sys.stderr,
-            flush=True,
+            ensure_ascii=False,
+            indent=2,
         )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
+    )
+    return
 
-    if args.command == "supervise-workflow":
-        print(
-            json.dumps(
+
+def _cli_cmd_cleanup_blocked_workflow_residue(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.cleanup_blocked_workflow_residue(
                 {
-                    "event": "workflow_runner_started",
-                    "job_id": str(args.job_id or ""),
-                    "auto_job_daemon": bool(args.auto_job_daemon),
-                    "mode": "supervisor",
-                },
-                ensure_ascii=False,
+                    "target_company": args.target_company,
+                    "active_limit": args.active_limit,
+                    "dry_run": args.dry_run,
+                }
             ),
-            file=sys.stderr,
-            flush=True,
+            ensure_ascii=False,
+            indent=2,
         )
-        result = orchestrator.run_workflow_supervisor(
-            args.job_id,
-            auto_job_daemon=bool(args.auto_job_daemon),
-            poll_seconds=float(args.poll_seconds or 2.0),
-            max_ticks=int(args.max_ticks or 0),
-        )
-        print(
-            json.dumps(
+    )
+    return
+
+
+def _cli_cmd_supersede_workflow_jobs(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.supersede_workflow_jobs(
                 {
-                    "event": "workflow_runner_finished",
-                    "job_id": str(args.job_id or ""),
-                    "status": str(result.get("status") or ""),
-                    "stage": str(result.get("stage") or ""),
-                    "mode": "supervisor",
-                },
-                ensure_ascii=False,
+                    "job_ids": list(args.job_id or []),
+                    "replacement_job_id": args.replacement_job_id,
+                    "reason": args.reason,
+                }
             ),
-            file=sys.stderr,
-            flush=True,
+            ensure_ascii=False,
+            indent=2,
         )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
+    )
+    return
 
-    if args.command == "show-job":
-        result = orchestrator.get_job_results(args.job_id)
-        if result is None:
-            raise SystemExit(f"Job {args.job_id} not found")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "show-progress":
-        result = orchestrator.get_job_progress(args.job_id)
-        if result is None:
-            raise SystemExit(f"Job {args.job_id} not found")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "show-system-progress":
-        print(
-            json.dumps(
-                orchestrator.get_system_progress(
-                    {
-                        "active_limit": args.active_limit,
-                        "object_sync_limit": args.object_sync_limit,
-                        "profile_registry_lookback_hours": args.profile_registry_lookback_hours,
-                        "force_refresh": bool(args.force_refresh),
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
+def _cli_cmd_show_recoverable_workers(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.list_recoverable_agent_workers(
+                {
+                    "stale_after_seconds": args.stale_after_seconds,
+                    "lane_id": args.lane_id,
+                    "job_id": args.job_id,
+                    "limit": args.limit,
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
         )
-        return
+    )
+    return
 
-    if args.command == "show-trace":
-        result = orchestrator.get_job_trace(args.job_id)
-        if result is None:
-            raise SystemExit(f"Job {args.job_id} not found")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "show-workers":
-        result = orchestrator.get_job_workers(args.job_id)
-        if result is None:
-            raise SystemExit(f"Job {args.job_id} not found")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "show-scheduler":
-        result = orchestrator.get_job_scheduler(args.job_id)
-        if result is None:
-            raise SystemExit(f"Job {args.job_id} not found")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "cleanup-workflow-duplicates":
-        print(
-            json.dumps(
-                orchestrator.cleanup_duplicate_inflight_workflows(
-                    {
-                        "target_company": args.target_company,
-                        "active_limit": args.active_limit,
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
+def _cli_cmd_cleanup_recoverable_workers(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.cleanup_recoverable_workers(
+                {
+                    "stale_after_seconds": args.stale_after_seconds,
+                    "lane_id": args.lane_id,
+                    "job_id": args.job_id,
+                    "target_company": args.target_company,
+                    "parent_job_statuses": list(args.parent_job_status or []),
+                    "limit": args.limit,
+                    "dry_run": bool(args.dry_run),
+                    "include_missing_jobs": bool(args.include_missing_jobs),
+                    "terminal_workflows_only": bool(args.terminal_workflows_only),
+                    "status": args.status,
+                    "reason": args.reason,
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
         )
-        return
+    )
+    return
 
-    if args.command == "cleanup-blocked-workflow-residue":
-        print(
-            json.dumps(
-                orchestrator.cleanup_blocked_workflow_residue(
-                    {
-                        "target_company": args.target_company,
-                        "active_limit": args.active_limit,
-                        "dry_run": args.dry_run,
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
+
+def _cli_cmd_interrupt_worker(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(orchestrator.interrupt_agent_worker({"worker_id": args.worker_id}), ensure_ascii=False, indent=2)
+    )
+    return
+
+
+def _cli_cmd_run_worker_daemon_once(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    recovery_payload = {
+        "owner_id": args.owner_id,
+        "lease_seconds": args.lease_seconds,
+        "stale_after_seconds": args.stale_after_seconds,
+        "total_limit": args.total_limit,
+        "job_id": args.job_id,
+    }
+    if bool(args.disable_search_seed_discovery):
+        recovery_payload["search_seed_discovery_enabled"] = False
+    if bool(args.disable_profile_prefetch_refill):
+        recovery_payload["profile_prefetch_refill_enabled"] = False
+    if bool(args.disable_snapshot_full_materialization):
+        recovery_payload["snapshot_full_materialization_enabled"] = False
+    if bool(args.disable_projection_facet_layering):
+        recovery_payload["projection_facet_layering_enabled"] = False
+    if bool(args.disable_excel_intake_recovery):
+        recovery_payload["excel_intake_recovery_enabled"] = False
+    if bool(args.disable_post_recovery_housekeeping):
+        recovery_payload["post_recovery_housekeeping_enabled"] = False
+    recovery_result = _json_safe_payload(orchestrator.run_worker_recovery_once(recovery_payload))
+    print(
+        json.dumps(
+            _compact_cli_recovery_payload(recovery_result),
+            ensure_ascii=False,
+            indent=2,
         )
-        return
+    )
+    return
 
-    if args.command == "supersede-workflow-jobs":
-        print(
-            json.dumps(
-                orchestrator.supersede_workflow_jobs(
-                    {
-                        "job_ids": list(args.job_id or []),
-                        "replacement_job_id": args.replacement_job_id,
-                        "reason": args.reason,
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
+
+def _cli_cmd_run_worker_daemon(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    recovery_payload = {
+        "owner_id": args.owner_id,
+        "lease_seconds": args.lease_seconds,
+        "stale_after_seconds": args.stale_after_seconds,
+        "total_limit": args.total_limit,
+        "job_id": args.job_id,
+        "poll_seconds": args.poll_seconds,
+        "max_ticks": args.max_ticks,
+    }
+    if bool(args.disable_search_seed_discovery):
+        recovery_payload["search_seed_discovery_enabled"] = False
+    if bool(args.disable_profile_prefetch_refill):
+        recovery_payload["profile_prefetch_refill_enabled"] = False
+    if bool(args.disable_snapshot_full_materialization):
+        recovery_payload["snapshot_full_materialization_enabled"] = False
+    if bool(args.disable_projection_facet_layering):
+        recovery_payload["projection_facet_layering_enabled"] = False
+    if bool(args.disable_excel_intake_recovery):
+        recovery_payload["excel_intake_recovery_enabled"] = False
+    if bool(args.disable_post_recovery_housekeeping):
+        recovery_payload["post_recovery_housekeeping_enabled"] = False
+    print(
+        json.dumps(
+            orchestrator.run_worker_recovery_forever(recovery_payload),
+            ensure_ascii=False,
+            indent=2,
         )
-        return
+    )
+    return
 
-    if args.command == "show-recoverable-workers":
-        print(
-            json.dumps(
-                orchestrator.list_recoverable_agent_workers(
-                    {
-                        "stale_after_seconds": args.stale_after_seconds,
-                        "lane_id": args.lane_id,
-                        "job_id": args.job_id,
-                        "limit": args.limit,
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return
 
-    if args.command == "cleanup-recoverable-workers":
-        print(
-            json.dumps(
-                orchestrator.cleanup_recoverable_workers(
-                    {
-                        "stale_after_seconds": args.stale_after_seconds,
-                        "lane_id": args.lane_id,
-                        "job_id": args.job_id,
-                        "target_company": args.target_company,
-                        "parent_job_statuses": list(args.parent_job_status or []),
-                        "limit": args.limit,
-                        "dry_run": bool(args.dry_run),
-                        "include_missing_jobs": bool(args.include_missing_jobs),
-                        "terminal_workflows_only": bool(args.terminal_workflows_only),
-                        "status": args.status,
-                        "reason": args.reason,
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return
-
-    if args.command == "interrupt-worker":
-        print(
-            json.dumps(orchestrator.interrupt_agent_worker({"worker_id": args.worker_id}), ensure_ascii=False, indent=2)
-        )
-        return
-
-    if args.command == "run-worker-daemon-once":
-        recovery_payload = {
+def _cli_cmd_run_worker_daemon_service(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    try:
+        payload = {
+            "service_name": args.service_name,
             "owner_id": args.owner_id,
             "lease_seconds": args.lease_seconds,
             "stale_after_seconds": args.stale_after_seconds,
             "total_limit": args.total_limit,
             "job_id": args.job_id,
-        }
-        if bool(args.disable_search_seed_discovery):
-            recovery_payload["search_seed_discovery_enabled"] = False
-        if bool(args.disable_profile_prefetch_refill):
-            recovery_payload["profile_prefetch_refill_enabled"] = False
-        if bool(args.disable_snapshot_full_materialization):
-            recovery_payload["snapshot_full_materialization_enabled"] = False
-        if bool(args.disable_projection_facet_layering):
-            recovery_payload["projection_facet_layering_enabled"] = False
-        if bool(args.disable_excel_intake_recovery):
-            recovery_payload["excel_intake_recovery_enabled"] = False
-        if bool(args.disable_post_recovery_housekeeping):
-            recovery_payload["post_recovery_housekeeping_enabled"] = False
-        recovery_result = _json_safe_payload(orchestrator.run_worker_recovery_once(recovery_payload))
-        print(
-            json.dumps(
-                _compact_cli_recovery_payload(recovery_result),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return
-
-    if args.command == "run-worker-daemon":
-        recovery_payload = {
-            "owner_id": args.owner_id,
-            "lease_seconds": args.lease_seconds,
-            "stale_after_seconds": args.stale_after_seconds,
-            "total_limit": args.total_limit,
-            "job_id": args.job_id,
+            "job_scoped": bool(args.job_scoped),
+            "explicit_worker_ids": list(args.explicit_worker_id or []),
+            "force_release_explicit_worker_leases": bool(args.force_release_explicit_worker_leases),
+            "profile_prefetch_nonblocking_submit": bool(args.profile_prefetch_nonblocking_submit),
             "poll_seconds": args.poll_seconds,
             "max_ticks": args.max_ticks,
+            "idle_stop_ticks": args.idle_stop_ticks,
+            "workflow_resume_stale_after_seconds": args.workflow_auto_resume_stale_after_seconds,
+            "workflow_queue_resume_stale_after_seconds": args.workflow_queue_auto_takeover_stale_after_seconds,
         }
-        if bool(args.disable_search_seed_discovery):
-            recovery_payload["search_seed_discovery_enabled"] = False
+        if bool(args.disable_workflow_auto_resume):
+            payload["workflow_auto_resume_enabled"] = False
+        if bool(args.disable_workflow_explicit_job_resume):
+            payload["workflow_resume_explicit_job"] = False
+        if bool(args.disable_workflow_queue_auto_takeover):
+            payload["workflow_queue_auto_takeover_enabled"] = False
         if bool(args.disable_profile_prefetch_refill):
-            recovery_payload["profile_prefetch_refill_enabled"] = False
+            payload["profile_prefetch_refill_enabled"] = False
+        if bool(args.profile_prefetch_refill_before_worker_recovery):
+            payload["profile_prefetch_refill_before_worker_recovery"] = True
+        if bool(args.disable_remote_event_followup):
+            payload["remote_event_followup_enabled"] = False
+        if bool(args.disable_search_seed_discovery):
+            payload["search_seed_discovery_enabled"] = False
         if bool(args.disable_snapshot_full_materialization):
-            recovery_payload["snapshot_full_materialization_enabled"] = False
+            payload["snapshot_full_materialization_enabled"] = False
         if bool(args.disable_projection_facet_layering):
-            recovery_payload["projection_facet_layering_enabled"] = False
+            payload["projection_facet_layering_enabled"] = False
         if bool(args.disable_excel_intake_recovery):
-            recovery_payload["excel_intake_recovery_enabled"] = False
+            payload["excel_intake_recovery_enabled"] = False
         if bool(args.disable_post_recovery_housekeeping):
-            recovery_payload["post_recovery_housekeeping_enabled"] = False
+            payload["post_recovery_housekeeping_enabled"] = False
         print(
             json.dumps(
-                orchestrator.run_worker_recovery_forever(recovery_payload),
+                orchestrator.run_worker_daemon_service(payload),
                 ensure_ascii=False,
                 indent=2,
             )
         )
-        return
+    except SingleInstanceError as exc:
+        raise SystemExit(str(exc)) from exc
+    return
 
-    if args.command == "run-worker-daemon-service":
-        try:
-            payload = {
-                "service_name": args.service_name,
-                "owner_id": args.owner_id,
-                "lease_seconds": args.lease_seconds,
-                "stale_after_seconds": args.stale_after_seconds,
-                "total_limit": args.total_limit,
-                "job_id": args.job_id,
-                "job_scoped": bool(args.job_scoped),
-                "explicit_worker_ids": list(args.explicit_worker_id or []),
-                "force_release_explicit_worker_leases": bool(args.force_release_explicit_worker_leases),
-                "profile_prefetch_nonblocking_submit": bool(args.profile_prefetch_nonblocking_submit),
-                "poll_seconds": args.poll_seconds,
-                "max_ticks": args.max_ticks,
-                "idle_stop_ticks": args.idle_stop_ticks,
-                "workflow_resume_stale_after_seconds": args.workflow_auto_resume_stale_after_seconds,
-                "workflow_queue_resume_stale_after_seconds": args.workflow_queue_auto_takeover_stale_after_seconds,
-            }
-            if bool(args.disable_workflow_auto_resume):
-                payload["workflow_auto_resume_enabled"] = False
-            if bool(args.disable_workflow_explicit_job_resume):
-                payload["workflow_resume_explicit_job"] = False
-            if bool(args.disable_workflow_queue_auto_takeover):
-                payload["workflow_queue_auto_takeover_enabled"] = False
-            if bool(args.disable_profile_prefetch_refill):
-                payload["profile_prefetch_refill_enabled"] = False
-            if bool(args.profile_prefetch_refill_before_worker_recovery):
-                payload["profile_prefetch_refill_before_worker_recovery"] = True
-            if bool(args.disable_remote_event_followup):
-                payload["remote_event_followup_enabled"] = False
-            if bool(args.disable_search_seed_discovery):
-                payload["search_seed_discovery_enabled"] = False
-            if bool(args.disable_snapshot_full_materialization):
-                payload["snapshot_full_materialization_enabled"] = False
-            if bool(args.disable_projection_facet_layering):
-                payload["projection_facet_layering_enabled"] = False
-            if bool(args.disable_excel_intake_recovery):
-                payload["excel_intake_recovery_enabled"] = False
-            if bool(args.disable_post_recovery_housekeeping):
-                payload["post_recovery_housekeeping_enabled"] = False
-            print(
-                json.dumps(
-                    orchestrator.run_worker_daemon_service(payload),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-        except SingleInstanceError as exc:
-            raise SystemExit(str(exc)) from exc
-        return
 
-    if args.command == "run-server-runtime-watchdog-service":
-        try:
-            print(
-                json.dumps(
-                    orchestrator.run_hosted_runtime_watchdog_service(
-                        {
-                            "hosted_runtime_watchdog_service_name": args.service_name,
-                            "shared_service_name": args.shared_service_name,
-                            "hosted_runtime_watchdog_poll_seconds": args.poll_seconds,
-                            "hosted_runtime_watchdog_max_ticks": args.max_ticks,
-                        }
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-        except SingleInstanceError as exc:
-            raise SystemExit(str(exc)) from exc
-        return
-
-    if args.command == "show-daemon-status":
+def _cli_cmd_run_server_runtime_watchdog_service(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    try:
         print(
             json.dumps(
-                orchestrator.get_worker_daemon_status(
-                    {"service_name": args.service_name, "include_details": True}
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        return
-
-    if args.command == "write-worker-daemon-systemd-unit":
-        print(
-            json.dumps(
-                orchestrator.write_worker_daemon_systemd_unit(
+                orchestrator.run_hosted_runtime_watchdog_service(
                     {
-                        "service_name": args.service_name,
-                        "output_path": args.output_path,
-                        "python_bin": args.python_bin,
-                        "user_name": args.user_name,
-                        "lease_seconds": args.lease_seconds,
-                        "stale_after_seconds": args.stale_after_seconds,
-                        "total_limit": args.total_limit,
-                        "poll_seconds": args.poll_seconds,
+                        "hosted_runtime_watchdog_service_name": args.service_name,
+                        "shared_service_name": args.shared_service_name,
+                        "hosted_runtime_watchdog_poll_seconds": args.poll_seconds,
+                        "hosted_runtime_watchdog_max_ticks": args.max_ticks,
                     }
                 ),
                 ensure_ascii=False,
                 indent=2,
             )
         )
-        return
+    except SingleInstanceError as exc:
+        raise SystemExit(str(exc)) from exc
+    return
 
-    if args.command == "record-feedback":
-        payload = json.loads(Path(args.file).read_text())
-        print(json.dumps(orchestrator.record_criteria_feedback(payload), ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "review-suggestion":
-        payload = json.loads(Path(args.file).read_text())
-        print(json.dumps(orchestrator.review_pattern_suggestion(payload), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "review-manual-item":
-        payload = json.loads(Path(args.file).read_text())
-        print(json.dumps(orchestrator.review_manual_review_item(payload), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "synthesize-manual-review":
-        print(
-            json.dumps(
-                orchestrator.synthesize_manual_review_item(
-                    {
-                        "review_item_id": int(args.review_item_id),
-                        "force_refresh": bool(args.force_refresh),
-                    }
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
+def _cli_cmd_show_daemon_status(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.get_worker_daemon_status(
+                {"service_name": args.service_name, "include_details": True}
+            ),
+            ensure_ascii=False,
+            indent=2,
         )
-        return
+    )
+    return
 
-    if args.command == "configure-confidence-policy":
-        payload = json.loads(Path(args.file).read_text())
-        print(json.dumps(orchestrator.configure_confidence_policy(payload), ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "recompile-criteria":
-        payload = json.loads(Path(args.file).read_text())
-        print(json.dumps(orchestrator.recompile_criteria(payload), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "show-criteria":
-        print(json.dumps(orchestrator.list_criteria_patterns(args.target_company), ensure_ascii=False, indent=2))
-        return
-
-    if args.command == "show-manual-review":
-        print(
-            json.dumps(
-                orchestrator.list_manual_review_items(args.target_company, args.job_id), ensure_ascii=False, indent=2
-            )
+def _cli_cmd_write_worker_daemon_systemd_unit(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.write_worker_daemon_systemd_unit(
+                {
+                    "service_name": args.service_name,
+                    "output_path": args.output_path,
+                    "python_bin": args.python_bin,
+                    "user_name": args.user_name,
+                    "lease_seconds": args.lease_seconds,
+                    "stale_after_seconds": args.stale_after_seconds,
+                    "total_limit": args.total_limit,
+                    "poll_seconds": args.poll_seconds,
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
         )
-        return
+    )
+    return
 
-    if args.command == "test-model":
-        print(json.dumps(orchestrator.healthcheck_model(), ensure_ascii=False, indent=2))
-        return
 
-    if args.command == "serve":
-        shared_recovery_stop = None
-        shared_recovery_thread = None
-        watchdog_stop = None
-        watchdog_thread = None
-        server = None
-        in_process_recovery_enabled = bool(args.enable_runtime_watchdog)
-        try:
-            if in_process_recovery_enabled:
-                shared_recovery_stop, shared_recovery_thread = start_shared_recovery_service(orchestrator)
-                watchdog_stop, watchdog_thread = start_server_runtime_watchdog(
-                    orchestrator,
-                    poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
-                )
-            # C3a: recovery is external by default. The compatibility threads
-            # above only exist behind an explicit dev opt-in. If neither that
-            # path nor a fresh external daemon covers recovery, refuse to serve.
-            assert_recovery_coverage_or_fail_closed(
+def _cli_cmd_record_feedback(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    print(json.dumps(orchestrator.record_criteria_feedback(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_review_suggestion(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    print(json.dumps(orchestrator.review_pattern_suggestion(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_review_manual_item(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    print(json.dumps(orchestrator.review_manual_review_item(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_synthesize_manual_review(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.synthesize_manual_review_item(
+                {
+                    "review_item_id": int(args.review_item_id),
+                    "force_refresh": bool(args.force_refresh),
+                }
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return
+
+
+def _cli_cmd_configure_confidence_policy(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    print(json.dumps(orchestrator.configure_confidence_policy(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_recompile_criteria(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    payload = json.loads(Path(args.file).read_text())
+    print(json.dumps(orchestrator.recompile_criteria(payload), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_criteria(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(json.dumps(orchestrator.list_criteria_patterns(args.target_company), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_show_manual_review(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(
+        json.dumps(
+            orchestrator.list_manual_review_items(args.target_company, args.job_id), ensure_ascii=False, indent=2
+        )
+    )
+    return
+
+
+def _cli_cmd_test_model(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    print(json.dumps(orchestrator.healthcheck_model(), ensure_ascii=False, indent=2))
+    return
+
+
+def _cli_cmd_serve(args: argparse.Namespace) -> None:
+    orchestrator = build_orchestrator()
+    shared_recovery_stop = None
+    shared_recovery_thread = None
+    watchdog_stop = None
+    watchdog_thread = None
+    server = None
+    in_process_recovery_enabled = bool(args.enable_runtime_watchdog)
+    try:
+        if in_process_recovery_enabled:
+            shared_recovery_stop, shared_recovery_thread = start_shared_recovery_service(orchestrator)
+            watchdog_stop, watchdog_thread = start_server_runtime_watchdog(
                 orchestrator,
-                shared_recovery_thread=shared_recovery_thread,
-                watchdog_disabled=not in_process_recovery_enabled,
-                allow_uncovered_recovery=bool(getattr(args, "allow_uncovered_recovery", False)),
+                poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
             )
-            orchestrator.start_background_organization_asset_warmup()
-            server = create_server(orchestrator, host=args.host, port=args.port)
-            print(f"Serving on http://{args.host}:{args.port}")
-            try:
-                server.serve_forever()
-            except KeyboardInterrupt:
-                pass
+        # C3a: recovery is external by default. The compatibility threads
+        # above only exist behind an explicit dev opt-in. If neither that
+        # path nor a fresh external daemon covers recovery, refuse to serve.
+        assert_recovery_coverage_or_fail_closed(
+            orchestrator,
+            shared_recovery_thread=shared_recovery_thread,
+            watchdog_disabled=not in_process_recovery_enabled,
+            allow_uncovered_recovery=bool(getattr(args, "allow_uncovered_recovery", False)),
+        )
+        orchestrator.start_background_organization_asset_warmup()
+        server = create_server(orchestrator, host=args.host, port=args.port)
+        print(f"Serving on http://{args.host}:{args.port}")
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+    finally:
+        try:
+            if server is not None:
+                server.server_close()
         finally:
-            try:
-                if server is not None:
-                    server.server_close()
-            finally:
-                if watchdog_stop is not None:
-                    watchdog_stop.set()
-                if shared_recovery_stop is not None:
-                    shared_recovery_stop.set()
-                if watchdog_thread is not None:
-                    watchdog_thread.join(timeout=max(1.0, float(args.runtime_watchdog_poll_seconds or 15.0)))
-                if shared_recovery_thread is not None:
-                    shared_recovery_thread.join(timeout=5.0)
+            if watchdog_stop is not None:
+                watchdog_stop.set()
+            if shared_recovery_stop is not None:
+                shared_recovery_stop.set()
+            if watchdog_thread is not None:
+                watchdog_thread.join(timeout=max(1.0, float(args.runtime_watchdog_poll_seconds or 15.0)))
+            if shared_recovery_thread is not None:
+                shared_recovery_thread.join(timeout=5.0)
+
+
+# WS2 god-file wave: cli slice 1 (2026-07-22) — the top-level dispatch
+# ladder is a handler registry; bodies moved verbatim (dedent-only), the
+# two grouped blocks keep their shared setup, and the post-prelude
+# branches construct the orchestrator per handler (one runs per process).
+# Parser configuration is slice 2. Adding a subcommand = one handler +
+# one registry row.
+_CLI_COMMAND_HANDLERS: dict[str, Callable[[argparse.Namespace], None]] = {
+    "show-control-plane-runtime": _cli_cmd_show_control_plane_runtime,
+    "run-target-candidate-public-web-experiment": _cli_cmd_run_target_candidate_public_web_experiment,
+    "evaluate-public-web-quality": _cli_cmd_evaluate_public_web_quality,
+    "refresh-company-public-web-assets": _cli_cmd_refresh_company_public_web_assets,
+    "list-company-public-web-assets": _cli_cmd_list_company_public_web_assets,
+    "backfill-linkedin-profile-registry": _cli_cmd_store_command_group_1,
+    "backfill-organization-asset-registry": _cli_cmd_store_command_group_1,
+    "backfill-authoritative-population-coverage": _cli_cmd_store_command_group_1,
+    "repair-authoritative-serving-generation": _cli_cmd_store_command_group_1,
+    "normalize-authoritative-source-provenance": _cli_cmd_store_command_group_1,
+    "backfill-job-result-lifecycle": _cli_cmd_store_command_group_1,
+    "backfill-snapshot-full-materialization-items": _cli_cmd_store_command_group_1,
+    "backfill-local-apply-closure-items": _cli_cmd_store_command_group_1,
+    "repair-excel-intake-artifacts": _cli_cmd_store_command_group_1,
+    "backfill-search-seed-discovery-items": _cli_cmd_store_command_group_1,
+    "rebuild-runtime-control-plane": _cli_cmd_store_command_group_1,
+    "repair-company-candidate-artifacts": _cli_cmd_store_command_group_1,
+    "repair-paginated-candidate-artifacts": _cli_cmd_store_command_group_1,
+    "backfill-structured-timeline": _cli_cmd_store_command_group_1,
+    "repair-profile-signal-projection": _cli_cmd_store_command_group_1,
+    "show-linkedin-profile-registry-metrics": _cli_cmd_store_command_group_1,
+    "export-control-plane-snapshot": _cli_cmd_export_control_plane_snapshot,
+    "sync-control-plane-postgres": _cli_cmd_sync_control_plane_postgres,
+    "export-company-snapshot-bundle": _cli_cmd_store_command_group_2,
+    "export-company-handoff-bundle": _cli_cmd_store_command_group_2,
+    "export-control-plane-snapshot-bundle": _cli_cmd_store_command_group_2,
+    "build-company-candidate-artifacts": _cli_cmd_store_command_group_2,
+    "rebuild-company-serving-view": _cli_cmd_store_command_group_2,
+    "audit-company-serving-view": _cli_cmd_store_command_group_2,
+    "audit-hot-cache-serving-artifacts": _cli_cmd_store_command_group_2,
+    "cleanup-hot-cache-serving-artifacts": _cli_cmd_store_command_group_2,
+    "audit-authoritative-reuse-planning": _cli_cmd_store_command_group_2,
+    "audit-authoritative-reuse-planning-matrix": _cli_cmd_store_command_group_2,
+    "compare-authoritative-reuse-planning-matrix": _cli_cmd_store_command_group_2,
+    "repoint-job-result-view": _cli_cmd_store_command_group_2,
+    "audit-job-result-view-consistency": _cli_cmd_store_command_group_2,
+    "segment-company-outreach-layers": _cli_cmd_store_command_group_2,
+    "complete-company-assets": _cli_cmd_store_command_group_2,
+    "supplement-company-assets": _cli_cmd_store_command_group_2,
+    "restore-asset-bundle": _cli_cmd_store_command_group_2,
+    "upload-asset-bundle": _cli_cmd_store_command_group_2,
+    "publish-candidate-generation": _cli_cmd_store_command_group_2,
+    "delete-asset-bundle": _cli_cmd_store_command_group_2,
+    "download-asset-bundle": _cli_cmd_store_command_group_2,
+    "import-cloud-assets": _cli_cmd_store_command_group_2,
+    "hydrate-candidate-generation": _cli_cmd_store_command_group_2,
+    "launch-detached": _cli_cmd_launch_detached,
+    "bootstrap": _cli_cmd_bootstrap,
+    "run-job": _cli_cmd_run_job,
+    "plan": _cli_cmd_plan,
+    "explain-workflow": _cli_cmd_explain_workflow,
+    "intake-excel": _cli_cmd_intake_excel,
+    "continue-excel-intake": _cli_cmd_continue_excel_intake,
+    "promote-asset-default-pointer": _cli_cmd_promote_asset_default_pointer,
+    "review-plan": _cli_cmd_review_plan,
+    "refine-results": _cli_cmd_refine_results,
+    "show-plan-reviews": _cli_cmd_show_plan_reviews,
+    "start-workflow": _cli_cmd_start_workflow,
+    "execute-workflow": _cli_cmd_execute_workflow,
+    "supervise-workflow": _cli_cmd_supervise_workflow,
+    "show-job": _cli_cmd_show_job,
+    "show-progress": _cli_cmd_show_progress,
+    "show-system-progress": _cli_cmd_show_system_progress,
+    "show-trace": _cli_cmd_show_trace,
+    "show-workers": _cli_cmd_show_workers,
+    "show-scheduler": _cli_cmd_show_scheduler,
+    "cleanup-workflow-duplicates": _cli_cmd_cleanup_workflow_duplicates,
+    "cleanup-blocked-workflow-residue": _cli_cmd_cleanup_blocked_workflow_residue,
+    "supersede-workflow-jobs": _cli_cmd_supersede_workflow_jobs,
+    "show-recoverable-workers": _cli_cmd_show_recoverable_workers,
+    "cleanup-recoverable-workers": _cli_cmd_cleanup_recoverable_workers,
+    "interrupt-worker": _cli_cmd_interrupt_worker,
+    "run-worker-daemon-once": _cli_cmd_run_worker_daemon_once,
+    "run-worker-daemon": _cli_cmd_run_worker_daemon,
+    "run-worker-daemon-service": _cli_cmd_run_worker_daemon_service,
+    "run-server-runtime-watchdog-service": _cli_cmd_run_server_runtime_watchdog_service,
+    "show-daemon-status": _cli_cmd_show_daemon_status,
+    "write-worker-daemon-systemd-unit": _cli_cmd_write_worker_daemon_systemd_unit,
+    "record-feedback": _cli_cmd_record_feedback,
+    "review-suggestion": _cli_cmd_review_suggestion,
+    "review-manual-item": _cli_cmd_review_manual_item,
+    "synthesize-manual-review": _cli_cmd_synthesize_manual_review,
+    "configure-confidence-policy": _cli_cmd_configure_confidence_policy,
+    "recompile-criteria": _cli_cmd_recompile_criteria,
+    "show-criteria": _cli_cmd_show_criteria,
+    "show-manual-review": _cli_cmd_show_manual_review,
+    "test-model": _cli_cmd_test_model,
+    "serve": _cli_cmd_serve,
+}
 
 
 if __name__ == "__main__":

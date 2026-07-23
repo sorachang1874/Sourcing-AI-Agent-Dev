@@ -20976,7 +20976,6 @@ class OperationControlHttpConflictTest(unittest.TestCase):
             thread.join(timeout=2)
 
 
-
 class FilterProjectionV1ImmutabilityTest(unittest.TestCase):
     """FT1-FF (finding 7): projection_filter_request_v1 is immutable; the
     canonical Cohort mapping is the distinct v2 contract."""
@@ -21015,7 +21014,10 @@ class FilterProjectionV1ImmutabilityTest(unittest.TestCase):
 
         spec = DEFAULT_ACTION_REGISTRY.spec_for(ACTION_FILTER_PROJECTION)
         normalized_input, _normalized_target = spec.validate_request(
-            input_payload={"limit": 5, "filters": {"function_buckets": ["research", "engineering", "product_management", "other", "unknown"]}},
+            input_payload={
+                "limit": 5,
+                "filters": {"function_buckets": ["research", "engineering", "product_management", "other", "unknown"]},
+            },
             target_ref={"projection_id": "proj-1", "membership_revision": "rev-1"},
         )
         self.assertIn("filters", normalized_input)
@@ -21071,9 +21073,7 @@ class FilterProjectionV1ImmutabilityTest(unittest.TestCase):
     def test_persisted_action_with_tampered_pin_fails_closed(self) -> None:
         writer = self._writer()
         with self.assertRaises(OperationRuntimeStateConflict) as raised:
-            writer.validate_persisted_action_request(
-                action=self._persisted_v1_action(request_schema_digest="0" * 64)
-            )
+            writer.validate_persisted_action_request(action=self._persisted_v1_action(request_schema_digest="0" * 64))
         self.assertIn("operation_action_request_schema_pin_conflict", str(raised.exception))
         with self.assertRaises(OperationRuntimeStateConflict):
             writer.validate_persisted_action_request(

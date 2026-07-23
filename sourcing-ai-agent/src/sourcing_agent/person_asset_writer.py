@@ -1036,9 +1036,7 @@ def _projection_filter_record(
         },
     }
     authoritative_statuses = [
-        str(item).strip()
-        for item in list(public_summary.get("employment_statuses") or [])
-        if str(item or "").strip()
+        str(item).strip() for item in list(public_summary.get("employment_statuses") or []) if str(item or "").strip()
     ]
     if authoritative_statuses:
         record["employment_statuses"] = authoritative_statuses

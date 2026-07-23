@@ -2167,9 +2167,7 @@ def _aggregate_public_web_phase_metrics(runs: list[dict[str, Any]]) -> dict[str,
         }
     aggregate["duration_by_phase_ms_max"] = duration_by_phase
     aggregate["slowest_phase"] = (
-        max(duration_by_phase, key=lambda phase: duration_by_phase[phase])
-        if any(duration_by_phase.values())
-        else ""
+        max(duration_by_phase, key=lambda phase: duration_by_phase[phase]) if any(duration_by_phase.values()) else ""
     )
     aggregate["has_pending_remote_search"] = int(aggregate.get("pending_task_count") or 0) > 0
     required_signals = int(

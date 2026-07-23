@@ -9,6 +9,7 @@ from pathlib import Path
 from sourcing_agent.asset_reuse_planning import build_acquisition_shard_registry_record
 from sourcing_agent.company_registry import resolve_company_alias_key
 from sourcing_agent.domain import JobRequest
+from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient, load_smoke_cases
 from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.organization_execution_profile import ensure_organization_execution_profile
 from sourcing_agent.scripted_provider_scenario import load_scripted_provider_invocations
@@ -23,7 +24,6 @@ from sourcing_agent.workflow_explain_matrix import (
     run_hosted_explain_case,
     run_hosted_explain_matrix,
 )
-from sourcing_agent.hosted_smoke_surface import HostedWorkflowSmokeClient, load_smoke_cases
 from sourcing_agent.workflow_smoke import (
     run_hosted_smoke_case,
     run_hosted_smoke_matrix,
@@ -1347,9 +1347,7 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
             # helper that follows the cutover payload to the serving route.
             from sourcing_agent.workflow_smoke import _fetch_smoke_results_payload
 
-            results_payload = _fetch_smoke_results_payload(
-                harness.client, job_id=job_id, include_candidates=True
-            )
+            results_payload = _fetch_smoke_results_payload(harness.client, job_id=job_id, include_candidates=True)
             self.assertEqual(str(dict(results_payload.get("job") or {}).get("status") or ""), "completed")
             self.assertTrue(
                 bool(dict(results_payload.get("asset_population") or {}).get("available"))

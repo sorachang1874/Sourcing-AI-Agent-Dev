@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
-from urllib import request as urllib_request
 from urllib.parse import parse_qs, quote, urlparse
 
 from .durable_runtime import (
@@ -64,11 +63,12 @@ _POST_TERMINAL_COMMAND_ITEM_KINDS = {
 # Product-shared smoke surface moved to hosted_smoke_surface (2026-07-22
 # god-file split wave 1); re-imported for the internal runners and for
 # backward-compatible consumers of this module path.
-from .hosted_smoke_surface import (  # noqa: E402
+from .hosted_smoke_surface import (  # noqa: E402,F401 — module-path compat re-exports
     DEFAULT_SMOKE_CASES,
     HostedWorkflowSmokeClient,
     load_smoke_cases,
 )
+
 TERMINAL_WORKFLOW_STATUSES = {"completed", "failed"}
 TERMINAL_WORKER_STATUSES = {"completed", "failed", "skipped", "cancelled", "canceled"}
 
@@ -5975,9 +5975,7 @@ def _evaluate_smoke_expectations(
                 )
                 if _safe_int(profile_scheduler_contract.get(key)) > 0
             }
-            detail_text = ", ".join(
-                f"{key}={value}" for key, value in sorted(scheduler_violation_details.items())
-            )
+            detail_text = ", ".join(f"{key}={value}" for key, value in sorted(scheduler_violation_details.items()))
             failures.append(
                 "profile scheduler contract violation detected" + (f" ({detail_text})" if detail_text else "")
             )
