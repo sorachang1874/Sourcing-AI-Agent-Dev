@@ -1093,5 +1093,119 @@ class AcquisitionResumeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(result["reason"], "runtime_not_takeover_eligible")
         self.assertEqual(result["classification"], "hosted_dispatch_inflight")
 
+    def test_resume_blocked_workflow_ignores_pending_exploration_workers(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Thinking Machines Lab people",
+            "target_company": "Thinking Machines Lab",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_resume_exploration_blocked"
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-resume-exploration"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Waiting for queued exploration workers",
+                "blocked_task": "enrich_profiles_multisource",
+            },
+        )
+
+        handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="exploration_specialist",
+            worker_key="candidate::queued_exploration",
+            stage="enriching",
+            span_name="explore_candidate:Queued Exploration Lead",
+            budget_payload={"max_queries": 7},
+            input_payload={
+                "candidate_id": "candidate::queued_exploration",
+                "display_name": "Queued Exploration Lead",
+                "candidate": {
+                    "candidate_id": "candidate::queued_exploration",
+                    "display_name": "Queued Exploration Lead",
+                },
+            },
+            metadata={
+                "target_company": "Thinking Machines Lab",
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="public_media_specialist",
+        )
+
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        original_execute_task = self.acquisition_engine.execute_task
+
+        def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved identity.",
+                    payload={"snapshot_dir": str(snapshot_dir)},
+                    state_updates={
+                        "company_identity": identity,
+                        "snapshot_id": snapshot_dir.name,
+                        "snapshot_dir": snapshot_dir,
+                    },
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"{task.task_type} completed.",
+                payload={},
+                state_updates={},
+            )
+
+        self.acquisition_engine.execute_task = fake_execute_task
+        try:
+            resume = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        # CALIBRATED 2026-07-22 (deep forensics): the modern completion gate
+        # fail-closes on the missing durable serving-finalized proof
+        # (anti-spoofing: a completed-looking job without a durable run is
+        # non-terminal). The original inline-completion tail is replaced by
+        # pinning BOTH halves of the modern contract: the resume ignored the
+        # pending exploration worker, and the terminal flip is gated on
+        # serving_finalized_proof_missing.
+        self.assertEqual(resume["status"], "resumed")
+        self.assertEqual(resume["job_status"], "running")
+        worker = self.orchestrator.agent_runtime.get_worker(handle.worker_id)
+        assert worker is not None
+        self.assertEqual(str(worker.get("status") or ""), "running")
+        self.orchestrator.agent_runtime.complete_worker(
+            handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed"},
+            output_payload={"summary": {"status": "completed"}, "entries": [], "errors": []},
+        )
+        self.orchestrator.run_worker_recovery_once({"explicit_job_id": job_id})
+        stored_job = self.store.get_job(job_id)
+        assert stored_job is not None
+        blockers = self.orchestrator._workflow_completion_promotion_blockers(stored_job)
+        self.assertEqual(str(blockers.get("reason") or ""), "serving_finalized_proof_missing")
+
 if __name__ == "__main__":
     unittest.main()

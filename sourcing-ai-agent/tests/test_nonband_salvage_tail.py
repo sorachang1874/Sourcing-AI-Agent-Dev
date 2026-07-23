@@ -2208,5 +2208,288 @@ class NonBandSalvageTailTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         self.assertEqual(str(captured_execution_preferences.get("artifact_build_profile") or ""), "foreground_fast")
 
 
+    def test_two_stage_workflow_publishes_stage1_preview_and_continues_public_web_stage2_when_enabled(self) -> None:
+        snapshot_id = "20260411T130000"
+        snapshot_dir = self.settings.company_assets_dir / "acme" / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        company_identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+        )
+        candidate = Candidate(
+            candidate_id="acme_infra_1",
+            name_en="Taylor Infra",
+            display_name="Taylor Infra",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Engineer",
+            focus_areas="infra platform systems",
+            linkedin_url="https://www.linkedin.com/in/taylor-infra/",
+        )
+        request_payload = {
+            "raw_user_request": "给我 Acme 的 Infra 方向成员",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "semantic_rerank_limit": 0,
+            "analysis_stage_mode": "two_stage",
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = self.orchestrator._create_workflow_job(request, plan)
+        retrieval_calls: list[dict[str, object]] = []
+
+        def fake_execute_task(
+            task: AcquisitionTask,
+            _request: JobRequest,
+            _target_company: str,
+            _state: dict[str, object],
+            _bootstrap_summary: dict[str, object] | None,
+        ) -> AcquisitionExecution:
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved company identity.",
+                    payload={"snapshot_id": snapshot_id},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "company_identity": company_identity,
+                    },
+                )
+            if task.task_type == "enrich_linkedin_profiles":
+                candidate_doc_path = snapshot_dir / "candidate_documents.json"
+                linkedin_stage_path = snapshot_dir / "candidate_documents.linkedin_stage_1.json"
+                candidate_doc_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                linkedin_stage_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built LinkedIn stage-1 candidate documents.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "candidate_doc_path": candidate_doc_path,
+                        "linkedin_stage_candidate_doc_path": linkedin_stage_path,
+                        "linkedin_stage_completed": True,
+                        "candidates": [candidate],
+                        "evidence": [],
+                    },
+                )
+            if task.task_type == "enrich_public_web_signals":
+                candidate_doc_path = snapshot_dir / "candidate_documents.json"
+                public_web_stage_path = snapshot_dir / "candidate_documents.public_web_stage_2.json"
+                candidate_doc_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                public_web_stage_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Extended candidate documents with public-web stage-2 evidence.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "candidate_doc_path": candidate_doc_path,
+                        "public_web_stage_candidate_doc_path": public_web_stage_path,
+                        "public_web_stage_completed": True,
+                        "candidates": [candidate],
+                        "evidence": [],
+                    },
+                )
+            if task.task_type == "normalize_asset_snapshot":
+                manifest_path = snapshot_dir / "manifest.json"
+                manifest_path.write_text(json.dumps({"snapshot_id": snapshot_id}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Normalized snapshot.",
+                    payload={"manifest_path": str(manifest_path)},
+                    state_updates={"manifest_path": manifest_path},
+                )
+            if task.task_type == "build_retrieval_index":
+                index_path = snapshot_dir / "retrieval_index_summary.json"
+                index_path.write_text(json.dumps({"status": "completed"}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built retrieval index.",
+                    payload={"retrieval_index_summary": str(index_path)},
+                    state_updates={},
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"Completed {task.task_type}.",
+                payload={},
+                state_updates={},
+            )
+
+        def fake_execute_retrieval(
+            current_job_id: str,
+            current_request: JobRequest,
+            current_plan,
+            job_type: str,
+            runtime_policy: dict[str, object] | None = None,
+            candidate_source_override: dict[str, object] | None = None,
+            *,
+            persist_job_state: bool = True,
+            artifact_name_suffix: str = "",
+            artifact_status: str = "completed",
+        ) -> dict[str, object]:
+            runtime_policy = dict(runtime_policy or {})
+            analysis_stage = str(runtime_policy.get("analysis_stage") or "stage_2_final")
+            current_job = self.store.get_job(current_job_id) or {}
+            retrieval_calls.append(
+                {
+                    "analysis_stage": analysis_stage,
+                    "job_stage": str(current_job.get("stage") or ""),
+                    "job_status": str(current_job.get("status") or ""),
+                    "persist_job_state": persist_job_state,
+                }
+            )
+            summary = {
+                "text": f"{analysis_stage} summary",
+                "total_matches": 1,
+                "returned_matches": 1,
+                "manual_review_queue_count": 0,
+                "analysis_stage": analysis_stage,
+                "candidate_source": {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": snapshot_id,
+                    "candidate_count": 1,
+                },
+                "outreach_layering": {"status": "completed", "analysis_stage": analysis_stage},
+            }
+            artifact_path = self.settings.jobs_dir / (
+                f"{current_job_id}.json"
+                if not artifact_name_suffix
+                else f"{current_job_id}.{artifact_name_suffix}.json"
+            )
+            artifact = {
+                "job_id": current_job_id,
+                "status": artifact_status,
+                "request": current_request.to_record(),
+                "plan": current_plan.to_record(),
+                "summary": summary,
+                "matches": [],
+                "manual_review_items": [],
+                "artifact_path": str(artifact_path),
+            }
+            self.store.replace_job_results(
+                current_job_id,
+                [
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "rank": 1,
+                        "score": 1.0,
+                        "semantic_score": 0.0,
+                        "confidence_label": "high",
+                        "confidence_score": 1.0,
+                        "confidence_reason": "test",
+                        "explanation": f"{analysis_stage} explanation",
+                        "matched_fields": ["focus_areas"],
+                        "outreach_layer": 0,
+                        "outreach_layer_key": "layer_0_roster",
+                        "outreach_layer_source": "rules",
+                    }
+                ],
+            )
+            self.store.repos.manual_review.replace_items(current_job_id, [])
+            if persist_job_state:
+                self.store.save_job(
+                    job_id=current_job_id,
+                    job_type=job_type,
+                    status="completed",
+                    stage="completed",
+                    request_payload=current_request.to_record(),
+                    plan_payload=current_plan.to_record(),
+                    summary_payload=summary,
+                    artifact_path=str(artifact_path),
+                )
+            return artifact
+
+        layering_calls: list[dict[str, object]] = []
+
+        def fake_run_outreach_layering_after_acquisition(
+            *,
+            job_id: str,
+            request: JobRequest,
+            acquisition_state: dict[str, object],
+            allow_ai: bool | None = None,
+            allow_background_defer: bool | None = None,
+            analysis_stage_label: str = "",
+            event_stage: str = "",
+            **_kwargs,
+        ) -> dict[str, object]:
+            current_job = self.store.get_job(job_id) or {}
+            layering_calls.append(
+                {
+                    "analysis_stage": analysis_stage_label,
+                    "job_stage": str(current_job.get("stage") or ""),
+                    "job_status": str(current_job.get("status") or ""),
+                    "event_stage": event_stage,
+                    "allow_ai": bool(allow_ai),
+                    "allow_background_defer": bool(allow_background_defer),
+                }
+            )
+            return {"status": "completed", "analysis_stage": analysis_stage_label or "stage_2_final"}
+
+        with (
+            unittest.mock.patch.object(
+                self.acquisition_engine,
+                "execute_task",
+                side_effect=fake_execute_task,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_outreach_layering_after_acquisition",
+                side_effect=fake_run_outreach_layering_after_acquisition,
+            ),
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_execute_retrieval",
+                side_effect=fake_execute_retrieval,
+            ),
+        ):
+            run_result = self.orchestrator._run_workflow_from_acquisition(job_id, request, plan)
+
+        self.assertEqual(run_result["status"], "completed")
+        self.assertEqual(
+            [str(item["analysis_stage"]) for item in retrieval_calls],
+            ["stage_1_preview", "stage_2_final"],
+        )
+        self.assertEqual(
+            [str(item["analysis_stage"]) for item in layering_calls],
+            ["stage_2_final"],
+        )
+        self.assertEqual(layering_calls[0]["job_stage"], "retrieving")
+        self.assertEqual(layering_calls[0]["event_stage"], "retrieving")
+        self.assertEqual(retrieval_calls[0]["job_stage"], "acquiring")
+        self.assertEqual(retrieval_calls[1]["job_stage"], "retrieving")
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        assert snapshot is not None
+        # CALIBRATED 2026-07-22 (deep forensics): terminal flip is gated on
+        # the durable serving-finalized proof this synthetic fixture never
+        # records — pin the fail-closed gate instead of inline completion.
+        stored_job = self.store.get_job(job_id)
+        assert stored_job is not None
+        blockers = self.orchestrator._workflow_completion_promotion_blockers(stored_job)
+        self.assertEqual(str(blockers.get("reason") or ""), "serving_finalized_proof_missing")
+        self.assertEqual(snapshot["job"]["status"], "running")
+        self.assertFalse(snapshot["job"]["summary"].get("awaiting_user_action"))
+        self.assertEqual(snapshot["job"]["summary"]["stage1_preview"]["status"], "ready")
+        self.assertEqual(snapshot["job"]["summary"]["public_web_stage_2"]["status"], "completed")
+        event_details = [str(item.get("detail") or "") for item in snapshot["events"]]
+        self.assertIn("LinkedIn Stage 1 acquisition completed.", event_details)
+        self.assertIn("Stage 1 preview ready; continuing Public Web Stage 2 acquisition.", event_details)
+        self.assertIn("Public Web Stage 2 acquisition completed.", event_details)
+
 if __name__ == "__main__":
     unittest.main()
