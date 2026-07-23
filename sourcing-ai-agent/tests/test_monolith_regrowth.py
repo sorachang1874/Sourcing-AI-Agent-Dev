@@ -29,10 +29,9 @@ _MONOLITH_BUDGETS = {
     "src/sourcing_agent/workflow_smoke.py": 10300,
     "src/sourcing_agent/acquisition.py": 7850,
     "src/sourcing_agent/harvest_connectors.py": 5350,
-    # cli: sanctioned re-baseline 5200->5300 (2026-07-22, slice-1 registry
-    # conversion adds 88 registry rows + 51 def lines; slice 2 moves parser
-    # configuration out and shrinks this below 5200 again).
-    "src/sourcing_agent/cli.py": 5300,
+    # cli: slice 2 moved the 2,000-line parser section to cli_parsers.py
+    # (2026-07-22); budget captured at the post-extraction size.
+    "src/sourcing_agent/cli.py": 3350,
 }
 
 # When a file drops far below budget, force the budget down too (captured
