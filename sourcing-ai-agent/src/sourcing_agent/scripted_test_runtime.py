@@ -9,13 +9,17 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .api import create_server
-from .cli import build_orchestrator
+from .cli import (
+    assert_recovery_coverage_or_fail_closed,
+    build_orchestrator,
+    start_shared_recovery_service,
+)
 from .local_postgres import (
     normalize_control_plane_postgres_connect_dsn,
     normalize_control_plane_postgres_schema,
@@ -340,6 +344,7 @@ class HostedScriptTestRuntime:
     thread: threading.Thread
     seed_result: dict[str, Any]
     postgres_prepare_result: dict[str, Any]
+    recovery_coverage: dict[str, Any] = field(default_factory=dict)
 
 
 def isolated_runtime_state_paths(runtime_dir: str | Path) -> dict[str, Path]:
@@ -766,12 +771,31 @@ def isolated_hosted_test_runtime(
     server = None
     thread = None
     orchestrator = None
+    shared_recovery_stop: threading.Event | None = None
+    shared_recovery_thread: threading.Thread | None = None
     with patched_environment(env_payload):
         try:
             if seed_reference_runtime:
                 seeded = seed_reference_smoke_runtime(runtime_dir=runtime_root)
                 seed_result = dict(seeded if isinstance(seeded, dict) else {})
             orchestrator = build_orchestrator()
+            # Production parity (R-037): `serve` fail-closes unless something
+            # drives worker recovery (Step 5a) — the request/read paths are
+            # signal-only (5e) and never execute queued workers themselves.
+            # This harness previously ran uncovered, so scripted acquisition
+            # workers stayed queued forever and jobs never reached the terminal
+            # result-view + run-scope-projection assembly (results then 410'd
+            # behind the serving-finalized fail-closed gate). Start the SAME
+            # in-process shared recovery primitive `serve` uses in its
+            # dev-compat mode so scripted flows complete through the production
+            # recovery → retrieval → terminal-assembly path, and enforce the
+            # same fail-closed coverage check `serve` applies.
+            shared_recovery_stop, shared_recovery_thread = start_shared_recovery_service(orchestrator)
+            recovery_coverage = assert_recovery_coverage_or_fail_closed(
+                orchestrator,
+                shared_recovery_thread=shared_recovery_thread,
+                watchdog_disabled=True,
+            )
             server = create_server(orchestrator, host="127.0.0.1", port=0)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -786,6 +810,7 @@ def isolated_hosted_test_runtime(
                 thread=thread,
                 seed_result=seed_result,
                 postgres_prepare_result=postgres_prepare_result,
+                recovery_coverage=dict(recovery_coverage or {}),
             )
         finally:
             if server is not None:
@@ -793,6 +818,13 @@ def isolated_hosted_test_runtime(
                 server.server_close()
             if thread is not None:
                 thread.join(timeout=5)
+            # Stop the in-process shared recovery service before sidecar/thread
+            # cleanup so teardown never races an in-flight recovery tick against
+            # store close + schema drop (mirrors `serve` shutdown ordering).
+            if shared_recovery_stop is not None:
+                shared_recovery_stop.set()
+            if shared_recovery_thread is not None:
+                shared_recovery_thread.join(timeout=10)
             _cleanup_runtime_sidecar_processes(runtime_root)
             _join_runtime_threads()
             if orchestrator is not None:

@@ -4119,6 +4119,69 @@ class MultiSourceEnricher:
             available_new_worker_count=available_new_worker_count,
         )
 
+    def schedule_pending_remote_run_event_watcher(
+        self,
+        *,
+        worker_checkpoint: dict[str, Any],
+        run_id: str,
+        dataset_id: str,
+        worker_id: int,
+        job_id: str,
+        payload_hash: str,
+        snapshot_dir: Path,
+        runtime_timing_overrides: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Public watcher seam for non-profile remote-wait lanes (R-037).
+
+        The company-roster harvest lane parks pending submissions as
+        waiting_remote_harvest workers that the recovery daemon deliberately
+        skips (duplicate paid-submit protection). Production live runs are
+        completed by provider webhooks; runtimes without a webhook endpoint
+        (dev/scripted/simulate) need the SAME local long-poll watcher the
+        profile-batch lane already uses so a terminal provider event marks the
+        worker and wakes recovery. This wrapper applies the profile lane's
+        lease/terminal-marker dedupe against the caller's worker checkpoint and
+        then delegates to the shared watcher scheduler (which keeps the
+        webhook-configured / scripted-env / provider-mode gating).
+        """
+
+        normalized_run_id = str(run_id or "").strip()
+        normalized_dataset_id = str(dataset_id or "").strip()
+        checkpoint_payload = dict(worker_checkpoint or {})
+        existing_watcher = dict(checkpoint_payload.get("local_provider_event_watcher") or {})
+        if _local_provider_event_watcher_lease_is_active(
+            dict(existing_watcher.get("watcher_lease") or existing_watcher),
+            run_id=normalized_run_id,
+            dataset_id=normalized_dataset_id,
+            worker_id=int(worker_id or 0),
+        ):
+            return {
+                **existing_watcher,
+                "status": "already_scheduled",
+                "reason": "local_provider_event_watcher_lease_active",
+            }
+        if _local_provider_event_watcher_terminal_marker_present(
+            checkpoint_payload,
+            run_id=normalized_run_id,
+            dataset_id=normalized_dataset_id,
+        ):
+            return {
+                "status": "skipped",
+                "reason": "remote_provider_terminal_event_already_seen",
+                "run_id": normalized_run_id,
+                "dataset_id": normalized_dataset_id,
+                "worker_id": int(worker_id or 0),
+            }
+        return self._schedule_local_provider_event_watcher(
+            run_id=normalized_run_id,
+            dataset_id=normalized_dataset_id,
+            worker_id=int(worker_id or 0),
+            job_id=str(job_id or "").strip(),
+            payload_hash=str(payload_hash or "").strip(),
+            snapshot_dir=snapshot_dir,
+            runtime_timing_overrides=dict(runtime_timing_overrides or {}),
+        )
+
     def _schedule_local_provider_event_watcher(
         self,
         *,

@@ -2775,6 +2775,12 @@ class SourcingOrchestrator(CompanyPublicWebActionMixin):
                 payload=payload,
                 scope="job_scoped",
             )
+            # R-037: persist the recovery controls like the managed-runner path
+            # does, so the daemon-status surface can resolve the shared
+            # worker-recovery-daemon service for hosted jobs (tick evidence,
+            # service_ready) instead of returning an empty recovery_services
+            # view for the hosted execution mode.
+            self._persist_workflow_runtime_controls_deferred(job_id, queued)
             return queued
         if workflow_status == "joined_existing_job":
             queued["shared_recovery"] = self._signal_shared_recovery_wakeup(
@@ -42469,13 +42475,26 @@ class SourcingOrchestrator(CompanyPublicWebActionMixin):
                 job,
                 include_service_details=include_details,
             )
+            shared_service_status = dict((runtime_controls.get("shared_recovery") or {}).get("service_status") or {})
+            if not str(shared_service_status.get("service_name") or "").strip():
+                # R-037: the shared worker-recovery-daemon is a runtime-global
+                # guarantee (Step 5a), not a per-job control. Job summaries can
+                # lose/compact their stored shared_recovery control across
+                # completion rewrites; the daemon-status surface must still
+                # report the canonical shared service so recovery tick evidence
+                # stays observable for any job in this runtime.
+                fallback_status = read_service_status(self.runtime_dir, service_name)
+                if not include_details:
+                    fallback_status = compact_service_status(fallback_status)
+                if str(fallback_status.get("service_name") or "").strip():
+                    shared_service_status = fallback_status
             return {
                 "job_id": job_id,
                 "status": "ok",
                 "runtime_controls": runtime_controls,
                 "recovery_services": {
                     "hosted": dict((runtime_controls.get("hosted_runtime_watchdog") or {}).get("service_status") or {}),
-                    "shared": dict((runtime_controls.get("shared_recovery") or {}).get("service_status") or {}),
+                    "shared": shared_service_status,
                     "job_scoped": dict((runtime_controls.get("job_recovery") or {}).get("service_status") or {}),
                 },
             }

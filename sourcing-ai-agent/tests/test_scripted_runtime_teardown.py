@@ -13,6 +13,8 @@ import json
 import os
 import re
 import tempfile
+import threading
+import time
 import unittest
 import uuid
 from pathlib import Path
@@ -233,6 +235,43 @@ class ScriptedRuntimeSchemaTeardownPGTest(unittest.TestCase):
                     self.assertGreaterEqual(int(row[0]), 14)
             second = prepare_workflow_confidence_postgres_schema(env_payload)
             self.assertEqual(second["migrations_applied"], [])
+
+    def test_isolated_hosted_test_runtime_provides_recovery_coverage(self) -> None:
+        """R-037: the hosted harness must satisfy serve's Step-5a recovery guarantee.
+
+        The API process is signal-only (5e); without a live recovery driver,
+        scripted acquisition workers stay queued forever and jobs never reach
+        the terminal result-view + run-scope-projection assembly (results then
+        410 behind the serving-finalized fail-closed gate). The harness must
+        start the same in-process shared recovery service `serve` uses in its
+        dev-compat mode and stop it on teardown.
+        """
+
+        def _recovery_threads() -> list[threading.Thread]:
+            return [
+                item
+                for item in threading.enumerate()
+                if item.is_alive() and item.name.startswith("worker-recovery-daemon")
+            ]
+
+        with tempfile.TemporaryDirectory(prefix="recovery-coverage-") as tmp:
+            with isolated_hosted_test_runtime(runtime_dir=tmp) as runtime:
+                schema = str(runtime.postgres_prepare_result["schema"])
+                self._cleanup_schemas.append(schema)
+                coverage = dict(runtime.recovery_coverage or {})
+                self.assertIn(
+                    str(coverage.get("coverage") or ""),
+                    {"in_process_shared_recovery_thread", "external_recovery_daemon"},
+                    coverage,
+                )
+                self.assertTrue(_recovery_threads(), "no live worker-recovery-daemon thread in harness")
+            deadline = time.monotonic() + 15.0
+            while time.monotonic() < deadline and _recovery_threads():
+                time.sleep(0.1)
+            self.assertFalse(
+                _recovery_threads(),
+                "worker-recovery-daemon thread leaked past harness teardown",
+            )
 
     def test_isolated_hosted_test_runtime_seeds_fresh_schema(self) -> None:
         with tempfile.TemporaryDirectory(prefix="seed-fresh-") as tmp:

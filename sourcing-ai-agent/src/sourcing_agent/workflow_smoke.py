@@ -1819,15 +1819,32 @@ def _projection_payloads_for_smoke(
     projection_id = str(link_payload.get("projection_id") or "").strip()
     if not projection_id:
         return link_payload, {}, {}
-    projection_payload = client.get(f"/api/projections/{quote(projection_id)}")
     query_suffix = str(candidate_query_suffix or "").strip()
     if query_suffix and not query_suffix.startswith("&"):
         query_suffix = "&" + query_suffix.lstrip("?")
-    candidate_page = client.get(
-        f"/api/projections/{quote(projection_id)}/candidates"
-        f"?offset={max(0, int(offset or 0))}&limit={max(1, min(250, int(limit or 24)))}{query_suffix}"
-    )
-    return link_payload, projection_payload, candidate_page
+    # A linked projection can be transiently non-servable (409) right at the
+    # terminal handoff: post-completion housekeeping (member replace, facet
+    # layering, search-index revision bumps) briefly flips readiness while the
+    # smoke reads immediately after the job turns terminal. Production readers
+    # poll through that window; mirror the same settle contract with a bounded
+    # retry, then FAIL CLOSED by surfacing the not-ready payload so callers'
+    # ready-status checks still reject a projection that never settles.
+    settle_deadline = time.monotonic() + 8.0
+    while True:
+        try:
+            projection_payload = client.get(f"/api/projections/{quote(projection_id)}")
+            candidate_page = client.get(
+                f"/api/projections/{quote(projection_id)}/candidates"
+                f"?offset={max(0, int(offset or 0))}&limit={max(1, min(250, int(limit or 24)))}{query_suffix}"
+            )
+            return link_payload, projection_payload, candidate_page
+        except urllib_error.HTTPError as exc:
+            if exc.code != 409:
+                raise
+            not_ready_payload = _http_error_payload(exc)
+            if time.monotonic() >= settle_deadline:
+                return link_payload, not_ready_payload, {}
+            time.sleep(0.25)
 
 
 def _flatten_projection_candidate_for_smoke(row: dict[str, Any]) -> dict[str, Any]:

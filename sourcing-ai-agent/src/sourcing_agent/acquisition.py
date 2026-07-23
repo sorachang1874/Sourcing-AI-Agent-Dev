@@ -5062,6 +5062,41 @@ class AcquisitionEngine:
             "summary": {**summary, "summary_path": str(summary_path)},
         }
         if execution.pending:
+            # R-037: a pending submission parks this worker as
+            # waiting_remote_harvest, which the recovery daemon deliberately
+            # skips (duplicate paid-submit protection). Webhooks complete it in
+            # hosted live runs; runtimes without a webhook endpoint
+            # (dev/scripted/simulate) need the same local provider-event
+            # watcher the profile-batch lane schedules, so the terminal event
+            # marks the worker and wakes recovery instead of stranding the
+            # roster shard until orphan admission.
+            pending_run_id = str(updated_checkpoint.get("run_id") or "").strip()
+            if pending_run_id and self.multi_source_enricher is not None:
+                watcher = self.multi_source_enricher.schedule_pending_remote_run_event_watcher(
+                    worker_checkpoint=updated_checkpoint,
+                    run_id=pending_run_id,
+                    dataset_id=str(updated_checkpoint.get("dataset_id") or "").strip(),
+                    worker_id=int(worker_handle.worker_id),
+                    job_id=job_id,
+                    payload_hash=str(updated_checkpoint.get("payload_hash") or "").strip(),
+                    snapshot_dir=snapshot_dir,
+                    runtime_timing_overrides={
+                        **dict(runtime_timing_overrides or {}),
+                        **{
+                            key: value
+                            for key, value in updated_checkpoint.items()
+                            if key
+                            in {
+                                "scripted_remote_wait_after_submit",
+                                "scripted_remote_wait_seconds",
+                                "scripted_remote_ready_epoch_ms",
+                            }
+                        },
+                    },
+                )
+                if str(watcher.get("status") or "") == "scheduled":
+                    updated_checkpoint["local_provider_event_watcher"] = dict(watcher)
+                    updated_output["summary"]["local_provider_event_watcher"] = dict(watcher)
             self.worker_runtime.complete_worker(
                 worker_handle,
                 status="queued",
