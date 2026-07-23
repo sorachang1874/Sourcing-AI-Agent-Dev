@@ -25,6 +25,27 @@ from typing import Any, Protocol
 
 from .domain import JobRequest
 from .retrieval_runtime import candidate_source_is_snapshot_authoritative
+from datetime import datetime, timezone
+
+
+def _utc_now_iso() -> str:
+    # Replicated from orchestrator (trivial utility; import direction stays one-way).
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    # Replicated from orchestrator (trivial utility; import direction stays one-way).
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    raw = str(value).strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 class _ResolverStore(Protocol):
@@ -46,13 +67,11 @@ class CandidateSourceResolverDeps:
     shrink as ladder members migrate into this module.
     """
 
-    candidate_source_result_view_stub: Callable[[dict[str, Any]], dict[str, Any]]
     apply_job_result_view_to_candidate_source: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
-    attach_persisted_lifecycle_to_candidate_source: Callable[..., tuple[dict[str, Any], dict[str, Any]]]
     strip_superseded_asset_population_overlay_from_public_source: Callable[
         [dict[str, Any], dict[str, Any]], tuple[dict[str, Any], dict[str, Any]]
     ]
-    annotate_running_result_view_publication_gap: Callable[..., dict[str, Any]]
+    project_canonical_lifecycle_payload: Callable[..., dict[str, Any]]
     candidate_source_has_manifest_invalid: Callable[[dict[str, Any]], bool]
     resolve_candidate_source_snapshot_dir: Callable[..., Path | None]
     candidate_source_materialized_path: Callable[..., Path | None]
@@ -75,6 +94,150 @@ class CandidateSourceResolver:
         self._store = store
         self._deps = deps
 
+    def _candidate_source_result_view_stub(self, candidate_source: dict[str, Any] | None) -> dict[str, Any]:
+        payload = dict(candidate_source or {})
+        nested = dict(payload.get("result_view") or {})
+        summary_payload = dict(nested.get("summary") or payload.get("result_view_summary") or {})
+        metadata_payload = dict(nested.get("metadata") or payload.get("result_view_metadata") or {})
+        if str(payload.get("asset_population_overlay_path") or "").strip():
+            metadata_payload.setdefault(
+                "asset_population_overlay_path",
+                str(payload.get("asset_population_overlay_path") or "").strip(),
+            )
+        if dict(payload.get("asset_population_patch") or {}):
+            metadata_payload.setdefault("asset_population_patch", dict(payload.get("asset_population_patch") or {}))
+        stub = {
+            "view_id": str(nested.get("view_id") or payload.get("result_view_id") or "").strip(),
+            "job_id": str(nested.get("job_id") or payload.get("job_id") or "").strip(),
+            "target_company": str(nested.get("target_company") or payload.get("target_company") or "").strip(),
+            "source_kind": str(nested.get("source_kind") or payload.get("source_kind") or "").strip(),
+            "view_kind": str(nested.get("view_kind") or payload.get("result_view_kind") or "").strip(),
+            "snapshot_id": str(nested.get("snapshot_id") or payload.get("snapshot_id") or "").strip(),
+            "asset_view": str(nested.get("asset_view") or payload.get("asset_view") or "canonical_merged").strip()
+            or "canonical_merged",
+            "source_path": str(nested.get("source_path") or payload.get("source_path") or "").strip(),
+            "authoritative_snapshot_id": str(
+                nested.get("authoritative_snapshot_id") or payload.get("authoritative_snapshot_id") or ""
+            ).strip(),
+            "materialization_generation_key": str(
+                nested.get("materialization_generation_key") or payload.get("materialization_generation_key") or ""
+            ).strip(),
+            "request_signature": str(nested.get("request_signature") or payload.get("request_signature") or "").strip(),
+            "summary": summary_payload,
+            "metadata": metadata_payload,
+        }
+        if not any(
+            [
+                stub["view_id"],
+                stub["source_kind"],
+                stub["view_kind"],
+                stub["snapshot_id"],
+                stub["source_path"],
+                stub["authoritative_snapshot_id"],
+                stub["materialization_generation_key"],
+            ]
+        ):
+            return {}
+        return stub
+
+
+    def _attach_persisted_lifecycle_to_candidate_source(
+        self,
+        *,
+        job_id: str,
+        candidate_source: dict[str, Any],
+        result_view: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        normalized_job_id = str(job_id or "").strip()
+        resolved = dict(candidate_source or {})
+        result_view_payload = dict(result_view or {})
+        if not normalized_job_id:
+            return resolved, result_view_payload
+        lifecycle_row = self._store.get_job_result_lifecycle(normalized_job_id)
+        if str(dict(lifecycle_row or {}).get("source_validation_status") or "").strip() != "validated":
+            return resolved, result_view_payload
+        lifecycle_payload = self._deps.project_canonical_lifecycle_payload(row=dict(lifecycle_row or {}))
+        metadata_payload = dict(resolved.get("result_view_metadata") or {})
+        metadata_payload["result_view_lifecycle"] = lifecycle_payload
+        resolved["result_view_metadata"] = metadata_payload
+        resolved["result_view_lifecycle"] = lifecycle_payload
+        if result_view_payload:
+            view_metadata = dict(result_view_payload.get("metadata") or {})
+            view_metadata["result_view_lifecycle"] = lifecycle_payload
+            result_view_payload["metadata"] = view_metadata
+            resolved["result_view"] = {
+                **dict(resolved.get("result_view") or {}),
+                "metadata": view_metadata,
+            }
+        resolved, result_view_payload = self._deps.strip_superseded_asset_population_overlay_from_public_source(
+            resolved,
+            result_view_payload,
+        )
+        return resolved, result_view_payload
+
+
+    def _annotate_running_result_view_publication_gap(
+        self,
+        *,
+        job_id: str,
+        request: JobRequest,
+        result_view: dict[str, Any],
+        summary_payloads: list[dict[str, Any] | None],
+    ) -> dict[str, Any]:
+        """Report an in-flight serving gap without publishing from a public read."""
+
+        view_payload = dict(result_view or {})
+        served_snapshot_id = str(view_payload.get("snapshot_id") or "").strip()
+        if not job_id or not served_snapshot_id:
+            return view_payload
+
+        detected_source: dict[str, Any] = {}
+        for payload in list(summary_payloads or []):
+            summary = dict(payload or {})
+            candidates = [
+                dict(summary.get("candidate_source") or {}),
+                dict(summary.get("linkedin_stage_1") or {}),
+                dict(summary.get("public_web_stage_2") or {}),
+                dict(summary.get("background_snapshot_materialization") or {}),
+                dict(dict(summary.get("stage1_preview") or {}).get("candidate_source") or {}),
+            ]
+            for source in candidates:
+                snapshot_id = str(source.get("snapshot_id") or "").strip()
+                if snapshot_id and snapshot_id != served_snapshot_id:
+                    detected_source = source
+                    break
+            if detected_source:
+                break
+
+        current_snapshot_id = str(detected_source.get("snapshot_id") or "").strip()
+        if not current_snapshot_id or current_snapshot_id == served_snapshot_id:
+            return view_payload
+
+        source_updated_at = ""
+        for timestamp_key in ("completed_at", "updated_at", "finished_at", "materialized_at", "created_at"):
+            source_updated_at = str(detected_source.get(timestamp_key) or "").strip()
+            if source_updated_at:
+                break
+        metadata = dict(view_payload.get("metadata") or {})
+        metadata["serving_publication_gap"] = {
+            "status": "pending_event_time_publication",
+            "reason": "running_public_read_does_not_publish_result_view",
+            "job_id": str(job_id or "").strip(),
+            "target_company": str(request.target_company or detected_source.get("target_company") or "").strip(),
+            "served_snapshot_id": served_snapshot_id,
+            "current_snapshot_id": current_snapshot_id,
+            "source_kind": str(detected_source.get("source_kind") or "").strip(),
+            "source_path": str(
+                detected_source.get("source_path") or detected_source.get("candidate_doc_path") or ""
+            ).strip(),
+            "source_updated_at": source_updated_at,
+            "observed_at": _utc_now_iso(),
+            "candidate_count": _coerce_int(detected_source.get("candidate_count"), 0),
+        }
+        view_payload["metadata"] = metadata
+        return view_payload
+
+
     def resolve(
         self,
         *,
@@ -91,7 +254,7 @@ class CandidateSourceResolver:
         )
         if str(request.target_company or "").strip() and not str(candidate_source.get("target_company") or "").strip():
             candidate_source["target_company"] = str(request.target_company or "").strip()
-        result_view = self._deps.candidate_source_result_view_stub(candidate_source)
+        result_view = self._candidate_source_result_view_stub(candidate_source)
         normalized_job_id = str(dict(job or {}).get("job_id") or "").strip()
         # Calibration vs the verbatim source: the original bound stored_view
         # only under `if normalized_job_id:` and read it unconditionally — an
@@ -101,7 +264,7 @@ class CandidateSourceResolver:
         if stored_view:
             result_view = stored_view
         resolved_source = self._deps.apply_job_result_view_to_candidate_source(candidate_source, result_view)
-        resolved_source, result_view = self._deps.attach_persisted_lifecycle_to_candidate_source(
+        resolved_source, result_view = self._attach_persisted_lifecycle_to_candidate_source(
             job_id=normalized_job_id,
             candidate_source=resolved_source,
             result_view=result_view,
@@ -112,7 +275,7 @@ class CandidateSourceResolver:
         )
         job_status = str(dict(job or {}).get("status") or "").strip().lower()
         if job_status != "completed":
-            result_view = self._deps.annotate_running_result_view_publication_gap(
+            result_view = self._annotate_running_result_view_publication_gap(
                 job_id=normalized_job_id,
                 request=request,
                 result_view=result_view,

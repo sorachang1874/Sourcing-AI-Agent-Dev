@@ -4760,52 +4760,6 @@ class SourcingOrchestrator:
             asset_view=asset_view,
         )
 
-    def _candidate_source_result_view_stub(self, candidate_source: dict[str, Any] | None) -> dict[str, Any]:
-        payload = dict(candidate_source or {})
-        nested = dict(payload.get("result_view") or {})
-        summary_payload = dict(nested.get("summary") or payload.get("result_view_summary") or {})
-        metadata_payload = dict(nested.get("metadata") or payload.get("result_view_metadata") or {})
-        if str(payload.get("asset_population_overlay_path") or "").strip():
-            metadata_payload.setdefault(
-                "asset_population_overlay_path",
-                str(payload.get("asset_population_overlay_path") or "").strip(),
-            )
-        if dict(payload.get("asset_population_patch") or {}):
-            metadata_payload.setdefault("asset_population_patch", dict(payload.get("asset_population_patch") or {}))
-        stub = {
-            "view_id": str(nested.get("view_id") or payload.get("result_view_id") or "").strip(),
-            "job_id": str(nested.get("job_id") or payload.get("job_id") or "").strip(),
-            "target_company": str(nested.get("target_company") or payload.get("target_company") or "").strip(),
-            "source_kind": str(nested.get("source_kind") or payload.get("source_kind") or "").strip(),
-            "view_kind": str(nested.get("view_kind") or payload.get("result_view_kind") or "").strip(),
-            "snapshot_id": str(nested.get("snapshot_id") or payload.get("snapshot_id") or "").strip(),
-            "asset_view": str(nested.get("asset_view") or payload.get("asset_view") or "canonical_merged").strip()
-            or "canonical_merged",
-            "source_path": str(nested.get("source_path") or payload.get("source_path") or "").strip(),
-            "authoritative_snapshot_id": str(
-                nested.get("authoritative_snapshot_id") or payload.get("authoritative_snapshot_id") or ""
-            ).strip(),
-            "materialization_generation_key": str(
-                nested.get("materialization_generation_key") or payload.get("materialization_generation_key") or ""
-            ).strip(),
-            "request_signature": str(nested.get("request_signature") or payload.get("request_signature") or "").strip(),
-            "summary": summary_payload,
-            "metadata": metadata_payload,
-        }
-        if not any(
-            [
-                stub["view_id"],
-                stub["source_kind"],
-                stub["view_kind"],
-                stub["snapshot_id"],
-                stub["source_path"],
-                stub["authoritative_snapshot_id"],
-                stub["materialization_generation_key"],
-            ]
-        ):
-            return {}
-        return stub
-
     def _candidate_source_materialized_path(self, *, snapshot_dir: Path, asset_view: str) -> Path | None:
         return resolve_snapshot_serving_artifact_path(
             snapshot_dir,
@@ -23957,40 +23911,6 @@ class SourcingOrchestrator:
             result_view_ref["source_invalid_detail"] = invalid_artifact
         return resolved
 
-    def _attach_persisted_lifecycle_to_candidate_source(
-        self,
-        *,
-        job_id: str,
-        candidate_source: dict[str, Any],
-        result_view: dict[str, Any] | None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        normalized_job_id = str(job_id or "").strip()
-        resolved = dict(candidate_source or {})
-        result_view_payload = dict(result_view or {})
-        if not normalized_job_id:
-            return resolved, result_view_payload
-        lifecycle_row = self.store.get_job_result_lifecycle(normalized_job_id)
-        if str(dict(lifecycle_row or {}).get("source_validation_status") or "").strip() != "validated":
-            return resolved, result_view_payload
-        lifecycle_payload = self._project_canonical_lifecycle_payload(row=dict(lifecycle_row or {}))
-        metadata_payload = dict(resolved.get("result_view_metadata") or {})
-        metadata_payload["result_view_lifecycle"] = lifecycle_payload
-        resolved["result_view_metadata"] = metadata_payload
-        resolved["result_view_lifecycle"] = lifecycle_payload
-        if result_view_payload:
-            view_metadata = dict(result_view_payload.get("metadata") or {})
-            view_metadata["result_view_lifecycle"] = lifecycle_payload
-            result_view_payload["metadata"] = view_metadata
-            resolved["result_view"] = {
-                **dict(resolved.get("result_view") or {}),
-                "metadata": view_metadata,
-            }
-        resolved, result_view_payload = self._strip_superseded_asset_population_overlay_from_public_source(
-            resolved,
-            result_view_payload,
-        )
-        return resolved, result_view_payload
-
     def _candidate_source_has_manifest_invalid(self, candidate_source: dict[str, Any] | None) -> bool:
         payload = dict(candidate_source or {})
         return bool(
@@ -24188,67 +24108,6 @@ class SourcingOrchestrator:
             except Exception:
                 pass
         return recovered_source, recovered_result_view
-
-    def _annotate_running_result_view_publication_gap(
-        self,
-        *,
-        job_id: str,
-        request: JobRequest,
-        result_view: dict[str, Any],
-        summary_payloads: list[dict[str, Any] | None],
-    ) -> dict[str, Any]:
-        """Report an in-flight serving gap without publishing from a public read."""
-
-        view_payload = dict(result_view or {})
-        served_snapshot_id = str(view_payload.get("snapshot_id") or "").strip()
-        if not job_id or not served_snapshot_id:
-            return view_payload
-
-        detected_source: dict[str, Any] = {}
-        for payload in list(summary_payloads or []):
-            summary = dict(payload or {})
-            candidates = [
-                dict(summary.get("candidate_source") or {}),
-                dict(summary.get("linkedin_stage_1") or {}),
-                dict(summary.get("public_web_stage_2") or {}),
-                dict(summary.get("background_snapshot_materialization") or {}),
-                dict(dict(summary.get("stage1_preview") or {}).get("candidate_source") or {}),
-            ]
-            for source in candidates:
-                snapshot_id = str(source.get("snapshot_id") or "").strip()
-                if snapshot_id and snapshot_id != served_snapshot_id:
-                    detected_source = source
-                    break
-            if detected_source:
-                break
-
-        current_snapshot_id = str(detected_source.get("snapshot_id") or "").strip()
-        if not current_snapshot_id or current_snapshot_id == served_snapshot_id:
-            return view_payload
-
-        source_updated_at = ""
-        for timestamp_key in ("completed_at", "updated_at", "finished_at", "materialized_at", "created_at"):
-            source_updated_at = str(detected_source.get(timestamp_key) or "").strip()
-            if source_updated_at:
-                break
-        metadata = dict(view_payload.get("metadata") or {})
-        metadata["serving_publication_gap"] = {
-            "status": "pending_event_time_publication",
-            "reason": "running_public_read_does_not_publish_result_view",
-            "job_id": str(job_id or "").strip(),
-            "target_company": str(request.target_company or detected_source.get("target_company") or "").strip(),
-            "served_snapshot_id": served_snapshot_id,
-            "current_snapshot_id": current_snapshot_id,
-            "source_kind": str(detected_source.get("source_kind") or "").strip(),
-            "source_path": str(
-                detected_source.get("source_path") or detected_source.get("candidate_doc_path") or ""
-            ).strip(),
-            "source_updated_at": source_updated_at,
-            "observed_at": _utc_now_iso(),
-            "candidate_count": _coerce_int(detected_source.get("candidate_count"), 0),
-        }
-        view_payload["metadata"] = metadata
-        return view_payload
 
     def _resolve_materialized_current_workflow_snapshot_result_view(
         self,
@@ -24846,13 +24705,11 @@ class SourcingOrchestrator:
             resolver = CandidateSourceResolver(
                 store=self.store,
                 deps=CandidateSourceResolverDeps(
-                    candidate_source_result_view_stub=self._candidate_source_result_view_stub,
                     apply_job_result_view_to_candidate_source=self._apply_job_result_view_to_candidate_source,
-                    attach_persisted_lifecycle_to_candidate_source=self._attach_persisted_lifecycle_to_candidate_source,
                     strip_superseded_asset_population_overlay_from_public_source=(
                         self._strip_superseded_asset_population_overlay_from_public_source
                     ),
-                    annotate_running_result_view_publication_gap=self._annotate_running_result_view_publication_gap,
+                    project_canonical_lifecycle_payload=self._project_canonical_lifecycle_payload,
                     candidate_source_has_manifest_invalid=self._candidate_source_has_manifest_invalid,
                     resolve_candidate_source_snapshot_dir=self._resolve_candidate_source_snapshot_dir,
                     candidate_source_materialized_path=self._candidate_source_materialized_path,
