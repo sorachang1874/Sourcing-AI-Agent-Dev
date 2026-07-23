@@ -18,6 +18,7 @@ import json
 import os
 import tempfile
 import time
+from datetime import datetime, timezone
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -908,6 +909,189 @@ class AcquisitionResumeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             asset_population = dict((refreshed or {}).get("asset_population") or {})
         self.assertTrue(asset_population.get("available"))
         self.assertGreaterEqual(int(asset_population.get("candidate_count") or 0), 1)
+
+
+    # -- salvage wave 8 (2026-07-22): hosted acquisition-resume dispatch
+    # dedupe/lease contracts (detached runner, marker dedupe, lease-alive
+    # skip, fresh-dispatch skip in progress auto-recovery, no inline resume
+    # under the job lock) — same work-list, same fixture.
+
+    def test_resume_queued_hosted_workflow_dispatches_without_holding_job_lock(self) -> None:
+        job_id = "job_resume_queued_hosted_no_outer_lock"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "Workflow queued", "runtime_execution_mode": "hosted"},
+        )
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_start_hosted_workflow_thread",
+                return_value={"job_id": job_id, "status": "started", "mode": "workflow", "source": "workflow_recovery"},
+            ) as hosted_mock,
+            unittest.mock.patch.object(self.orchestrator, "_job_run_lock") as lock_mock,
+        ):
+            result = self.orchestrator._resume_queued_workflow_if_ready(job_id)
+
+        hosted_mock.assert_called_once_with(job_id, source="workflow_recovery")
+        lock_mock.assert_not_called()
+        self.assertEqual(result["status"], "takeover_started")
+        self.assertEqual(result["mode"], "hosted")
+
+    def test_resume_acquiring_hosted_workflow_dispatches_thread_without_inline_resume(self) -> None:
+        job_id = "job_resume_acquiring_hosted"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload={"target_company": "OpenAI"},
+            plan_payload={},
+            summary_payload={
+                "message": "waiting for profile detail",
+                "runtime_execution_mode": "hosted",
+                "blocked_task": "enrich_linkedin_profiles",
+            },
+        )
+
+        with (
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_start_hosted_acquisition_resume_thread",
+                return_value={
+                    "job_id": job_id,
+                    "status": "started",
+                    "mode": "acquisition_resume",
+                    "source": "workflow_recovery",
+                },
+            ) as hosted_mock,
+            unittest.mock.patch.object(self.orchestrator, "_job_run_lock") as lock_mock,
+            unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_workflow_from_acquisition",
+                side_effect=AssertionError("recovery tick must not run workflow inline"),
+            ),
+        ):
+            result = self.orchestrator._resume_acquiring_workflow_if_ready(job_id)
+
+        hosted_mock.assert_called_once_with(job_id, source="workflow_recovery")
+        lock_mock.assert_not_called()
+        self.assertEqual(result["status"], "takeover_started")
+        self.assertEqual(result["mode"], "hosted")
+
+    def test_start_hosted_acquisition_resume_thread_dispatches_detached_runner_and_dedupes_marker(self) -> None:
+        job_id = "job_hosted_acquisition_resume_deduped"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload={"target_company": "OpenAI"},
+            plan_payload={},
+            summary_payload={
+                "message": "waiting for profile detail",
+                "runtime_execution_mode": "hosted",
+                "blocked_task": "enrich_linkedin_profiles",
+            },
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_spawn_workflow_takeover_runner",
+            return_value={"status": "started", "pid": 24680, "log_path": "/tmp/workflow.log"},
+        ) as spawn_mock:
+            first = self.orchestrator._start_hosted_acquisition_resume_thread(job_id, source="workflow_recovery")
+            second = self.orchestrator._start_hosted_acquisition_resume_thread(job_id, source="progress_poll")
+
+        self.assertEqual(first["status"], "started")
+        self.assertEqual(first["mode"], "acquisition_resume")
+        self.assertEqual(first["dispatch_kind"], "detached_execute_workflow")
+        self.assertEqual(second["status"], "skipped")
+        self.assertEqual(second["reason"], "hosted_dispatch_inflight")
+        spawn_mock.assert_called_once_with(job_id, auto_job_daemon=False)
+
+        stored_job = self.store.get_job(job_id) or {}
+        hosted_dispatch = dict(dict(stored_job.get("summary") or {}).get("hosted_dispatch") or {})
+        self.assertEqual(hosted_dispatch.get("mode"), "acquisition_resume")
+        self.assertEqual(hosted_dispatch.get("source"), "workflow_recovery")
+        self.assertEqual(hosted_dispatch.get("dispatch_kind"), "detached_execute_workflow")
+        self.assertEqual(hosted_dispatch.get("pid"), 24680)
+
+    def test_start_hosted_acquisition_resume_thread_skips_when_workflow_lease_alive(self) -> None:
+        job_id = "job_hosted_acquisition_resume_lease_inflight"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload={"target_company": "OpenAI"},
+            plan_payload={},
+            summary_payload={
+                "message": "waiting for profile detail",
+                "runtime_execution_mode": "hosted",
+                "blocked_task": "enrich_linkedin_profiles",
+                "hosted_dispatch": {
+                    "status": "started",
+                    "mode": "acquisition_resume",
+                    "source": "workflow_recovery",
+                    "dispatched_at": "2000-01-01T00:00:00+00:00",
+                },
+            },
+        )
+        self.store.acquire_workflow_job_lease(
+            job_id,
+            lease_owner=self.orchestrator._workflow_job_lease_owner(),  # noqa: SLF001
+            lease_seconds=120,
+            lease_token="lease-token",
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_spawn_workflow_takeover_runner",
+            side_effect=AssertionError("active workflow lease must not spawn another runner"),
+        ):
+            result = self.orchestrator._start_hosted_acquisition_resume_thread(job_id, source="progress_poll")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "workflow_job_lease_inflight")
+
+    def test_progress_auto_recovery_skips_fresh_hosted_dispatch_for_queued_job(self) -> None:
+        job_id = "job_hosted_dispatch_progress_guard"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "MiroMind.ai"},
+            plan_payload={},
+            summary_payload={
+                "message": "Workflow queued",
+                "runtime_execution_mode": "hosted",
+                "hosted_dispatch": {
+                    "status": "started",
+                    "mode": "workflow",
+                    "source": "start_workflow",
+                    "dispatched_at": datetime.now(timezone.utc).isoformat(),
+                },
+            },
+        )
+
+        job = self.store.get_job(job_id) or {}
+        result = self.orchestrator._maybe_auto_recover_workflow_on_progress(
+            job=job,
+            events=[],
+            workers=[],
+            runtime_controls={},
+        )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "runtime_not_takeover_eligible")
+        self.assertEqual(result["classification"], "hosted_dispatch_inflight")
 
 if __name__ == "__main__":
     unittest.main()
