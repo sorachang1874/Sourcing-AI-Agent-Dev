@@ -7,10 +7,14 @@ ingestion (`ensure_acquisition_shard_registry_for_snapshot`) unconditionally —
 live registry rows. Dry-run must skip the rebuild and report it as planned.
 """
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import scripts.backfill_acquisition_shard_query_families as backfill_script
+from sourcing_agent.asset_reuse_planning import build_salvage_manifest_shard_registry_records
 
 
 class _FakeStore:
@@ -51,6 +55,109 @@ class BackfillDryRunReadOnlyTest(unittest.TestCase):
             ["--company", "Skild AI", "--snapshot-id", "snap-1", "--rebuild-from-assets"]
         )
         rebuild.assert_called_once()
+
+
+class SalvageManifestRecordBuilderTest(unittest.TestCase):
+    """Adopted-paid-dataset receipts map onto the company_employees lane;
+    profile batches and passthrough docs are skipped with explicit reasons."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.runtime_root = Path(self.tempdir.name) / "runtime"
+        (self.runtime_root / "salvage").mkdir(parents=True)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _write_dataset(self, name: str, entries: int) -> str:
+        path = self.runtime_root / "salvage" / name
+        path.write_text(json.dumps([{"id": i} for i in range(entries)]))
+        return str(path)
+
+    def test_function_paired_datasets_yield_per_function_shards(self) -> None:
+        fn8 = self._write_dataset("fn8.json", 3)
+        fn24 = self._write_dataset("fn24.json", 2)
+        records, skipped = build_salvage_manifest_shard_registry_records(
+            target_company="Google",
+            company_key="google",
+            snapshot_id="20260722T113432",
+            manifest={
+                "salvage_note": "Built from adopted paid Apify datasets",
+                "created_at": "2026-07-22T11:34:33Z",
+                "inputs": {
+                    "current_roster_dataset": f"[PosixPath('{fn8}'), PosixPath('{fn24}')]",
+                    "current_roster_functions": ["8", "24"],
+                    "current_roster_run_ids": ["runA", "runB"],
+                },
+            },
+            manifest_path="manifest.json",
+            runtime_root=self.runtime_root,
+        )
+        self.assertEqual(skipped, [])
+        self.assertEqual(len(records), 2)
+        first, second = records
+        self.assertEqual(first["lane"], "company_employees")
+        self.assertEqual(first["shard_id"], "salvage_fn8")
+        self.assertEqual(first["result_count"], 3)
+        self.assertEqual(first["function_ids"], ["8"])
+        self.assertEqual(dict(first["metadata"])["apify_run_id"], "runA")
+        self.assertTrue(dict(first["metadata"])["adopted_paid_dataset"])
+        self.assertEqual(
+            dict(dict(first["metadata"])["request_filters"]).get("function_ids"), ["8"]
+        )
+        self.assertEqual(second["shard_id"], "salvage_fn24")
+        self.assertEqual(second["result_count"], 2)
+
+    def test_full_mode_roster_yields_single_root_shard_and_skips_non_receipts(self) -> None:
+        roster = self._write_dataset("tml_roster.json", 5)
+        records, skipped = build_salvage_manifest_shard_registry_records(
+            target_company="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            snapshot_id="20260722T113432",
+            manifest={
+                "inputs": {
+                    "current_roster_dataset": f"[PosixPath('{roster}')]",
+                    "current_roster_functions": [],
+                    "current_roster_run_ids": ["runC"],
+                    "former_candidate_documents": "old/candidate_documents.json",
+                    "profile_datasets": ["b1.json", "b2.json"],
+                },
+            },
+            manifest_path="manifest.json",
+            runtime_root=self.runtime_root,
+        )
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["shard_id"], "salvage_root")
+        self.assertEqual(records[0]["result_count"], 5)
+        self.assertEqual(records[0]["function_ids"], [])
+        reasons = {row["reason"] for row in skipped}
+        self.assertEqual(
+            reasons,
+            {
+                "profile_detail_batches_have_no_registry_lane_contract",
+                "passthrough_candidate_documents_are_not_provider_receipts",
+            },
+        )
+
+    def test_profile_only_manifest_registers_nothing(self) -> None:
+        records, skipped = build_salvage_manifest_shard_registry_records(
+            target_company="OpenAI",
+            company_key="openai",
+            snapshot_id="20260722T113432",
+            manifest={
+                "inputs": {
+                    "current_roster_dataset": "",
+                    "profile_datasets": ["batch1.json"],
+                },
+            },
+            manifest_path="manifest.json",
+            runtime_root=self.runtime_root,
+        )
+        self.assertEqual(records, [])
+        self.assertEqual(
+            [row["reason"] for row in skipped],
+            ["profile_detail_batches_have_no_registry_lane_contract"],
+        )
 
 
 if __name__ == "__main__":

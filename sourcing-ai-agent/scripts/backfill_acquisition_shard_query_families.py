@@ -21,6 +21,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from sourcing_agent.asset_reuse_planning import (
     ensure_acquisition_shard_registry_for_snapshot,
+    ensure_salvage_manifest_shard_registry_for_snapshot,
     refresh_acquisition_shard_registry_query_family_metadata,
 )
 from sourcing_agent.settings import load_settings
@@ -57,6 +58,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Re-run snapshot->registry ingestion before metadata backfill so missing rows are recovered from assets.",
     )
+    parser.add_argument(
+        "--from-salvage-manifest",
+        action="store_true",
+        help=(
+            "Ingest adopted-paid-dataset roster receipts from each snapshot's salvage_manifest.json "
+            "as company_employees shard rows (profile batches are reported as skipped, not registered)."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Report planned updates without writing rows.")
     parser.add_argument("--limit", type=int, default=5000, help="Per-company row fetch limit.")
     return parser.parse_args()
@@ -91,6 +100,26 @@ def main() -> None:
         raise SystemExit("At least one --company is required.")
     if bool(args.rebuild_from_assets) and not snapshot_ids:
         raise SystemExit("--rebuild-from-assets requires at least one --snapshot-id.")
+    if bool(args.from_salvage_manifest) and not snapshot_ids:
+        raise SystemExit("--from-salvage-manifest requires at least one --snapshot-id.")
+
+    salvage_results: list[dict[str, Any]] = []
+    if bool(args.from_salvage_manifest):
+        for company in companies:
+            for snapshot_id in snapshot_ids:
+                salvage_results.append(
+                    {
+                        "target_company": company,
+                        "snapshot_id": snapshot_id,
+                        **ensure_salvage_manifest_shard_registry_for_snapshot(
+                            runtime_dir=settings.runtime_dir,
+                            store=store,
+                            target_company=company,
+                            snapshot_id=snapshot_id,
+                            dry_run=bool(args.dry_run),
+                        ),
+                    }
+                )
 
     rebuild_results: list[dict[str, Any]] = []
     if bool(args.rebuild_from_assets):
@@ -165,8 +194,10 @@ def main() -> None:
                 "runtime_dir": str(settings.runtime_dir),
                 "db_path": str(settings.db_path),
                 "rebuild_from_assets": bool(args.rebuild_from_assets),
+                "from_salvage_manifest": bool(args.from_salvage_manifest),
                 "dry_run": bool(args.dry_run),
                 "rebuild_results": rebuild_results,
+                "salvage_results": salvage_results,
                 "row_count": len(touched_rows),
                 "changed_rows": changed_rows,
                 "family_counts": dict(sorted(family_counts.items())),

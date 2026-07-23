@@ -2063,6 +2063,171 @@ def ensure_acquisition_shard_registry_for_snapshot(
     }
 
 
+_SALVAGE_MANIFEST_QUOTED_PATH_PATTERN = re.compile(r"'([^']+)'")
+
+
+def _salvage_manifest_dataset_paths(raw_value: Any) -> list[str]:
+    """Parse the manifest's dataset-path field.
+
+    Salvage manifests serialized this field as ``str(list[PosixPath])``
+    (e.g. ``"[PosixPath('runtime/...json'), ...]"``); plain path strings and
+    real lists are accepted too.
+    """
+    if isinstance(raw_value, list):
+        return [str(item).strip() for item in raw_value if str(item).strip()]
+    text = str(raw_value or "").strip()
+    if not text:
+        return []
+    if text.startswith("["):
+        return [match for match in _SALVAGE_MANIFEST_QUOTED_PATH_PATTERN.findall(text)]
+    return [text]
+
+
+def _salvage_dataset_entry_count(dataset_path: Path) -> tuple[int, str]:
+    """Count entries in an adopted Apify dataset file; never fabricate."""
+    try:
+        payload = json.loads(dataset_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return 0, "dataset_unreadable"
+    if isinstance(payload, list):
+        return len(payload), "dataset_entry_count"
+    return 0, "dataset_not_a_list"
+
+
+def build_salvage_manifest_shard_registry_records(
+    *,
+    target_company: str,
+    company_key: str,
+    snapshot_id: str,
+    manifest: dict[str, Any],
+    manifest_path: str,
+    runtime_root: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Map adopted-paid-dataset receipts in a salvage manifest to shard rows.
+
+    Only CURRENT-roster provider receipts map onto the existing
+    ``company_employees`` lane. Profile-detail batches and passthrough
+    candidate documents are reported as skipped with explicit reasons —
+    registering them would need a new lane contract value (review-gated),
+    and passthrough docs are not provider receipts at all.
+    """
+    inputs = dict(manifest.get("inputs") or {})
+    dataset_paths = _salvage_manifest_dataset_paths(inputs.get("current_roster_dataset"))
+    function_ids = [
+        str(item).strip() for item in list(inputs.get("current_roster_functions") or []) if str(item).strip()
+    ]
+    run_ids = [str(item).strip() for item in list(inputs.get("current_roster_run_ids") or [])]
+    pair_functions = len(function_ids) == len(dataset_paths) and bool(function_ids)
+
+    records: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for index, raw_path in enumerate(dataset_paths):
+        dataset_path = Path(raw_path)
+        if not dataset_path.is_absolute():
+            for candidate in (runtime_root.parent / dataset_path, runtime_root / dataset_path):
+                if candidate.exists():
+                    dataset_path = candidate
+                    break
+        result_count, count_source = _salvage_dataset_entry_count(dataset_path)
+        shard_function_ids = [function_ids[index]] if pair_functions else []
+        shard_id = f"salvage_fn{function_ids[index]}" if pair_functions else "salvage_root"
+        company_filters: dict[str, Any] = {"companies": [target_company]}
+        if shard_function_ids:
+            company_filters["function_ids"] = shard_function_ids
+        records.append(
+            build_acquisition_shard_registry_record(
+                target_company=target_company,
+                company_key=company_key,
+                snapshot_id=snapshot_id,
+                lane="company_employees",
+                employment_scope="current",
+                strategy_type="full_company_roster",
+                shard_id=shard_id,
+                shard_title=(
+                    f"Salvaged roster function {function_ids[index]}"
+                    if pair_functions
+                    else "Salvaged roster (full mode)"
+                ),
+                search_query="",
+                company_filters=company_filters,
+                result_count=result_count,
+                status="completed",
+                source_path=str(manifest_path),
+                metadata={
+                    "source": "salvage_manifest",
+                    "adopted_paid_dataset": True,
+                    "salvage_note": str(manifest.get("salvage_note") or ""),
+                    "salvage_created_at": str(manifest.get("created_at") or ""),
+                    "apify_dataset_path": str(dataset_path),
+                    "apify_run_id": run_ids[index] if index < len(run_ids) else "",
+                    "result_count_source": count_source,
+                },
+            )
+        )
+    profile_datasets = _salvage_manifest_dataset_paths(inputs.get("profile_datasets"))
+    if profile_datasets:
+        skipped.append(
+            {
+                "reason": "profile_detail_batches_have_no_registry_lane_contract",
+                "profile_datasets": profile_datasets,
+            }
+        )
+    if str(inputs.get("former_candidate_documents") or "").strip():
+        skipped.append(
+            {
+                "reason": "passthrough_candidate_documents_are_not_provider_receipts",
+                "former_candidate_documents": str(inputs.get("former_candidate_documents")),
+            }
+        )
+    return records, skipped
+
+
+def ensure_salvage_manifest_shard_registry_for_snapshot(
+    *,
+    runtime_dir: str | Path,
+    store: ControlPlaneStore,
+    target_company: str,
+    snapshot_id: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    try:
+        company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(
+            runtime_dir, target_company, snapshot_id=snapshot_id
+        )
+    except CandidateArtifactError:
+        return {"status": "snapshot_not_found", "records_planned": 0, "records_written": 0, "skipped": []}
+    manifest_path = snapshot_dir / "salvage_manifest.json"
+    if not manifest_path.exists():
+        return {"status": "no_salvage_manifest", "records_planned": 0, "records_written": 0, "skipped": []}
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"status": "salvage_manifest_unreadable", "records_planned": 0, "records_written": 0, "skipped": []}
+    records, skipped = build_salvage_manifest_shard_registry_records(
+        target_company=_preferred_company_display_name(
+            requested_company=target_company,
+            resolved_company=identity_payload.get("canonical_name") or target_company,
+        ),
+        company_key=str(identity_payload.get("company_key") or company_key),
+        snapshot_id=snapshot_dir.name,
+        manifest=manifest,
+        manifest_path=str(manifest_path),
+        runtime_root=Path(runtime_dir),
+    )
+    written = 0
+    if not dry_run:
+        for record in records:
+            store.upsert_acquisition_shard_registry(record)
+            written += 1
+    return {
+        "status": "completed",
+        "records_planned": len(records),
+        "records_written": written,
+        "planned_shard_keys": [str(record.get("shard_key") or "") for record in records],
+        "skipped": skipped,
+    }
+
+
 def _company_employee_registry_match_key(
     record: dict[str, Any],
 ) -> tuple[str, str, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
