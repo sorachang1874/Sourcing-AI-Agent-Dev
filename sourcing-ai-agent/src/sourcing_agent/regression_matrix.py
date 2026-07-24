@@ -412,6 +412,25 @@ _PROFILE_BATCH_DIVISION_CONTRACT_SUITES = (
 # (tests/test_model_provider.py), which silently missed the v1 protocol
 # characterization pins; W7.2 S2 makes the mapping explicit and adds the
 # divider surface suite (the ModelClient Protocol gained a divider method).
+# asset_reuse_planning.py owns the organization-asset promote decision surface
+# (evaluate_organization_asset_registry_promotion + completeness_score formula +
+# candidate selection) and storage.py owns the lineage/generation guard; both are
+# pinned by the WS7/W7.3 S0 promote characterization oracle (ruling ③, 2026-07-24,
+# docs/WS7_AI_PROMOTE_DESIGN.md §6). An edit to EITHER source must re-run the oracle
+# ALONGSIDE the module's normal suites, mirroring the enrichment -> divider-oracle
+# paired mapping. This group is checked WITHOUT a `continue` so each path still
+# picks up its standard workflow-explain / storage coverage below.
+_ORGANIZATION_PROMOTE_ORACLE_RELATED_PATHS = {
+    "src/sourcing_agent/asset_reuse_planning.py",
+    "src/sourcing_agent/storage.py",
+}
+_ORGANIZATION_PROMOTE_ORACLE_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_characterization.py",
+        args=("tests/test_organization_promote_characterization.py",),
+        reason="WS7/W7.3 S0 ruling-③ promote oracle pins the evaluate threshold family + completeness_score grid + candidate selection + the two storage-guard refusal shapes",
+    ),
+)
 _MODEL_PROVIDER_RELATED_PATHS = {
     "src/sourcing_agent/model_provider.py",
 }
@@ -559,6 +578,12 @@ def infer_pytest_invocations(
     for path in normalized_paths:
         if path.endswith(".md") or path.startswith("docs/"):
             continue
+        if path in _ORGANIZATION_PROMOTE_ORACLE_RELATED_PATHS:
+            # No `continue`: the promote oracle rides ALONGSIDE the module's
+            # normal storage / workflow-explain suites, both matched below.
+            saw_backend_change = True
+            for invocation in _ORGANIZATION_PROMOTE_ORACLE_SUITES:
+                add(invocation)
         if path in _STORAGE_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _STORAGE_AND_CONTROL_PLANE_SUITES:

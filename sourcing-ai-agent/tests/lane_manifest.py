@@ -35,6 +35,7 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_profile_batch_division_model_surface.py", "WS7/W7.2 S2 divider model-invocation surface: ModelClient divider method, OQ7 scripted client env gate, OQ5 >300 engagement, OQ8 20s timeout, F1-F6 audit mapping (offline)"),
     ("tests/test_profile_batch_division_shadow.py", "WS7/W7.2 S3 shadow integration: mint-seam hook records division/fallback beside the plan, dispatch byte-identical shadow on/off, completion-path non-invocation, exception isolation (offline)"),
     ("tests/test_profile_batch_division_wave_identity.py", "WS7/W7.2 S4 R6 wave-identity extension: refill_plan_division_id writer at the mint seam, scalar-claim carry, oracle R6 goldens byte-identical, heterogeneous per-batch inheritance pure functions + structural unreachability (PG round-trip skips offline)"),
+    ("tests/test_organization_promote_characterization.py", "WS7/W7.3 S0 ruling-③ promote oracle: pins the CURRENT evaluate_organization_asset_registry_promotion threshold family (four branches + boundary grid), completeness_score formula grid, candidate selection, and the TWO storage-guard refusal shapes (permanent-hard); threshold goldens become acceptance validators at S5, guard goldens never demote (pure functions + PG guard shapes)"),
     ("tests/test_api_auth.py", "C2.1 auth foundation contract"),
     ("tests/test_api_server_identity.py", "server identity contract"),
     ("tests/test_user_private_reads.py", "user-scoped read isolation contract"),

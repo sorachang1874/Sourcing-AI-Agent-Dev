@@ -254,6 +254,38 @@ def test_model_provider_change_selects_protocol_and_divider_surface_suites() -> 
     assert "paired::tests/test_profile_batch_division_model_surface.py" in labels
 
 
+def test_asset_reuse_planning_change_selects_promote_characterization_oracle() -> None:
+    # WS7/W7.3 S0 (ruling ③, 2026-07-24): the promote decision surface in
+    # asset_reuse_planning.py is pinned by the promote characterization oracle;
+    # an edit there must route to the oracle AND keep its workflow-explain
+    # coverage (docs/WS7_AI_PROMOTE_DESIGN.md §6, enrichment -> divider-oracle
+    # precedent).
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/asset_reuse_planning.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_organization_promote_characterization.py" in labels
+    assert "workflow-explain-focus" in labels
+
+
+def test_storage_change_selects_promote_characterization_oracle() -> None:
+    # The lineage/generation guard lives in storage.py; an edit there must
+    # re-run the promote oracle's two permanent-hard refusal-shape pins alongside
+    # the storage/control-plane suites.
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/storage.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_organization_promote_characterization.py" in labels
+    assert "control-plane-live" in labels
+
+
 def test_recovery_phases_change_selects_recovery_tick_oracle() -> None:
     labels = {
         invocation.label
