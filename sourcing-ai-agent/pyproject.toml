@@ -54,6 +54,7 @@ files = [
     "src/sourcing_agent/repositories/__init__.py",
     "src/sourcing_agent/repositories/manual_review.py",
     "src/sourcing_agent/repositories/serving_projection.py",
+    "src/sourcing_agent/profile_batch_division_contract.py",
     "src/sourcing_agent/profile_registry_backfill.py",
     "src/sourcing_agent/profile_registry_utils.py",
     "src/sourcing_agent/linkedin_url_normalization.py",

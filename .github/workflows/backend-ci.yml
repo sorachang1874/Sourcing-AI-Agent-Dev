@@ -118,7 +118,8 @@ jobs:
             tests/test_serving_mesh_boundary.py \
             tests/test_monolith_regrowth.py \
             tests/test_backfill_shard_query_families_script.py \
-            tests/test_fetch_profile_batch_characterization.py
+            tests/test_fetch_profile_batch_characterization.py \
+            tests/test_profile_batch_division_contract.py
           python -m pytest -q \
             tests/test_api_auth.py \
             tests/test_api_server_identity.py \

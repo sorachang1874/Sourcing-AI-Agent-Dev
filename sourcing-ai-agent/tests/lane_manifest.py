@@ -30,6 +30,7 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_monolith_regrowth.py", "WS2 slice-3 anti-regrowth ratchet: monoliths only shrink (the +8.4k regrowth lesson)"),
     ("tests/test_backfill_shard_query_families_script.py", "live-ops backfill script: --dry-run is fully read-only (2026-07-23 rebuild-write defect)"),
     ("tests/test_fetch_profile_batch_characterization.py", "WS7 ruling-① plan-record oracle: pins the CURRENT batch-division ladder the AI divider must replace behind acceptance validators (offline, pure functions)"),
+    ("tests/test_profile_batch_division_contract.py", "WS7/W7.2 S1 divider-output contract: ai_batch_division.v1 strict schema + V1-V10 acceptance battery + F1-F6 fallback audit shapes (offline, pure functions)"),
     ("tests/test_api_auth.py", "C2.1 auth foundation contract"),
     ("tests/test_api_server_identity.py", "server identity contract"),
     ("tests/test_user_private_reads.py", "user-scoped read isolation contract"),

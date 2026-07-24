@@ -203,6 +203,22 @@ def test_enrichment_change_selects_batch_division_characterization_oracle() -> N
     assert "paired::tests/test_enrichment.py" in labels
 
 
+def test_profile_batch_division_contract_change_selects_contract_suite_and_oracle() -> None:
+    # WS7/W7.2 S1 (2026-07-23): the divider-output contract module's validator
+    # battery formalizes the ladder rules the plan-record oracle pins, so an
+    # edit there must route to BOTH the paired contract suite and the oracle
+    # (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §1.3).
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/profile_batch_division_contract.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_profile_batch_division_contract.py" in labels
+    assert "paired::tests/test_fetch_profile_batch_characterization.py" in labels
+
+
 def test_recovery_phases_change_selects_recovery_tick_oracle() -> None:
     labels = {
         invocation.label

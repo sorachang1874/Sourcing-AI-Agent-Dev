@@ -360,6 +360,26 @@ _ENRICHMENT_SUITES = (
         reason="profile-prefetch scheduler R1-R7 contract guards ride every enrichment edit",
     ),
 )
+# profile_batch_division_contract.py is the WS7/W7.2 S1 divider-output contract
+# (schema sourcing.profile_prefetch.ai_batch_division.v1 + validator battery
+# V1-V10). The validators formalize the ladder rules the WS7 oracle pins, so an
+# edit here must re-run the paired contract suite AND the characterization
+# oracle (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §1.3 oracle-pin column).
+_PROFILE_BATCH_DIVISION_CONTRACT_RELATED_PATHS = {
+    "src/sourcing_agent/profile_batch_division_contract.py",
+}
+_PROFILE_BATCH_DIVISION_CONTRACT_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_profile_batch_division_contract.py",
+        args=("tests/test_profile_batch_division_contract.py",),
+        reason="ai_batch_division.v1 schema + V1-V10 validator battery contract",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_fetch_profile_batch_characterization.py",
+        args=("tests/test_fetch_profile_batch_characterization.py",),
+        reason="the validator battery formalizes the ladder rules the WS7 plan-record oracle pins",
+    ),
+)
 _ORCHESTRATOR_RELATED_PATHS = {
     "src/sourcing_agent/orchestrator.py",
     # T-008 remap: operation/agent contract band + orchestrator-extracted
@@ -526,6 +546,11 @@ def infer_pytest_invocations(
         if path in _ENRICHMENT_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _ENRICHMENT_SUITES:
+                add(invocation)
+            continue
+        if path in _PROFILE_BATCH_DIVISION_CONTRACT_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _PROFILE_BATCH_DIVISION_CONTRACT_SUITES:
                 add(invocation)
             continue
         if path == "src/sourcing_agent/orchestrator.py":
