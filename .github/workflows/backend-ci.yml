@@ -152,7 +152,8 @@ jobs:
             tests/test_profile_batch_division_shadow.py \
             tests/test_profile_batch_division_wave_identity.py \
             tests/test_organization_promote_characterization.py \
-            tests/test_organization_promote_contract.py
+            tests/test_organization_promote_contract.py \
+            tests/test_organization_promote_model_surface.py
           python -m pytest -q \
             tests/test_api_auth.py \
             tests/test_api_server_identity.py \

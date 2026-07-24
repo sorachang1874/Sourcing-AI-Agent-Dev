@@ -47,6 +47,35 @@ PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY = "provenance"
 PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY = "error"
 PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY = "raw_response_preview"
 PROFILE_BATCH_DIVIDER_CIRCUIT_ERROR_PREFIX = "model_provider_circuit_open"
+# WS7/W7.3 S2 (docs/WS7_AI_PROMOTE_DESIGN.md §3, OQ8): opt-in scripted
+# organization-asset promote-judge client for offline AI-path exercise. Absent →
+# judge_organization_asset_promotion returns {} (ruling-④ F1 keep-incumbent
+# marker). Dedicated flag by ruling — it deliberately does NOT piggyback the
+# scripted-planning or scripted-divider flag (different blast radius).
+_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV = "SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE"
+# OQ8 RATIFIED 2026-07-24: the promote-judge call gets its own bounded timeout
+# (default 20 s) instead of ModelProviderSettings.timeout_seconds (45 s). Promote
+# is a materialize→promote decision point, not a hot serving path, but a bounded
+# timeout keeps a slow model from stalling the registration/consolidation flow;
+# on timeout the caller keeps the incumbent (ruling ④, design §3.4/§4).
+_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_ENV = "SOURCING_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS"
+_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_DEFAULT = 20
+_ORGANIZATION_PROMOTE_JUDGE_MAX_OUTPUT_TOKENS = 1000
+# Wire keys of the judge_organization_asset_promotion response envelope (S2
+# invocation-surface contract, consumed by organization_promote_judgment.py):
+#   {}                                   → judge unavailable (F1 keep-incumbent)
+#   {"error": "..."}                     → call failed; circuit-open errors keep
+#                                          the "model_provider_circuit_open" prefix (F2 vs F3)
+#   {"judgment": {...}, "provenance": {...}, "raw_response_preview": "..."}
+#                                        → the RAW model output ({decision, reason,
+#                                          reason_code}) + client-side call facts;
+#                                          validation is single-sourced in
+#                                          organization_promote_contract (S1).
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY = "judgment"
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY = "provenance"
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY = "error"
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY = "raw_response_preview"
+ORGANIZATION_PROMOTE_JUDGE_CIRCUIT_ERROR_PREFIX = "model_provider_circuit_open"
 _MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS"
 _MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS"
 _MODEL_PROVIDER_CIRCUIT_DISABLED_ENV = "SOURCING_MODEL_PROVIDER_CIRCUIT_DISABLED"
@@ -215,6 +244,28 @@ def _profile_batch_divider_timeout_seconds() -> int:
     return _env_int(
         _PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_ENV,
         _PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_DEFAULT,
+        minimum=1,
+        maximum=300,
+    )
+
+
+def _scripted_organization_promote_judge_enabled(*, provider_mode: str) -> bool:
+    """OQ8 opt-in: scripted promote-judge client, offline provider modes only.
+
+    Mirrors the scripted-divider gate (design §3.1 / discrepancy D2): any offline
+    mode qualifies so simulate/replay/scripted e2e can drive the AI promote branch
+    without a billed call; live mode never uses the scripted judge.
+    """
+    return str(provider_mode or "").strip().lower() in {"simulate", "replay", "scripted"} and _env_bool(
+        _SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV,
+        False,
+    )
+
+
+def _organization_promote_judge_timeout_seconds() -> int:
+    return _env_int(
+        _ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_ENV,
+        _ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_DEFAULT,
         minimum=1,
         maximum=300,
     )
@@ -682,6 +733,8 @@ class ModelClient(Protocol):
 
     def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def provider_name(self) -> str: ...
 
     def supports_outreach_ai_verification(self) -> bool: ...
@@ -940,6 +993,16 @@ class DeterministicModelClient:
         # (design §2.1 / discrepancy D2).
         return {}
 
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        # WS7/W7.3 S2: {} is the structural "judge unavailable" marker — the
+        # caller (organization_promote_judgment.judge_and_validate_promotion)
+        # maps it to the ruling-④ F1 keep-incumbent fallback
+        # (`judge_model_unavailable`). OfflineModelClient inherits this, so
+        # simulate/replay are keep-incumbent-by-construction (design §3.1 / §4);
+        # a failure NEVER flips authority (unlike the divider's rule-ladder
+        # fallback, promotion is asset-correctness-conservative).
+        return {}
+
 
 class OfflineModelClient(DeterministicModelClient):
     def __init__(self, *, mode: str) -> None:
@@ -1112,6 +1175,102 @@ class ScriptedProfileBatchDividerModelClient(OfflineModelClient):
             },
             PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
             PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "",
+        }
+
+
+class ScriptedOrganizationPromoteJudgeModelClient(OfflineModelClient):
+    """Offline scripted promote judge (WS7/W7.3 S2, OQ8): deterministic,
+    schema-valid ai_promote_decision.v1 verdicts without a billed model call.
+
+    Mirrors ScriptedProfileBatchDividerModelClient behind its own dedicated env
+    `SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE` (design §3.1). The env is
+    re-checked per call as a belt-and-braces gate: even a directly constructed
+    instance returns {} (the F1 keep-incumbent marker) when the opt-in is absent.
+    Every other ModelClient method keeps OfflineModelClient semantics.
+
+    The scripted verdict reads ONLY the AI-visible candidate descriptor the
+    caller sends (never the guard verdict, which has no schema slot — design §2.2)
+    and authors exactly {decision, reason, reason_code}, the same wire shape a
+    real model authors: reject on simulate/placeholder provenance
+    (`ai_provenance_suspect`) or strictly narrower lane coverage
+    (`ai_coverage_not_superset`), otherwise promote (`ai_coverage_superset`). The
+    caller (organization_promote_judgment) still runs the full S1 battery over the
+    output, so a scripted promote that a floor rejects keeps the incumbent by
+    construction.
+    """
+
+    def provider_name(self) -> str:
+        return "scripted_organization_promote_judge_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "scripted_promote_judge_enabled": _env_bool(_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV, False),
+            "note": (
+                "Offline scripted organization-asset promote judge (OQ8 opt-in via "
+                f"{_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV}); only judge_organization_asset_promotion "
+                "is scripted, every other model call stays offline-deterministic."
+            ),
+        }
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not _env_bool(_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV, False):
+            return {}
+        descriptor = payload.get("candidate_descriptor") if isinstance(payload.get("candidate_descriptor"), dict) else {}
+        candidate = descriptor.get("candidate") if isinstance(descriptor.get("candidate"), dict) else {}
+        incumbent = descriptor.get("incumbent") if isinstance(descriptor.get("incumbent"), dict) else {}
+        prior = (
+            descriptor.get("prior_snapshot_comparison")
+            if isinstance(descriptor.get("prior_snapshot_comparison"), dict)
+            else {}
+        )
+        candidate_metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
+        incumbent_metrics = incumbent.get("metrics") if isinstance(incumbent.get("metrics"), dict) else {}
+
+        def _lane_total(metrics: dict[str, Any]) -> int:
+            try:
+                return int(metrics.get("effective_lane_total") or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        if bool(prior.get("simulate_or_placeholder_provenance")):
+            decision, reason_code, reason = (
+                "reject",
+                "ai_provenance_suspect",
+                "candidate carries simulate/placeholder provenance; a promote would risk repeating incident #2",
+            )
+        elif _lane_total(candidate_metrics) < _lane_total(incumbent_metrics):
+            decision, reason_code, reason = (
+                "reject",
+                "ai_coverage_not_superset",
+                "candidate effective lane coverage is strictly narrower than the incumbent; not a superset",
+            )
+        else:
+            decision, reason_code, reason = (
+                "promote",
+                "ai_coverage_superset",
+                "candidate coverage is at least as wide as the incumbent with no completeness regression",
+            )
+        snapshot = json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str)
+        return {
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY: {
+                "decision": decision,
+                "reason": reason,
+                "reason_code": reason_code,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": "scripted-organization-promote-judge-v1",
+                "response_model": "scripted-organization-promote-judge-v1",
+                "prompt_sha256": hashlib.sha256(b"scripted_organization_promote_judge:v1").hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(snapshot.encode("utf-8")).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": 0,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: "",
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY: "",
         }
 
 
@@ -1419,6 +1578,45 @@ class QwenResponsesModelClient(DeterministicModelClient):
             },
             PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
             PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else response[:240],
+        }
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # WS7/W7.3 S2: same wire contract as the OpenAI-compatible client.
+        # NOTE (design discrepancy D6, inherited): the Qwen transport has no
+        # circuit breaker, so the F2 class never arises here — every call failure
+        # maps to F3 (`judge_call_failed`) at the caller.
+        system_prompt = _build_organization_promote_judge_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        response, error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=_ORGANIZATION_PROMOTE_JUDGE_MAX_OUTPUT_TOKENS,
+            timeout_seconds=_organization_promote_judge_timeout_seconds(),
+        )
+        if error:
+            return {ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: error}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(response)
+        return {
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY: parsed,
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": str(self.settings.model or ""),
+                # The Qwen text-extraction path drops the response body's model
+                # identity; recorded honestly as empty rather than echoed.
+                "response_model": "",
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": latency_ms,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: "",
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else response[:240],
         }
 
     def _run_text_prompt(
@@ -1893,6 +2091,62 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else call_result.text[:240],
         }
 
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """WS7/W7.3 S2 promote-judge call (design §3, OQ8).
+
+        Returns the RAW parsed model output ({decision, reason, reason_code})
+        plus client-side call facts — validation is single-sourced in
+        organization_promote_contract (S1) and belongs to the caller. Uses the
+        judge-scoped bounded timeout (OQ8, default 20 s) and the shared
+        per-(provider, base_url, model) circuit: a circuit-open or transport
+        failure surfaces as the truncated `_model_call_error_message` string
+        under the "error" key (F2/F3 at the caller — a failure keeps the
+        incumbent, never flips authority, ruling ④). The model never sees or
+        authors the lineage-guard verdict (design §2.2).
+        """
+        system_prompt = _build_organization_promote_judge_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        try:
+            call_result = self._require_business_model_identity(
+                self._call_prompt_result(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max(
+                        _ORGANIZATION_PROMOTE_JUDGE_MAX_OUTPUT_TOKENS,
+                        int(getattr(self.settings, "min_max_tokens", 0) or 0),
+                    ),
+                    timeout_seconds=_organization_promote_judge_timeout_seconds(),
+                )
+            )
+        except Exception as exc:
+            return {ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: _model_call_error_message(exc)}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(call_result.text)
+        return {
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY: parsed,
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": call_result.requested_model,
+                "response_model": call_result.response_model,
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {
+                    "input_tokens": int(call_result.usage.input_tokens or 0),
+                    "output_tokens": int(call_result.usage.output_tokens or 0),
+                },
+                "latency_ms": latency_ms,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: "",
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else call_result.text[:240],
+        }
+
     def healthcheck(self) -> dict[str, Any]:
         circuit_key = self._circuit_key()
         flight, is_leader = _claim_model_provider_healthcheck_flight(circuit_key)
@@ -2318,6 +2572,43 @@ def _build_profile_batch_division_system_prompt() -> str:
     )
 
 
+def _build_organization_promote_judge_system_prompt() -> str:
+    """WS7/W7.3 S2 promote-judge prompt (design §3.3, OQ4/OQ8).
+
+    The model judges ONE contested authoritative-snapshot promotion: given the
+    incumbent and candidate coverage/lineage/completeness evidence in
+    candidate_descriptor, decide whether the candidate should replace the
+    incumbent. It authors exactly {decision, reason, reason_code} and NOTHING
+    else — the lineage-guard verdict is never in the payload and must never be
+    emitted (design §2.2). The prompt is explicit that the judge is one gate
+    among several: a hard lineage guard and retained validators run regardless,
+    so a promote verdict can be overruled but a reject is final — the judge can
+    only be MORE conservative than the rules.
+    """
+    return (
+        "You are judging whether ONE candidate materialized snapshot should replace the current "
+        "authoritative (incumbent) snapshot for an organization's asset registry. The payload's "
+        "candidate_descriptor gives you the incumbent and candidate faces (metric pairs, "
+        "completeness_score and band, selected_snapshot_ids and generation lineage evidence, "
+        "per-shard request-population coverage evidence, and a simulate/placeholder-provenance flag) "
+        "plus the contested-decision context. Judge asset-promotion CORRECTNESS: promote only when "
+        "the candidate genuinely covers the incumbent (equal-or-wider coverage, no material "
+        "completeness regression, trustworthy provenance); otherwise reject and keep the incumbent. "
+        "Return strict JSON with EXACTLY the keys decision, reason, reason_code and no others. "
+        "decision must be exactly 'promote' or 'reject'. "
+        "reason is a concise (<= 240 chars) non-empty explanation of the verdict. "
+        "reason_code must be one of: for a promote — ai_coverage_superset, ai_material_coverage_gain, "
+        "ai_quality_recovery; for a reject — ai_coverage_not_superset, ai_completeness_regression_risk, "
+        "ai_generation_regression_risk, ai_provenance_suspect, ai_no_material_gain. "
+        "You are ONE gate among several: an independent fail-closed lineage/generation guard and "
+        "coverage/provenance/lifecycle validators run regardless of your verdict and can overrule a "
+        "promote. You can never force a promote past them — you can only be MORE conservative by "
+        "rejecting. When in doubt, reject: keeping the incumbent is always a safe outcome. "
+        "Never output the guard's verdict, store internals, or any key other than the three required. "
+        "Do not output markdown."
+    )
+
+
 def _build_public_web_signal_adjudication_prompt() -> str:
     return (
         "Adjudicate public-web evidence for one candidate. Return strict JSON only with keys: "
@@ -2607,6 +2898,13 @@ def build_model_client(
         # divider falls back per ruling ④).
         if _scripted_profile_batch_divider_enabled(provider_mode=external_mode):
             return ScriptedProfileBatchDividerModelClient(mode=external_mode)
+        # WS7/W7.3 S2 (OQ8): scripted promote-judge opt-in for offline AI-path
+        # exercise. Same non-composable precedence stance as the divider: the
+        # earlier scripted opt-in (planning, then divider) wins when several
+        # flags are set, and the promote judge falls back per ruling ④ (its
+        # deterministic default {} keeps the incumbent — always a safe state).
+        if _scripted_organization_promote_judge_enabled(provider_mode=external_mode):
+            return ScriptedOrganizationPromoteJudgeModelClient(mode=external_mode)
         return OfflineModelClient(mode=external_mode)
     # Genuine live mode: a billed LLM client must clear the same fail-closed gate as
     # every other live provider — outside production it requires the explicit

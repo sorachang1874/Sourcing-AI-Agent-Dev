@@ -443,12 +443,21 @@ _ORGANIZATION_PROMOTE_ORACLE_SUITES = (
 # contract suite AND the characterization oracle (design §5 anchor column).
 _ORGANIZATION_PROMOTE_CONTRACT_RELATED_PATHS = {
     "src/sourcing_agent/organization_promote_contract.py",
+    # WS7/W7.3 S2: the promote-judgment orchestration helper (model call +
+    # envelope assembly + F1-F6 keep-incumbent mapping) rides the same contract
+    # family.
+    "src/sourcing_agent/organization_promote_judgment.py",
 }
 _ORGANIZATION_PROMOTE_CONTRACT_SUITES = (
     PytestInvocation(
         label="paired::tests/test_organization_promote_contract.py",
         args=("tests/test_organization_promote_contract.py",),
         reason="ai_promote_decision.v1 schema + V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE validator battery + F1-F6 keep-incumbent audit shapes",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_model_surface.py",
+        args=("tests/test_organization_promote_model_surface.py",),
+        reason="WS7/W7.3 S2 promote-judge model-invocation surface: OQ4 contested gate, OQ8 scripted client + 20s timeout, F1-F5/honest-reject keep-incumbent mapping",
     ),
     PytestInvocation(
         label="paired::tests/test_organization_promote_characterization.py",
@@ -474,6 +483,11 @@ _MODEL_PROVIDER_SUITES = (
         label="paired::tests/test_profile_batch_division_model_surface.py",
         args=("tests/test_profile_batch_division_model_surface.py",),
         reason="W7.2 S2 divider method conventions (timeout/circuit/raw-output contract)",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_model_surface.py",
+        args=("tests/test_organization_promote_model_surface.py",),
+        reason="W7.3 S2 promote-judge method conventions (judge-scoped 20s timeout/circuit/raw-output contract) — the ModelClient Protocol gained judge_organization_asset_promotion",
     ),
 )
 _ORCHESTRATOR_RELATED_PATHS = {

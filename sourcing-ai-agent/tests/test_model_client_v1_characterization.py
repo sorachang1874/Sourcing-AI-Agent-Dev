@@ -59,6 +59,11 @@ PROTOCOL_METHOD_CONTRACTS = {
     # returns {} (ruling-④ F1 marker) and validation is single-sourced in
     # profile_batch_division_contract.
     "divide_profile_prefetch_batches": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    # WS7/W7.3 S2 (2026-07-24, docs/WS7_AI_PROMOTE_DESIGN.md §3): the promote-judge
+    # method joins the v1 surface additively; DeterministicModelClient returns {}
+    # (ruling-④ F1 keep-incumbent marker) and validation is single-sourced in
+    # organization_promote_contract.
+    "judge_organization_asset_promotion": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
     "provider_name": ("sync", "(self) -> str", ()),
     "supports_outreach_ai_verification": ("sync", "(self) -> bool", ()),
     "healthcheck": ("sync", "(self) -> dict[str, Any]", ()),
@@ -87,6 +92,11 @@ CONCRETE_PROTOCOL_OVERRIDES = {
     # scripted; everything else keeps OfflineModelClient semantics.
     "ScriptedProfileBatchDividerModelClient": frozenset(
         {"provider_name", "healthcheck", "divide_profile_prefetch_batches"}
+    ),
+    # WS7/W7.3 S2 scripted promote judge (OQ8 opt-in): only the judge method is
+    # scripted; everything else keeps OfflineModelClient semantics.
+    "ScriptedOrganizationPromoteJudgeModelClient": frozenset(
+        {"provider_name", "healthcheck", "judge_organization_asset_promotion"}
     ),
 }
 
@@ -121,6 +131,7 @@ MODEL_CLIENT_CONSUMER_MODULES = frozenset(
         "manual_review_resolution.py",
         "manual_review_synthesis.py",
         "orchestrator.py",
+        "organization_promote_judgment.py",
         "outreach_layering.py",
         "planning.py",
         "post_acquisition_refinement.py",
@@ -160,6 +171,15 @@ MODEL_CLIENT_CALL_POINTS = Counter(
         # shadow slice wires enrichment's wave-mint site through it.
         ("profile_batch_division.py", "propose_and_validate_division", "divide_profile_prefetch_batches"): 1,
         ("profile_batch_division.py", "propose_and_validate_division", "provider_name"): 1,
+        # WS7/W7.3 S2 (2026-07-24): the promote-judgment orchestration helper is
+        # the single consumer of judge_organization_asset_promotion until the S3
+        # shadow slice wires the upsert-with-guard seam through it.
+        (
+            "organization_promote_judgment.py",
+            "judge_and_validate_promotion",
+            "judge_organization_asset_promotion",
+        ): 1,
+        ("organization_promote_judgment.py", "judge_and_validate_promotion", "provider_name"): 1,
         (
             "post_acquisition_refinement.py",
             "compile_refinement_patch_from_instruction",
@@ -1284,7 +1304,8 @@ def test_model_client_protocol_surface_matches_v1_golden() -> None:
 
     assert _protocol_surface(tree) == PROTOCOL_METHOD_CONTRACTS
     # 17 → 18 on 2026-07-23: WS7/W7.2 S2 added divide_profile_prefetch_batches.
-    assert len(PROTOCOL_METHOD_CONTRACTS) == 18
+    # 18 → 19 on 2026-07-24: WS7/W7.3 S2 added judge_organization_asset_promotion.
+    assert len(PROTOCOL_METHOD_CONTRACTS) == 19
 
 
 def test_concrete_clients_and_factory_returns_preserve_complete_protocol_surface() -> None:
@@ -1375,6 +1396,7 @@ def _scripted_live_runtime_delegate_graph() -> dict[str, tuple[str, ...]]:
         "synthesize_manual_review": lambda: client.synthesize_manual_review({}),
         "evaluate_outreach_profile": lambda: client.evaluate_outreach_profile({}),
         "divide_profile_prefetch_batches": lambda: client.divide_profile_prefetch_batches({}),
+        "judge_organization_asset_promotion": lambda: client.judge_organization_asset_promotion({}),
         "provider_name": client.provider_name,
         "supports_outreach_ai_verification": client.supports_outreach_ai_verification,
         "healthcheck": client.healthcheck,
@@ -1388,7 +1410,7 @@ def _scripted_live_runtime_delegate_graph() -> dict[str, tuple[str, ...]]:
     return graph
 
 
-def test_scripted_live_runtime_spy_proves_the_complete_18_method_call_graph() -> None:
+def test_scripted_live_runtime_spy_proves_the_complete_19_method_call_graph() -> None:
     expected = {
         method_name: ((method_name,) if method_name in SCRIPTED_LIVE_DELEGATED_METHODS else ())
         for method_name in PROTOCOL_METHOD_CONTRACTS
@@ -1410,8 +1432,10 @@ def test_model_client_consumer_inventory_and_call_points_match_v1_golden() -> No
     assert calls == MODEL_CLIENT_CALL_POINTS
     # 25/29 → 26/31 on 2026-07-23: WS7/W7.2 S2 added profile_batch_division.py
     # (divide_profile_prefetch_batches + provider_name call points).
-    assert len(modules) == 26
-    assert sum(calls.values()) == 31
+    # 26/31 → 27/33 on 2026-07-24: WS7/W7.3 S2 added organization_promote_judgment.py
+    # (judge_organization_asset_promotion + provider_name call points).
+    assert len(modules) == 27
+    assert sum(calls.values()) == 33
     assert {method_name for _, _, method_name in calls} == set(PROTOCOL_METHOD_CONTRACTS)
 
 

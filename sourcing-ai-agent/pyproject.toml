@@ -57,6 +57,7 @@ files = [
     "src/sourcing_agent/profile_batch_division_contract.py",
     "src/sourcing_agent/profile_batch_division.py",
     "src/sourcing_agent/organization_promote_contract.py",
+    "src/sourcing_agent/organization_promote_judgment.py",
     "src/sourcing_agent/profile_registry_backfill.py",
     "src/sourcing_agent/profile_registry_utils.py",
     "src/sourcing_agent/linkedin_url_normalization.py",
