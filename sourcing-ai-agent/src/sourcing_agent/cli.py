@@ -1421,7 +1421,10 @@ def _cli_cmd_show_control_plane_runtime(args: argparse.Namespace) -> None:
     return
 
 
-def _cli_cmd_run_target_candidate_public_web_experiment(args: argparse.Namespace) -> None:
+def _cli_cmd_target_candidate_public_web_experiment(args: argparse.Namespace) -> None:
+    # Name deliberately drops the run_ prefix: the pre-agent contract forbids
+    # the retired direct-call token (the experiment entry point invoked without
+    # its _command wrapper suffix) anywhere in cli source.
     print(json.dumps(run_target_candidate_public_web_experiment_command(args), ensure_ascii=False, indent=2))
     return
 
@@ -3173,7 +3176,7 @@ def _cli_cmd_serve(args: argparse.Namespace) -> None:
 # one registry row.
 _CLI_COMMAND_HANDLERS: dict[str, Callable[[argparse.Namespace], None]] = {
     "show-control-plane-runtime": _cli_cmd_show_control_plane_runtime,
-    "run-target-candidate-public-web-experiment": _cli_cmd_run_target_candidate_public_web_experiment,
+    "run-target-candidate-public-web-experiment": _cli_cmd_target_candidate_public_web_experiment,
     "evaluate-public-web-quality": _cli_cmd_evaluate_public_web_quality,
     "refresh-company-public-web-assets": _cli_cmd_refresh_company_public_web_assets,
     "list-company-public-web-assets": _cli_cmd_list_company_public_web_assets,
