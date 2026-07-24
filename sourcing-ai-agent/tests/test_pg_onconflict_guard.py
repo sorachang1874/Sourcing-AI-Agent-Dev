@@ -22,9 +22,11 @@ This module mechanically re-derives the complete ON CONFLICT target list from
 and asserts every target set has a matching unique constraint in the Postgres
 bootstrap, where bootstrap uniqueness comes from
 
-1. primary keys carried over from the SQLite DDL by ``_build_create_table_sql``
-   (the snapshot/direct sync paths derive PG PKs from SQLite ``pk`` columns —
-   SQLite ``UNIQUE(...)`` constraints are NOT carried over),
+1. primary keys and non-partial unique constraints/indexes declared anywhere in
+   the versioned migration chain (``migrations/*.sql``) — bootstrap is
+   ``ensure_bootstrapped`` -> ``apply_pending_migrations`` over the FULL chain
+   (Track B B1.3), so tables created by later migrations (e.g. 0010/0011) are
+   first-class bootstrap DDL, not just ``0001_baseline.sql`` (R-039),
 2. ``_CONTROL_PLANE_UNIQUE_INDEXES`` (non-partial entries only: a partial
    unique index cannot serve a plain ``ON CONFLICT (cols)`` inference),
 3. literal non-partial ``CREATE UNIQUE INDEX`` statements in the two
@@ -116,35 +118,88 @@ def _extract_balanced_create_table_blocks(source: str) -> list[tuple[str, str]]:
     return blocks
 
 
-_BASELINE_SQL_PATH = Path(control_plane_live_postgres.__file__).parent / "migrations" / "0001_baseline.sql"
-_BASELINE_PK_RE = re.compile(
-    r"ALTER TABLE ONLY\s+\"?(\w+)\"?\s+ADD CONSTRAINT\s+\w+\s+PRIMARY KEY\s*\(([^)]+)\)",
+_MIGRATIONS_DIR = Path(control_plane_live_postgres.__file__).parent / "migrations"
+_MIGRATION_ALTER_PK_RE = re.compile(
+    r"ALTER TABLE(?:\s+ONLY)?\s+\"?(\w+)\"?\s+ADD CONSTRAINT\s+\w+\s+PRIMARY KEY\s*\(([^)]+)\)",
     re.IGNORECASE | re.DOTALL,
 )
-_BASELINE_UNIQUE_INDEX_RE = re.compile(
-    r"CREATE UNIQUE INDEX\s+\w+\s+ON\s+\"?(\w+)\"?\s+USING\s+\w+\s*\(([^)]+)\)(\s*WHERE)?",
+_MIGRATION_ALTER_UNIQUE_RE = re.compile(
+    r"ALTER TABLE(?:\s+ONLY)?\s+\"?(\w+)\"?\s+ADD CONSTRAINT\s+\w+\s+UNIQUE\s*\(([^)]+)\)",
+    re.IGNORECASE | re.DOTALL,
+)
+_MIGRATION_UNIQUE_INDEX_RE = re.compile(
+    r"CREATE UNIQUE INDEX\s+\w+\s+ON\s+\"?(\w+)\"?\s*(?:USING\s+\w+\s*)?\(([^)]+)\)(\s*WHERE)?",
     re.IGNORECASE,
+)
+_TABLE_UNIQUE_CLAUSE_RE = re.compile(r"UNIQUE\s*\(([^)]+)\)", re.IGNORECASE)
+_UNIQUE_INLINE_RE = re.compile(
+    r"^\s*\"?(?!CONSTRAINT\b|UNIQUE\b)(\w+)\"?\s+\w+[^,()]*?\bUNIQUE\b",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 
-def derive_baseline_unique_sets() -> dict[str, set[frozenset[str]]]:
-    """table -> unique column sets from migrations/0001_baseline.sql.
+def _plain_identifier_columns(raw: str) -> tuple[str, ...] | None:
+    """Split a column list; None when it is expression-based (e.g. btrim(...)).
 
-    B4.3f: storage.py carries no SQLite DDL anymore — the versioned migration
-    baseline is the sole schema source for the normal runtime tables, so the
-    guard derives primary keys and (non-partial) unique indexes directly from
-    it. Legacy migration-only tables live as literal CREATE TABLE DDL in
-    control_plane_live_postgres.py and are picked up separately.
+    Expression indexes (0009's trimmed idempotency key) cannot serve a plain
+    ``ON CONFLICT (cols)`` inference, so they must not enter the unique sets.
     """
 
-    source = _BASELINE_SQL_PATH.read_text(encoding="utf-8")
+    columns = _split_columns(raw)
+    if columns and all(re.fullmatch(r"\w+", column) for column in columns):
+        return columns
+    return None
+
+
+def derive_migration_unique_sets() -> dict[str, set[frozenset[str]]]:
+    """table -> unique column sets from the FULL versioned migration chain.
+
+    B1.3/B4.3f: ``ensure_bootstrapped`` creates the PG schema by running
+    ``apply_pending_migrations`` over every ``migrations/*.sql`` in order, so
+    the whole chain — not just ``0001_baseline.sql`` — is bootstrap DDL.
+    Tables created by later migrations (0010 acquisition_plan_previews, 0011
+    agent_tool_result_slots/attempts/journal) declare their primary keys and
+    UNIQUE constraints there and nowhere else (R-039). Legacy migration-only
+    tables live as literal CREATE TABLE DDL in control_plane_live_postgres.py
+    and are picked up separately.
+
+    Collected per file: ALTER TABLE ... ADD CONSTRAINT ... PRIMARY KEY,
+    non-partial CREATE UNIQUE INDEX (with or without USING), and CREATE TABLE
+    bodies (table-level/inline PRIMARY KEY, table-level/named/inline UNIQUE).
+    NOTE: no migration to date drops a PRIMARY KEY or UNIQUE constraint (only
+    CHECK constraints are dropped/re-added); if one ever does, this derivation
+    needs subtractive handling.
+    """
+
     unique_sets: dict[str, set[frozenset[str]]] = {}
-    for match in _BASELINE_PK_RE.finditer(source):
-        unique_sets.setdefault(match.group(1), set()).add(frozenset(_split_columns(match.group(2))))
-    for match in _BASELINE_UNIQUE_INDEX_RE.finditer(source):
-        if match.group(3):
-            continue  # partial index cannot serve a plain ON CONFLICT (cols)
-        unique_sets.setdefault(match.group(1), set()).add(frozenset(_split_columns(match.group(2))))
+
+    def add(table_name: str, raw_columns: str) -> None:
+        columns = _plain_identifier_columns(raw_columns)
+        if columns:
+            unique_sets.setdefault(table_name, set()).add(frozenset(columns))
+
+    for sql_path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
+        source = sql_path.read_text(encoding="utf-8")
+        for match in _MIGRATION_ALTER_PK_RE.finditer(source):
+            add(match.group(1), match.group(2))
+        for match in _MIGRATION_ALTER_UNIQUE_RE.finditer(source):
+            add(match.group(1), match.group(2))
+        for match in _MIGRATION_UNIQUE_INDEX_RE.finditer(source):
+            if match.group(3):
+                continue  # partial index cannot serve a plain ON CONFLICT (cols)
+            add(match.group(1), match.group(2))
+        for table_name, body in _extract_balanced_create_table_blocks(source):
+            pk_clause = _PK_CLAUSE_RE.search(body)
+            if pk_clause:
+                add(table_name, pk_clause.group(1))
+            else:
+                inline = _PK_INLINE_RE.search(body)
+                if inline:
+                    add(table_name, inline.group(1))
+            for match in _TABLE_UNIQUE_CLAUSE_RE.finditer(body):
+                add(table_name, match.group(1))
+            for match in _UNIQUE_INLINE_RE.finditer(body):
+                add(table_name, match.group(1))
     return unique_sets
 
 
@@ -234,9 +289,10 @@ def derive_pg_bootstrap_unique_sets() -> dict[str, set[frozenset[str]]]:
         if columns:
             unique_sets.setdefault(table_name, set()).add(frozenset(columns))
 
-    # 1. Primary keys + non-partial unique indexes from the versioned migration
-    #    baseline (B4.3f: the sole schema source for the normal runtime tables).
-    for table_name, column_sets in derive_baseline_unique_sets().items():
+    # 1. Primary keys + non-partial unique constraints/indexes from the FULL
+    #    versioned migration chain (B1.3: bootstrap = apply_pending_migrations
+    #    over every migrations/*.sql, not just the 0001 baseline — R-039).
+    for table_name, column_sets in derive_migration_unique_sets().items():
         for columns in column_sets:
             add(table_name, columns)
 
@@ -372,6 +428,106 @@ class OnConflictBootstrapGuardTest(unittest.TestCase):
             "Every unique index in _CONTROL_PLANE_UNIQUE_INDEXES needs a deterministic dedupe "
             "recency policy so bootstrap can clean pre-existing duplicates instead of failing "
             f"CREATE UNIQUE INDEX. Missing: {missing}",
+        )
+
+
+class PrimaryKeyUpsertCatalogParityTest(unittest.TestCase):
+    """R-039 regression net: catalog-level parity for ``_PRIMARY_KEY_COLUMNS``.
+
+    The static guard above parses DDL text; this test asserts against ground
+    truth instead — a real ``ensure_bootstrapped`` schema — that every generic
+    ``upsert_row``/``bulk_upsert_rows`` conflict target is backed by a
+    non-partial unique index / primary key on exactly those columns. This is
+    the 2026-06-12 defect class end-to-end: an ON CONFLICT target without a
+    backing unique index fails here no matter which DDL source drifted.
+
+    Legacy migration-context tables (created on demand, deliberately outside
+    the migration chain) are skipped when absent, but the migration-created
+    R-039 tables must be present after bootstrap.
+    """
+
+    _R039_MIGRATION_CREATED_TABLES = (
+        "acquisition_plan_previews",
+        "agent_tool_result_slots",
+        "agent_tool_result_attempts",
+        "agent_tool_result_journal",
+    )
+
+    def test_bootstrapped_schema_backs_every_primary_key_upsert_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = enter_pg_store_fixture(
+                runtime_dir=tempdir, schema_label="onconflict_catalog"
+            )
+            try:
+                store = storage_module.ControlPlaneStore(Path(tempdir) / "control_plane.db")
+                try:
+                    store._control_plane_postgres.ensure_bootstrapped()  # noqa: SLF001
+                finally:
+                    store.close()
+                with psycopg.connect(
+                    fixture.dsn, autocommit=True, connect_timeout=5, client_encoding="utf8"
+                ) as connection:
+                    cursor = connection.cursor()
+                    cursor.execute(
+                        "SELECT tablename FROM pg_tables WHERE schemaname = %s",
+                        (fixture.schema,),
+                    )
+                    present_tables = {str(row[0]) for row in cursor.fetchall()}
+                    cursor.execute(
+                        """
+                        SELECT c.relname,
+                               ARRAY(
+                                   SELECT a.attname
+                                   FROM unnest(i.indkey::int2[]) WITH ORDINALITY AS key(attnum, ord)
+                                   JOIN pg_attribute a
+                                     ON a.attrelid = c.oid AND a.attnum = key.attnum
+                                   ORDER BY key.ord
+                               )
+                        FROM pg_index i
+                        JOIN pg_class c ON c.oid = i.indrelid
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = %s
+                          AND i.indisunique
+                          AND i.indpred IS NULL
+                          AND 0 <> ALL (i.indkey::int2[])
+                        """,
+                        (fixture.schema,),
+                    )
+                    catalog_unique_sets: dict[str, set[frozenset[str]]] = {}
+                    for table_name, columns in cursor.fetchall():
+                        catalog_unique_sets.setdefault(str(table_name), set()).add(
+                            frozenset(str(column) for column in columns)
+                        )
+            finally:
+                fixture.__exit__(None, None, None)
+
+        for table_name in self._R039_MIGRATION_CREATED_TABLES:
+            self.assertIn(
+                table_name,
+                present_tables,
+                f"{table_name} must be created by ensure_bootstrapped (migration chain); "
+                "its absence means bootstrap no longer applies the migration that owns it.",
+            )
+
+        missing: list[str] = []
+        for table_name, pk_columns in sorted(_PRIMARY_KEY_COLUMNS.items()):
+            if table_name not in present_tables:
+                continue  # legacy migration-context tables are created on demand
+            if frozenset(pk_columns) not in catalog_unique_sets.get(table_name, set()):
+                available = sorted(
+                    sorted(column_set) for column_set in catalog_unique_sets.get(table_name, set())
+                )
+                missing.append(
+                    f"- {table_name}: upsert conflict target ({', '.join(pk_columns)}) has no "
+                    f"non-partial unique index/primary key in the bootstrapped schema "
+                    f"(available unique sets: {available})"
+                )
+        self.assertEqual(
+            missing,
+            [],
+            "_PRIMARY_KEY_COLUMNS upsert targets without a backing unique constraint in a real "
+            "ensure_bootstrapped schema (bootstrap<->migrations drift, R-039 defect class):\n"
+            + "\n".join(missing),
         )
 
 
