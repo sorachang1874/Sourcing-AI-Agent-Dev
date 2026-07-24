@@ -1,0 +1,1 @@
+psql:/Users/changyuyi/projects/Sourcing AI Agent Dev/pg_backup_pre_podman_migration_20260724/globals.sql:16: ERROR:  role "sourcing" already exists

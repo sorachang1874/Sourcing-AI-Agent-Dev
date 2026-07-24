@@ -5,7 +5,9 @@ HOST ?= 0.0.0.0
 PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,$(if $(wildcard .venv-tests/bin/python),.venv-tests/bin/python,python3))
 TEST_PYTHON_BIN ?= $(if $(wildcard .venv-tests/bin/python),.venv-tests/bin/python,$(PYTHON_BIN))
 TESTCONTAINERS_POSTGRES_IMAGE ?= public.ecr.aws/docker/library/postgres:16-alpine
-LOCAL_PG_DOCKER_BIN_PATH ?= /Applications/Docker.app/Contents/Resources/bin
+# Container engine bin dir (Docker retired for Podman 2026-07-24; podman lives
+# in the Homebrew bin). local_postgres_docker.py resolves podman then docker.
+LOCAL_PG_DOCKER_BIN_PATH ?= /opt/homebrew/bin
 LOCAL_PG_DOCKER_CMD = PATH="$(LOCAL_PG_DOCKER_BIN_PATH):$$PATH" PYTHONPATH=src "$(PYTHON_BIN)" -m sourcing_agent.local_postgres_docker
 API_PORT ?= 8765
 FRONTEND_PORT ?= 4173

@@ -41,11 +41,19 @@ _DEFAULT_DATABASE = "sourcing_agent"
 _ENV_FILE_MANAGED_MARKER = "# managed-by: sourcing_agent.local_postgres_docker"
 _ENV_FILE_PRESERVED_PREFIX = "# previous-unmanaged: "
 _LOCAL_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+# Container-engine binary search dirs. Docker was retired in favor of Podman
+# (2026-07-24); Podman installs to the Homebrew bin, and the dead
+# /Applications/Docker.app path is gone.
 _DOCKER_BIN_DIRS = (
-    "/Applications/Docker.app/Contents/Resources/bin",
-    "/usr/local/bin",
     "/opt/homebrew/bin",
+    "/usr/local/bin",
 )
+# Engine resolution: honor an explicit SOURCING_CONTAINER_ENGINE override,
+# otherwise prefer podman and fall back to docker so a host that still has
+# Docker keeps working. Podman's CLI is Docker-compatible for the run/exec/
+# volume/info verbs this module uses.
+_CONTAINER_ENGINE_ENV = "SOURCING_CONTAINER_ENGINE"
+_PREFERRED_CONTAINER_ENGINES = ("podman", "docker")
 _DOCKER_DAEMON_NEGATIVE_CACHE_SECONDS = 15.0
 _docker_daemon_unreachable_until = 0.0
 
@@ -64,14 +72,25 @@ def _docker_environment() -> dict[str, str]:
 
 
 def _docker_cli_path() -> str:
+    """Resolve the container-engine binary (podman-preferred, docker fallback)."""
     env = _docker_environment()
-    return _strip(shutil.which("docker", path=env.get("PATH", "")))
+    path = env.get("PATH", "")
+    explicit = _strip(os.getenv(_CONTAINER_ENGINE_ENV))
+    if explicit:
+        return _strip(shutil.which(explicit, path=path)) or explicit
+    for engine in _PREFERRED_CONTAINER_ENGINES:
+        found = _strip(shutil.which(engine, path=path))
+        if found:
+            return found
+    return ""
 
 
 def _run_docker(args: list[str], *, timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
     cli = _docker_cli_path()
     if not cli:
-        return subprocess.CompletedProcess(["docker", *args], 127, "", "docker CLI not found")
+        return subprocess.CompletedProcess(
+            ["podman", *args], 127, "", "container engine (podman/docker) not found"
+        )
     command = [cli, *args]
     try:
         return subprocess.run(
@@ -96,7 +115,10 @@ def docker_runtime_available(*, force_refresh: bool = False) -> bool:
     if not _docker_cli_path():
         _docker_daemon_unreachable_until = time.monotonic() + _DOCKER_DAEMON_NEGATIVE_CACHE_SECONDS
         return False
-    result = _run_docker(["info", "--format", "{{.ServerVersion}}"], timeout=10.0)
+    # Cross-engine liveness probe: `version --format {{.Server.Version}}` works
+    # on both docker and podman, whereas docker's `info --format
+    # {{.ServerVersion}}` errors under podman (different info schema).
+    result = _run_docker(["version", "--format", "{{.Server.Version}}"], timeout=10.0)
     if result.returncode == 0 and _strip(result.stdout):
         _docker_daemon_unreachable_until = 0.0
         return True
