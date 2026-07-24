@@ -84,6 +84,23 @@ jobs:
             "pytest>=9,<10" \
             "mypy>=1.20,<1.21"
 
+      # Frontend toolchain for the frontend-contract lane members (R-045,
+      # 2026-07-24): ~10 lane tests (test_pre_agent_contract_review's
+      # operation-control-state contract + the frontend_* suites) compile the
+      # generated frontend_api_adapter with esbuild from
+      # frontend-demo/node_modules and run it under node. The pip-only job
+      # would MODULE_NOT_FOUND on runners; local lanes never hit it because dev
+      # checkouts have node_modules. Provision it here (dev/CI parity) rather
+      # than skipping — a skip on the toolchain would reintroduce the
+      # false-green class the 2026-07-09 skip->fail hardening removed.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Frontend Deps (esbuild adapter compilation)
+        working-directory: sourcing-ai-agent/frontend-demo
+        run: npm ci
+
       - name: Compile Python Sources
         run: |
           python -m compileall -q src tests
