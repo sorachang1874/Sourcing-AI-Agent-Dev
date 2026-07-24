@@ -1542,8 +1542,11 @@ class _StopLaneProbe(RuntimeError):
 
 class ScopedKeywordUnionSeedLaneWiringTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     """Engine-level 4b-B wiring: ``_acquire_search_seed_pool`` forwards the
-    planner-minted policy from task metadata into the discovery lane (and an
-    empty policy for legacy tasks keeps the plain seed-pool)."""
+    planner-minted policy from task metadata into the discovery lane. WS1
+    Step 4c (pgLegacy deletion, 2026-07-23) retired the policy-less legacy
+    pass-through fail-closed: a scoped CURRENT-member seed-pool task without
+    the minted policy blocks with an explicit reason instead of running the
+    paid lane ungoverned."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -1627,10 +1630,58 @@ class ScopedKeywordUnionSeedLaneWiringTest(PGControlPlaneStoreTestMixin, unittes
         captured = self._seed_pool_discover_kwargs({"scoped_keyword_union_shard_policy": policy})
         self.assertEqual(dict(captured.get("scoped_keyword_union_shard_policy") or {}), policy)
 
-    def test_legacy_task_without_policy_passes_no_shard_governance(self) -> None:
-        captured = self._seed_pool_discover_kwargs({})
-        self.assertIn("scoped_keyword_union_shard_policy", captured)
-        self.assertFalse(dict(captured.get("scoped_keyword_union_shard_policy") or {}))
+    def test_policyless_scoped_current_task_fails_closed(self) -> None:
+        # WS1 Step 4c (pgLegacy deletion, 2026-07-23): the legacy policy-less
+        # pass-through ("empty policy keeps the plain seed-pool") is RETIRED.
+        # Live carrier census was zero (all jobs/workflows terminal), and every
+        # live scoped plan mints the keyword-union policy since Step 4a — a
+        # policy-less scoped CURRENT-member task is a malformed/legacy task and
+        # must fail closed instead of running the paid people-search lane
+        # without the persisted shard plan / honest completion contract.
+        from sourcing_agent.seed_discovery import SearchSeedAcquirer
+
+        task = AcquisitionTask(
+            task_id="acquire-full-roster",
+            task_type="acquire_full_roster",
+            title="Acquire scoped roster",
+            description="Scoped keyword roster",
+            status="ready",
+            blocking=True,
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "employment_statuses": ["current"],
+                "include_former_search_seed": False,
+                "search_seed_queries": ["Pre-train", "Robotics"],
+                "cost_policy": {"provider_people_search_mode": "primary_only"},
+            },
+        )
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "lovable" / "snap"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        def _must_not_dispatch(_identity, _snapshot_dir, **kwargs):
+            raise AssertionError("policy-less scoped task must not reach the seed-pool discovery lane")
+
+        with unittest.mock.patch.object(SearchSeedAcquirer, "discover", side_effect=_must_not_dispatch):
+            execution = self.engine._acquire_search_seed_pool(
+                task,
+                {"company_identity": self.identity, "snapshot_dir": snapshot_dir},
+                JobRequest.from_payload(
+                    {
+                        "raw_user_request": "Lovable Pre-train people",
+                        "query": "Lovable Pre-train people",
+                        "target_company": "Lovable",
+                        "categories": ["employee"],
+                        "employment_statuses": ["current"],
+                        "keywords": ["Pre-train", "Robotics"],
+                    }
+                ),
+            )
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(
+            execution.payload.get("reason"),
+            "scoped_keyword_union_shard_policy_missing",
+        )
+        self.assertEqual(execution.payload.get("strategy_type"), "scoped_search_roster")
 
     def test_former_companion_pass_is_not_keyword_union_governed(self) -> None:
         # The keyword-union policy governs the CURRENT-member scoped roster;

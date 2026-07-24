@@ -28,7 +28,10 @@ from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_paths import canonicalize_company_key
 from sourcing_agent.company_registry import normalize_company_key
 from sourcing_agent.connectors import CompanyIdentity, CompanyRosterSnapshot
-from sourcing_agent.company_shard_planning import build_default_company_employee_shard_policy
+from sourcing_agent.company_shard_planning import (
+    build_default_company_employee_shard_policy,
+    build_request_scoped_keyword_union_shard_policy,
+)
 from sourcing_agent.domain import AcquisitionTask, Candidate, JobRequest
 from sourcing_agent.enrichment import MultiSourceEnrichmentResult
 from sourcing_agent.model_provider import DeterministicModelClient
@@ -433,6 +436,15 @@ class NonBandSalvageTailTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
                 "include_former_search_seed": True,
                 "search_seed_queries": ["infra"],
                 "employment_statuses": ["current", "former"],
+                # WS1 Step 4c (2026-07-23): the policy-less scoped pass-through
+                # is retired fail-closed; the fixture mirrors the planner-minted
+                # keyword-union policy every live scoped plan carries.
+                "scoped_keyword_union_shard_policy": build_request_scoped_keyword_union_shard_policy(
+                    keywords=["infra"],
+                    function_ids=[],
+                    max_pages=10,
+                    page_limit=50,
+                ),
             },
         )
         started_at = time.monotonic()

@@ -874,6 +874,13 @@ class PlanningModulesTest(unittest.TestCase):
 
         self.assertEqual(strategy.strategy_type, "full_company_roster")
         self.assertIn("Google DeepMind", strategy.company_scope)
+        # WS1 Step 4c (2026-07-23): `_infer_strategy_type` collapsed — the
+        # sub-org scope preference is now an explicit fallback rule with its
+        # own reason code instead of a rung in the retired inference ladder.
+        self.assertIn(
+            "fallback_rule_google_sub_org_scope_roster",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
         self.assertEqual(
             strategy.search_channel_order,
             ["harvest_company_employees", "harvest_profile_search", "profile_detail_api"],
@@ -961,6 +968,12 @@ class PlanningModulesTest(unittest.TestCase):
         )
         self.assertIn(
             "fallback_rule_strategy",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
+        # WS1 Step 4c (2026-07-23): the collapsed fallback tail names its rule
+        # explicitly — a broad non-directional request defaults to full roster.
+        self.assertIn(
+            "fallback_rule_company_default_full_roster",
             list(strategy.strategy_decision_explanation.get("reason_codes") or []),
         )
 

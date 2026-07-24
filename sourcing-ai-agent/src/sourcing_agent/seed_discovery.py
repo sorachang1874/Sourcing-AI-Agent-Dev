@@ -750,6 +750,55 @@ class SearchSeedAcquirer:
             and harvest_connector_available(self.harvest_search_connector.settings)
         )
 
+    @staticmethod
+    def scoped_seed_pool_admission_block(
+        *,
+        strategy_type: str,
+        employment_status: str,
+        policy: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Fail-closed admission gate for the scoped keyword seed-pool lane.
+
+        WS1 Step 4c (pgLegacy deletion, 2026-07-23): every live scoped plan
+        mints the keyword-union shard policy at plan time (Step 4a — a scoped
+        strategy always compiles at least one seed query, so the mint is
+        unconditional), and the live-schema carrier census was zero at
+        deletion time (all jobs/workflows terminal, zero pending review
+        sessions; the queued commands were post-acquisition projections
+        only).  A scoped CURRENT-member seed-pool task without the
+        planner-minted policy is a legacy/malformed carrier and fails closed:
+        proceeding would run the paid people-search lane without the
+        persisted shard plan / honest completion contract (the retired
+        pre-4b-B silent pass-through), and plain deletion would have widened
+        into exactly that ungoverned dispatch.  The former companion pass
+        keeps its own former shard-plan contract (employment_status
+        ``former`` is exempt); the explicit-cohort lane never reaches this
+        gate.
+
+        Returns ``{}`` to admit the task, or blocked ``AcquisitionExecution``
+        kwargs (status/detail/payload) mirroring the 9544b69 roster-policy
+        fail-closed precedent.
+        """
+
+        if (
+            str(strategy_type or "").strip() != "scoped_search_roster"
+            or str(employment_status or "").strip().lower() == "former"
+            or dict(policy or {})
+        ):
+            return {}
+        return {
+            "status": "blocked",
+            "detail": (
+                "Scoped search-seed acquisition requires the planner-minted "
+                "scoped_keyword_union_shard_policy; policy-less legacy tasks are "
+                "retired (WS1 Step 4c pgLegacy deletion, 2026-07-23)."
+            ),
+            "payload": {
+                "reason": "scoped_keyword_union_shard_policy_missing",
+                "strategy_type": "scoped_search_roster",
+            },
+        }
+
     def _deduped_provider_people_search_query_texts(
         self,
         *,

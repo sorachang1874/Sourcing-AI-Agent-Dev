@@ -554,42 +554,6 @@ def _scope_candidates_from_disambiguation(scope_disambiguation: dict[str, Any] |
     return resolved[:6]
 
 
-def _infer_strategy_type(
-    target_company: str,
-    categories: list[str],
-    employment_statuses: list[str],
-    scope_hints: list[str],
-    execution_preferences: dict[str, object],
-) -> str:
-    explicit_override = str(execution_preferences.get("acquisition_strategy_override") or "").strip().lower()
-    if explicit_override in {
-        "full_company_roster",
-        "scoped_search_roster",
-        "former_employee_search",
-        "investor_firm_roster",
-    }:
-        return explicit_override
-    normalized_categories = {str(item).strip().lower() for item in categories if str(item).strip()}
-    normalized_statuses = {str(item).strip().lower() for item in employment_statuses if str(item).strip()}
-    if (
-        bool(execution_preferences.get("use_company_employees_lane"))
-        and normalized_statuses != {"former"}
-        and "investor" not in normalized_categories
-    ):
-        return "full_company_roster"
-    company_key = target_company.strip().lower()
-    if "investor" in categories:
-        return "investor_firm_roster"
-    if employment_statuses == ["former"]:
-        return "former_employee_search"
-    if company_key in {"google", "alphabet"}:
-        if related_company_scope_labels(target_company, scope_hints):
-            return "full_company_roster"
-    if len(scope_hints) >= 2:
-        return "scoped_search_roster"
-    return "full_company_roster"
-
-
 def _is_directional_company_query(
     *,
     text: str,
@@ -852,17 +816,36 @@ def _determine_strategy_decision(
             "requested_population_boundary": requested_population_boundary,
             "organization_execution_profile": normalized_profile,
         }
-    fallback_strategy_type = _infer_strategy_type(
-        target_company,
-        categories,
-        employment_statuses,
-        scope_hints,
-        execution_preferences,
-    )
+    # WS1 Step 4c (2026-07-23): the duplicated `_infer_strategy_type`
+    # inference ladder is RETIRED. Every rung except the tail below was
+    # already decided by the explicit branches above — explicit override,
+    # use_company_employees_lane, investor population, and former-only
+    # population each returned before this point with identical (or strictly
+    # broader, for the investor rung's raw-vs-normalized membership check)
+    # conditions, so the ladder re-derived settled semantics from raw fields
+    # and a normalization drift could silently fork strategy_type. Explicit
+    # metadata wins; only the live tail semantics remain, spelled out with
+    # per-rule reason codes ("fallback_rule_strategy" is kept as the stable
+    # decision-family code):
+    #   - the Google/Alphabet sub-org scope preference (computed above) takes
+    #     the multi-company-page full-roster path;
+    #   - a non-directional request that still carries 2+ scope hints (only
+    #     reachable when a semantic brief overrides directionality) stays a
+    #     scoped search;
+    #   - everything else defaults to the full company roster.
+    if google_scope_roster_preferred:
+        fallback_strategy_type = "full_company_roster"
+        fallback_rule_reason = "fallback_rule_google_sub_org_scope_roster"
+    elif len(scope_hints) >= 2:
+        fallback_strategy_type = "scoped_search_roster"
+        fallback_rule_reason = "fallback_rule_multi_scope_hint_scoped"
+    else:
+        fallback_strategy_type = "full_company_roster"
+        fallback_rule_reason = "fallback_rule_company_default_full_roster"
     return {
         "strategy_type": fallback_strategy_type,
         "decision_source": "fallback_rules",
-        "reason_codes": ["fallback_rule_strategy"],
+        "reason_codes": ["fallback_rule_strategy", fallback_rule_reason],
         "directional_query": directional_query,
         "requested_population_boundary": requested_population_boundary,
         "organization_execution_profile": normalized_profile,
