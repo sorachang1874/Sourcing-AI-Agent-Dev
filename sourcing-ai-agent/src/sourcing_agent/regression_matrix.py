@@ -430,6 +430,31 @@ _ORGANIZATION_PROMOTE_ORACLE_SUITES = (
         args=("tests/test_organization_promote_characterization.py",),
         reason="WS7/W7.3 S0 ruling-③ promote oracle pins the evaluate threshold family + completeness_score grid + candidate selection + the two storage-guard refusal shapes",
     ),
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_contract.py",
+        args=("tests/test_organization_promote_contract.py",),
+        reason="WS7/W7.3 S1 promote-decision contract: the V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE battery formalizes the same ladder rules the S0 oracle pins, so an evaluate/storage-guard edit must re-run the contract suite too",
+    ),
+)
+# organization_promote_contract.py is the WS7/W7.3 S1 promote-decision contract
+# (schema sourcing.organization_asset.ai_promote_decision.v1 + validator battery
+# V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE). The validators formalize the ladder
+# rules the WS7/W7.3 S0 oracle pins, so an edit here must re-run the paired
+# contract suite AND the characterization oracle (design §5 anchor column).
+_ORGANIZATION_PROMOTE_CONTRACT_RELATED_PATHS = {
+    "src/sourcing_agent/organization_promote_contract.py",
+}
+_ORGANIZATION_PROMOTE_CONTRACT_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_contract.py",
+        args=("tests/test_organization_promote_contract.py",),
+        reason="ai_promote_decision.v1 schema + V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE validator battery + F1-F6 keep-incumbent audit shapes",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_characterization.py",
+        args=("tests/test_organization_promote_characterization.py",),
+        reason="the validator battery formalizes the ladder rules the WS7/W7.3 S0 promote oracle pins",
+    ),
 )
 _MODEL_PROVIDER_RELATED_PATHS = {
     "src/sourcing_agent/model_provider.py",
@@ -628,6 +653,11 @@ def infer_pytest_invocations(
         if path in _PROFILE_BATCH_DIVISION_CONTRACT_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _PROFILE_BATCH_DIVISION_CONTRACT_SUITES:
+                add(invocation)
+            continue
+        if path in _ORGANIZATION_PROMOTE_CONTRACT_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _ORGANIZATION_PROMOTE_CONTRACT_SUITES:
                 add(invocation)
             continue
         if path in _MODEL_PROVIDER_RELATED_PATHS:
