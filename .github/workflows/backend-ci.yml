@@ -98,7 +98,17 @@ jobs:
           # suites and the job stays green (the Docker-daemon-down false-green class).
           SOURCING_REQUIRE_PG_STORE_TESTS: "1"
           SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS: "1"
+          # Asset-dependency seam (2026-07-24): the real Anthropic asset package is
+          # gitignored personal data that only exists on the developer machine, so
+          # AssetCatalog.discover() would FileNotFoundError on runners. The lane
+          # builds a fully-synthetic package (tests/synthetic_asset_package.py) and
+          # points discover() at it; production resolution order is unchanged when
+          # this env is absent. tests/test_asset_catalog.py guards the seam.
+          SOURCING_ASSET_PACKAGE_ROOT: ${{ runner.temp }}/synthetic_asset_package
         run: |
+          # Build the synthetic asset package every lane test resolves via
+          # SOURCING_ASSET_PACKAGE_ROOT (never real candidate data on CI).
+          python -m tests.synthetic_asset_package "$SOURCING_ASSET_PACKAGE_ROOT"
           # Offline harness gates, first so drift fails fast: docs banners/links/
           # budgets (harness reorg R5), lane-manifest drift guard, test-provenance
           # gate, mypy-ratchet comparator, and the 2026-07 incident regressions
@@ -113,6 +123,7 @@ jobs:
             tests/test_latest_snapshot_pointer.py \
             tests/test_live_apify_dataset_salvage.py \
             tests/test_live_schema_write_fence.py \
+            tests/test_asset_catalog.py \
             tests/test_strategy_contract_preflight.py \
             tests/test_pipeline_freeze.py \
             tests/test_serving_mesh_boundary.py \

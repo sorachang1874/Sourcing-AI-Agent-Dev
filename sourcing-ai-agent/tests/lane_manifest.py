@@ -24,6 +24,7 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_latest_snapshot_pointer.py", "2026-07 pointer cross-root drift incident regression (ran in no lane before)"),
     ("tests/test_live_apify_dataset_salvage.py", "GDM fn8/fn24 salvage adapter contract (function attribution + passthrough preservation)"),
     ("tests/test_live_schema_write_fence.py", "2026-07-22 simulate-rows-in-live-schema incident fence"),
+    ("tests/test_asset_catalog.py", "SOURCING_ASSET_PACKAGE_ROOT seam guard (2026-07-24): lane runs on the synthetic asset package because the real one is gitignored personal data absent on runners; also pins production resolution order + fail-closed override"),
     ("tests/test_strategy_contract_preflight.py", "strategy_type cross-surface preflight + Step 2/3 flip-target pins (Contract Field Ownership rule 2)"),
     ("tests/test_pipeline_freeze.py", "R-009 resurrection guard: the deleted god-file must never return (salvage-delete completed 2026-07-22)"),
     ("tests/test_serving_mesh_boundary.py", "Block (a) resolver extraction structural guards: Edge B stays broken + resolver dependency direction (SERVING_MESH_OWNERSHIP_BOUNDARY.md §5)"),

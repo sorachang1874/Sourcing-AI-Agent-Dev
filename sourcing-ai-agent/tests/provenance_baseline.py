@@ -12,7 +12,6 @@ GRANDFATHERED = frozenset([
     "test_api_json_serialization.py",
     "test_api_transport_parity.py",
     "test_artifact_cache.py",
-    "test_asset_catalog.py",
     "test_asset_consolidation_cold_archive_manifest.py",
     "test_asset_consolidation_repair_apply.py",
     "test_asset_governance.py",
@@ -221,4 +220,4 @@ GRANDFATHERED = frozenset([
     "test_xlsx_reader.py",
 ])
 
-MAX_GRANDFATHERED = 213
+MAX_GRANDFATHERED = 212
