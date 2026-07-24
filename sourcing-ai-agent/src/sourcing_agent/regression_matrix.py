@@ -435,6 +435,11 @@ _ORGANIZATION_PROMOTE_ORACLE_SUITES = (
         args=("tests/test_organization_promote_contract.py",),
         reason="WS7/W7.3 S1 promote-decision contract: the V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE battery formalizes the same ladder rules the S0 oracle pins, so an evaluate/storage-guard edit must re-run the contract suite too",
     ),
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_shadow.py",
+        args=("tests/test_organization_promote_shadow.py",),
+        reason="WS7/W7.3 S3 promote-judge SHADOW at the upsert_organization_asset_registry_with_guard seam (asset_reuse_planning.py) — an edit to evaluate/the seam must re-verify that the authoritative-row outcome stays byte-identical with the shadow on vs off",
+    ),
 )
 # organization_promote_contract.py is the WS7/W7.3 S1 promote-decision contract
 # (schema sourcing.organization_asset.ai_promote_decision.v1 + validator battery
@@ -463,6 +468,11 @@ _ORGANIZATION_PROMOTE_CONTRACT_SUITES = (
         label="paired::tests/test_organization_promote_characterization.py",
         args=("tests/test_organization_promote_characterization.py",),
         reason="the validator battery formalizes the ladder rules the WS7/W7.3 S0 promote oracle pins",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_shadow.py",
+        args=("tests/test_organization_promote_shadow.py",),
+        reason="WS7/W7.3 S3 SHADOW hook body lives in organization_promote_judgment.py (record_organization_promote_shadow) — an edit here must re-run the shadow suite that pins record-only + exception isolation + byte-identical authority",
     ),
 )
 _MODEL_PROVIDER_RELATED_PATHS = {

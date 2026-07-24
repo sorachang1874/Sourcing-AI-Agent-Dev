@@ -78,6 +78,7 @@ def sync_company_asset_registration(
     registry_refresh_mode: str = "guarded_upsert",
     refresh_company_identity: bool = True,
     serving_generation_repair_snapshot_id: str = "",
+    model_client: Any = None,
 ) -> dict[str, Any]:
     from .asset_reuse_planning import (
         backfill_organization_asset_registry_for_company,
@@ -279,6 +280,7 @@ def sync_company_asset_registration(
                 lambda: upsert_organization_asset_registry_with_guard(
                     store=store,
                     candidate_record=registry_record,
+                    model_client=model_client,
                 )
             )
 

@@ -53,6 +53,7 @@ from .model_provider import (
     ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY,
     ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY,
     ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY,
+    DeterministicModelClient,
     ModelClient,
 )
 from .organization_promote_contract import (
@@ -68,6 +69,7 @@ from .organization_promote_contract import (
     PromoteDecisionContractError,
     fallback_reason_for_validator,
     normalize_fallback_audit,
+    predict_lineage_guard_refusal,
     validate_ai_promote_decision,
 )
 
@@ -403,15 +405,346 @@ def judge_and_validate_promotion(
     )
 
 
+# ---------------------------------------------------------------------------
+# WS7/W7.3 slice S3 — SHADOW integration (records, NEVER changes the live
+# promote decision or which row becomes authoritative).
+#
+# Design §2.4/§7 S3: the shadow hook runs at the
+# ``upsert_organization_asset_registry_with_guard`` seam (asset_reuse_planning.py:1541)
+# AFTER the ladder decision and the store write, computes the AI promote judgment,
+# and returns a record the live promote path NEVER reads. Authority stays 100%
+# the rule ladder (`evaluate`) + the storage lineage guard.
+#
+# PLACEMENT NOTE (honest calibration vs design §2.4). The design named the record
+# an additive ``metadata.ai_promote_decision`` key on the registry row, but the
+# ``organization_asset_registry`` table has NO ``metadata``/``metadata_json``
+# column and no ``schema_version`` (only ``summary_json`` + lane/selection JSON;
+# migrations/0001_baseline.sql). Adding a durable column is a schema change that
+# S5 owns (task hard rule: "no schema_version bump on the registry — S5's job").
+# So — exactly as the proven divider S3 attached its shadow to the
+# ``refill_plan_items`` activity surface and deferred the durable
+# ``refill_plan_division_id`` registry field to a LATER slice (S4, migration 0015)
+# — this S3 attaches the shadow to the seam's RETURNED record under the sibling
+# key ``ai_promote_decision_shadow``. The store write (which row is authoritative)
+# is byte-identical with the shadow on or off; the durable
+# ``metadata.ai_promote_decision`` column is deferred to S5's schema bump.
+# ---------------------------------------------------------------------------
+
+# Sibling key on the guard-wrapper's returned record (record-only surface).
+SHADOW_RECORD_KEY = "ai_promote_decision_shadow"
+SHADOW_RECORD_KIND = "organization_asset_ai_promote_decision_shadow"
+SHADOW_STATUS_ERROR = "shadow_error"
+
+# The deterministic pre-branch reasons `evaluate` emits (asset_reuse_planning.py
+# :1227/:1235/:1244); a decision carrying one of these is NOT contested (OQ4) and
+# never calls the model.
+_DETERMINISTIC_PREBRANCH_REASONS = frozenset(
+    {"no_existing_authoritative", "same_snapshot_refresh", "lifecycle_state_not_promotable"}
+)
+# Pre-branch reasons whose deterministic outcome is a promote (the third,
+# lifecycle_state_not_promotable, keeps the incumbent).
+_DETERMINISTIC_PROMOTE_REASONS = frozenset({"no_existing_authoritative", "same_snapshot_refresh"})
+
+
+def model_client_supports_promote_judgment(model_client: Any) -> bool:
+    """True when the client overrides the deterministic F1 judge stub.
+
+    Structural capability check for the S3 condition (a) "scripted/live judge
+    client available": ``DeterministicModelClient.judge_organization_asset_promotion``
+    (and its ``OfflineModelClient`` inheritance) is the structural "judge
+    unavailable" marker (design §3.1) — engaging it on every promote decision
+    would only mint F1 keep-incumbent audit noise, so the shadow hook does not
+    engage at all for such clients (mirror of the divider's
+    ``model_client_supports_batch_division``).
+    """
+    if model_client is None:
+        return False
+    method = getattr(type(model_client), "judge_organization_asset_promotion", None)
+    if method is None:
+        return False
+    return method is not DeterministicModelClient.judge_organization_asset_promotion
+
+
+def _shadow_int(value: Any) -> int:
+    try:
+        if isinstance(value, bool):
+            return 0
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _shadow_float(value: Any) -> float:
+    try:
+        if isinstance(value, bool):
+            return 0.0
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _shadow_selected_snapshot_ids(row: Mapping[str, Any]) -> list[str]:
+    selection = dict(row.get("source_snapshot_selection") or {}) if isinstance(row, Mapping) else {}
+    raw = row.get("selected_snapshot_ids") or selection.get("selected_snapshot_ids") or []
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        return []
+    return [str(value).strip() for value in raw if str(value or "").strip()]
+
+
+def _shadow_completeness_band(row: Mapping[str, Any], score: float) -> str:
+    band = str(row.get("completeness_band") or "").strip()
+    if band:
+        return band
+    if score >= 75:
+        return "high"
+    if score >= 50:
+        return "medium"
+    return "low"
+
+
+def _snapshot_descriptor_from_registry_row(
+    row: Mapping[str, Any], *, incumbent_snapshot_id: str = ""
+) -> dict[str, Any]:
+    """Map an ``organization_asset_registry`` row (duck-typed) to the S1
+    SnapshotDescriptor payload shape (design §2.2). Reads exactly the fields
+    `evaluate` reads today (asset_reuse_planning.py:1254-1269) plus lineage
+    evidence; carries NO guard verdict and NO store internals."""
+    row = dict(row or {})
+    score = _shadow_float(row.get("completeness_score"))
+    selected = _shadow_selected_snapshot_ids(row)
+    effective_lane_total = _shadow_int(row.get("current_lane_effective_candidate_count")) + _shadow_int(
+        row.get("former_lane_effective_candidate_count")
+    )
+    return {
+        "snapshot_id": str(row.get("snapshot_id") or ""),
+        "metrics": {
+            "candidate_count": _shadow_int(row.get("candidate_count")),
+            "evidence_count": _shadow_int(row.get("evidence_count")),
+            "profile_detail_count": _shadow_int(row.get("profile_detail_count")),
+            "missing_linkedin_count": _shadow_int(row.get("missing_linkedin_count")),
+            "profile_completion_backlog_count": _shadow_int(row.get("profile_completion_backlog_count")),
+            "effective_lane_total": effective_lane_total,
+        },
+        "completeness_score": score,
+        "completeness_band": _shadow_completeness_band(row, score),
+        "selected_snapshot_ids": selected,
+        "source_snapshot_count": _shadow_int(row.get("source_snapshot_count")),
+        "materialization_generation_sequence": _shadow_int(row.get("materialization_generation_sequence")),
+        "lifecycle_status": str(row.get("status") or "ready").strip() or "ready",
+        "materialization_generation_key": str(row.get("materialization_generation_key") or ""),
+        "explicit_baseline_inclusion": bool(incumbent_snapshot_id and incumbent_snapshot_id in selected),
+    }
+
+
+def _shadow_sort_key(descriptor: Mapping[str, Any]) -> list[Any]:
+    metrics = dict(descriptor.get("metrics") or {})
+    return [
+        _shadow_float(descriptor.get("completeness_score")),
+        _shadow_int(metrics.get("effective_lane_total")),
+        _shadow_int(metrics.get("candidate_count")),
+        _shadow_int(metrics.get("profile_detail_count")),
+    ]
+
+
+def _shadow_candidate_descriptor(
+    *, incumbent_descriptor: Mapping[str, Any], candidate_descriptor: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Assemble the AI-visible candidate_descriptor (design §2.2). Pre-S4 the
+    per-shard coverage evidence is not yet recorded (§2.3: payload-snapshot
+    capture + lineage backfill land in S4), so ``shards`` is empty — itself the
+    documented weak-evidence signal — and ``request_population_match`` is a
+    best-effort selected-id superset check."""
+    incumbent_selected = set(incumbent_descriptor.get("selected_snapshot_ids") or [])
+    candidate_selected = set(candidate_descriptor.get("selected_snapshot_ids") or [])
+    return {
+        "incumbent": dict(incumbent_descriptor),
+        "candidate": dict(candidate_descriptor),
+        "coverage_evidence": {
+            "shards": [],
+            "request_population_match": {
+                "candidate_covers_incumbent_shards": bool(incumbent_selected)
+                and incumbent_selected <= candidate_selected,
+                "new_shards": [],
+                "dropped_shards": [],
+            },
+        },
+        "prior_snapshot_comparison": {
+            "candidate_sort_key": _shadow_sort_key(candidate_descriptor),
+            "incumbent_sort_key": _shadow_sort_key(incumbent_descriptor),
+            # Pre-S4: no per-snapshot simulate/placeholder provenance signal is
+            # recorded on the registry row, so this is conservatively False. When
+            # S4 lands the provenance capture, this becomes the real flag.
+            "simulate_or_placeholder_provenance": False,
+        },
+    }
+
+
+def _shadow_ladder_comparison(
+    *, ladder_promote: bool, ladder_reason: str, ai_promote: bool, contested: bool, engaged: bool
+) -> dict[str, Any]:
+    """Divergence digest: the ladder's ACTUAL promote decision vs the AI's
+    effective decision (design §7 S3 — the "AI decision ≠ ladder decision"
+    counter the S5 flip consumes as free before/after evidence). Under ruling ④
+    the AI can only be MORE conservative, so ``ai_more_permissive`` should never
+    fire on a contested decision — recorded honestly if it ever does."""
+    agreement = bool(ladder_promote) == bool(ai_promote)
+    if not engaged:
+        divergence = "not_engaged"
+    elif agreement:
+        divergence = "agree"
+    elif ladder_promote and not ai_promote:
+        divergence = "ai_more_conservative"
+    else:
+        divergence = "ai_more_permissive"
+    return {
+        "contested": bool(contested),
+        "ladder_promote": bool(ladder_promote),
+        "ladder_reason": str(ladder_reason or ""),
+        "ai_promote": bool(ai_promote),
+        "agreement": agreement,
+        "divergence": divergence,
+    }
+
+
+def record_organization_promote_shadow(
+    model_client: Any,
+    *,
+    existing_authoritative: Mapping[str, Any] | None,
+    candidate_record: Mapping[str, Any],
+    ladder_decision: Mapping[str, Any],
+    completeness_regression_tolerance: float | None = None,
+) -> dict[str, Any] | None:
+    """One S3 shadow record per promote decision — records, NEVER changes the
+    live promote decision or which row becomes authoritative.
+
+    Called from the ``upsert_organization_asset_registry_with_guard`` seam AFTER
+    the ladder decision and the store write, with the SAME (post-coverage)
+    ``candidate_record`` that was upserted and the ``existing_authoritative`` row.
+    Both are read-only copies here; nothing mutates them and this never touches
+    the store, so authority is byte-identical with the shadow on or off (S3 hard
+    rule).
+
+    Structural non-invocation (returns None — no model call, no record):
+      * no judge-capable client (default simulate/replay ``OfflineModelClient`` /
+        no client — condition (a), design §3.1).
+
+    Otherwise returns the shadow record. Engagement (OQ4):
+      * a CONTESTED decision (a non-pre-branch ladder reason) drives the S2 helper
+        with the full descriptor + read-only guard-predicted verdict + incumbent
+        (one model call).
+      * a NON-CONTESTED decision (a deterministic pre-branch: no-incumbent /
+        same-snapshot-refresh / lifecycle-not-promotable) records a SKIP shadow
+        (engaged=False, ``skip_reason``) WITHOUT a model call.
+
+    Any exception is caught and returned AS the record
+    (``shadow_status="shadow_error"``) — the S3 hard rule is that the shadow path
+    can never affect the live promote decision or the registry write.
+    """
+    try:
+        if not model_client_supports_promote_judgment(model_client):
+            return None
+
+        ladder = dict(ladder_decision or {})
+        ladder_reason = str(ladder.get("reason") or "")
+        ladder_promote = bool(ladder.get("promote"))
+        contested = ladder_reason not in _DETERMINISTIC_PREBRANCH_REASONS
+        deterministic_promote = ladder_reason in _DETERMINISTIC_PROMOTE_REASONS
+
+        incumbent_row = dict(existing_authoritative or {})
+        candidate_row = dict(candidate_record or {})
+
+        if not contested:
+            # OQ4: deterministic pre-branch — no model call, no descriptor build.
+            result = judge_and_validate_promotion(
+                model_client,
+                candidate_descriptor={},
+                guard_predicted_verdict={"refused": False, "reason": ""},
+                incumbent_descriptor={},
+                contested=False,
+                deterministic_promote=deterministic_promote,
+            )
+            guard_verdict: dict[str, Any] | None = None
+        else:
+            incumbent_snapshot_id = str(incumbent_row.get("snapshot_id") or "")
+            incumbent_descriptor = _snapshot_descriptor_from_registry_row(incumbent_row)
+            candidate_snapshot = _snapshot_descriptor_from_registry_row(
+                candidate_row, incumbent_snapshot_id=incumbent_snapshot_id
+            )
+            # The read-only guard-predicted verdict (mirror of storage.py:8670-8681);
+            # the model never sees it — it flows to the S1 battery as a parameter.
+            guard_verdict = predict_lineage_guard_refusal(
+                incoming_snapshot_id=candidate_snapshot["snapshot_id"],
+                incoming_generation_key=candidate_snapshot["materialization_generation_key"],
+                incoming_generation_sequence=candidate_snapshot["materialization_generation_sequence"],
+                incoming_selected_snapshot_ids=candidate_snapshot["selected_snapshot_ids"],
+                incumbent_snapshot_id=incumbent_descriptor["snapshot_id"],
+                incumbent_generation_key=incumbent_descriptor["materialization_generation_key"],
+                incumbent_generation_sequence=incumbent_descriptor["materialization_generation_sequence"],
+                incumbent_selected_snapshot_ids=incumbent_descriptor["selected_snapshot_ids"],
+            )
+            candidate_descriptor = _shadow_candidate_descriptor(
+                incumbent_descriptor=incumbent_descriptor, candidate_descriptor=candidate_snapshot
+            )
+            helper_kwargs: dict[str, Any] = {}
+            if completeness_regression_tolerance is not None:
+                helper_kwargs["completeness_regression_tolerance"] = completeness_regression_tolerance
+            result = judge_and_validate_promotion(
+                model_client,
+                candidate_descriptor=candidate_descriptor,
+                guard_predicted_verdict=guard_verdict,
+                incumbent_descriptor=incumbent_descriptor,
+                contested=True,
+                **helper_kwargs,
+            )
+
+        engaged = bool(result["engaged"])
+        ai_promote = str(result["status"]) == STATUS_PROMOTED
+        decision = result.get("decision")
+        audit = result.get("audit")
+        return {
+            "kind": SHADOW_RECORD_KIND,
+            "mode": "shadow",
+            "engaged": engaged,
+            "contested": bool(result["contested"]),
+            "skip_reason": str(result.get("skip_reason") or ""),
+            "decision_id": str(result["decision_id"]),
+            "ai_status": str(result["status"]),
+            "decision": dict(decision) if isinstance(decision, Mapping) else None,
+            "audit": dict(audit) if isinstance(audit, Mapping) else None,
+            "guard_predicted_verdict": dict(guard_verdict) if isinstance(guard_verdict, Mapping) else None,
+            "ladder_comparison": _shadow_ladder_comparison(
+                ladder_promote=ladder_promote,
+                ladder_reason=ladder_reason,
+                ai_promote=ai_promote,
+                contested=contested,
+                engaged=engaged,
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001 — S3 hard rule: shadow failure NEVER affects the live promote decision or the registry write
+        return {
+            "kind": SHADOW_RECORD_KIND,
+            "mode": "shadow",
+            "shadow_status": SHADOW_STATUS_ERROR,
+            "engaged": False,
+            "shadow_error": " ".join(str(exc or "").strip().split())[:MAX_JUDGE_ERROR_LENGTH],
+            "shadow_error_type": type(exc).__name__,
+        }
+
+
 # Re-export the validator-rejection reason helper so an S3/S5 caller mapping a
 # late (apply-time) validator failure names the same F5 fallback_reason string.
 __all__ = [
     "STATUS_PROMOTED",
     "STATUS_KEPT_INCUMBENT",
     "SKIP_REASON_NOT_CONTESTED",
+    "SHADOW_RECORD_KEY",
+    "SHADOW_RECORD_KIND",
+    "SHADOW_STATUS_ERROR",
     "build_promote_judge_input_payload",
     "build_keep_incumbent_audit",
     "stale_input_keep_incumbent_audit",
     "judge_and_validate_promotion",
+    "model_client_supports_promote_judgment",
+    "record_organization_promote_shadow",
     "fallback_reason_for_validator",
 ]

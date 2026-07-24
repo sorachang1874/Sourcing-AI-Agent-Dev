@@ -1517,6 +1517,7 @@ def upsert_organization_asset_registry_with_guard(
     *,
     store: ControlPlaneStore,
     candidate_record: dict[str, Any],
+    model_client: Any = None,
 ) -> dict[str, Any]:
     target_company = _normalize_text(candidate_record.get("target_company"))
     asset_view = _normalize_text(candidate_record.get("asset_view")) or "canonical_merged"
@@ -1542,10 +1543,30 @@ def upsert_organization_asset_registry_with_guard(
         existing_authoritative=existing_authoritative,
         candidate_record=candidate_record,
     )
-    return store.upsert_organization_asset_registry(
+    # Authority is 100% the rule ladder + the storage lineage guard. This write
+    # is byte-identical whether or not the S3 shadow hook below runs.
+    result = store.upsert_organization_asset_registry(
         candidate_record,
         authoritative=bool(decision.get("promote")),
     )
+    # WS7/W7.3 S3 SHADOW hook (design §2.4/§7): record-only + exception-isolated,
+    # runs AFTER the store write so it can never affect which row is authoritative.
+    # The shadow-hook body lives in organization_promote_judgment (only the call is
+    # here); it returns None unless a scripted/live judge client is injected. The
+    # live promote path never reads the sibling ``ai_promote_decision_shadow`` key.
+    # Imported lazily to keep the module import graph flat (mirrors this module's
+    # own lazy consumers).
+    from .organization_promote_judgment import SHADOW_RECORD_KEY, record_organization_promote_shadow
+
+    shadow_record = record_organization_promote_shadow(
+        model_client,
+        existing_authoritative=existing_authoritative,
+        candidate_record=candidate_record,
+        ladder_decision=decision,
+    )
+    if shadow_record is not None and isinstance(result, dict):
+        result = {**result, SHADOW_RECORD_KEY: shadow_record}
+    return result
 
 
 def _load_available_organization_asset_registry_records(
