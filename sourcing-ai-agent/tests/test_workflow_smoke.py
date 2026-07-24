@@ -7984,23 +7984,57 @@ class WorkflowSmokeTest(unittest.TestCase):
         )
 
     def test_settle_board_probe_waits_for_first_nonempty_candidate_page(self) -> None:
-        client = mock.Mock()
-        client.get.side_effect = [
-            {"asset_population": {"available": False, "candidate_count": 0}, "results": []},
-            {"result_mode": "", "returned_count": 0, "total_candidates": 0, "has_more": False},
-            {
-                "asset_population": {
-                    "available": True,
-                    "candidate_count": 47,
-                    "candidates": [{"candidate_id": "cand-1"}],
-                },
-                "results": [],
-            },
-            {"result_mode": "asset_population", "returned_count": 24, "total_candidates": 47, "has_more": True},
-        ]
+        # R-042 (2026-07-23): the original order-based mock.Mock() side_effect pinned the
+        # pre-projection-cutover call sequence (exactly dashboard+candidates per attempt).
+        # c801352/0650928 (2026-06) landed the projection-first smoke reads
+        # (_fetch_smoke_projection_payloads_if_ready probes /projection-link before the
+        # legacy endpoints), so ordinal mocks misalign. Contract evolution, not a product
+        # regression: this fake is path-aware like the sibling _settle_board_probe tests;
+        # the assertions (wait for first NONEMPTY candidate page across >=2 attempts) are
+        # unchanged.
+        class FakeClient:
+            def __init__(self) -> None:
+                self.dashboard_call_count = 0
+                self.candidate_call_count = 0
+
+            def get(self, path: str) -> dict:
+                base_path = path.split("?", 1)[0]
+                if base_path.endswith("/projection-link"):
+                    return {"status": "not_ready", "reason": "projection_not_ready"}
+                if base_path.endswith("/dashboard"):
+                    self.dashboard_call_count += 1
+                    if self.dashboard_call_count == 1:
+                        return {
+                            "asset_population": {"available": False, "candidate_count": 0},
+                            "results": [],
+                        }
+                    return {
+                        "asset_population": {
+                            "available": True,
+                            "candidate_count": 47,
+                            "candidates": [{"candidate_id": "cand-1"}],
+                        },
+                        "results": [],
+                    }
+                if "/candidates?" in path:
+                    self.candidate_call_count += 1
+                    if self.candidate_call_count == 1:
+                        return {
+                            "result_mode": "",
+                            "returned_count": 0,
+                            "total_candidates": 0,
+                            "has_more": False,
+                        }
+                    return {
+                        "result_mode": "asset_population",
+                        "returned_count": 24,
+                        "total_candidates": 47,
+                        "has_more": True,
+                    }
+                raise AssertionError(f"unexpected path {path}")
 
         dashboard_payload, candidate_page_payload, timings = _settle_board_probe(
-            client,
+            FakeClient(),  # type: ignore[arg-type]
             job_id="job-123",
             results_payload={
                 "asset_population": {"available": True, "candidate_count": 47},
