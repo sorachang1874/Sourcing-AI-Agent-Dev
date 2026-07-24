@@ -136,7 +136,8 @@ jobs:
             tests/test_storage_surface_guardrails.py \
             tests/test_pg_onconflict_guard.py \
             tests/test_migration_runner.py \
-            tests/test_pg_only_dedup_reads.py
+            tests/test_pg_only_dedup_reads.py \
+            tests/test_d1n_inspect_operation_result_slot_uow.py
           SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 python -m pytest -q \
             tests/test_enrichment.py \
             -k 'isolates_retry_wait or retry_wait_as_isolated_batch'

@@ -47,6 +47,11 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_pg_onconflict_guard.py", "PG ON CONFLICT unique-index parity guard (2026-06-12 defect class)"),
     ("tests/test_migration_runner.py", "schema migration runner contract"),
     ("tests/test_pg_only_dedup_reads.py", "PG-only dedup read contract"),
+    (
+        "tests/test_d1n_inspect_operation_result_slot_uow.py",
+        "D1n inspect result-slot UoW surface (R-019/R-029/R-031 adjacency); ran in NO lane and broke "
+        "silently for 4 days after FF-G a98e3df (R-040, attributed 2026-07-23)",
+    ),
 ]
 
 # --- Partial (-k) members shared by BOTH lanes, in invocation order.

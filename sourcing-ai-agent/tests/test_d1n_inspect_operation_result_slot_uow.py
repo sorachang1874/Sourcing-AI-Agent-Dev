@@ -64,6 +64,16 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             "command_type": spec.default_workflow_command_type,
             "owner": spec.owner_module,
         }
+        # Since a98e3df ("Close S1e2b fixed-forward closure review findings
+        # (FF-G)", 2026-07-19) a start-candidate Operation carrying the exact
+        # `acquisition.run.create` workflow reference WITHOUT the legacy request
+        # pin pair is classified as drifted start-v2 provenance and the generic
+        # control preflight fails closed (`operation_event_v1` planned events
+        # are then rejected).  This fixture models the legacy schema-defined
+        # start path, so it must carry the schema-defined legacy request pins
+        # to stay legacy-coherent (`non_v2` -> preflight `ready`).  The old
+        # pin-free fixture pinned the pre-FF-G downgrade-to-non_v2 behavior
+        # that FF-G finding #2 intentionally removed.
         action = self.repository.upsert_action(
             action_id=action_id,
             workspace_id="workspace_1",
@@ -73,6 +83,8 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             operation_type=spec.operation_type,
             target_ref={},
             input_payload={},
+            request_schema_version=spec.request_schema_version,
+            request_schema_digest=spec.request_schema_digest,
             approval_status="approved",
             approval_policy=spec.approval_policy,
             budget={"max_cost_micro_usd": 1_000_000},
@@ -85,6 +97,8 @@ class D1nInspectOperationResultSlotUowPGTest(PGControlPlaneStoreTestMixin, unitt
             action_id=action_id,
             owner_module=spec.owner_module,
             operation_type=spec.operation_type,
+            request_schema_version=spec.request_schema_version,
+            request_schema_digest=spec.request_schema_digest,
             status="running",
             progress={"phase": "workflow_command_planned"},
             workflow_ref=workflow_ref,
