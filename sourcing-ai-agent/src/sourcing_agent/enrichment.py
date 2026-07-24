@@ -50,6 +50,7 @@ from .harvest_connectors import (
 )
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient
+from .profile_batch_division import record_profile_prefetch_division_shadow
 from .profile_registry_utils import (
     extract_profile_registry_aliases_from_payload,
     harvest_profile_payload_has_usable_content,
@@ -5650,6 +5651,17 @@ class MultiSourceEnricher:
                     active_queue_state="dispatch_reserved",
                     active_reason="scheduler_dispatch_reserved",
                 )
+                # W7.2 S3 SHADOW hook (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §7 S3): record-only,
+                # exception-isolated inside the helper; dispatch never reads this key (flip = S5).
+                shadow_division_record = record_profile_prefetch_division_shadow(
+                    self.model_client,
+                    plan=prefetch_batch_plan,
+                    registry_entries=latest_registry_entries,
+                    runtime_tuning_context=runtime_tuning_context,
+                    wave_mint_provider_submit=bool(submit_provider),
+                )
+                if shadow_division_record is not None:
+                    refill_plan_items["ai_batch_division_shadow"] = shadow_division_record
         scheduler_lock_summary = {
             "required": bool(scheduler_lock_required),
             "kind": str(

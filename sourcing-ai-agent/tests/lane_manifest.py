@@ -32,6 +32,7 @@ GH_LANE_FULL: list[tuple[str, str]] = [
     ("tests/test_fetch_profile_batch_characterization.py", "WS7 ruling-① plan-record oracle: pins the CURRENT batch-division ladder the AI divider must replace behind acceptance validators (offline, pure functions)"),
     ("tests/test_profile_batch_division_contract.py", "WS7/W7.2 S1 divider-output contract: ai_batch_division.v1 strict schema + V1-V10 acceptance battery + F1-F6 fallback audit shapes (offline, pure functions)"),
     ("tests/test_profile_batch_division_model_surface.py", "WS7/W7.2 S2 divider model-invocation surface: ModelClient divider method, OQ7 scripted client env gate, OQ5 >300 engagement, OQ8 20s timeout, F1-F6 audit mapping (offline)"),
+    ("tests/test_profile_batch_division_shadow.py", "WS7/W7.2 S3 shadow integration: mint-seam hook records division/fallback beside the plan, dispatch byte-identical shadow on/off, completion-path non-invocation, exception isolation (offline)"),
     ("tests/test_api_auth.py", "C2.1 auth foundation contract"),
     ("tests/test_api_server_identity.py", "server identity contract"),
     ("tests/test_user_private_reads.py", "user-scoped read isolation contract"),

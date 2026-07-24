@@ -201,6 +201,9 @@ def test_enrichment_change_selects_batch_division_characterization_oracle() -> N
     assert "paired::tests/test_fetch_profile_batch_characterization.py" in labels
     assert "paired::tests/test_profile_prefetch_scheduler_contract.py" in labels
     assert "paired::tests/test_enrichment.py" in labels
+    # WS7/W7.2 S3 (2026-07-23): the shadow mint seam lives in enrichment.py, so
+    # an enrichment edit must also run the shadow-integration pins.
+    assert "paired::tests/test_profile_batch_division_shadow.py" in labels
 
 
 def test_profile_batch_division_contract_change_selects_contract_suite_and_oracle() -> None:
@@ -231,6 +234,8 @@ def test_profile_batch_division_helper_change_selects_the_full_divider_family() 
     }
     assert "paired::tests/test_profile_batch_division_contract.py" in labels
     assert "paired::tests/test_profile_batch_division_model_surface.py" in labels
+    # WS7/W7.2 S3 (2026-07-23): the helper now hosts the shadow hook body.
+    assert "paired::tests/test_profile_batch_division_shadow.py" in labels
     assert "paired::tests/test_fetch_profile_batch_characterization.py" in labels
 
 

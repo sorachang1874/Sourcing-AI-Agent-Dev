@@ -1,4 +1,4 @@
-"""Divider orchestration helper (WS7/W7.2 slice S2, ADDITIVE ONLY).
+"""Divider orchestration helper (WS7/W7.2 slices S2+S3, ADDITIVE ONLY).
 
 Spec: docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §2 (model invocation surface), §3
 (ruling-④ failure classes F1-F6), OQ1/OQ5/OQ6/OQ7/OQ8 RATIFIED 2026-07-23.
@@ -6,10 +6,13 @@ This module is the thin seam between the ModelClient divider method
 (`divide_profile_prefetch_batches`, model_provider.py) and the S1 contract
 (`profile_batch_division_contract`): it builds the OQ1 input payload (index
 ranges + digests only — NEVER raw URLs), calls the model ONCE per wave mint
-(OQ6; idempotency/locking is the S3 mint site's duty), assembles the
-caller-owned envelope fields (division_id, membership_sha256, provenance
-passthrough), and validates through the single-sourced S1 battery. It performs
-NO enrichment.py integration and NO dispatch — shadow recording is slice S3.
+(OQ6; idempotency/locking is the enrichment mint seam's scheduler-lock duty),
+assembles the caller-owned envelope fields (division_id, membership_sha256,
+provenance passthrough), and validates through the single-sourced S1 battery.
+Slice S3 adds `record_profile_prefetch_division_shadow` — the SHADOW hook the
+enrichment.py mint seam calls to RECORD a division proposal beside the
+ladder-built plan; it never produces `dispatch_item_specs` and dispatch never
+reads its output (the flip is slice S5).
 
 Responsibility split (design §1.2 read with §2.3): the model authors ONLY the
 ``batches`` list; every other ai_batch_division.v1 field is caller-authored
@@ -38,6 +41,7 @@ from .model_provider import (
     PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY,
     PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY,
     PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY,
+    DeterministicModelClient,
     ModelClient,
 )
 from .profile_batch_division_contract import (
@@ -59,12 +63,19 @@ from .profile_batch_division_contract import (
     SCHEMA_FAILURE_VALIDATOR_ID,
     SCHEMA_ID_V1,
     TINY_BATCH_LEGAL_REASON_CODES,
+    VALIDATOR_RESULT_STATUS_FAIL,
+    VALIDATOR_RESULT_STATUS_PASS,
+    VALIDATOR_V5_WORKER_BUDGET,
+    VALIDATOR_V6_WAVE_MINT_ONLY,
     BatchDivisionContractError,
     compute_membership_sha256,
     fallback_reason_for_validator,
     normalize_fallback_audit,
     validate_ai_batch_division,
+    validate_v5_worker_budget,
+    validate_v6_wave_mint_only,
 )
+from .runtime_tuning import resolved_harvest_profile_actor_global_inflight
 
 # OQ5 RATIFIED 2026-07-23: engage the AI divider only above the single-envelope
 # band — exactly the provider envelope cap (>300 urls), where the ladder starts
@@ -468,3 +479,287 @@ def propose_and_validate_division(
         validator_results=result["validator_results"],
         provenance=provenance,
     )
+
+
+# ---------------------------------------------------------------------------
+# W7.2 slice S3 — SHADOW integration (records, NEVER drives dispatch).
+#
+# Design §5.2/§7 S3 + discrepancy D1: the shadow record lives on the
+# `refill_plan_items` activity surface next to
+# `_record_profile_prefetch_batch_plan_items` (enrichment.py mint seam), NEVER
+# inside the oracle-pinned plan record (`ProfilePrefetchBatchPlan.to_record()`
+# whole-dict compare, test_fetch_profile_batch_characterization.py:142-192).
+# The additive plan-record key + schema_version bump are the S5 flip's job.
+# ---------------------------------------------------------------------------
+
+SHADOW_RECORD_KIND = "profile_prefetch_ai_batch_division_shadow"
+SHADOW_STATUS_ERROR = "shadow_error"
+# Ladder literal for an R6 durable-wave-inherited window (enrichment.py:1211);
+# such a window belongs to an in-flight wave, which is never (re-)divided
+# (design §4.5 / OQ6).
+DURABLE_WAVE_BATCH_SIZE_REASON = "durable_refill_wave_batch_size"
+# S4 registry contract field (design §4.3). Pre-S4 no writer exists, so the
+# live-division-id set read below is always empty — wired forward-compatibly so
+# V6 becomes meaningful the moment S4 lands, without another seam edit.
+REGISTRY_DIVISION_ID_FIELD = "refill_plan_division_id"
+RETRY_WAIT_QUEUE_STATE = "retry_wait"
+
+
+def model_client_supports_batch_division(model_client: Any) -> bool:
+    """True when the client overrides the deterministic F1 divider stub.
+
+    Structural capability check for the S3 condition (a) "scripted/live model
+    client available": `DeterministicModelClient.divide_profile_prefetch_batches`
+    (and its `OfflineModelClient` inheritance) is the structural
+    "divider unavailable" marker (design §2.1 / discrepancy D2) — calling it on
+    every wave would only mint F1 audit noise, so the shadow hook does not
+    engage at all for such clients.
+    """
+    if model_client is None:
+        return False
+    method = getattr(type(model_client), "divide_profile_prefetch_batches", None)
+    if method is None:
+        return False
+    return method is not DeterministicModelClient.divide_profile_prefetch_batches
+
+
+def _shadow_item_url_key(item: Any) -> str:
+    return str(getattr(item, "registry_key", "") or "").strip() or str(getattr(item, "profile_url", "") or "").strip()
+
+
+def _shadow_apply_time_validator_results(
+    division: Any,
+    *,
+    worker_budget: Mapping[str, Any],
+    registry_entries: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """V5/V6 apply-time wiring at the mint seam (S1 left both `skipped`).
+
+    V5: the post-R5 dispatched batch count a real apply would produce is
+    `min(batch_count, available_new_worker_count)` (surplus defers — exactly
+    the R5 split the oracle pins); recorded as a structural tripwire, the same
+    check the S5 apply path will run. V6: evaluated over the division ids
+    recorded on the dispatch set's registry items; pre-S4 no writer exists so
+    the live set is empty by construction (recorded honestly in the note).
+    """
+    if not isinstance(division, Mapping):
+        return []
+    available = max(0, int(dict(worker_budget or {}).get("available_new_worker_count") or 0))
+    batch_count = max(0, int(division.get("batch_count") or 0))
+    simulated_dispatched = min(batch_count, available)
+    v5_failure = validate_v5_worker_budget(simulated_dispatched, available_new_worker_count=available)
+    live_division_ids = {
+        str(dict(entry or {}).get(REGISTRY_DIVISION_ID_FIELD) or "").strip()
+        for entry in dict(registry_entries or {}).values()
+    } - {""}
+    v6_failure = validate_v6_wave_mint_only(str(division.get("division_id") or ""), live_division_ids=live_division_ids)
+    results: list[dict[str, Any]] = []
+    for validator_id, failure, note in (
+        (
+            VALIDATOR_V5_WORKER_BUDGET,
+            v5_failure,
+            (
+                f"shadow-simulated R5 apply: min(batch_count={batch_count}, "
+                f"available_new_worker_count={available}) = {simulated_dispatched} dispatched, surplus defers"
+            ),
+        ),
+        (
+            VALIDATOR_V6_WAVE_MINT_ONLY,
+            v6_failure,
+            (
+                f"live division ids from registry field {REGISTRY_DIVISION_ID_FIELD!r}: "
+                f"{sorted(live_division_ids) or 'none recorded (pre-S4 the field has no writer)'}"
+            ),
+        ),
+    ):
+        entry: dict[str, Any] = {
+            "validator": validator_id,
+            "status": VALIDATOR_RESULT_STATUS_FAIL if failure else VALIDATOR_RESULT_STATUS_PASS,
+            "reason": str(failure) if failure else note,
+        }
+        results.append(entry)
+    return results
+
+
+def _shadow_ladder_comparison(plan: Any, division: Any) -> dict[str, Any]:
+    """Divergence digest: the ladder's ACTUAL division vs the shadow proposal.
+
+    The ladder side is the dispatched (post-R5) partition plus deferred/tail
+    counts; the AI side covers the whole eligible set, so
+    `dispatched_membership_identical` is only True when the AI division equals
+    the fully-dispatched ladder partition — the before/after evidence counter
+    the S5 flip decision consumes (design §5.2).
+    """
+    dispatched_key_chunks = [
+        [_shadow_item_url_key(item) for item in list(chunk or [])]
+        for _, chunk in list(getattr(plan, "dispatch_item_specs", None) or [])
+    ]
+    ladder_membership = compute_membership_sha256(dispatched_key_chunks)
+    payload: dict[str, Any] = {
+        "ladder_dispatched_batch_count": len(dispatched_key_chunks),
+        "ladder_dispatched_batch_sizes": [len(chunk) for chunk in dispatched_key_chunks],
+        "ladder_deferred_item_count": len(list(getattr(plan, "deferred_items", None) or [])),
+        "ladder_tail_coalescing_item_count": len(list(getattr(plan, "tail_coalescing_items", None) or [])),
+        "ladder_dispatched_membership_sha256": ladder_membership,
+        "ai_batch_count": None,
+        "ai_batch_sizes": None,
+        "ai_membership_sha256": None,
+        "batch_count_delta": None,
+        "dispatched_membership_identical": None,
+    }
+    if isinstance(division, Mapping):
+        ai_batch_count = max(0, int(division.get("batch_count") or 0))
+        ai_membership = str(division.get("membership_sha256") or "")
+        payload["ai_batch_count"] = ai_batch_count
+        payload["ai_batch_sizes"] = [
+            max(0, int(dict(batch or {}).get("member_count") or 0)) for batch in list(division.get("batches") or [])
+        ]
+        payload["ai_membership_sha256"] = ai_membership
+        payload["batch_count_delta"] = ai_batch_count - len(dispatched_key_chunks)
+        payload["dispatched_membership_identical"] = bool(ai_membership) and ai_membership == ladder_membership
+    return payload
+
+
+def record_profile_prefetch_division_shadow(
+    model_client: Any,
+    *,
+    plan: Any,
+    registry_entries: Mapping[str, Mapping[str, Any]] | None = None,
+    runtime_tuning_context: Mapping[str, Any] | None = None,
+    wave_mint_provider_submit: bool = True,
+) -> dict[str, Any] | None:
+    """One S3 shadow record per wave mint — records, NEVER drives dispatch.
+
+    Called from the enrichment.py mint seam (inside the scheduler lock, right
+    after ``_record_profile_prefetch_batch_plan_items``) with the LADDER-built
+    ``ProfilePrefetchBatchPlan`` (duck-typed; this module never imports
+    enrichment). The plan is read-only input: nothing here mutates
+    ``dispatch_item_specs``/``dispatch_specs`` and the caller only attaches the
+    returned record to the ``refill_plan_items`` activity surface, which
+    dispatch never reads.
+
+    Structural non-invocation (returns None, no model call, no record):
+      * no divider-capable client (default simulate/replay OfflineModelClient —
+        condition (a); discrepancy D2)
+      * completion fast path / deferred-submit callback
+        (``wave_mint_provider_submit=False`` — ruling ② + OQ6: the divider runs
+        once per wave mint, never on the <1 s completion tick)
+      * retry-isolated wave (V8: the retry wave is never AI-divided, §4.2)
+      * R6 durable-wave-inherited window (in-flight wave, §4.5)
+      * empty plan (nothing to divide)
+
+    Otherwise returns the shadow record: the OQ5 engagement outcome from
+    ``propose_and_validate_division`` (validated envelope OR ruling-④ fallback
+    audit OR the ≤300 skip record), V5/V6 apply-time results wired from the
+    seam's worker budget + registry ids, and the ladder-divergence digest.
+    Any exception is caught and returned AS the record
+    (``shadow_status="shadow_error"``) — the S3 hard rule is that the shadow
+    path can never affect dispatch.
+    """
+    try:
+        if not model_client_supports_batch_division(model_client):
+            return None
+        if not wave_mint_provider_submit:
+            return None
+        queue_items = list(getattr(plan, "queue_items", None) or [])
+        if not queue_items:
+            return None
+        retry_wait_indices = [
+            index
+            for index, item in enumerate(queue_items)
+            if str(getattr(item, "queue_state", "") or "").strip() == RETRY_WAIT_QUEUE_STATE
+        ]
+        if len(retry_wait_indices) == len(queue_items):
+            return None
+        dispatch_window = dict(getattr(plan, "dispatch_window", None) or {})
+        if str(dispatch_window.get("batch_size_reason") or "").strip() == DURABLE_WAVE_BATCH_SIZE_REASON:
+            return None
+        entries = {str(key): dict(value or {}) for key, value in dict(registry_entries or {}).items()}
+        inventory: list[dict[str, Any]] = []
+        failure_class_counts: dict[str, int] = {}
+        attempted_item_count = 0
+        max_attempt_count = 0
+        for item in queue_items:
+            url_key = _shadow_item_url_key(item)
+            entry = entries.get(url_key) or {}
+            try:
+                attempt_count = max(0, int(entry.get("last_refill_attempt_count") or 0))
+            except (TypeError, ValueError):
+                attempt_count = 0
+            failure_class = str(
+                entry.get("last_refill_deferred_reason") or entry.get("refill_terminal_status") or ""
+            ).strip()
+            if attempt_count > 0:
+                attempted_item_count += 1
+                max_attempt_count = max(max_attempt_count, attempt_count)
+            if failure_class:
+                failure_class_counts[failure_class] = failure_class_counts.get(failure_class, 0) + 1
+            inventory.append(
+                {
+                    "url_key": url_key,
+                    "source_shards": [str(shard) for shard in list(getattr(item, "source_shards", None) or [])],
+                    "queue_state": str(getattr(item, "queue_state", "") or "").strip(),
+                    "attempt_count": attempt_count,
+                    "last_failure_class": failure_class,
+                    "priority": bool(getattr(item, "priority", False)),
+                }
+            )
+        failure_history = {
+            "retry_wait_item_count": len(retry_wait_indices),
+            "attempted_item_count": attempted_item_count,
+            "max_attempt_count": max_attempt_count,
+            "failure_class_counts": dict(sorted(failure_class_counts.items())),
+        }
+        prior_round_context = {
+            "plan_reason": str(getattr(plan, "plan_reason", "") or ""),
+            "window_batch_size_reason": str(dispatch_window.get("batch_size_reason") or ""),
+            "recorded_wave_batch_size": max(
+                [max(0, int(getattr(item, "refill_plan_batch_size", 0) or 0)) for item in queue_items] or [0]
+            ),
+            "recorded_wave_batch_count": max(
+                [max(0, int(getattr(item, "refill_plan_batch_count", 0) or 0)) for item in queue_items] or [0]
+            ),
+            "recorded_wave_window_url_count": max(
+                [max(0, int(getattr(item, "refill_plan_window_url_count", 0) or 0)) for item in queue_items] or [0]
+            ),
+        }
+        actor_global_inflight = resolved_harvest_profile_actor_global_inflight(dict(runtime_tuning_context or {}))
+        proposal = propose_and_validate_division(
+            model_client,
+            inventory=inventory,
+            failure_history=failure_history,
+            prior_round_context=prior_round_context,
+            retry_wait_indices=retry_wait_indices,
+            actor_global_inflight=actor_global_inflight,
+        )
+        division = proposal.get("division")
+        return {
+            "kind": SHADOW_RECORD_KIND,
+            "mode": "shadow",
+            "shadow_status": str(proposal.get("status") or ""),
+            "engaged": bool(proposal.get("engaged")),
+            "skip_reason": str(proposal.get("skip_reason") or ""),
+            "division_id": str(proposal.get("division_id") or ""),
+            "eligible_member_count": int(proposal.get("eligible_member_count") or 0),
+            "engagement_threshold_urls": int(proposal.get("engagement_threshold_urls") or 0),
+            "actor_global_inflight": int(actor_global_inflight),
+            "division": dict(division) if isinstance(division, Mapping) else None,
+            "fallback_audit": (
+                dict(proposal["fallback_audit"]) if isinstance(proposal.get("fallback_audit"), Mapping) else None
+            ),
+            "apply_time_validator_results": _shadow_apply_time_validator_results(
+                division,
+                worker_budget=dict(getattr(plan, "worker_budget", None) or {}),
+                registry_entries=entries,
+            ),
+            "ladder_comparison": _shadow_ladder_comparison(plan, division),
+        }
+    except Exception as exc:  # noqa: BLE001 — S3 hard rule: shadow failure NEVER affects dispatch
+        return {
+            "kind": SHADOW_RECORD_KIND,
+            "mode": "shadow",
+            "shadow_status": SHADOW_STATUS_ERROR,
+            "engaged": False,
+            "shadow_error": " ".join(str(exc or "").strip().split())[:MAX_DIVIDER_ERROR_LENGTH],
+            "shadow_error_type": type(exc).__name__,
+        }
