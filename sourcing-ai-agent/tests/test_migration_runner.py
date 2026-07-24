@@ -54,6 +54,7 @@ _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION = "0013_agent_tool_result_link_poli
 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION = (
     "0014_agent_tool_result_attempt_effect_contract"
 )
+_WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION = "0015_profile_refill_plan_division_id"
 _ALL_MIGRATIONS = [
     "0001_baseline",
     "0002_action_request_schema_pins",
@@ -69,6 +70,7 @@ _ALL_MIGRATIONS = [
     _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
     _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
     _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+    _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
 ]
 _D3_COMMAND_COLUMNS = (
     ("runtime_namespace", "text", "NO", "''::text"),
@@ -820,6 +822,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(ledger, _ALL_MIGRATIONS)
@@ -875,6 +878,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(
@@ -1103,6 +1107,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_COMMAND_COLUMNS))
@@ -1280,6 +1285,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1374,6 +1380,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(session_columns, list(_D3_SCOPED_SESSION_COLUMNS))
@@ -1577,6 +1584,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1670,6 +1678,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(run_columns, list(_D3_ACTIVITY_RUN_COLUMNS))
@@ -1886,6 +1895,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])
@@ -1970,6 +1980,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(columns, list(_D3_EVENT_COLUMNS))
@@ -2114,6 +2125,7 @@ class MigrationRunnerTest(unittest.TestCase):
                 _D1N_AGENT_TOOL_OWNER_REVISION_TOKEN_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_LINK_POLICY_MIGRATION,
                 _D1N_AGENT_TOOL_RESULT_ATTEMPT_EFFECT_CONTRACT_MIGRATION,
+                _WS7_S4_PROFILE_REFILL_PLAN_DIVISION_ID_MIGRATION,
             ],
         )
         self.assertEqual(again.applied, [])

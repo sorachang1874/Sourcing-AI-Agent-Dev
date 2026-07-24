@@ -50,7 +50,11 @@ from .harvest_connectors import (
 )
 from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient
-from .profile_batch_division import record_profile_prefetch_division_shadow
+from .profile_batch_division import (
+    inherited_division_wave_identity,
+    record_profile_prefetch_division_shadow,
+    shadow_plan_division_id,
+)
 from .profile_registry_utils import (
     extract_profile_registry_aliases_from_payload,
     harvest_profile_payload_has_usable_content,
@@ -1151,10 +1155,7 @@ def _build_profile_prefetch_queue_items(
                 registry_status=str(registry_entry.get("status") or "").strip().lower(),
                 refill_plan_batch_size=max(0, int(registry_entry.get("refill_plan_batch_size") or 0)),
                 refill_plan_batch_count=max(0, int(registry_entry.get("refill_plan_batch_count") or 0)),
-                refill_plan_window_url_count=max(
-                    0,
-                    int(registry_entry.get("refill_plan_window_url_count") or 0),
-                ),
+                refill_plan_window_url_count=max(0, int(registry_entry.get("refill_plan_window_url_count") or 0)),
             )
         )
     return items
@@ -1204,16 +1205,14 @@ def _apply_durable_refill_wave_dispatch_window(
     batch_count = max(1, (len(dispatch_urls) + inherited_batch_size - 1) // inherited_batch_size)
     resolved["batch_size"] = inherited_batch_size
     resolved["batch_count"] = batch_count
-    resolved["max_workers"] = min(
-        max(1, int(resolved.get("max_workers") or 1)),
-        max(batch_count, 1),
-    )
+    resolved["max_workers"] = min(max(1, int(resolved.get("max_workers") or 1)), max(batch_count, 1))
     resolved["batch_size_contract"] = "profile_actor_slot_durable_wave_item_packing"
     resolved["batch_size_reason"] = "durable_refill_wave_batch_size"
     resolved["durable_refill_wave_batch_size"] = inherited_batch_size
     resolved["durable_refill_wave_batch_count"] = max(inherited_batch_counts or [0])
     resolved["durable_refill_wave_window_url_count"] = max(inherited_window_counts or [0])
     resolved["durable_refill_wave_item_count"] = len(dispatch_urls)
+    resolved.update(inherited_division_wave_identity(dispatch_urls=dispatch_urls, registry_entries=registry_entries))
     return resolved
 
 
@@ -1568,6 +1567,7 @@ def _record_profile_prefetch_batch_plan_items(
     record_active_items: bool = True,
     active_queue_state: str = "dispatch_reserved",
     active_reason: str = "scheduler_dispatch_reserved",
+    refill_plan_division_id: str = "",
 ) -> dict[str, Any]:
     if store is None:
         return {"status": "skipped", "reason": "store_unavailable"}
@@ -1639,6 +1639,7 @@ def _record_profile_prefetch_batch_plan_items(
                     refill_plan_batch_size=plan_batch_size,
                     refill_plan_batch_count=plan_batch_count,
                     refill_plan_window_url_count=plan_window_url_count,
+                    refill_plan_division_id=refill_plan_division_id,
                 )
                 or {}
             )
@@ -1659,6 +1660,7 @@ def _record_profile_prefetch_batch_plan_items(
                     refill_plan_batch_size=plan_batch_size,
                     refill_plan_batch_count=plan_batch_count,
                     refill_plan_window_url_count=plan_window_url_count,
+                    refill_plan_division_id=refill_plan_division_id,
                 )
                 or {}
             )
@@ -1687,6 +1689,7 @@ def _record_profile_prefetch_batch_plan_items(
                     refill_plan_batch_size=plan_batch_size,
                     refill_plan_batch_count=plan_batch_count,
                     refill_plan_window_url_count=plan_window_url_count,
+                    refill_plan_division_id=refill_plan_division_id,
                 )
                 or {}
             )
@@ -5589,12 +5592,9 @@ class MultiSourceEnricher:
                 else bool(allow_under_target_final_tail_dispatch)
             )
             if no_dispatch_after_revalidation:
-                prefetch_worker_budget = {
-                    "active_worker_count": 0,
-                    "actor_budget": 0,
-                    "submit_budget": 0,
-                    "available_new_worker_count": 0,
-                }
+                prefetch_worker_budget = dict.fromkeys(
+                    ("active_worker_count", "actor_budget", "submit_budget", "available_new_worker_count"), 0
+                )
             else:
                 latest_registry_entries = _current_prefetch_registry_entries()
                 prefetch_dispatch_window = _recommended_harvest_profile_prefetch_dispatch_window(
@@ -5640,6 +5640,15 @@ class MultiSourceEnricher:
                     queue_items=dispatch_queue_items,
                     allow_under_target_final_tail_dispatch=resolved_allow_under_target_final_tail_dispatch,
                 )
+                # W7.2 S3/S4 shadow hook (WS7 design §7): record-only + exception-isolated; runs BEFORE the
+                # recorder since S4 so a validated proposal's division id rides the plan-record write (§4.3).
+                shadow_division_record = record_profile_prefetch_division_shadow(
+                    self.model_client,
+                    plan=prefetch_batch_plan,
+                    registry_entries=latest_registry_entries,
+                    runtime_tuning_context=runtime_tuning_context,
+                    wave_mint_provider_submit=bool(submit_provider),
+                )
                 refill_plan_items = _record_profile_prefetch_batch_plan_items(
                     self.store,
                     prefetch_batch_plan,
@@ -5650,15 +5659,7 @@ class MultiSourceEnricher:
                     record_active_items=bool(submit_provider),
                     active_queue_state="dispatch_reserved",
                     active_reason="scheduler_dispatch_reserved",
-                )
-                # W7.2 S3 SHADOW hook (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §7 S3): record-only,
-                # exception-isolated inside the helper; dispatch never reads this key (flip = S5).
-                shadow_division_record = record_profile_prefetch_division_shadow(
-                    self.model_client,
-                    plan=prefetch_batch_plan,
-                    registry_entries=latest_registry_entries,
-                    runtime_tuning_context=runtime_tuning_context,
-                    wave_mint_provider_submit=bool(submit_provider),
+                    refill_plan_division_id=shadow_plan_division_id(shadow_division_record),
                 )
                 if shadow_division_record is not None:
                     refill_plan_items["ai_batch_division_shadow"] = shadow_division_record

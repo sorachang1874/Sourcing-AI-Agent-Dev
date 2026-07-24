@@ -70,6 +70,9 @@ LINKEDIN_PROFILE_REGISTRY = TableDescriptor(
         Column("refill_plan_batch_size", Kind.INT),
         Column("refill_plan_batch_count", Kind.INT),
         Column("refill_plan_window_url_count", Kind.INT),
+        # WS7/W7.2 S4 durable wave identity extension (migration 0015): the AI-batch
+        # division id minted at the plan-record moment; empty = scalar-only wave.
+        Column("refill_plan_division_id"),
         Column("last_refill_attempt_count", Kind.INT),
         Column("refill_owner_worker_id", Kind.INT),
         Column("refill_owner_run_id"),
@@ -441,6 +444,7 @@ class LinkedinProfileRegistryRepository(Repository):
         refill_plan_batch_size: int = 0,
         refill_plan_batch_count: int = 0,
         refill_plan_window_url_count: int = 0,
+        refill_plan_division_id: str = "",
         last_refill_attempt_count: int = 0,
         refill_owner_worker_id: int = 0,
         refill_owner_run_id: str = "",
@@ -482,6 +486,7 @@ class LinkedinProfileRegistryRepository(Repository):
                 "refill_plan_batch_size": refill_plan_batch_size,
                 "refill_plan_batch_count": refill_plan_batch_count,
                 "refill_plan_window_url_count": refill_plan_window_url_count,
+                "refill_plan_division_id": refill_plan_division_id,
                 "last_refill_attempt_count": last_refill_attempt_count,
                 "refill_owner_worker_id": refill_owner_worker_id,
                 "refill_owner_run_id": refill_owner_run_id,
@@ -1749,6 +1754,7 @@ class LinkedinProfileRegistryRepository(Repository):
         refill_plan_batch_size: int = 0,
         refill_plan_batch_count: int = 0,
         refill_plan_window_url_count: int = 0,
+        refill_plan_division_id: str = "",
     ) -> dict[str, Any]:
         active_urls = normalize_linkedin_profile_url_list(list(active_profile_urls or []))
         deferred_urls = normalize_linkedin_profile_url_list(list(deferred_profile_urls or []))
@@ -1798,6 +1804,7 @@ class LinkedinProfileRegistryRepository(Repository):
         normalized_refill_plan_batch_size = max(0, int(refill_plan_batch_size or 0))
         normalized_refill_plan_batch_count = max(0, int(refill_plan_batch_count or 0))
         normalized_refill_plan_window_url_count = max(0, int(refill_plan_window_url_count or 0))
+        normalized_refill_plan_division_id = str(refill_plan_division_id or "").strip()
 
         def _source_shards_for(url: str) -> list[str]:
             return source_shards_map.get(str(url or "").strip()) or []
@@ -2007,6 +2014,7 @@ class LinkedinProfileRegistryRepository(Repository):
                             "refill_plan_batch_size": normalized_refill_plan_batch_size,
                             "refill_plan_batch_count": normalized_refill_plan_batch_count,
                             "refill_plan_window_url_count": normalized_refill_plan_window_url_count,
+                            "refill_plan_division_id": normalized_refill_plan_division_id,
                             "last_refill_attempt_count": attempt_count,
                             "refill_owner_worker_id": owner_worker_id,
                             "refill_owner_run_id": owner_run_id,
@@ -2364,6 +2372,7 @@ class LinkedinProfileRegistryRepository(Repository):
             0,
             int(existing.get("refill_plan_window_url_count") or 0),
         )
+        effective_refill_plan_division_id = str(existing.get("refill_plan_division_id") or "")
         effective_refill_terminal_status = str(existing.get("refill_terminal_status") or "")
         effective_refill_terminal_at = str(existing.get("refill_terminal_at") or "")
         if effective_status in {"fetched", "unrecoverable"}:
@@ -2372,6 +2381,7 @@ class LinkedinProfileRegistryRepository(Repository):
             effective_refill_plan_batch_size = 0
             effective_refill_plan_batch_count = 0
             effective_refill_plan_window_url_count = 0
+            effective_refill_plan_division_id = ""
             effective_refill_terminal_status = (
                 effective_refill_terminal_status
                 or ("completed" if effective_status == "fetched" else "terminal_failed")
@@ -2409,6 +2419,7 @@ class LinkedinProfileRegistryRepository(Repository):
             "refill_plan_batch_size": effective_refill_plan_batch_size,
             "refill_plan_batch_count": effective_refill_plan_batch_count,
             "refill_plan_window_url_count": effective_refill_plan_window_url_count,
+            "refill_plan_division_id": effective_refill_plan_division_id,
             "last_refill_attempt_count": max(0, int(existing.get("last_refill_attempt_count") or 0)),
             "refill_owner_worker_id": max(0, int(existing.get("refill_owner_worker_id") or 0)),
             "refill_owner_run_id": str(existing.get("refill_owner_run_id") or ""),
@@ -2457,6 +2468,7 @@ class LinkedinProfileRegistryRepository(Repository):
             refill_plan_batch_size=int(effective_payload.get("refill_plan_batch_size") or 0),
             refill_plan_batch_count=int(effective_payload.get("refill_plan_batch_count") or 0),
             refill_plan_window_url_count=int(effective_payload.get("refill_plan_window_url_count") or 0),
+            refill_plan_division_id=str(effective_payload.get("refill_plan_division_id") or ""),
             last_refill_attempt_count=int(effective_payload.get("last_refill_attempt_count") or 0),
             refill_owner_worker_id=int(effective_payload.get("refill_owner_worker_id") or 0),
             refill_owner_run_id=str(effective_payload.get("refill_owner_run_id") or ""),
@@ -2695,6 +2707,7 @@ class LinkedinProfileRegistryRepository(Repository):
                             "refill_plan_batch_size": 0,
                             "refill_plan_batch_count": 0,
                             "refill_plan_window_url_count": 0,
+                            "refill_plan_division_id": "",
                             "refill_owner_worker_id": 0,
                             "refill_owner_run_id": "",
                             "refill_owner_dataset_id": "",

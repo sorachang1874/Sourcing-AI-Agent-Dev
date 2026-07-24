@@ -13,6 +13,14 @@ Slice S3 adds `record_profile_prefetch_division_shadow` — the SHADOW hook the
 enrichment.py mint seam calls to RECORD a division proposal beside the
 ladder-built plan; it never produces `dispatch_item_specs` and dispatch never
 reads its output (the flip is slice S5).
+Slice S4 extends the R6 durable wave identity with `refill_plan_division_id`
+(design §4.3/OQ6): `shadow_plan_division_id` threads the shadow proposal's id
+into the plan-record write (so the hook now runs right BEFORE
+`_record_profile_prefetch_batch_plan_items`), `inherited_division_wave_identity`
+carries the id through the scalar R6 claim, and
+`inherit_heterogeneous_division_windows` is the pure-function per-batch
+inheritance for AI divisions — structurally unreachable until the S5 flip
+passes a division into the plan.
 
 Responsibility split (design §1.2 read with §2.3): the model authors ONLY the
 ``batches`` list; every other ai_batch_division.v1 field is caller-authored
@@ -35,6 +43,7 @@ import uuid
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import (
     PROFILE_BATCH_DIVIDER_CIRCUIT_ERROR_PREFIX,
     PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY,
@@ -498,11 +507,22 @@ SHADOW_STATUS_ERROR = "shadow_error"
 # such a window belongs to an in-flight wave, which is never (re-)divided
 # (design §4.5 / OQ6).
 DURABLE_WAVE_BATCH_SIZE_REASON = "durable_refill_wave_batch_size"
-# S4 registry contract field (design §4.3). Pre-S4 no writer exists, so the
-# live-division-id set read below is always empty — wired forward-compatibly so
-# V6 becomes meaningful the moment S4 lands, without another seam edit.
+# S4 registry contract field (design §4.3, LANDED 2026-07-23, migration 0015):
+# minted at the plan-record moment from the shadow proposal's division id and
+# cleared in lockstep with the scalar wave identity, so V6's live set is
+# non-empty exactly while a divided wave is in flight.
 REGISTRY_DIVISION_ID_FIELD = "refill_plan_division_id"
 RETRY_WAIT_QUEUE_STATE = "retry_wait"
+# The registry queue states that mean "this item belongs to a live durable
+# wave" — the same set the scalar R6 inheritance scan uses
+# (enrichment.py `_apply_durable_refill_wave_dispatch_window`).
+DURABLE_WAVE_QUEUE_STATES = frozenset(
+    {"deferred_budget", "deferred_coalescing", "dispatch_reserved", "dispatch_claimed"}
+)
+# Additive dispatch-window key the scalar R6 claim carries the division id under
+# (absent when the durable wave has no division id — every pre-S4 row and every
+# ladder-only wave — so the oracle's R6 goldens stay byte-identical).
+DURABLE_WAVE_DIVISION_ID_WINDOW_KEY = "durable_refill_wave_division_id"
 
 
 def model_client_supports_batch_division(model_client: Any) -> bool:
@@ -568,7 +588,7 @@ def _shadow_apply_time_validator_results(
             v6_failure,
             (
                 f"live division ids from registry field {REGISTRY_DIVISION_ID_FIELD!r}: "
-                f"{sorted(live_division_ids) or 'none recorded (pre-S4 the field has no writer)'}"
+                f"{sorted(live_division_ids) or 'none recorded (no live durable wave carries a division id)'}"
             ),
         ),
     ):
@@ -631,7 +651,8 @@ def record_profile_prefetch_division_shadow(
     """One S3 shadow record per wave mint — records, NEVER drives dispatch.
 
     Called from the enrichment.py mint seam (inside the scheduler lock, right
-    after ``_record_profile_prefetch_batch_plan_items``) with the LADDER-built
+    BEFORE ``_record_profile_prefetch_batch_plan_items`` since S4, so the
+    proposal's division id can ride the same plan-record write) with the LADDER-built
     ``ProfilePrefetchBatchPlan`` (duck-typed; this module never imports
     enrichment). The plan is read-only input: nothing here mutates
     ``dispatch_item_specs``/``dispatch_specs`` and the caller only attaches the
@@ -763,3 +784,156 @@ def record_profile_prefetch_division_shadow(
             "shadow_error": " ".join(str(exc or "").strip().split())[:MAX_DIVIDER_ERROR_LENGTH],
             "shadow_error_type": type(exc).__name__,
         }
+
+
+# ---------------------------------------------------------------------------
+# W7.2 slice S4 — R6 durable wave-identity extension by `division_id`.
+#
+# Design §4.3 (the honest gap, resolved here) + OQ6: R6's scalar wave identity
+# (refill_plan_batch_size/batch_count/window_url_count, all-items-same-size)
+# cannot represent a heterogeneous AI division. S4 adds the identity carrier:
+# `refill_plan_division_id` is minted at the plan-record moment (the shadow
+# proposal's id pre-flip), persisted per registry item beside the scalars
+# (migration 0015), inherited through the scalar R6 claim, and consumed by V6.
+# The heterogeneous per-batch inheritance is a pure function here — reachable
+# only when a future S5 caller passes an AI division into the plan.
+# ---------------------------------------------------------------------------
+
+
+def shadow_plan_division_id(shadow_record: Mapping[str, Any] | None) -> str:
+    """The division id the plan-record moment persists as wave identity (S4).
+
+    Pre-flip rule: only a VALIDATED shadow proposal (``shadow_status ==
+    "proposed"``) links the shadow division to the actual ladder-built wave —
+    that linkage is the divergence-measurement key. Fallback/skip/error shadow
+    records return "" so rejected-proposal ids never pollute the registry (a
+    persisted id means "an accepted division is riding this wave", which is
+    exactly what V6's in-flight set and the S5 identity claim consume).
+    """
+    if not isinstance(shadow_record, Mapping):
+        return ""
+    if str(shadow_record.get("shadow_status") or "") != DIVISION_PROPOSAL_STATUS_PROPOSED:
+        return ""
+    return str(shadow_record.get("division_id") or "").strip()
+
+
+def live_division_ids_for_dispatch(
+    *,
+    dispatch_urls: Sequence[str],
+    registry_entries: Mapping[str, Mapping[str, Any]],
+) -> set[str]:
+    """Division ids recorded on the dispatch set's live durable-wave items.
+
+    Mirrors the scalar R6 scan exactly: only entries whose
+    ``refill_queue_state`` is in ``DURABLE_WAVE_QUEUE_STATES`` contribute, so a
+    terminalized or re-queued item's stale id can never claim a wave.
+    """
+    ids: set[str] = set()
+    entries = dict(registry_entries or {})
+    for profile_url in list(dispatch_urls or []):
+        entry = dict(entries.get(normalize_linkedin_profile_url_key(profile_url)) or {})
+        if str(entry.get("refill_queue_state") or "").strip() not in DURABLE_WAVE_QUEUE_STATES:
+            continue
+        division_id = str(entry.get(REGISTRY_DIVISION_ID_FIELD) or "").strip()
+        if division_id:
+            ids.add(division_id)
+    return ids
+
+
+def inherited_division_wave_identity(
+    *,
+    dispatch_urls: Sequence[str],
+    registry_entries: Mapping[str, Mapping[str, Any]],
+) -> dict[str, str]:
+    """The division-id fragment the scalar R6 claim merges into the window (S4).
+
+    Called by enrichment's ``_apply_durable_refill_wave_dispatch_window`` ONLY
+    inside its claim branch, so the id inherits exactly when the scalar
+    identity inherits. Returns ``{}`` when no live item carries a division id —
+    every pre-S4 row and every ladder-only wave — keeping the claimed window
+    byte-identical to today (the oracle's R6 goldens). With multiple distinct
+    ids on one merged dispatch set the lexicographically-first id is carried
+    (deterministic); the conflict itself is V6's domain at proposal time.
+    """
+    ids = live_division_ids_for_dispatch(dispatch_urls=dispatch_urls, registry_entries=registry_entries)
+    if not ids:
+        return {}
+    return {DURABLE_WAVE_DIVISION_ID_WINDOW_KEY: sorted(ids)[0]}
+
+
+def inherit_heterogeneous_division_windows(
+    *,
+    division: Mapping[str, Any],
+    inventory_url_keys: Sequence[str],
+    dispatch_url_keys: Sequence[str],
+) -> dict[str, Any]:
+    """Per-batch R6 inheritance for a heterogeneous AI division (pure, S5-only).
+
+    Design §4.3: when a dispatch set carries a live ``division_id``, the
+    recorded division claims the window WHOLESALE — no re-split, no re-call.
+    Because AI batches are heterogeneous, the claim is expressed as per-batch
+    windows keyed by (``division_id``, ``batch_index`` ordinal): each remaining
+    dispatch member is routed back to the batch that owns it in the recorded
+    division (membership expanded from ``member_index_ranges`` over the
+    canonical inventory ordering the division was minted against).
+
+    ``claimed`` is True only when the division id is non-empty, at least one
+    dispatch member remains, and EVERY dispatch member maps into exactly one
+    recorded batch; any unassigned member (ready-set drift since mint) makes
+    the claim fail closed — the caller falls back to a fresh mint with the F6
+    ``divider_input_stale`` audit. Structurally unreachable pre-flip: no
+    production caller passes an AI division (pinned by the S4 suite).
+    """
+    division_payload = dict(division or {})
+    division_id = str(division_payload.get("division_id") or "").strip()
+    position_by_key: dict[str, int] = {}
+    for position, url_key in enumerate(inventory_url_keys):
+        position_by_key.setdefault(str(url_key or "").strip(), position)
+    batch_index_by_position: dict[int, int] = {}
+    batch_by_index: dict[int, dict[str, Any]] = {}
+    for batch in list(division_payload.get("batches") or []):
+        batch_payload = dict(batch or {})
+        try:
+            batch_index = int(batch_payload.get("batch_index") or 0)
+        except (TypeError, ValueError):
+            continue
+        if batch_index <= 0:
+            continue
+        batch_by_index[batch_index] = batch_payload
+        for raw_range in list(batch_payload.get("member_index_ranges") or []):
+            try:
+                start, end = int(raw_range[0]), int(raw_range[1])
+            except (IndexError, TypeError, ValueError):
+                continue
+            for position in range(start, end + 1):
+                batch_index_by_position.setdefault(position, batch_index)
+    remaining_by_batch: dict[int, list[str]] = {}
+    unassigned_url_keys: list[str] = []
+    for url_key in [str(key or "").strip() for key in list(dispatch_url_keys or [])]:
+        member_position: int | None = position_by_key.get(url_key)
+        owning_batch_index: int | None = (
+            batch_index_by_position.get(member_position) if member_position is not None else None
+        )
+        if owning_batch_index is None:
+            unassigned_url_keys.append(url_key)
+            continue
+        remaining_by_batch.setdefault(owning_batch_index, []).append(url_key)
+    batch_windows = [
+        {
+            "division_id": division_id,
+            "batch_index": batch_index,
+            "recorded_member_count": max(0, int(batch_by_index[batch_index].get("member_count") or 0)),
+            "remaining_member_count": len(member_url_keys),
+            "member_url_keys": list(member_url_keys),
+            "reason": str(batch_by_index[batch_index].get("reason") or ""),
+            "reason_code": str(batch_by_index[batch_index].get("reason_code") or ""),
+        }
+        for batch_index, member_url_keys in sorted(remaining_by_batch.items())
+    ]
+    claimed = bool(division_id) and bool(batch_windows) and not unassigned_url_keys
+    return {
+        "division_id": division_id,
+        "claimed": claimed,
+        "batch_windows": batch_windows,
+        "unassigned_url_keys": unassigned_url_keys,
+    }

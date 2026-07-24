@@ -364,6 +364,11 @@ _ENRICHMENT_SUITES = (
         args=("tests/test_profile_batch_division_shadow.py",),
         reason="W7.2 S3 shadow mint-seam pins: dispatch byte-identity + completion-path non-invocation",
     ),
+    PytestInvocation(
+        label="paired::tests/test_profile_batch_division_wave_identity.py",
+        args=("tests/test_profile_batch_division_wave_identity.py",),
+        reason="W7.2 S4 R6 division_id wave identity: mint-seam writer threading + scalar-claim carry byte-compat",
+    ),
 )
 # profile_batch_division_contract.py is the WS7/W7.2 S1 divider-output contract
 # (schema sourcing.profile_prefetch.ai_batch_division.v1 + validator battery
@@ -391,6 +396,11 @@ _PROFILE_BATCH_DIVISION_CONTRACT_SUITES = (
         label="paired::tests/test_profile_batch_division_shadow.py",
         args=("tests/test_profile_batch_division_shadow.py",),
         reason="W7.2 S3 shadow hook: record-only integration, exception isolation, ladder divergence digest",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_profile_batch_division_wave_identity.py",
+        args=("tests/test_profile_batch_division_wave_identity.py",),
+        reason="W7.2 S4 R6 division_id extension: identity carry, heterogeneous windows, structural unreachability",
     ),
     PytestInvocation(
         label="paired::tests/test_fetch_profile_batch_characterization.py",

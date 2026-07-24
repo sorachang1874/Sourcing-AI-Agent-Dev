@@ -176,7 +176,9 @@ class ShadowEngagementTest(unittest.TestCase):
         apply_time = {entry["validator"]: entry for entry in record["apply_time_validator_results"]}
         self.assertEqual(apply_time[VALIDATOR_V5_WORKER_BUDGET]["status"], VALIDATOR_RESULT_STATUS_PASS)
         self.assertEqual(apply_time[VALIDATOR_V6_WAVE_MINT_ONLY]["status"], VALIDATOR_RESULT_STATUS_PASS)
-        self.assertIn("pre-S4", apply_time[VALIDATOR_V6_WAVE_MINT_ONLY]["reason"])
+        # S4 landed the refill_plan_division_id writer (2026-07-23): the empty
+        # live set now means "no live divided wave", not "no writer exists".
+        self.assertIn("no live durable wave carries a division id", apply_time[VALIDATOR_V6_WAVE_MINT_ONLY]["reason"])
         # Divergence digest vs the ladder's ACTUAL division.
         comparison = record["ladder_comparison"]
         self.assertEqual(comparison["ladder_dispatched_batch_count"], len(plan.dispatch_item_specs))
@@ -425,9 +427,13 @@ class ShadowSeamStructuralPinTest(unittest.TestCase):
 
     def test_shadow_record_is_write_only_on_the_activity_surface(self) -> None:
         # The key is assigned once onto refill_plan_items and NEVER read back:
-        # dispatch has no way to consume the shadow division.
+        # dispatch has no way to consume the shadow division. Since S4 the seam
+        # has exactly ONE sanctioned read of the shadow record — the
+        # `shadow_plan_division_id` mint threading into the plan-record write
+        # (design §4.3 wave identity); dispatch shapes still never consume it.
         self.assertEqual(self.source.count("ai_batch_division_shadow"), 1)
-        self.assertEqual(self.source.count("shadow_division_record"), 3)
+        self.assertEqual(self.source.count("shadow_division_record"), 4)
+        self.assertEqual(self.source.count("shadow_plan_division_id(shadow_division_record)"), 1)
         self.assertEqual(self.source.count('refill_plan_items["ai_batch_division_shadow"] = shadow_division_record'), 1)
 
     def test_plan_record_gains_no_ai_batch_division_key_before_the_flip(self) -> None:
