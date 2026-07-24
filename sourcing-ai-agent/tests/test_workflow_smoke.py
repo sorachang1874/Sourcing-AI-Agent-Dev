@@ -3,6 +3,7 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timezone
+from typing import Any
 from io import BytesIO
 from pathlib import Path
 from unittest import mock
@@ -44,13 +45,21 @@ from sourcing_agent.workflow_smoke import (
     _smoke_remote_provider_webhook_payload,
     _smoke_shared_recovery_signal_payload,
     _synchronize_post_terminal_recovery_with_service_metrics,
-    _worker_can_receive_smoke_provider_webhook,
+    _worker_is_pending_smoke_provider_webhook,
     load_smoke_cases,
     run_hosted_smoke_case,
     run_hosted_smoke_matrix,
     stage_summary_digest,
     summarize_smoke_timings,
 )
+
+
+def _worker_can_receive_smoke_provider_webhook(worker: dict[str, Any]) -> bool:
+    # Sunk verbatim from workflow_smoke.py (2026-07-23): test-only wrapper over
+    # _worker_is_pending_smoke_provider_webhook with zero product/ops callers.
+    payload = dict(worker or {})
+    pending, reason = _worker_is_pending_smoke_provider_webhook(payload)
+    return bool(pending and not reason)
 
 
 class WorkflowSmokeTest(unittest.TestCase):

@@ -319,12 +319,6 @@ def _worker_is_pending_smoke_provider_webhook(
     return True, ""
 
 
-def _worker_can_receive_smoke_provider_webhook(worker: dict[str, Any]) -> bool:
-    payload = dict(worker or {})
-    pending, reason = _worker_is_pending_smoke_provider_webhook(payload)
-    return bool(pending and not reason)
-
-
 def _smoke_shared_recovery_signal_payload() -> dict[str, Any]:
     """Return the only payload allowed across the API-to-daemon signal boundary."""
 

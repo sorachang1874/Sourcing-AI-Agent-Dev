@@ -28,7 +28,13 @@ _MONOLITH_BUDGETS = {
     "src/sourcing_agent/orchestrator.py": 81100,
     "src/sourcing_agent/storage.py": 13000,
     "src/sourcing_agent/enrichment.py": 12800,
-    "src/sourcing_agent/workflow_smoke.py": 10300,
+    # workflow_smoke: measured 2026-07-23 — 165/166 defs (9,888/9,892 def lines)
+    # sit in the transitive closure of the three script-imported entry points
+    # (run_hosted_smoke_case / run_hosted_smoke_matrix / summarize_smoke_timings),
+    # so the runner is ops-script surface, not test-side sink material; the one
+    # genuinely test-only band (4-line webhook wrapper) sank to
+    # tests/test_workflow_smoke.py and the budget captured the shrink.
+    "src/sourcing_agent/workflow_smoke.py": 10294,
     "src/sourcing_agent/acquisition.py": 7850,
     "src/sourcing_agent/harvest_connectors.py": 5350,
     # cli: slice 2 moved the 2,000-line parser section to cli_parsers.py
