@@ -43,6 +43,7 @@ from sourcing_agent.company_shard_planning import (
     REQUEST_FUNCTION_PARTITION_STRATEGY_ID,
     build_default_company_employee_shard_policy,
     build_request_scoped_company_employee_query_plan,
+    build_request_scoped_keyword_union_shard_policy,
     plan_company_employee_shards_from_policy,
     request_scoped_roster_function_ids,
     resolve_segmented_roster_completion,
@@ -1274,6 +1275,379 @@ class RosterLaneExecutionTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             filters = dict(call["company_filters"])
             self.assertIn(filters.pop("function_ids"), (["8"], ["24"]))
             self.assertEqual(filters, expected_filters)
+
+
+class _KeywordUnionFakeHarvestSettings:
+    enabled = True
+    max_paid_items = 100
+
+
+class _KeywordUnionFakeHarvestConnector:
+    """Captures every ``search_profiles`` provider call (the paid payload seam)."""
+
+    settings = _KeywordUnionFakeHarvestSettings()
+
+    def __init__(
+        self,
+        *,
+        rows_by_query: dict[str, list[dict]] | None = None,
+        raise_for_queries: frozenset[str] | set[str] = frozenset(),
+    ) -> None:
+        self.calls: list[dict] = []
+        self.rows_by_query = dict(rows_by_query or {})
+        self.raise_for_queries = set(raise_for_queries)
+
+    def _default_row(self, query_text: str) -> list[dict]:
+        slug = query_text.lower().replace(" ", "-") or "person"
+        return [
+            {
+                "full_name": f"Person {query_text}",
+                "headline": "Researcher",
+                "location": "United States",
+                "profile_url": f"https://www.linkedin.com/in/{slug}/",
+                "username": slug,
+                "current_company": "Lovable",
+            }
+        ]
+
+    def search_profiles(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        query_text = str(kwargs.get("query_text") or "")
+        if query_text in self.raise_for_queries:
+            raise RuntimeError("scripted transient provider failure")
+        rows = self.rows_by_query.get(query_text)
+        if rows is None:
+            rows = self._default_row(query_text)
+        return {
+            "raw_path": Path(kwargs["discovery_dir"]) / f"harvest_{len(self.calls):02d}.json",
+            "rows": [dict(row) for row in rows],
+            "pagination": {},
+            "payload": {},
+        }
+
+
+class ScopedKeywordUnionSeedLaneTest(unittest.TestCase):
+    """WS1 Step 4b-B (ruling RATIFIED 2026-07-23, B-then-A): scoped keyword
+    shards execute as first-class shards of the paid people-search lane —
+    plan persisted, per-shard dispatch on the EXISTING seed-pool provider
+    surface, honest ``resolve_segmented_roster_completion`` merge — while
+    policy-less legacy tasks keep the plain seed-pool.  All scripted: zero
+    provider/model/network calls."""
+
+    SCOPED_COST_POLICY = {
+        "provider_people_search_mode": "primary_only",
+        "provider_people_search_min_expected_results": 2,
+        "provider_people_search_pages": 1,
+        "provider_people_search_accept_zero_results": True,
+    }
+
+    def setUp(self) -> None:
+        self.identity = CompanyIdentity(
+            requested_name="Lovable",
+            canonical_name="Lovable",
+            company_key="lovable",
+            linkedin_slug="lovable",
+            linkedin_company_url="https://www.linkedin.com/company/lovable/",
+        )
+        self.policy = build_request_scoped_keyword_union_shard_policy(
+            keywords=["Pre-train", "Robotics"],
+            function_ids=[],
+            max_pages=10,
+            page_limit=50,
+        )
+
+    def _discover(
+        self,
+        connector: _KeywordUnionFakeHarvestConnector,
+        snapshot_dir: Path,
+        *,
+        policy: dict | None,
+        cost_policy_overrides: dict | None = None,
+        keywords: list[str] | None = None,
+    ):
+        from sourcing_agent.asset_logger import AssetLogger
+        from sourcing_agent.seed_discovery import SearchSeedAcquirer
+
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        acquirer = SearchSeedAcquirer([], harvest_search_connector=connector)
+        return acquirer.discover(
+            self.identity,
+            snapshot_dir,
+            asset_logger=AssetLogger(snapshot_dir),
+            search_seed_queries=list(keywords or ["Pre-train", "Robotics"]),
+            query_bundles=[],
+            filter_hints={},
+            cost_policy={**self.SCOPED_COST_POLICY, **dict(cost_policy_overrides or {})},
+            employment_status="current",
+            scoped_keyword_union_shard_policy=policy,
+        )
+
+    def _plan_payload(self, snapshot_dir: Path) -> dict:
+        plan_path = snapshot_dir / "search_seed_discovery" / "scoped_keyword_union_shard_plan.json"
+        self.assertTrue(plan_path.exists(), "expected the persisted keyword-union shard plan")
+        return json.loads(plan_path.read_text(encoding="utf-8"))
+
+    def test_multi_keyword_dispatch_one_provider_query_per_shard(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            connector = _KeywordUnionFakeHarvestConnector()
+            snapshot_dir = Path(tempdir) / "snap"
+            snapshot = self._discover(connector, snapshot_dir, policy=self.policy)
+            plan_payload = self._plan_payload(snapshot_dir)
+        # One provider call per keyword shard (parallel dispatch — assert the set).
+        self.assertEqual(sorted(call["query_text"] for call in connector.calls), ["Pre-train", "Robotics"])
+        block = dict(snapshot.to_record().get("scoped_keyword_union") or {})
+        self.assertEqual(block.get("strategy_id"), "request_scoped_keyword_union")
+        # Shard ids come verbatim from the planner policy (single-writer rule).
+        self.assertEqual(block.get("expected_shard_ids"), ["kw_pre_train", "kw_robotics"])
+        by_shard = {item["shard_id"]: item for item in block.get("shards") or []}
+        self.assertEqual(by_shard["kw_pre_train"]["dispatch_status"], "dispatched")
+        self.assertEqual(by_shard["kw_pre_train"]["provider_query"], "Pre-train")
+        self.assertEqual(by_shard["kw_robotics"]["dispatch_status"], "dispatched")
+        completion = dict(block.get("completion") or {})
+        self.assertEqual(completion.get("completion_status"), "completed")
+        self.assertEqual(completion.get("stop_reason"), "completed_keyword_union")
+        self.assertEqual(plan_payload.get("expected_shard_ids"), ["kw_pre_train", "kw_robotics"])
+        self.assertEqual(
+            dict(plan_payload.get("completion") or {}).get("completion_status"),
+            "completed",
+        )
+
+    def test_truncated_shard_keeps_the_union_partial(self) -> None:
+        # One keyword's provider query fails into the durable retry lane —
+        # its shard carries truncation evidence, so the honest completion is
+        # partial, never completed (same contract as the segmented roster).
+        with tempfile.TemporaryDirectory() as tempdir:
+            connector = _KeywordUnionFakeHarvestConnector(raise_for_queries={"Robotics"})
+            snapshot_dir = Path(tempdir) / "snap"
+            snapshot = self._discover(connector, snapshot_dir, policy=self.policy)
+        completion = dict(dict(snapshot.to_record().get("scoped_keyword_union") or {}).get("completion") or {})
+        self.assertEqual(completion.get("completion_status"), "partial")
+        self.assertEqual(completion.get("stop_reason"), "partial_keyword_union")
+        self.assertEqual(completion.get("truncated_shard_ids"), ["kw_robotics"])
+        self.assertEqual(completion.get("missing_shard_ids"), [])
+
+    def test_query_budget_cut_shard_is_missing_not_silently_dropped(self) -> None:
+        # Pre-4b the seed pool silently dropped keywords beyond
+        # provider_people_search_max_queries; under the shard contract the cut
+        # keyword stays in the expected set and keeps the union partial.
+        with tempfile.TemporaryDirectory() as tempdir:
+            connector = _KeywordUnionFakeHarvestConnector()
+            snapshot_dir = Path(tempdir) / "snap"
+            snapshot = self._discover(
+                connector,
+                snapshot_dir,
+                policy=self.policy,
+                cost_policy_overrides={"provider_people_search_max_queries": 1},
+            )
+        self.assertEqual([call["query_text"] for call in connector.calls], ["Pre-train"])
+        block = dict(snapshot.to_record().get("scoped_keyword_union") or {})
+        by_shard = {item["shard_id"]: item for item in block.get("shards") or []}
+        self.assertEqual(by_shard["kw_robotics"]["dispatch_status"], "not_dispatched_query_budget")
+        completion = dict(block.get("completion") or {})
+        self.assertEqual(completion.get("completion_status"), "partial")
+        self.assertEqual(completion.get("missing_shard_ids"), ["kw_robotics"])
+
+    def test_duplicate_person_across_keyword_shards_unions_provenance(self) -> None:
+        duplicate_row = [
+            {
+                "full_name": "Dual Hit",
+                "headline": "Research Engineer",
+                "location": "United States",
+                "profile_url": "https://www.linkedin.com/in/dual-hit/",
+                "username": "dual-hit",
+                "current_company": "Lovable",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tempdir:
+            connector = _KeywordUnionFakeHarvestConnector(
+                rows_by_query={"Pre-train": duplicate_row, "Robotics": duplicate_row}
+            )
+            snapshot_dir = Path(tempdir) / "snap"
+            snapshot = self._discover(connector, snapshot_dir, policy=self.policy)
+        self.assertEqual(len(snapshot.entries), 1)
+        entry = dict(snapshot.entries[0])
+        self.assertEqual(
+            dict(entry.get("metadata") or {}).get("scoped_keyword_union_shard_ids"),
+            ["kw_pre_train", "kw_robotics"],
+        )
+        completion = dict(dict(snapshot.to_record().get("scoped_keyword_union") or {}).get("completion") or {})
+        self.assertEqual(completion.get("completion_status"), "completed")
+
+    def test_policy_absent_falls_back_to_the_plain_seed_pool(self) -> None:
+        # 4c owns seed-pool retirement; a policy-less (legacy/hydrated) task
+        # must keep today's ungoverned dispatch with no shard-plan artifacts.
+        with tempfile.TemporaryDirectory() as tempdir:
+            connector = _KeywordUnionFakeHarvestConnector()
+            snapshot_dir = Path(tempdir) / "snap"
+            snapshot = self._discover(connector, snapshot_dir, policy=None)
+            plan_path = snapshot_dir / "search_seed_discovery" / "scoped_keyword_union_shard_plan.json"
+            self.assertFalse(plan_path.exists())
+        # Parallel dispatch: assert the query SET (order is worker-timing).
+        self.assertEqual(sorted(call["query_text"] for call in connector.calls), ["Pre-train", "Robotics"])
+        self.assertNotIn("scoped_keyword_union", snapshot.to_record())
+        self.assertNotIn("scoped_keyword_union", dict(snapshot.summary_payload or {}))
+
+    def test_provider_payloads_are_byte_compatible_with_the_legacy_seed_pool(self) -> None:
+        # The 4b-B ruling reuses the EXISTING seed-pool provider surface: for
+        # the same request, the per-keyword connector payloads must be
+        # byte-identical between the legacy (policy-less) path and the
+        # shard-governed path — no payload guessing.
+        def _sanitized_calls(connector: _KeywordUnionFakeHarvestConnector) -> list[str]:
+            sanitized = []
+            for call in connector.calls:
+                payload = {
+                    key: value
+                    for key, value in call.items()
+                    if key not in {"discovery_dir", "asset_logger"}
+                }
+                sanitized.append(json.dumps(payload, sort_keys=True, default=str))
+            # Parallel dispatch order is worker-timing; the per-query payload
+            # bytes are the contract under test.
+            return sorted(sanitized)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            legacy_connector = _KeywordUnionFakeHarvestConnector()
+            self._discover(legacy_connector, Path(tempdir) / "legacy", policy=None)
+            sharded_connector = _KeywordUnionFakeHarvestConnector()
+            self._discover(sharded_connector, Path(tempdir) / "sharded", policy=self.policy)
+        self.assertTrue(legacy_connector.calls, "legacy seed pool must dispatch provider calls")
+        self.assertEqual(_sanitized_calls(legacy_connector), _sanitized_calls(sharded_connector))
+
+    def test_dispatch_records_planner_shard_ids_verbatim(self) -> None:
+        # Shard-id single-writer rule (9544b69): execution records the
+        # planner's ids verbatim and never re-normalizes them.
+        from sourcing_agent.seed_discovery import SearchSeedAcquirer
+
+        acquirer = SearchSeedAcquirer([], harvest_search_connector=_KeywordUnionFakeHarvestConnector())
+        dispatch = acquirer.resolve_scoped_keyword_union_shard_dispatch(
+            policy={
+                "strategy_id": "request_scoped_keyword_union",
+                "mode": "keyword_union",
+                "keyword_shards": [
+                    {"rule_id": "KW_Pre-Train.v2", "title": "Pre-train", "include_patch": {"keywords": ["Pre-train"]}}
+                ],
+            },
+            identity=self.identity,
+            filter_hints={},
+            search_seed_queries=["Pre-train"],
+            cost_policy=dict(self.SCOPED_COST_POLICY),
+        )
+        self.assertEqual(dispatch.get("expected_shard_ids"), ["KW_Pre-Train.v2"])
+        self.assertEqual(dispatch["shards"][0]["dispatch_status"], "dispatched")
+
+
+class _StopLaneProbe(RuntimeError):
+    pass
+
+
+class ScopedKeywordUnionSeedLaneWiringTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """Engine-level 4b-B wiring: ``_acquire_search_seed_pool`` forwards the
+    planner-minted policy from task metadata into the discovery lane (and an
+    empty policy for legacy tasks keeps the plain seed-pool)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.catalog = AssetCatalog.discover()
+        self.store = self.make_pg_store(str(Path(self.tempdir.name) / "test.db"))
+        self.settings = AppSettings(
+            project_root=Path(self.tempdir.name),
+            runtime_dir=Path(self.tempdir.name),
+            secrets_file=Path(self.tempdir.name) / "providers.local.json",
+            jobs_dir=Path(self.tempdir.name) / "jobs",
+            company_assets_dir=Path(self.tempdir.name) / "company_assets",
+            db_path=Path(self.tempdir.name) / "test.db",
+            qwen=QwenSettings(enabled=False),
+            semantic=SemanticProviderSettings(enabled=False),
+            harvest=HarvestSettings(profile_scraper=HarvestActorSettings(enabled=False)),
+        )
+        self.engine = AcquisitionEngine(self.catalog, self.settings, self.store, DeterministicModelClient())
+        self.identity = CompanyIdentity(
+            requested_name="Lovable",
+            canonical_name="Lovable",
+            company_key="lovable",
+            linkedin_slug="lovable",
+            linkedin_company_url="https://www.linkedin.com/company/lovable/",
+        )
+
+    def _seed_pool_discover_kwargs(self, metadata: dict, *, employment_statuses: list[str] | None = None) -> dict:
+        from sourcing_agent.seed_discovery import SearchSeedAcquirer
+
+        statuses = list(employment_statuses or ["current"])
+        task = AcquisitionTask(
+            task_id="acquire-full-roster",
+            task_type="acquire_full_roster",
+            title="Acquire scoped roster",
+            description="Scoped keyword roster",
+            status="ready",
+            blocking=True,
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "employment_statuses": statuses,
+                "include_former_search_seed": False,
+                "search_seed_queries": ["Pre-train", "Robotics"],
+                "cost_policy": {"provider_people_search_mode": "primary_only"},
+                **metadata,
+            },
+        )
+        captured: dict = {}
+
+        def _fake_discover(_identity, _snapshot_dir, **kwargs):
+            captured.update(kwargs)
+            raise _StopLaneProbe()
+
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "lovable" / "snap"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        with unittest.mock.patch.object(SearchSeedAcquirer, "discover", side_effect=_fake_discover):
+            with self.assertRaises(_StopLaneProbe):
+                self.engine._acquire_search_seed_pool(
+                    task,
+                    {"company_identity": self.identity, "snapshot_dir": snapshot_dir},
+                    JobRequest.from_payload(
+                        {
+                            "raw_user_request": "Lovable Pre-train people",
+                            "query": "Lovable Pre-train people",
+                            "target_company": "Lovable",
+                            "categories": ["employee"],
+                            "employment_statuses": statuses,
+                            "keywords": ["Pre-train", "Robotics"],
+                        }
+                    ),
+                )
+        return captured
+
+    def test_planner_minted_policy_reaches_the_discovery_lane(self) -> None:
+        policy = build_request_scoped_keyword_union_shard_policy(
+            keywords=["Pre-train", "Robotics"],
+            function_ids=[],
+            max_pages=10,
+            page_limit=50,
+        )
+        captured = self._seed_pool_discover_kwargs({"scoped_keyword_union_shard_policy": policy})
+        self.assertEqual(dict(captured.get("scoped_keyword_union_shard_policy") or {}), policy)
+
+    def test_legacy_task_without_policy_passes_no_shard_governance(self) -> None:
+        captured = self._seed_pool_discover_kwargs({})
+        self.assertIn("scoped_keyword_union_shard_policy", captured)
+        self.assertFalse(dict(captured.get("scoped_keyword_union_shard_policy") or {}))
+
+    def test_former_companion_pass_is_not_keyword_union_governed(self) -> None:
+        # The keyword-union policy governs the CURRENT-member scoped roster;
+        # the former companion pass owns its own former shard-plan contract
+        # and shares the discovery dir — forwarding the policy there would
+        # double-write the persisted plan.
+        policy = build_request_scoped_keyword_union_shard_policy(
+            keywords=["Pre-train", "Robotics"],
+            function_ids=[],
+            max_pages=10,
+            page_limit=50,
+        )
+        captured = self._seed_pool_discover_kwargs(
+            {"scoped_keyword_union_shard_policy": policy},
+            employment_statuses=["former"],
+        )
+        self.assertFalse(dict(captured.get("scoped_keyword_union_shard_policy") or {}))
 
 
 if __name__ == "__main__":

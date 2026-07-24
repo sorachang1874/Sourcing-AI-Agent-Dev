@@ -1620,6 +1620,7 @@ class AcquisitionEngine:
             "company_employee_shards",
             "company_employee_shard_policy",
             "company_employee_shard_strategy",
+            "scoped_keyword_union_shard_policy",
             "max_pages",
             "page_limit",
             "reuse_existing_roster",
@@ -3218,6 +3219,18 @@ class AcquisitionEngine:
                     "baseline_snapshot_id": baseline_snapshot_id,
                     "asset_reuse_plan": self._task_asset_reuse_plan(task, job_request),
                 },
+                # WS1 Step 4b-B: the planner-minted keyword-union policy makes the
+                # people-search lane shard-governed (plan persisted, honest
+                # completion); legacy tasks without it keep the plain seed-pool.
+                # The policy governs the CURRENT-member scoped roster only —
+                # the former companion pass has its own former shard-plan
+                # contract and shares this discovery dir, so forwarding it
+                # there would double-write the persisted plan.
+                scoped_keyword_union_shard_policy=(
+                    self._task_execution_dict(task, job_request, "scoped_keyword_union_shard_policy")
+                    if employment_status != "former"
+                    else {}
+                ),
                 on_incremental_query_result=_queue_incremental_search_seed_prefetch,
             )
         except Exception:

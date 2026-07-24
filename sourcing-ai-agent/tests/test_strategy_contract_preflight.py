@@ -122,12 +122,19 @@ class UnificationFlipTargetPinsTest(unittest.TestCase):
     of these fails, either the unification step just landed (update the pin in
     the same change) or strategy selection regressed (investigate)."""
 
-    def test_step4a_scoped_request_plan_mints_keyword_union_policy(self) -> None:
-        # WS1 Step 4a (2026-07-22): a scoped request's roster task carries the
-        # request-scoped keyword_union shard policy — the reviewable plan-time
-        # contract for the Step 4b execution cutover (design lineage: 233a31a
-        # + tombstone T-001). Until 4b lands, execution still runs the
-        # seed-pool path; this pin guards the migration target's shape.
+    def test_step4b_scoped_request_policy_drives_keyword_union_execution(self) -> None:
+        # FLIPPED 2026-07-23 (WS1 Step 4b-B, ruling "B-then-A"): the policy
+        # this pin guards is now the EXECUTION contract, not just a plan-time
+        # mint — _acquire_search_seed_pool forwards it into the people-search
+        # lane, which persists the expected-shard plan pre-dispatch, runs one
+        # provider query per keyword shard on the existing seed-pool surface
+        # (payload byte-compat pinned in test_request_scoped_roster_shards),
+        # and resolves honest completion through
+        # resolve_segmented_roster_completion. The plan-time shape is
+        # unchanged from 4a (design lineage: 233a31a + tombstone T-001);
+        # policy-less legacy tasks keep the plain seed-pool until 4c retires
+        # it. The A-upgrade (per-shard search_query on the roster actor)
+        # waits for the capability-probe round.
         planned = _plan(
             {
                 "raw_user_request": "OpenAI Pre-train direction people",

@@ -14,6 +14,7 @@ from urllib import error, parse, request
 
 from .agent_runtime import AgentRuntimeCoordinator
 from .asset_logger import AssetLogger
+from .company_shard_planning import resolve_segmented_roster_completion
 from .connectors import CompanyIdentity, RapidApiAccount, search_people_accounts
 from .domain import Candidate, EvidenceRecord, JobRequest, format_display_name, make_evidence_id, normalize_name_token
 from .durable_runtime import (
@@ -73,6 +74,99 @@ SearchSeedIncrementalResultCallback = Callable[[dict[str, Any]], None]
 
 PROVIDER_SEARCH_RETRY_ITEM_KIND = "provider_search_retry"
 PROVIDER_RETRY_TYPE_HARVEST_ZERO_RESULT = "harvest_people_search_zero_result_retry"
+
+# WS1 Step 4b-B (ruling RATIFIED 2026-07-23, B-then-A): a scoped request's
+# keyword shards execute as first-class shards of the paid people-search lane.
+# The persisted plan file is the canonical expected-shard contract and the
+# completion routes through resolve_segmented_roster_completion — the same
+# honesty contract the segmented company-roster lane uses.
+SCOPED_KEYWORD_UNION_SHARD_PLAN_FILENAME = "scoped_keyword_union_shard_plan.json"
+SCOPED_KEYWORD_UNION_COMPLETED_STOP_REASON = "completed_keyword_union"
+SCOPED_KEYWORD_UNION_PARTIAL_STOP_REASON = "partial_keyword_union"
+# Dispatch statuses that keep a keyword shard in the expected-coverage set.
+# Suppressed shards (generic-only text or company-identity echoes) are
+# recorded in the plan for audit but are structurally unqueryable, so they
+# never hold completion hostage.
+SCOPED_KEYWORD_UNION_EXPECTED_DISPATCH_STATUSES = frozenset(
+    {"dispatched", "merged_duplicate_query", "not_dispatched_query_budget"}
+)
+# Provider-lane query summary states meaning this query's coverage is NOT
+# exhaustively fetched yet (retry pending, provider-side incomplete, degraded
+# page coverage, or still queued).
+_SCOPED_KEYWORD_UNION_TRUNCATED_QUERY_STATUSES = frozenset(
+    {"retry_wait", "incomplete", "degraded", "queued", "skipped_degraded"}
+)
+
+
+def provider_query_summary_is_truncated(summary: dict[str, Any]) -> bool:
+    """True when one paid people-search query summary shows non-exhaustive coverage."""
+
+    payload = dict(summary or {})
+    status = str(payload.get("status") or "").strip().lower()
+    if status in _SCOPED_KEYWORD_UNION_TRUNCATED_QUERY_STATUSES:
+        return True
+    return bool(
+        payload.get("provider_search_incomplete")
+        or payload.get("provider_search_retryable")
+        or payload.get("provider_search_degraded")
+    )
+
+
+def resolve_scoped_keyword_union_completion(
+    *,
+    dispatch: dict[str, Any],
+    query_summaries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Honest completion for the scoped keyword-union seed roster (Step 4b-B).
+
+    Routes through ``resolve_segmented_roster_completion``: every expected
+    keyword shard must be present and untruncated or the union stays
+    ``partial`` — a query cut by the provider query budget, an unrun provider
+    lane, or a retry-pending/degraded query is never reported as complete
+    coverage.  Overlap-pruned queries stay covered: their summaries carry
+    ``skipped_high_overlap`` (a coverage decision with probe evidence), which
+    is not a truncated state.
+    """
+
+    summaries_by_query: dict[str, dict[str, Any]] = {}
+    for item in list(query_summaries or []):
+        if not isinstance(item, dict):
+            continue
+        query_text = str(item.get("query") or "").strip()
+        if query_text and query_text not in summaries_by_query:
+            summaries_by_query[query_text] = dict(item)
+    shard_summaries: list[dict[str, Any]] = []
+    for shard in list(dispatch.get("shards") or []):
+        record = dict(shard or {})
+        shard_id = str(record.get("shard_id") or "").strip()
+        if not shard_id or str(record.get("dispatch_status") or "") not in SCOPED_KEYWORD_UNION_EXPECTED_DISPATCH_STATUSES:
+            continue
+        summary = summaries_by_query.get(str(record.get("provider_query") or "").strip())
+        if summary is None:
+            # Missing shard: the resolver reports it in missing_shard_ids.
+            continue
+        shard_summaries.append(
+            {
+                "shard_id": shard_id,
+                "partial_result": provider_query_summary_is_truncated(summary),
+                "query_status": str(summary.get("status") or ""),
+                "seed_entry_count": int(summary.get("seed_entry_count") or 0),
+            }
+        )
+    return resolve_segmented_roster_completion(
+        expected_shard_ids=[str(item) for item in list(dispatch.get("expected_shard_ids") or [])],
+        shard_summaries=shard_summaries,
+        completed_stop_reason=SCOPED_KEYWORD_UNION_COMPLETED_STOP_REASON,
+        partial_stop_reason=SCOPED_KEYWORD_UNION_PARTIAL_STOP_REASON,
+    )
+
+
+def _provider_people_search_max_query_count(cost_policy: dict[str, Any] | None) -> int:
+    try:
+        max_query_count = int(dict(cost_policy or {}).get("provider_people_search_max_queries") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, max_query_count)
 
 
 def _env_int(name: str, default: int) -> int:
@@ -173,6 +267,13 @@ class SearchSeedSnapshot:
             "entries_path": str(self.entries_path) if isinstance(self.entries_path, Path) else "",
             "lane_keys": sorted({*lane_summary_paths.keys(), *[str(key).strip() for key in self.lane_entries.keys()]}),
             "lane_summary_paths": lane_summary_paths,
+            # WS1 Step 4b-B: the scoped keyword-union shard contract (persisted
+            # plan path + honest completion) rides on the execution payload.
+            **(
+                {"scoped_keyword_union": dict(dict(self.summary_payload or {}).get("scoped_keyword_union") or {})}
+                if dict(self.summary_payload or {}).get("scoped_keyword_union")
+                else {}
+            ),
         }
 
 
@@ -649,6 +750,148 @@ class SearchSeedAcquirer:
             and harvest_connector_available(self.harvest_search_connector.settings)
         )
 
+    def _deduped_provider_people_search_query_texts(
+        self,
+        *,
+        identity: CompanyIdentity,
+        filter_hints: dict[str, list[str]],
+        queries: list[str],
+        max_query_count: int,
+    ) -> list[str]:
+        """Signature-level dedupe + query budget for the paid people-search lane.
+
+        Single source for BOTH the live dispatch loop
+        (``_provider_people_search_fallback``) and the scoped keyword-union
+        shard plan (WS1 Step 4b-B): the persisted plan must pre-register
+        exactly the query list the dispatch loop will run.
+        """
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        harvest_enabled = self._harvest_people_search_enabled()
+        for item in queries:
+            key = str(item or "")
+            if harvest_enabled:
+                effective_key = _normalize_harvest_query_text(
+                    query_text=key,
+                    filter_hints=filter_hints,
+                    identity=identity,
+                )
+                signature = _search_query_signature(effective_key) or "__empty__"
+            else:
+                signature = _search_query_signature(key) or "__empty__"
+            if signature in seen:
+                continue
+            seen.add(signature)
+            deduped.append(key)
+        if max_query_count > 0:
+            deduped = deduped[:max_query_count]
+        return deduped
+
+    def resolve_scoped_keyword_union_shard_dispatch(
+        self,
+        *,
+        policy: dict[str, Any],
+        identity: CompanyIdentity,
+        filter_hints: dict[str, list[str]],
+        search_seed_queries: list[str],
+        cost_policy: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Map planner-minted keyword shards onto the paid people-search dispatch.
+
+        WS1 Step 4b-B: shard ids come verbatim from the planner's
+        ``scoped_keyword_union_shard_policy`` rules (the planner is the single
+        writer — ids are never re-normalized here).  The provider query list is
+        resolved through the SAME pipeline the dispatch loop uses
+        (``_resolve_provider_people_search_queries`` + signature dedupe +
+        query budget), so per-keyword provider payloads stay byte-compatible
+        with the pre-4b seed-pool path and the mapping cannot drift from the
+        real dispatch.  Shards whose query survives resolution are
+        ``dispatched`` (or ``merged_duplicate_query`` when two keywords
+        canonicalize into one query family); shards cut by the query budget
+        stay expected (``not_dispatched_query_budget``) so completion reports
+        them as missing coverage instead of silently dropping the keyword;
+        structurally unqueryable shards (generic-only text, company-identity
+        echoes) are recorded as suppressed for audit and excluded from the
+        expected set.
+        """
+
+        paid_queries = _resolve_provider_people_search_queries(
+            identity=identity,
+            filter_hints=filter_hints,
+            search_seed_queries=list(search_seed_queries or []),
+        )
+        dispatched_query_texts = self._deduped_provider_people_search_query_texts(
+            identity=identity,
+            filter_hints=filter_hints,
+            queries=paid_queries,
+            max_query_count=_provider_people_search_max_query_count(cost_policy),
+        )
+        query_by_family: dict[str, str] = {}
+        for query_text in dispatched_query_texts:
+            family = _provider_query_family_key(query_text)
+            if family and family not in query_by_family:
+                query_by_family[family] = query_text
+        shards: list[dict[str, Any]] = []
+        claimed_queries: set[str] = set()
+        for rule in list(policy.get("keyword_shards") or []):
+            record = dict(rule or {})
+            shard_id = str(record.get("rule_id") or "").strip()
+            include_patch = dict(record.get("include_patch") or {})
+            keywords = [
+                str(item or "").strip()
+                for item in list(include_patch.get("keywords") or [])
+                if str(item or "").strip()
+            ]
+            keyword = keywords[0] if keywords else str(record.get("title") or "").strip()
+            if not shard_id or not keyword:
+                continue
+            cleaned = _clean_provider_query_text(keyword)
+            normalized = _clean_provider_query_text(
+                _normalize_harvest_query_text(
+                    query_text=keyword,
+                    filter_hints=filter_hints,
+                    identity=identity,
+                )
+            )
+            provider_query = ""
+            for candidate in (cleaned, normalized):
+                family = _provider_query_family_key(candidate) if candidate else ""
+                if family and family in query_by_family:
+                    provider_query = query_by_family[family]
+                    break
+            if provider_query:
+                dispatch_status = "merged_duplicate_query" if provider_query in claimed_queries else "dispatched"
+                claimed_queries.add(provider_query)
+            elif not cleaned and not normalized:
+                dispatch_status = "suppressed_generic_terms"
+            elif _provider_query_matches_company_identity(
+                cleaned or keyword, identity=identity
+            ) or _provider_query_matches_company_identity(normalized or keyword, identity=identity):
+                dispatch_status = "suppressed_company_identity"
+            else:
+                dispatch_status = "not_dispatched_query_budget"
+            shards.append(
+                {
+                    "shard_id": shard_id,
+                    "keyword": keyword,
+                    "provider_query": provider_query,
+                    "dispatch_status": dispatch_status,
+                }
+            )
+        expected_shard_ids = [
+            str(item.get("shard_id") or "")
+            for item in shards
+            if str(item.get("dispatch_status") or "") in SCOPED_KEYWORD_UNION_EXPECTED_DISPATCH_STATUSES
+        ]
+        return {
+            "strategy_id": str(policy.get("strategy_id") or ""),
+            "mode": str(policy.get("mode") or ""),
+            "shards": shards,
+            "expected_shard_ids": expected_shard_ids,
+            "unsharded_query_texts": [item for item in dispatched_query_texts if item not in claimed_queries],
+        }
+
     def refresh_background_search_workers(self, workers: list[dict[str, Any]]) -> dict[str, Any]:
         grouped_specs: dict[Path, list[dict[str, Any]]] = {}
         discovery_dirs: dict[Path, Path] = {}
@@ -757,6 +1000,7 @@ class SearchSeedAcquirer:
         intent_view: dict[str, Any] | None = None,
         delta_execution_plan: dict[str, Any] | None = None,
         lane_context: dict[str, Any] | None = None,
+        scoped_keyword_union_shard_policy: dict[str, Any] | None = None,
         on_incremental_query_result: SearchSeedIncrementalResultCallback | None = None,
     ) -> SearchSeedSnapshot:
         discovery_dir = snapshot_dir / "search_seed_discovery"
@@ -976,6 +1220,41 @@ class SearchSeedAcquirer:
             should_run_provider_people_search = True
         elif provider_available and len(entries) < web_result_target and provider_people_search_mode == "fallback_only":
             should_run_provider_people_search = True
+        scoped_keyword_union_policy = dict(scoped_keyword_union_shard_policy or {})
+        scoped_keyword_union_dispatch: dict[str, Any] = {}
+        scoped_keyword_union_plan_path = discovery_dir / SCOPED_KEYWORD_UNION_SHARD_PLAN_FILENAME
+        provider_query_summaries: list[dict[str, Any]] = []
+        scoped_provider_entries: list[dict[str, Any]] = []
+        if scoped_keyword_union_policy:
+            # WS1 Step 4b-B (ruling RATIFIED 2026-07-23, B-then-A): keyword
+            # shards are first-class shards of the paid people-search lane.
+            # The expected-shard set is derived from the planner-minted policy
+            # (shard ids recorded verbatim — the planner is the single writer)
+            # against the exact query list the dispatch loop will run, and is
+            # persisted BEFORE dispatch so recovery and completion fail closed
+            # against the full plan, not whatever queries happen to finish.
+            scoped_keyword_union_dispatch = self.resolve_scoped_keyword_union_shard_dispatch(
+                policy=scoped_keyword_union_policy,
+                identity=identity,
+                filter_hints=effective_filter_hints,
+                search_seed_queries=list(paid_queries),
+                cost_policy=cost_policy,
+            )
+            logger.write_json(
+                scoped_keyword_union_plan_path,
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": identity.canonical_name,
+                    **scoped_keyword_union_dispatch,
+                    "provider_lane_planned": bool(
+                        should_run_provider_people_search and self._harvest_people_search_enabled()
+                    ),
+                },
+                asset_type="scoped_keyword_union_shard_plan",
+                source_kind="search_seed_discovery",
+                is_raw_asset=False,
+                model_safe=True,
+            )
         if should_run_provider_people_search:
             needed = max(web_result_target - len(entries), 0)
             provider_limit = max(needed, web_result_target)
@@ -997,13 +1276,76 @@ class SearchSeedAcquirer:
                 runtime_mode=runtime_mode,
                 snapshot_id=snapshot_dir.name,
             )
+            scoped_provider_entries = [dict(item) for item in provider_entries if isinstance(item, dict)]
             entries.extend(provider_entries)
             entries = _dedupe_seed_entries(entries)
             query_summaries.extend(provider_summaries)
+            provider_query_summaries = [dict(item) for item in provider_summaries if isinstance(item, dict)]
             errors.extend(provider_errors)
             accounts_used.extend(provider_accounts)
             if provider_entries and not queued_background_search:
                 stop_reason = "provider_people_search_primary" if provider_search_primary else "provider_people_search_fallback"
+
+        scoped_keyword_union_block: dict[str, Any] = {}
+        if scoped_keyword_union_policy:
+            # Honest completion + union-dedupe provenance (Step 4b-B): every
+            # duplicate person found by multiple keyword shards keeps the FULL
+            # set of contributing shard ids on the surviving deduped entry.
+            scoped_keyword_union_completion = resolve_scoped_keyword_union_completion(
+                dispatch=scoped_keyword_union_dispatch,
+                query_summaries=provider_query_summaries,
+            )
+            shard_ids_by_query: dict[str, list[str]] = {}
+            for shard in list(scoped_keyword_union_dispatch.get("shards") or []):
+                provider_query = str(dict(shard or {}).get("provider_query") or "").strip()
+                shard_id = str(dict(shard or {}).get("shard_id") or "").strip()
+                if provider_query and shard_id:
+                    shard_ids_by_query.setdefault(provider_query, []).append(shard_id)
+            provenance_by_seed_key: dict[str, list[str]] = {}
+            for provider_entry in scoped_provider_entries:
+                seed_key = str(provider_entry.get("seed_key") or "").strip()
+                source_query = str(provider_entry.get("source_query") or "").strip()
+                if not seed_key:
+                    continue
+                for shard_id in shard_ids_by_query.get(source_query, []):
+                    bucket = provenance_by_seed_key.setdefault(seed_key, [])
+                    if shard_id not in bucket:
+                        bucket.append(shard_id)
+            if provenance_by_seed_key:
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    shard_ids = provenance_by_seed_key.get(str(entry.get("seed_key") or "").strip())
+                    if not shard_ids:
+                        continue
+                    entry_metadata = dict(entry.get("metadata") or {})
+                    entry_metadata["scoped_keyword_union_shard_ids"] = list(shard_ids)
+                    entry["metadata"] = entry_metadata
+            scoped_keyword_union_block = {
+                "strategy_id": str(scoped_keyword_union_dispatch.get("strategy_id") or ""),
+                "mode": str(scoped_keyword_union_dispatch.get("mode") or ""),
+                "plan_path": str(scoped_keyword_union_plan_path),
+                "shards": list(scoped_keyword_union_dispatch.get("shards") or []),
+                "expected_shard_ids": list(scoped_keyword_union_dispatch.get("expected_shard_ids") or []),
+                "unsharded_query_texts": list(scoped_keyword_union_dispatch.get("unsharded_query_texts") or []),
+                "completion": dict(scoped_keyword_union_completion),
+            }
+            logger.write_json(
+                scoped_keyword_union_plan_path,
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": identity.canonical_name,
+                    **scoped_keyword_union_dispatch,
+                    "provider_lane_planned": bool(
+                        should_run_provider_people_search and self._harvest_people_search_enabled()
+                    ),
+                    "completion": dict(scoped_keyword_union_completion),
+                },
+                asset_type="scoped_keyword_union_shard_plan",
+                source_kind="search_seed_discovery",
+                is_raw_asset=False,
+                model_safe=True,
+            )
 
         strategy_type = str(dict(lane_context or {}).get("strategy_type") or "").strip()
         query_summaries = _annotate_search_seed_query_summaries(
@@ -1070,6 +1412,7 @@ class SearchSeedAcquirer:
             "lane_context": dict(lane_context or {}),
             "summary_path": str(lane_summary_path),
             "entries_path": str(lane_entries_path),
+            **({"scoped_keyword_union": dict(scoped_keyword_union_block)} if scoped_keyword_union_block else {}),
             "worker_daemon": {
                 "cycles": int(daemon_summary.get("cycles") or 0),
                 "retried": list(daemon_summary.get("retried") or []),
@@ -1104,6 +1447,7 @@ class SearchSeedAcquirer:
             "intent_view": resolved_intent_view,
             "delta_execution_plan": dict(delta_execution_plan or {}),
             "lane_context": dict(lane_context or {}),
+            **({"scoped_keyword_union": dict(scoped_keyword_union_block)} if scoped_keyword_union_block else {}),
             "lane_summaries": {
                 employment_scope: {
                     "lane": "profile_search",
@@ -1869,12 +2213,7 @@ class SearchSeedAcquirer:
                 query_summary["search_seed_discovery_query_item_id"] = str(item.get("item_id") or "")
                 query_summary["discovery_query_item_status"] = str(item.get("status") or "")
             return {"query_entries": [], "query_summary": query_summary, "account_used": ""}
-        try:
-            max_query_count = int(cost_policy.get("provider_people_search_max_queries") or 0)
-        except (TypeError, ValueError):
-            max_query_count = 0
-        if max_query_count < 0:
-            max_query_count = 0
+        max_query_count = _provider_people_search_max_query_count(cost_policy)
         paid_queries = _resolve_provider_people_search_queries(
             identity=identity,
             filter_hints=filter_hints,
@@ -1936,25 +2275,14 @@ class SearchSeedAcquirer:
             broad_former_past_company_allowed
         ):
             paid_queries = [""]
-        deduped_queries: list[str] = []
-        seen_queries: set[str] = set()
-        for item in paid_queries:
-            key = str(item or "")
-            if self._harvest_people_search_enabled():
-                effective_key = _normalize_harvest_query_text(
-                    query_text=key,
-                    filter_hints=filter_hints,
-                    identity=identity,
-                )
-                signature = _search_query_signature(effective_key) or "__empty__"
-            else:
-                signature = _search_query_signature(key) or "__empty__"
-            if signature in seen_queries:
-                continue
-            seen_queries.add(signature)
-            deduped_queries.append(key)
-        if max_query_count > 0:
-            deduped_queries = deduped_queries[:max_query_count]
+        # Single-sourced with the scoped keyword-union shard plan (Step 4b-B):
+        # the persisted plan pre-registers exactly this deduped/budgeted list.
+        deduped_queries = self._deduped_provider_people_search_query_texts(
+            identity=identity,
+            filter_hints=filter_hints,
+            queries=paid_queries,
+            max_query_count=max_query_count,
+        )
 
         def _emit_incremental_provider_result(
             *,
