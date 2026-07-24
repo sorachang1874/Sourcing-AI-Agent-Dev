@@ -54,6 +54,11 @@ PROTOCOL_METHOD_CONTRACTS = {
     "judge_profile_membership": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
     "synthesize_manual_review": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
     "evaluate_outreach_profile": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
+    # WS7/W7.2 S2 (2026-07-23, docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §2.1): the
+    # divider method joins the v1 surface additively; DeterministicModelClient
+    # returns {} (ruling-④ F1 marker) and validation is single-sourced in
+    # profile_batch_division_contract.
+    "divide_profile_prefetch_batches": ("sync", "(self, payload: dict[str, Any]) -> dict[str, Any]", ()),
     "provider_name": ("sync", "(self) -> str", ()),
     "supports_outreach_ai_verification": ("sync", "(self) -> bool", ()),
     "healthcheck": ("sync", "(self) -> dict[str, Any]", ()),
@@ -78,6 +83,11 @@ CONCRETE_PROTOCOL_OVERRIDES = {
     ),
     "QwenResponsesModelClient": frozenset(PROTOCOL_METHOD_CONTRACTS),
     "OpenAICompatibleChatModelClient": frozenset(PROTOCOL_METHOD_CONTRACTS),
+    # WS7/W7.2 S2 scripted divider (OQ7 opt-in): only the divider method is
+    # scripted; everything else keeps OfflineModelClient semantics.
+    "ScriptedProfileBatchDividerModelClient": frozenset(
+        {"provider_name", "healthcheck", "divide_profile_prefetch_batches"}
+    ),
 }
 
 
@@ -117,6 +127,7 @@ MODEL_CLIENT_CONSUMER_MODULES = frozenset(
         "public_web_runtime_core.py",
         "public_web_search.py",
         "review_plan_instructions.py",
+        "profile_batch_division.py",
         "search_planning.py",
         "seed_discovery.py",
         "snapshot_materializer.py",
@@ -144,6 +155,11 @@ MODEL_CLIENT_CALL_POINTS = Counter(
         ("planning.py", "build_sourcing_plan", "interpret_intent"): 2,
         ("planning.py", "_build_intent_brief", "draft_intent_brief"): 1,
         ("post_acquisition_refinement.py", "compile_refinement_patch_from_instruction", "provider_name"): 1,
+        # WS7/W7.2 S2 (2026-07-23): the divider orchestration helper is the
+        # single consumer of divide_profile_prefetch_batches until the S3
+        # shadow slice wires enrichment's wave-mint site through it.
+        ("profile_batch_division.py", "propose_and_validate_division", "divide_profile_prefetch_batches"): 1,
+        ("profile_batch_division.py", "propose_and_validate_division", "provider_name"): 1,
         (
             "post_acquisition_refinement.py",
             "compile_refinement_patch_from_instruction",
@@ -1267,7 +1283,8 @@ def test_model_client_protocol_surface_matches_v1_golden() -> None:
     tree = ast.parse(MODEL_PROVIDER_PATH.read_text(encoding="utf-8"), filename=str(MODEL_PROVIDER_PATH))
 
     assert _protocol_surface(tree) == PROTOCOL_METHOD_CONTRACTS
-    assert len(PROTOCOL_METHOD_CONTRACTS) == 17
+    # 17 → 18 on 2026-07-23: WS7/W7.2 S2 added divide_profile_prefetch_batches.
+    assert len(PROTOCOL_METHOD_CONTRACTS) == 18
 
 
 def test_concrete_clients_and_factory_returns_preserve_complete_protocol_surface() -> None:
@@ -1357,6 +1374,7 @@ def _scripted_live_runtime_delegate_graph() -> dict[str, tuple[str, ...]]:
         "judge_profile_membership": lambda: client.judge_profile_membership({}),
         "synthesize_manual_review": lambda: client.synthesize_manual_review({}),
         "evaluate_outreach_profile": lambda: client.evaluate_outreach_profile({}),
+        "divide_profile_prefetch_batches": lambda: client.divide_profile_prefetch_batches({}),
         "provider_name": client.provider_name,
         "supports_outreach_ai_verification": client.supports_outreach_ai_verification,
         "healthcheck": client.healthcheck,
@@ -1370,7 +1388,7 @@ def _scripted_live_runtime_delegate_graph() -> dict[str, tuple[str, ...]]:
     return graph
 
 
-def test_scripted_live_runtime_spy_proves_the_complete_17_method_call_graph() -> None:
+def test_scripted_live_runtime_spy_proves_the_complete_18_method_call_graph() -> None:
     expected = {
         method_name: ((method_name,) if method_name in SCRIPTED_LIVE_DELEGATED_METHODS else ())
         for method_name in PROTOCOL_METHOD_CONTRACTS
@@ -1390,8 +1408,10 @@ def test_model_client_consumer_inventory_and_call_points_match_v1_golden() -> No
 
     assert modules == MODEL_CLIENT_CONSUMER_MODULES
     assert calls == MODEL_CLIENT_CALL_POINTS
-    assert len(modules) == 25
-    assert sum(calls.values()) == 29
+    # 25/29 → 26/31 on 2026-07-23: WS7/W7.2 S2 added profile_batch_division.py
+    # (divide_profile_prefetch_batches + provider_name call points).
+    assert len(modules) == 26
+    assert sum(calls.values()) == 31
     assert {method_name for _, _, method_name in calls} == set(PROTOCOL_METHOD_CONTRACTS)
 
 

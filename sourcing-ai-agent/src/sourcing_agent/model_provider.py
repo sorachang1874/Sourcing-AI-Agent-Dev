@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -21,6 +22,31 @@ from .settings import ModelProviderSettings, QwenSettings
 
 _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater_china_scope"
 _SCRIPTED_LIVE_MODEL_PLANNING_ENV = "SOURCING_SCRIPTED_LIVE_MODEL_PLANNING"
+# WS7/W7.2 S2 (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §2, OQ7): opt-in scripted
+# profile-batch-divider client for offline AI-path exercise. Absent → the
+# divide method returns {} (ruling-④ F1 fallback marker). Dedicated flag by
+# ruling — it deliberately does NOT piggyback the scripted-planning flag.
+_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV = "SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER"
+# OQ8 RATIFIED 2026-07-23: the divider call gets its own bounded timeout
+# (default 20 s) instead of ModelProviderSettings.timeout_seconds (45 s),
+# because it runs inside the wave-mint path (design §2.4).
+_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_ENV = "SOURCING_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS"
+_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_DEFAULT = 20
+_PROFILE_BATCH_DIVIDER_MAX_OUTPUT_TOKENS = 1000
+# Wire keys of the divide_profile_prefetch_batches response envelope (S2
+# invocation-surface contract, consumed by profile_batch_division.py):
+#   {}                                   → divider unavailable (F1)
+#   {"error": "..."}                     → call failed; circuit-open errors keep
+#                                          the "model_provider_circuit_open" prefix (F2 vs F3)
+#   {"division": {...}, "provenance": {...}, "raw_response_preview": "..."}
+#                                        → raw, UNVALIDATED model output + client-side
+#                                          call facts; validation is single-sourced in
+#                                          profile_batch_division_contract (S1).
+PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY = "division"
+PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY = "provenance"
+PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY = "error"
+PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY = "raw_response_preview"
+PROFILE_BATCH_DIVIDER_CIRCUIT_ERROR_PREFIX = "model_provider_circuit_open"
 _MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS"
 _MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS"
 _MODEL_PROVIDER_CIRCUIT_DISABLED_ENV = "SOURCING_MODEL_PROVIDER_CIRCUIT_DISABLED"
@@ -169,6 +195,28 @@ def _scripted_live_model_planning_enabled(*, provider_mode: str) -> bool:
     return str(provider_mode or "").strip().lower() == "scripted" and _env_bool(
         _SCRIPTED_LIVE_MODEL_PLANNING_ENV,
         False,
+    )
+
+
+def _scripted_profile_batch_divider_enabled(*, provider_mode: str) -> bool:
+    """OQ7 opt-in: scripted divider client, offline provider modes only.
+
+    Unlike scripted-live planning (scripted mode only), the divider's offline
+    exercise path must also cover simulate e2e (design §5.4 / discrepancy D2),
+    so any offline mode qualifies. Live mode never uses the scripted divider.
+    """
+    return str(provider_mode or "").strip().lower() in {"simulate", "replay", "scripted"} and _env_bool(
+        _SCRIPTED_PROFILE_BATCH_DIVIDER_ENV,
+        False,
+    )
+
+
+def _profile_batch_divider_timeout_seconds() -> int:
+    return _env_int(
+        _PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_ENV,
+        _PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_DEFAULT,
+        minimum=1,
+        maximum=300,
     )
 
 
@@ -632,6 +680,8 @@ class ModelClient(Protocol):
 
     def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def provider_name(self) -> str: ...
 
     def supports_outreach_ai_verification(self) -> bool: ...
@@ -882,6 +932,14 @@ class DeterministicModelClient:
     def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {}
 
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        # WS7/W7.2 S2: {} is the structural "divider unavailable" marker — the
+        # caller (profile_batch_division.propose_and_validate_division) maps it
+        # to the ruling-④ F1 fallback (`divider_model_unavailable`), so
+        # deterministic/offline runs take the rule-ladder path by construction
+        # (design §2.1 / discrepancy D2).
+        return {}
+
 
 class OfflineModelClient(DeterministicModelClient):
     def __init__(self, *, mode: str) -> None:
@@ -955,6 +1013,106 @@ class ScriptedLivePlanningModelClient(DeterministicModelClient):
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         return self.delegate.plan_search_strategy(request, draft_payload)
+
+
+class ScriptedProfileBatchDividerModelClient(OfflineModelClient):
+    """Offline scripted divider (WS7/W7.2 S2, OQ7): deterministic, schema-valid
+    profile-batch divisions without a billed model call.
+
+    Mirrors the ScriptedLivePlanningModelClient opt-in pattern behind its own
+    dedicated env `SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER` (design §2.1). The
+    env is re-checked per call as a belt-and-braces gate: even a directly
+    constructed instance returns {} (the F1 fallback marker) when the opt-in is
+    absent. Every other ModelClient method keeps OfflineModelClient semantics.
+
+    The scripted division is a contiguous near-equal split of the eligible
+    (non-retry_wait) inventory indices into `clamp(ceil(eligible/300), 4, 8)`
+    batches. It satisfies the full S1 acceptance battery for eligible sizes in
+    (300, 2400] at the default inflight of 4; outside that range no division
+    can satisfy V1+V2/V9 simultaneously and the battery rejects it into the
+    ruling-④ fallback — deliberately NOT special-cased here (the mint site
+    bounds windows before engaging the divider; S3 scope).
+    """
+
+    def provider_name(self) -> str:
+        return "scripted_profile_batch_divider_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "scripted_divider_enabled": _env_bool(_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV, False),
+            "note": (
+                "Offline scripted profile-batch divider (OQ7 opt-in via "
+                f"{_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV}); only divide_profile_prefetch_batches "
+                "is scripted, every other model call stays offline-deterministic."
+            ),
+        }
+
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not _env_bool(_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV, False):
+            return {}
+        inventory = payload.get("inventory") if isinstance(payload.get("inventory"), dict) else {}
+        budget = payload.get("budget") if isinstance(payload.get("budget"), dict) else {}
+        retry_wait = payload.get("retry_wait") if isinstance(payload.get("retry_wait"), dict) else {}
+        try:
+            inventory_size = max(0, int(inventory.get("size") or 0))
+        except (TypeError, ValueError):
+            inventory_size = 0
+        try:
+            envelope = max(1, int(budget.get("provider_envelope_max_urls") or 300))
+        except (TypeError, ValueError):
+            envelope = 300
+        retry_indices = {
+            int(index)
+            for index in (retry_wait.get("indices") or [])
+            if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < inventory_size
+        }
+        eligible = [index for index in range(inventory_size) if index not in retry_indices]
+        if not eligible:
+            return {}
+        batch_count = min(8, max(4, -(-len(eligible) // envelope)))
+        base_size, remainder = divmod(len(eligible), batch_count)
+        batches: list[dict[str, Any]] = []
+        cursor = 0
+        for ordinal in range(1, batch_count + 1):
+            size = base_size + (1 if ordinal <= remainder else 0)
+            members = eligible[cursor : cursor + size]
+            cursor += size
+            ranges: list[list[int]] = []
+            for index in members:
+                if ranges and index == ranges[-1][1] + 1:
+                    ranges[-1][1] = index
+                else:
+                    ranges.append([index, index])
+            batches.append(
+                {
+                    "batch_index": ordinal,
+                    "member_index_ranges": [[start, end] for start, end in ranges],
+                    "member_count": len(members),
+                    "reason": (
+                        f"scripted contiguous chunk {ordinal}/{batch_count} of "
+                        f"{len(eligible)} eligible members (offline AI-path exercise)"
+                    ),
+                    "reason_code": "ai_division",
+                }
+            )
+        snapshot = json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str)
+        return {
+            PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY: {"batches": batches},
+            PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": "scripted-profile-batch-divider-v1",
+                "response_model": "scripted-profile-batch-divider-v1",
+                "prompt_sha256": hashlib.sha256(b"scripted_profile_batch_divider:v1").hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(snapshot.encode("utf-8")).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": 0,
+            },
+            PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
+            PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "",
+        }
 
 
 class QwenResponsesModelClient(DeterministicModelClient):
@@ -1224,9 +1382,59 @@ class QwenResponsesModelClient(DeterministicModelClient):
             return {"error": "non_json_response", "raw_preview": response[:240]}
         return _normalize_outreach_profile_response(parsed)
 
-    def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # WS7/W7.2 S2: same wire contract as the OpenAI-compatible client.
+        # NOTE (design discrepancy D6): the Qwen transport has no circuit
+        # breaker, so the F2 class never arises here — every call failure maps
+        # to F3 (`divider_call_failed`) at the caller.
+        system_prompt = _build_profile_batch_division_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        response, error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=_PROFILE_BATCH_DIVIDER_MAX_OUTPUT_TOKENS,
+            timeout_seconds=_profile_batch_divider_timeout_seconds(),
+        )
+        if error:
+            return {PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: error}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(response)
+        return {
+            PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY: parsed,
+            PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": str(self.settings.model or ""),
+                # The Qwen text-extraction path drops the response body's model
+                # identity; recorded honestly as empty rather than echoed.
+                "response_model": "",
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": latency_ms,
+            },
+            PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
+            PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else response[:240],
+        }
+
+    def _run_text_prompt(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> str:
         input_text = f"System instruction:\n{system_prompt}\n\nUser input:\n{user_prompt}"
-        return self._call_responses_api(input_text, max_tokens=max_tokens)
+        if timeout_seconds is None:
+            # Keep the pre-S2 call shape when no override is requested so
+            # subclass fakes/overrides with the original signature keep working.
+            return self._call_responses_api(input_text, max_tokens=max_tokens)
+        return self._call_responses_api(input_text, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
 
     def _safe_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
         response, _error = self._safe_text_prompt_with_error(
@@ -1236,13 +1444,38 @@ class QwenResponsesModelClient(DeterministicModelClient):
         )
         return response
 
-    def _safe_text_prompt_with_error(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> tuple[str, str]:
+    def _safe_text_prompt_with_error(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> tuple[str, str]:
         try:
-            return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens), ""
+            if timeout_seconds is None:
+                # Keep the pre-S2 call shape when no override is requested so
+                # subclass fakes/overrides with the original signature keep working.
+                return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens), ""
+            return (
+                self._run_text_prompt(
+                    system_prompt,
+                    user_prompt,
+                    max_tokens=max_tokens,
+                    timeout_seconds=timeout_seconds,
+                ),
+                "",
+            )
         except Exception as exc:
             return "", _model_call_error_message(exc)
 
-    def _call_responses_api(self, input_text: str, *, max_tokens: int | None = None) -> str:
+    def _call_responses_api(
+        self,
+        input_text: str,
+        *,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> str:
         endpoint = f"{self.settings.base_url}/responses"
         payload = {
             "model": self.settings.model,
@@ -1261,7 +1494,10 @@ class QwenResponsesModelClient(DeterministicModelClient):
             method="POST",
         )
         try:
-            with request.urlopen(http_request, timeout=self.settings.timeout_seconds) as response:
+            effective_timeout = (
+                timeout_seconds if timeout_seconds is not None else self.settings.timeout_seconds
+            )
+            with request.urlopen(http_request, timeout=effective_timeout) as response:
                 body = json.loads(response.read().decode("utf-8"))
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")
@@ -1603,6 +1839,60 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             return {"error": "non_json_response", "raw_preview": response[:240]}
         return _normalize_outreach_profile_response(parsed)
 
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """WS7/W7.2 S2 divider call (design §2.1/§2.3, OQ1/OQ8).
+
+        Returns the RAW parsed model output plus client-side call facts —
+        validation is single-sourced in profile_batch_division_contract (S1)
+        and belongs to the caller. Uses the divider-scoped bounded timeout
+        (OQ8, default 20 s) and the shared per-(provider, base_url, model)
+        circuit: a circuit-open or transport failure surfaces as the
+        truncated `_model_call_error_message` string under the "error" key
+        (same convention as `_safe_text_prompt_with_error`).
+        """
+        system_prompt = _build_profile_batch_division_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        try:
+            call_result = self._require_business_model_identity(
+                self._call_prompt_result(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max(
+                        _PROFILE_BATCH_DIVIDER_MAX_OUTPUT_TOKENS,
+                        int(getattr(self.settings, "min_max_tokens", 0) or 0),
+                    ),
+                    timeout_seconds=_profile_batch_divider_timeout_seconds(),
+                )
+            )
+        except Exception as exc:
+            return {PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: _model_call_error_message(exc)}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(call_result.text)
+        return {
+            PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY: parsed,
+            PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": call_result.requested_model,
+                "response_model": call_result.response_model,
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {
+                    "input_tokens": int(call_result.usage.input_tokens or 0),
+                    "output_tokens": int(call_result.usage.output_tokens or 0),
+                },
+                "latency_ms": latency_ms,
+            },
+            PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
+            PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else call_result.text[:240],
+        }
+
     def healthcheck(self) -> dict[str, Any]:
         circuit_key = self._circuit_key()
         flight, is_leader = _claim_model_provider_healthcheck_flight(circuit_key)
@@ -1823,12 +2113,16 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         messages: list[dict[str, str]],
         *,
         max_tokens: int,
+        timeout_seconds: int | None = None,
     ) -> OpenAIModelCallResult:
         api_style = str(self.settings.api_style or "openai_chat_completions").strip().lower()
+        # Forward the divider-scoped timeout only when explicitly requested so
+        # subclass fakes/overrides with the original signature keep working.
+        timeout_kwargs: dict[str, int] = {} if timeout_seconds is None else {"timeout_seconds": timeout_seconds}
         if api_style == "openai_responses":
-            return self._call_responses_api_result(messages, max_tokens=max_tokens)
+            return self._call_responses_api_result(messages, max_tokens=max_tokens, **timeout_kwargs)
         if api_style in {"", "openai_chat_completions"}:
-            return self._call_chat_completions_result(messages, max_tokens=max_tokens)
+            return self._call_chat_completions_result(messages, max_tokens=max_tokens, **timeout_kwargs)
         raise RuntimeError(f"Unsupported OpenAI-compatible api_style: {self.settings.api_style}")
 
     def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
@@ -1841,6 +2135,7 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         messages: list[dict[str, str]],
         *,
         max_tokens: int,
+        timeout_seconds: int | None = None,
     ) -> OpenAIModelCallResult:
         circuit_error = _model_provider_circuit_error(self._circuit_key())
         if circuit_error:
@@ -1858,7 +2153,7 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             try:
                 response = requests.post(
                     endpoint,
-                    timeout=self.settings.timeout_seconds,
+                    timeout=timeout_seconds if timeout_seconds is not None else self.settings.timeout_seconds,
                     headers={
                         "Authorization": f"Bearer {self.settings.api_key}",
                         "Content-Type": "application/json",
@@ -1900,6 +2195,7 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         messages: list[dict[str, str]],
         *,
         max_tokens: int,
+        timeout_seconds: int | None = None,
     ) -> OpenAIModelCallResult:
         circuit_error = _model_provider_circuit_error(self._circuit_key())
         if circuit_error:
@@ -1921,7 +2217,7 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             try:
                 response = requests.post(
                     endpoint,
-                    timeout=self.settings.timeout_seconds,
+                    timeout=timeout_seconds if timeout_seconds is not None else self.settings.timeout_seconds,
                     headers={
                         "Authorization": f"Bearer {self.settings.api_key}",
                         "Content-Type": "application/json",
@@ -1987,6 +2283,39 @@ def _safe_json_object(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _build_profile_batch_division_system_prompt() -> str:
+    """WS7/W7.2 S2 divider prompt (design §2.2/§2.3, OQ1).
+
+    The payload never contains raw URLs (index-range membership per the
+    ai_batch_division.v1 contract) and the model is explicitly forbidden from
+    echoing URLs or inventing url-like strings — indices only.
+    """
+    return (
+        "You are dividing one wave of LinkedIn profile-prefetch queue items into paid-provider "
+        "dispatch batches. The payload describes a canonically ordered candidate inventory ONLY by "
+        "integer indices (aggregate groups with inclusive index ranges), plus url-level failure "
+        "history summaries, prior-round context, retry_wait indices, and budget constants. "
+        "Return strict JSON with a single top-level key batches. "
+        "batches must be an array of 4 to 8 objects, each with exactly the keys "
+        "batch_index,member_index_ranges,member_count,reason,reason_code. "
+        "batch_index is the 1-based ordinal in output order. "
+        "member_index_ranges is an array of inclusive [start,end] integer pairs over the inventory "
+        "ordering; NEVER echo URLs, url fragments, or any url-like strings — indices only. "
+        "member_count must equal the total number of indices covered by the ranges. "
+        "Together the batches must cover every eligible inventory index exactly once, where "
+        "eligible means every index in [0, inventory.size) that is NOT listed in "
+        "retry_wait.indices; never include retry_wait indices, duplicates, or indices outside the "
+        "inventory. Every batch must have at most budget.provider_envelope_max_urls members. "
+        "ceil(batch_count / budget.actor_global_inflight) must be <= budget.max_actor_wave_rounds. "
+        "A batch smaller than budget.min_non_tiny_batch_size members is only allowed with one of "
+        "the legal tiny reason_code values listed in budget.legal_tiny_reason_codes; otherwise use "
+        "reason_code ai_division. reason is a concise explanation (<= 240 chars) of why the batch "
+        "is grouped this way (source-shard affinity, failure-history cohorting, envelope packing). "
+        "Group members to maximize retry efficiency and provider-envelope utilization. "
+        "Do not output markdown."
+    )
 
 
 def _build_public_web_signal_adjudication_prompt() -> str:
@@ -2271,6 +2600,13 @@ def build_model_client(
                 return ScriptedLivePlanningModelClient(OpenAICompatibleChatModelClient(model_settings), mode=external_mode)
             if qwen_settings and qwen_settings.enabled:
                 return ScriptedLivePlanningModelClient(QwenResponsesModelClient(qwen_settings), mode=external_mode)
+        # WS7/W7.2 S2 (OQ7): scripted divider opt-in for offline AI-path
+        # exercise. Precedence is deliberate: when scripted-live planning is
+        # engaged above it wins (the two opt-ins are not composable in one
+        # client yet; combining both flags keeps planning-only behavior and the
+        # divider falls back per ruling ④).
+        if _scripted_profile_batch_divider_enabled(provider_mode=external_mode):
+            return ScriptedProfileBatchDividerModelClient(mode=external_mode)
         return OfflineModelClient(mode=external_mode)
     # Genuine live mode: a billed LLM client must clear the same fail-closed gate as
     # every other live provider — outside production it requires the explicit

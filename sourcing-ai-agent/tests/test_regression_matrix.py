@@ -219,6 +219,36 @@ def test_profile_batch_division_contract_change_selects_contract_suite_and_oracl
     assert "paired::tests/test_fetch_profile_batch_characterization.py" in labels
 
 
+def test_profile_batch_division_helper_change_selects_the_full_divider_family() -> None:
+    # WS7/W7.2 S2 (2026-07-23): the orchestration helper rides the same family
+    # as the contract module — contract suite + model-surface suite + oracle.
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/profile_batch_division.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_profile_batch_division_contract.py" in labels
+    assert "paired::tests/test_profile_batch_division_model_surface.py" in labels
+    assert "paired::tests/test_fetch_profile_batch_characterization.py" in labels
+
+
+def test_model_provider_change_selects_protocol_and_divider_surface_suites() -> None:
+    # WS7/W7.2 S2 (2026-07-23): explicit mapping replaces the generic paired
+    # fallback that silently missed the v1 protocol characterization pins.
+    labels = {
+        invocation.label
+        for invocation in infer_pytest_invocations(
+            ["src/sourcing_agent/model_provider.py"],
+            repo_root=_repo_root(),
+        )
+    }
+    assert "paired::tests/test_model_provider.py" in labels
+    assert "paired::tests/test_model_client_v1_characterization.py" in labels
+    assert "paired::tests/test_profile_batch_division_model_surface.py" in labels
+
+
 def test_recovery_phases_change_selects_recovery_tick_oracle() -> None:
     labels = {
         invocation.label

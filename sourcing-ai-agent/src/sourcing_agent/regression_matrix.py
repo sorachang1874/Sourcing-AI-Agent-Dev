@@ -367,6 +367,9 @@ _ENRICHMENT_SUITES = (
 # oracle (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §1.3 oracle-pin column).
 _PROFILE_BATCH_DIVISION_CONTRACT_RELATED_PATHS = {
     "src/sourcing_agent/profile_batch_division_contract.py",
+    # W7.2 S2: the divider orchestration helper (model call + envelope assembly
+    # + F1-F6 mapping) rides the same contract family.
+    "src/sourcing_agent/profile_batch_division.py",
 }
 _PROFILE_BATCH_DIVISION_CONTRACT_SUITES = (
     PytestInvocation(
@@ -375,9 +378,38 @@ _PROFILE_BATCH_DIVISION_CONTRACT_SUITES = (
         reason="ai_batch_division.v1 schema + V1-V10 validator battery contract",
     ),
     PytestInvocation(
+        label="paired::tests/test_profile_batch_division_model_surface.py",
+        args=("tests/test_profile_batch_division_model_surface.py",),
+        reason="W7.2 S2 divider model-invocation surface: OQ5 gate, OQ7 scripted client, F1-F6 audit mapping",
+    ),
+    PytestInvocation(
         label="paired::tests/test_fetch_profile_batch_characterization.py",
         args=("tests/test_fetch_profile_batch_characterization.py",),
         reason="the validator battery formalizes the ladder rules the WS7 plan-record oracle pins",
+    ),
+)
+# model_provider.py previously rode only the generic paired fallback
+# (tests/test_model_provider.py), which silently missed the v1 protocol
+# characterization pins; W7.2 S2 makes the mapping explicit and adds the
+# divider surface suite (the ModelClient Protocol gained a divider method).
+_MODEL_PROVIDER_RELATED_PATHS = {
+    "src/sourcing_agent/model_provider.py",
+}
+_MODEL_PROVIDER_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_model_provider.py",
+        args=("tests/test_model_provider.py",),
+        reason="model provider client behavior + fail-closed live selection",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_model_client_v1_characterization.py",
+        args=("tests/test_model_client_v1_characterization.py",),
+        reason="ModelClient v1 protocol surface + consumer call-point pins",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_profile_batch_division_model_surface.py",
+        args=("tests/test_profile_batch_division_model_surface.py",),
+        reason="W7.2 S2 divider method conventions (timeout/circuit/raw-output contract)",
     ),
 )
 _ORCHESTRATOR_RELATED_PATHS = {
@@ -551,6 +583,11 @@ def infer_pytest_invocations(
         if path in _PROFILE_BATCH_DIVISION_CONTRACT_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _PROFILE_BATCH_DIVISION_CONTRACT_SUITES:
+                add(invocation)
+            continue
+        if path in _MODEL_PROVIDER_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _MODEL_PROVIDER_SUITES:
                 add(invocation)
             continue
         if path == "src/sourcing_agent/orchestrator.py":
