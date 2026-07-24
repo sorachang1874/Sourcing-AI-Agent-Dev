@@ -918,6 +918,12 @@ def test_d0c_contract_modules_have_no_transport_settings_environment_or_storage_
         SOURCE_ROOT / "model_tool_runtime.py": {
             "__future__",
             "abc",
+            # agent_contract_identity is a pure leaf module (imports only
+            # __future__ + re — no transport/settings/env/storage), so it is
+            # admitted here alongside model_route_registry/model_usage rather
+            # than broken out (R-038, 2026-07-24: the 651ee3a track-d hardening
+            # added this import; it meets the d0c purity criterion).
+            "agent_contract_identity",
             "codecs",
             "dataclasses",
             "datetime",
