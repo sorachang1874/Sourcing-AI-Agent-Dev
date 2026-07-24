@@ -42,6 +42,18 @@ if [ "$(uname -s)" = "Linux" ]; then
   done
 
   if [ "${missing_deb}" -eq 1 ]; then
+    # Refresh the package index before downloading: `apt download` fetches the
+    # candidate version resolved from the LOCAL index, and a stale index pins a
+    # superseded version whose .deb has been purged from the mirror pool
+    # (observed 2026-07-24 on GitHub runners: libasound2t64_1.2.11-1ubuntu0.2
+    # 404'd across azure/archive/security mirrors, R-044). The update is
+    # best-effort — sudo may be absent on dev machines, where the warm .deb
+    # cache above already sets missing_deb=0 and skips this block entirely.
+    if command -v sudo >/dev/null 2>&1; then
+      sudo apt-get update -y >/dev/null 2>&1 || true
+    else
+      apt-get update -y >/dev/null 2>&1 || true
+    fi
     apt download libnspr4 libnss3 "${audio_pkg}"
   fi
 
