@@ -1,5 +1,7 @@
 # WS7/W7.3 — AI-Native materialize→promote Judgment Design (operator directive #3)
 
+> **OQ1–OQ8 全部 RATIFIED 2026-07-24（operator 亲答,均按本稿推荐）**：阈值族(asset_reuse_planning:1217)退役、completeness_score 保留为 AI 特征+V_COMP 非回归地板、仅『争议』决策调 AI（pre-branch 确定性分流）；任何失败类一律保 incumbent+审计（非划分器的规则梯回退）；payload 快照捕获+backfill 仅 S6-live 前必需（simulate 切片先行）；**S0 characterization oracle 强制先钉**（evaluate 决策金样+完整性公式网格+候选选择+两道 guard 拒绝形状标 permanent-hard）；additive `metadata.ai_promote_decision` 键+审计化 force_upsert 保留+dry-run 双门可见；配置 settings 模型+promote 专用 20s 超时+`SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE` opt-in。实施自 S0 起按 §7 协议;lineage guard 事务内 fail-closed 硬前置不可动。
+
 > Status: DESIGN DRAFT 2026-07-24 — **awaiting operator rulings on OQ1–OQ8 (§8) + independent review gate**. No implementation slice lands before the ruling batch is answered and the review verdict for the contract slices is recorded (contract-heavy → §9 protocol). Authority: operator ruling ③ + ④ RATIFIED 2026-07-22 ([REFACTOR_MASTER_PLAN.md](REFACTOR_MASTER_PLAN.md) §6.5, directive #3); factual base: [WS7_STRONG_AGENT_RECON_2026-07-22.md](WS7_STRONG_AGENT_RECON_2026-07-22.md) §2. Design shape mirrors the proven [WS7_AI_BATCH_DIVIDER_DESIGN.md](WS7_AI_BATCH_DIVIDER_DESIGN.md) (divider议案①, OQ1–OQ8 RATIFIED 2026-07-23).
 
 ```
