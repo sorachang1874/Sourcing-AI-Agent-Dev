@@ -1,0 +1,41 @@
+{
+  "schema_version": "x.grok_cli.exploration.query_policy_registry.v2",
+  "registry_version": "approved-query-policies-v2",
+  "snapshot_position": 0,
+  "predecessor_registry_version": null,
+  "predecessor_registry_sha256": null,
+  "issuance_history_count": 1,
+  "issuance_history_head_sha256": "25ac1292974577513b03f5366cc5e4a5b7bb676be01087d579a25a6772ce478a",
+  "commitment_issuance_lineage": [
+    {
+      "lineage_position": 0,
+      "issuance_id": "qci_3b5939ca3949f15a0494b20a",
+      "policy_version": "openai-pretrain-base-discovery-2026-07-14-v1",
+      "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
+      "policy_sha256": "97575b96e58f8ee106006d5c1597b07175f5f390cf85849d40893f2ab1f4bb49",
+      "protected_category_boundary_version": "base-discovery-protected-category-boundary-v3",
+      "semantic_manifest_sha256": "ceaffcf725506bbe6fe39f2c74310ad1acde3a340edf1b279c657aba7da44a9c",
+      "run_binding_commitment": "d6f54c517e46a434d9b249aa7320be77b7920cb3d21d2e7e2e5d44390e672db9",
+      "commitment_key_id": "f8eb1635d042945e64ff2ca25098894638b70a69a6151f57bd6eabbe1ef5f3bb",
+      "commitment_nonce_id": "c034604c772d7ec1a4ace412ca2d4fc9bb43a18e406a0f5f652dddf9bbf54112"
+    }
+  ],
+  "policies": [
+    {
+      "policy_version": "openai-pretrain-base-discovery-2026-07-14-v1",
+      "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
+      "policy_sha256": "97575b96e58f8ee106006d5c1597b07175f5f390cf85849d40893f2ab1f4bb49",
+      "commitment_scheme": "hmac-sha256-v1",
+      "commitment_issuance_id": "qci_3b5939ca3949f15a0494b20a",
+      "commitment_key_id": "f8eb1635d042945e64ff2ca25098894638b70a69a6151f57bd6eabbe1ef5f3bb",
+      "commitment_nonce_id": "c034604c772d7ec1a4ace412ca2d4fc9bb43a18e406a0f5f652dddf9bbf54112",
+      "legacy_full_policy_commitment": "af2f3f538f5a03e1a718810c27eb65feae7b6ef92147565847c31413b9fa5e4b",
+      "policy_schema_version": "x.grok_cli.exploration.query_policy_descriptor.v2",
+      "purpose": "base_researcher_discovery",
+      "lab_id": "openai",
+      "protected_category_boundary_version": "base-discovery-protected-category-boundary-v3",
+      "run_binding_commitment": "d6f54c517e46a434d9b249aa7320be77b7920cb3d21d2e7e2e5d44390e672db9",
+      "enabled": true
+    }
+  ]
+}

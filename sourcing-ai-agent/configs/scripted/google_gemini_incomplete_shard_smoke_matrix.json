@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "case": "google_gemini_incomplete_shard_no_full_reuse",
+      "coverage_tags": [
+        "google_gemini_incomplete_shard_no_full_reuse"
+      ],
+      "scripted_scenario": "configs/scripted/google_gemini_incomplete_shard_streaming.json",
+      "payload": {
+        "raw_user_request": "帮我找Google做Gemini方向的人",
+        "target_company": "Google",
+        "keywords": ["Gemini"],
+        "employment_statuses": ["current", "former"],
+        "categories": ["employee", "former_employee"],
+        "top_k": 10
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 24,
+        "require_post_terminal_recovery_settled": true,
+        "require_post_preview_finalization_observed": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_unexpected_public_web_stage": true,
+        "require_no_event_level_efficiency_violation": true,
+        "require_no_progress_contract_violation": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_board_visible_projection_violation": true,
+        "require_no_serving_publication_gap": true,
+        "max_remote_provider_event_lag_ms": 30000,
+        "max_serving_publication_gap_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_stage_1_preview_to_final_results_ms": 60000,
+        "max_global_next_worker_start_gap_ms": 30000,
+        "expect_explain_dispatch_strategy": "delta_from_snapshot",
+        "expect_explain_planner_mode": "delta_from_snapshot",
+        "expect_explain_requires_delta_acquisition": true,
+        "expect_explain_effective_acquisition_mode": "baseline_reuse_with_delta",
+        "expect_explain_keywords_include": ["Gemini"],
+        "expect_latest_stage1_current_search_returned_count": 48,
+        "expect_latest_stage1_former_search_returned_count": 18,
+        "expect_latest_stage1_all_search_returned_count": 0,
+        "expect_latest_stage1_deduped_candidate_count": 66,
+        "expect_latest_stage1_deduped_profile_url_count": 66,
+        "expect_latest_stage1_profile_fetch_required_count": 66,
+        "expect_latest_stage1_profile_fetched_count": 66,
+        "min_provider_invocation_count": 5,
+        "min_provider_invocations_by_logical_name": {
+          "harvest_profile_search": 2,
+          "harvest_profile_scraper_batch": 2
+        },
+        "min_profile_url_total_count": 60,
+        "min_fetched_profile_count": 60,
+        "min_board_total_candidates": 60,
+        "min_agent_worker_count": 2,
+        "min_materialize_completed_count": 1,
+        "min_profile_batch_envelope_count": 1,
+        "max_profile_unexplained_tiny_batch_count": 0,
+        "max_provider_slot_underuse_with_backlog_count": 0,
+        "max_repeated_materialize_signature_count": 0,
+        "max_same_worker_reconcile_repeat_count": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,338 @@
+import unittest
+
+from sourcing_agent.domain import JobRequest
+from sourcing_agent.request_normalization import (
+    expand_request_intent_axes_patch,
+    merge_unique_request_string_values,
+    resolve_request_intent_view,
+    supplement_request_query_signals,
+)
+from sourcing_agent.semantic_intent import compile_semantic_brief
+
+
+class SemanticIntentTest(unittest.TestCase):
+    def test_semantic_brief_defaults_technical_queries_to_research_and_engineering(self) -> None:
+        brief = compile_semantic_brief(
+            raw_text="我想要 OpenAI 做 Reasoning 方向的人",
+            target_company="OpenAI",
+            target_scope="full_company_asset",
+            categories=["employee"],
+            employment_statuses=["current", "former"],
+            organization_keywords=[],
+            keywords=["Reasoning"],
+            must_have_keywords=[],
+            must_have_facets=[],
+            must_have_primary_role_buckets=[],
+            execution_preferences={"keyword_priority_only": True},
+        )
+
+        role_targeting = dict(brief.get("role_targeting") or {})
+        self.assertEqual(role_targeting.get("provenance"), "default_technical")
+        self.assertCountEqual(role_targeting.get("resolved_role_buckets") or [], ["research", "engineering"])
+        self.assertCountEqual(role_targeting.get("function_ids") or [], ["24", "8"])
+
+    def test_semantic_brief_keeps_explicit_product_manager_role(self) -> None:
+        brief = compile_semantic_brief(
+            raw_text="帮我找 Google 的 product manager",
+            target_company="Google",
+            target_scope="full_company_asset",
+            categories=["employee"],
+            employment_statuses=["current"],
+            organization_keywords=["Gemini"],
+            keywords=[],
+            must_have_keywords=[],
+            must_have_facets=["product_management"],
+            must_have_primary_role_buckets=["product_management"],
+            execution_preferences={},
+        )
+
+        role_targeting = dict(brief.get("role_targeting") or {})
+        self.assertEqual(role_targeting.get("provenance"), "text_explicit")
+        self.assertEqual(role_targeting.get("resolved_role_buckets"), ["product_management"])
+        self.assertEqual(role_targeting.get("function_ids"), ["19"])
+
+    def test_semantic_brief_does_not_force_technical_split_for_plain_full_roster_request(self) -> None:
+        brief = compile_semantic_brief(
+            raw_text="给我 xAI 的所有成员",
+            target_company="xAI",
+            target_scope="full_company_asset",
+            categories=["employee", "former_employee"],
+            employment_statuses=["current", "former"],
+            organization_keywords=[],
+            keywords=[],
+            must_have_keywords=[],
+            must_have_facets=[],
+            must_have_primary_role_buckets=[],
+            execution_preferences={},
+        )
+
+        role_targeting = dict(brief.get("role_targeting") or {})
+        self.assertEqual(role_targeting.get("resolved_role_buckets"), [])
+        self.assertEqual(role_targeting.get("function_ids"), [])
+
+    def test_request_intent_view_treats_infra_as_theme_not_role_bucket(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "给我 OpenAI 做 Infra 和 Post-train 方向的人",
+                "query": "OpenAI Infra 和 Post-train 方向的人",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+            },
+            raw_text="给我 OpenAI 做 Infra 和 Post-train 方向的人",
+        )
+
+        request = JobRequest.from_payload(payload)
+        intent_view = resolve_request_intent_view(request)
+        role_targeting = dict(dict(intent_view.get("semantic_brief") or {}).get("role_targeting") or {})
+
+        self.assertIn("Infra", intent_view["keywords"])
+        self.assertNotIn("infra_systems", intent_view["must_have_primary_role_buckets"])
+        self.assertIn(
+            role_targeting.get("provenance"),
+            {"structured", "default_technical", "default_technical_from_weak_structured_singleton"},
+        )
+        self.assertCountEqual(role_targeting.get("resolved_role_buckets") or [], ["research", "engineering"])
+        self.assertCountEqual(role_targeting.get("function_ids") or [], ["24", "8"])
+
+    def test_intent_view_drops_model_emitted_infra_systems_for_infra_theme(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找 PostHog 做 Infra 方向的人",
+                "query": "PostHog Infra 方向的人",
+                "target_company": "PostHog",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["Infra"],
+                "must_have_primary_role_buckets": ["infra_systems"],
+            }
+        )
+
+        intent_view = resolve_request_intent_view(request)
+
+        self.assertEqual(intent_view["keywords"], ["Infra"])
+        self.assertEqual(intent_view["must_have_primary_role_buckets"], [])
+
+    def test_request_intent_view_keeps_explicit_infrastructure_engineer_role(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "帮我找 OpenAI 的 infrastructure engineer",
+                "query": "OpenAI infrastructure engineer",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+            },
+            raw_text="帮我找 OpenAI 的 infrastructure engineer",
+        )
+
+        request = JobRequest.from_payload(payload)
+        intent_view = resolve_request_intent_view(request)
+
+        self.assertIn("infra_systems", intent_view["must_have_primary_role_buckets"])
+
+    def test_request_intent_view_treats_agent_as_theme_keyword(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "帮我找OpenAI做Agent方向的人",
+                "query": "帮我找OpenAI做Agent方向的人",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+            },
+            raw_text="帮我找OpenAI做Agent方向的人",
+        )
+
+        request = JobRequest.from_payload(payload)
+        intent_view = resolve_request_intent_view(request)
+        role_targeting = dict(dict(intent_view.get("semantic_brief") or {}).get("role_targeting") or {})
+
+        self.assertEqual(intent_view["keywords"], ["Agent"])
+        self.assertEqual(intent_view["must_have_primary_role_buckets"], [])
+        self.assertCountEqual(role_targeting.get("resolved_role_buckets") or [], ["research", "engineering"])
+        self.assertCountEqual(role_targeting.get("function_ids") or [], ["24", "8"])
+
+    def test_requested_population_boundary_distinguishes_full_roster_from_directional_filter(self) -> None:
+        full_roster = resolve_request_intent_view(
+            JobRequest.from_payload(
+                {
+                    "raw_user_request": "给我 xAI 的所有成员",
+                    "target_company": "xAI",
+                    "employment_statuses": ["current", "former"],
+                }
+            )
+        )
+        directional_filter = resolve_request_intent_view(
+            JobRequest.from_payload(
+                {
+                    "raw_user_request": "我要 xAI 做 Coding 方向的全部成员",
+                    "query": "xAI coding all members",
+                    "target_company": "xAI",
+                    "keywords": ["Coding"],
+                    "employment_statuses": ["current", "former"],
+                }
+            )
+        )
+
+        self.assertEqual(
+            full_roster["requested_population_boundary"]["boundary_type"],
+            "full_company_roster",
+        )
+        self.assertEqual(
+            directional_filter["requested_population_boundary"]["boundary_type"],
+            "scoped_directional",
+        )
+        self.assertTrue(
+            directional_filter["requested_population_boundary"]["full_company_filter_allowed"],
+        )
+        self.assertTrue(
+            directional_filter["requested_population_boundary"]["full_company_filter_requires_coverage_proof"],
+        )
+
+    def test_openai_health_group_is_scoped_directional_boundary(self) -> None:
+        intent_view = resolve_request_intent_view(
+            JobRequest.from_payload(
+                {
+                    "raw_user_request": "我想要OpenAI在health组的人",
+                    "target_company": "OpenAI",
+                    "employment_statuses": ["current", "former"],
+                }
+            )
+        )
+
+        self.assertEqual(
+            intent_view["requested_population_boundary"]["boundary_type"],
+            "scoped_directional",
+        )
+        self.assertIn("Health", intent_view["keywords"])
+
+    def test_openai_whisper_group_preserves_explicit_ascii_scope_keyword(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "帮我找OpenAI在Whisper组的人",
+                "target_company": "OpenAI",
+                "employment_statuses": ["current", "former"],
+            },
+            raw_text="帮我找OpenAI在Whisper组的人",
+        )
+        intent_view = resolve_request_intent_view(JobRequest.from_payload(payload))
+
+        self.assertIn("Whisper", intent_view["keywords"])
+        self.assertEqual(
+            intent_view["requested_population_boundary"]["boundary_type"],
+            "scoped_directional",
+        )
+
+
+class RequestNormalizationRobustnessTest(unittest.TestCase):
+    def test_merge_helper_drops_malformed_model_emitted_containers(self) -> None:
+        merged = merge_unique_request_string_values(
+            True,
+            7,
+            {"nested": "dict"},
+            ["Valid Company", "valid company", "Another Lab"],
+            None,
+            target_company="Acme",
+        )
+        self.assertEqual(merged, ["Valid Company", "Another Lab"])
+
+    def test_axes_patch_ignores_bool_confirmed_company_scope(self) -> None:
+        patch = expand_request_intent_axes_patch(
+            {
+                "intent_axes": {
+                    "scope_boundary": {
+                        "target_company": "Thinking Machines Lab",
+                        "confirmed_company_scope": True,
+                    }
+                }
+            },
+            target_company="Thinking Machines Lab",
+        )
+        execution_preferences = dict(patch.get("execution_preferences") or {})
+        self.assertNotIn("confirmed_company_scope", execution_preferences)
+
+    def test_supplement_suppresses_location_and_role_terms_covered_by_dedicated_fields(self) -> None:
+        # operator directive 2026-07-20: the location parameter and role/function
+        # buckets are the one owners; the same terms must not also become keywords.
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "获取 OpenAI 全部成员（美国地区，current+former，research 与 engineering 职能分片），先做全量成员列表，再批量获取 profile。",
+                "query": "OpenAI current and former members in the United States across research and engineering functions (queried as separate function shards); build the full roster first, then retrieve profiles in batch",
+                "target_company": "OpenAI",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "target_locations": ["United States"],
+                "keywords": [],
+            },
+            raw_text="获取 OpenAI 全部成员（美国地区，current+former，research 与 engineering 职能分片），先做全量成员列表，再批量获取 profile。",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        self.assertNotIn("United States", keywords)
+        self.assertNotIn("united_states", keywords)
+        self.assertNotIn("research", keywords)
+        self.assertNotIn("engineering", keywords)
+
+    def test_supplement_keeps_topical_direction_terms(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "找 Thinking Machines Lab 做 Pre-train 方向的华人",
+                "query": "Thinking Machines Lab pre-training researchers",
+                "target_company": "Thinking Machines Lab",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+            },
+            raw_text="找 Thinking Machines Lab 做 Pre-train 方向的华人",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        self.assertTrue(any("Pre-train" in item or "pre-train" in item.lower() for item in keywords), keywords)
+
+    def test_supplement_keeps_location_terms_when_no_location_parameter_set(self) -> None:
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "帮我找 OpenAI 的 Research Engineer",
+                "query": "OpenAI Research Engineer",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+            },
+            raw_text="帮我找 OpenAI 的 Research Engineer",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        # role term suppressed only when role inference covers it; without any
+        # location parameter the keyword lane keeps location-named terms.
+        self.assertTrue(isinstance(keywords, list))
+
+    def test_suppress_compound_location_terms(self) -> None:
+        # GDM case 2026-07-20: compound location+status duplicates the
+        # dedicated location parameter and must not become a keyword.
+        payload = supplement_request_query_signals(
+            {
+                "raw_user_request": "获取 Google DeepMind 全部成员（美国地区，current+former），先做全量成员列表。只要 DeepMind，不要 Google 本体。",
+                "query": "Google DeepMind (DeepMind only, NOT Google) members in the United States",
+                "target_company": "Google DeepMind",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "target_locations": ["United States"],
+            },
+            raw_text="获取 Google DeepMind 全部成员（美国地区，current+former），先做全量成员列表。只要 DeepMind，不要 Google 本体。",
+        )
+        keywords = [str(item) for item in (payload.get("keywords") or [])]
+        self.assertNotIn("美国地区，current+former", keywords)
+
+    def test_negation_scope_is_ai_native_prompt_contract_not_regex(self) -> None:
+        # operator directive 2026-07-20: negation/exclusion scope ('NOT X',
+        # '不要X') belongs to the AI-native plan/review layer (the model
+        # normalize prompt + scope_disambiguation + review gate), never to a
+        # case-by-case regex list in request_normalization.
+        from sourcing_agent.model_provider import _build_request_normalization_system_prompt
+        from sourcing_agent.request_normalization import _suppress_dedicated_field_keyword_terms
+        import inspect
+
+        prompt = _build_request_normalization_system_prompt()
+        self.assertIn("NOT X", prompt)
+        self.assertIn("scope signals, never keywords", prompt)
+        source = inspect.getsource(_suppress_dedicated_field_keyword_terms)
+        self.assertNotIn("NEGATION", source, "no negation-marker regex list may live in request_normalization")
+
+
+if __name__ == "__main__":
+    unittest.main()

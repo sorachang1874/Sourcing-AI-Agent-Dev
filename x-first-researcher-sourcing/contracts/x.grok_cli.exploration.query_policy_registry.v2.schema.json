@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok_cli.exploration.query_policy_registry.v2.schema.json",
+  "title": "Grok CLI approved public query-policy descriptor registry v2",
+  "description": "One immutable version-named snapshot in a code-admitted predecessor/hash chain. Its issuance lineage must be an exact prefix of the canonical append-only query commitment issuance history, and the code-admitted latest snapshot must cover that history completely. Each issuance binds the descriptor path/hash, protected boundary, semantic manifest digest, and keyed run identities. Additions require a new snapshot plus reviewed source admission.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registry_version",
+    "snapshot_position",
+    "predecessor_registry_version",
+    "predecessor_registry_sha256",
+    "issuance_history_count",
+    "issuance_history_head_sha256",
+    "commitment_issuance_lineage",
+    "policies"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok_cli.exploration.query_policy_registry.v2"},
+    "registry_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "snapshot_position": {"type": "integer", "minimum": 0},
+    "predecessor_registry_version": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "predecessor_registry_sha256": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "issuance_history_count": {"type": "integer", "minimum": 1},
+    "issuance_history_head_sha256": {"$ref": "#/$defs/sha256"},
+    "commitment_issuance_lineage": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/commitment_issuance"}
+    },
+    "policies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policy_version",
+          "policy_path",
+          "policy_sha256",
+          "commitment_scheme",
+          "commitment_issuance_id",
+          "commitment_key_id",
+          "commitment_nonce_id",
+          "legacy_full_policy_commitment",
+          "policy_schema_version",
+          "purpose",
+          "lab_id",
+          "protected_category_boundary_version",
+          "run_binding_commitment",
+          "enabled"
+        ],
+        "properties": {
+          "policy_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+          "policy_path": {"type": "string", "pattern": "^configs/[A-Za-z0-9_./-]+\\.json$"},
+          "policy_sha256": {"$ref": "#/$defs/sha256"},
+          "commitment_scheme": {"const": "hmac-sha256-v1"},
+          "commitment_issuance_id": {"type": "string", "pattern": "^qci_[0-9a-f]{24}$"},
+          "commitment_key_id": {"$ref": "#/$defs/sha256"},
+          "commitment_nonce_id": {"$ref": "#/$defs/sha256"},
+          "legacy_full_policy_commitment": {"$ref": "#/$defs/sha256"},
+          "policy_schema_version": {"const": "x.grok_cli.exploration.query_policy_descriptor.v2"},
+          "purpose": {"const": "base_researcher_discovery"},
+          "lab_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+          "protected_category_boundary_version": {"const": "base-discovery-protected-category-boundary-v3"},
+          "run_binding_commitment": {"$ref": "#/$defs/sha256"},
+          "enabled": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "commitment_issuance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lineage_position",
+        "issuance_id",
+        "policy_version",
+        "policy_path",
+        "policy_sha256",
+        "protected_category_boundary_version",
+        "semantic_manifest_sha256",
+        "run_binding_commitment",
+        "commitment_key_id",
+        "commitment_nonce_id"
+      ],
+      "properties": {
+        "lineage_position": {"type": "integer", "minimum": 0},
+        "issuance_id": {"type": "string", "pattern": "^qci_[0-9a-f]{24}$"},
+        "policy_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+        "policy_path": {"type": "string", "pattern": "^configs/[A-Za-z0-9_./-]+\\.json$"},
+        "policy_sha256": {"$ref": "#/$defs/sha256"},
+        "protected_category_boundary_version": {"const": "base-discovery-protected-category-boundary-v3"},
+        "semantic_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "run_binding_commitment": {"$ref": "#/$defs/sha256"},
+        "commitment_key_id": {"$ref": "#/$defs/sha256"},
+        "commitment_nonce_id": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

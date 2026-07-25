@@ -1,0 +1,284 @@
+{
+  "meta": {
+    "behavior_fixture": "large_org_profile_tail_reconcile",
+    "concrete_driver": "xAI full-roster query",
+    "notes": [
+      "This is a reusable large-org profile-tail behavior fixture.",
+      "It explicitly models a case where roster acquisition completes first and LinkedIn profile detail is reconciled later via background harvest prefetch."
+    ]
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "large_org_full_roster_overflow_queue",
+        "match": {
+          "logical_name": "harvest_company_employees"
+        },
+        "execute_pending_rounds": 2,
+        "pending_message": "Scripted large-org roster shard is still draining company-employee pages.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "retryable",
+            "message": "Scripted large-org roster shard hit transient queue backpressure; retrying."
+          }
+        ],
+        "body": [
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-compute/",
+            "publicIdentifier": "scripted-xai-compute",
+            "headline": "ML Systems Engineer at xAI",
+            "currentCompany": "xAI",
+            "location": "United States",
+            "photoUrl": "https://cdn.example.com/scripted-xai-compute.jpg",
+            "item": {
+              "profileUrl": "https://www.linkedin.com/in/scripted-xai-compute/",
+              "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-compute/",
+              "publicIdentifier": "scripted-xai-compute",
+              "fullName": "Scripted xAI Compute",
+              "headline": "ML Systems Engineer at xAI",
+              "location": "United States",
+              "currentCompany": "xAI",
+              "photoUrl": "https://cdn.example.com/scripted-xai-compute.jpg",
+              "summary": "Distributed systems, training infrastructure, and large-scale model serving."
+            }
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-research/",
+            "publicIdentifier": "scripted-xai-research",
+            "headline": "Research Scientist at xAI",
+            "currentCompany": "xAI",
+            "location": "United States",
+            "photoUrl": "https://cdn.example.com/scripted-xai-research.jpg",
+            "item": {
+              "profileUrl": "https://www.linkedin.com/in/scripted-xai-research/",
+              "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-research/",
+              "publicIdentifier": "scripted-xai-research",
+              "fullName": "Scripted xAI Research",
+              "headline": "Research Scientist at xAI",
+              "location": "United States",
+              "currentCompany": "xAI",
+              "photoUrl": "https://cdn.example.com/scripted-xai-research.jpg",
+              "summary": "Reasoning, post-training, and evaluation research."
+            }
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-safety/",
+            "publicIdentifier": "scripted-xai-safety",
+            "headline": "Safety Engineer at xAI",
+            "currentCompany": "xAI",
+            "location": "United States",
+            "photoUrl": "https://cdn.example.com/scripted-xai-safety.jpg",
+            "item": {
+              "profileUrl": "https://www.linkedin.com/in/scripted-xai-safety/",
+              "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-safety/",
+              "publicIdentifier": "scripted-xai-safety",
+              "fullName": "Scripted xAI Safety",
+              "headline": "Safety Engineer at xAI",
+              "location": "United States",
+              "currentCompany": "xAI",
+              "photoUrl": "https://cdn.example.com/scripted-xai-safety.jpg",
+              "summary": "Model safety, evals, and policy guardrails."
+            }
+          }
+        ]
+      },
+      {
+        "name": "large_org_profile_completion_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch"
+        },
+        "execute_pending_rounds": 4,
+        "pending_message": "Scripted large-org profile tail is still enriching LinkedIn profile detail.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "retryable",
+            "message": "Scripted large-org profile batch hit retryable profile-detail timeout; resuming."
+          }
+        ],
+        "body": [
+          {
+            "_harvest_request": {
+              "kind": "url",
+              "value": "https://www.linkedin.com/in/scripted-xai-compute/",
+              "profile_url": "https://www.linkedin.com/in/scripted-xai-compute/"
+            },
+            "item": {
+              "profileUrl": "https://www.linkedin.com/in/scripted-xai-compute/",
+              "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-compute/",
+              "publicIdentifier": "scripted-xai-compute",
+              "fullName": "Scripted xAI Compute",
+              "headline": "ML Systems Engineer at xAI",
+              "location": "San Francisco Bay Area",
+              "currentCompany": "xAI",
+              "photoUrl": "https://cdn.example.com/scripted-xai-compute.jpg",
+              "about": "Builds distributed training and inference infrastructure for frontier models.",
+              "experience": [
+                {
+                  "companyName": "xAI",
+                  "title": "ML Systems Engineer",
+                  "dateRange": {
+                    "start": {
+                      "year": 2024,
+                      "month": 2
+                    }
+                  }
+                },
+                {
+                  "companyName": "Google",
+                  "title": "Software Engineer",
+                  "dateRange": {
+                    "start": {
+                      "year": 2021,
+                      "month": 6
+                    },
+                    "end": {
+                      "year": 2024,
+                      "month": 1
+                    }
+                  }
+                }
+              ],
+              "education": [
+                {
+                  "schoolName": "Carnegie Mellon University",
+                  "degreeName": "MS",
+                  "fieldOfStudy": "Machine Learning",
+                  "dateRange": {
+                    "start": {
+                      "year": 2019
+                    },
+                    "end": {
+                      "year": 2021
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "_harvest_request": {
+              "kind": "url",
+              "value": "https://www.linkedin.com/in/scripted-xai-research/",
+              "profile_url": "https://www.linkedin.com/in/scripted-xai-research/"
+            },
+            "item": {
+              "profileUrl": "https://www.linkedin.com/in/scripted-xai-research/",
+              "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-research/",
+              "publicIdentifier": "scripted-xai-research",
+              "fullName": "Scripted xAI Research",
+              "headline": "Research Scientist at xAI",
+              "location": "Palo Alto, California",
+              "currentCompany": "xAI",
+              "photoUrl": "https://cdn.example.com/scripted-xai-research.jpg",
+              "about": "Works on reasoning, post-training, and evaluation for generalist models.",
+              "experience": [
+                {
+                  "companyName": "xAI",
+                  "title": "Research Scientist",
+                  "dateRange": {
+                    "start": {
+                      "year": 2024,
+                      "month": 1
+                    }
+                  }
+                },
+                {
+                  "companyName": "OpenAI",
+                  "title": "Research Engineer",
+                  "dateRange": {
+                    "start": {
+                      "year": 2022,
+                      "month": 1
+                    },
+                    "end": {
+                      "year": 2023,
+                      "month": 12
+                    }
+                  }
+                }
+              ],
+              "education": [
+                {
+                  "schoolName": "Stanford University",
+                  "degreeName": "PhD",
+                  "fieldOfStudy": "Computer Science",
+                  "dateRange": {
+                    "start": {
+                      "year": 2017
+                    },
+                    "end": {
+                      "year": 2022
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "_harvest_request": {
+              "kind": "url",
+              "value": "https://www.linkedin.com/in/scripted-xai-safety/",
+              "profile_url": "https://www.linkedin.com/in/scripted-xai-safety/"
+            },
+            "item": {
+              "profileUrl": "https://www.linkedin.com/in/scripted-xai-safety/",
+              "linkedinUrl": "https://www.linkedin.com/in/scripted-xai-safety/",
+              "publicIdentifier": "scripted-xai-safety",
+              "fullName": "Scripted xAI Safety",
+              "headline": "Safety Engineer at xAI",
+              "location": "United States",
+              "currentCompany": "xAI",
+              "photoUrl": "https://cdn.example.com/scripted-xai-safety.jpg",
+              "about": "Builds safety tooling, evals, and policy guardrails.",
+              "experience": [
+                {
+                  "companyName": "xAI",
+                  "title": "Safety Engineer",
+                  "dateRange": {
+                    "start": {
+                      "year": 2024,
+                      "month": 3
+                    }
+                  }
+                },
+                {
+                  "companyName": "Anthropic",
+                  "title": "Applied Scientist",
+                  "dateRange": {
+                    "start": {
+                      "year": 2021,
+                      "month": 7
+                    },
+                    "end": {
+                      "year": 2024,
+                      "month": 2
+                    }
+                  }
+                }
+              ],
+              "education": [
+                {
+                  "schoolName": "University of Washington",
+                  "degreeName": "BS",
+                  "fieldOfStudy": "Computer Science",
+                  "dateRange": {
+                    "start": {
+                      "year": 2014
+                    },
+                    "end": {
+                      "year": 2018
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

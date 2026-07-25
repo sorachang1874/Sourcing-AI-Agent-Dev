@@ -1,0 +1,160 @@
+{
+  "schema_version": "x.research_scope.catalog.v1",
+  "catalog_id": "fixture_research_scope_catalog",
+  "catalog_version": "fixture_research_scope_catalog.v1",
+  "generated_at": "2026-07-18T00:00:00Z",
+  "scope_nodes": [
+    {
+      "scope_id": "fixture_lab",
+      "display_name": "Fixture AI Lab",
+      "scope_kind": "organization",
+      "status": "active",
+      "aliases": ["Fixture AI Lab", "Fixture Lab"],
+      "containment_parent_scope_ids": [],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_lab"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_model",
+      "display_name": "Fixture Model",
+      "scope_kind": "model",
+      "status": "active",
+      "aliases": ["Fixture Model", "FM"],
+      "containment_parent_scope_ids": ["fixture_lab"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_model"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_product",
+      "display_name": "Fixture Assistant",
+      "scope_kind": "product",
+      "status": "active",
+      "aliases": ["Fixture Assistant", "Fixture Chat"],
+      "containment_parent_scope_ids": ["fixture_lab"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_product"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_application",
+      "display_name": "Fixture Desktop",
+      "scope_kind": "application",
+      "status": "active",
+      "aliases": ["Fixture Desktop", "Fixture App"],
+      "containment_parent_scope_ids": ["fixture_product"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_application"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_coding",
+      "display_name": "Fixture Coding Capability",
+      "scope_kind": "capability",
+      "status": "active",
+      "aliases": ["Fixture Coding", "Code Capability"],
+      "containment_parent_scope_ids": ["fixture_model", "fixture_product"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_coding"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_program",
+      "display_name": "Fixture Reasoning Program",
+      "scope_kind": "research_program",
+      "status": "active",
+      "aliases": ["Fixture Reasoning Program", "Reasoning Program"],
+      "containment_parent_scope_ids": ["fixture_lab"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_program"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_team",
+      "display_name": "Fixture Model Team",
+      "scope_kind": "team",
+      "status": "active",
+      "aliases": ["Fixture Model Team", "Model Team"],
+      "containment_parent_scope_ids": ["fixture_model"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_team"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_initiative",
+      "display_name": "Fixture Strike Team",
+      "scope_kind": "initiative",
+      "status": "active",
+      "aliases": ["Fixture Strike Team", "Coding Strike Team"],
+      "containment_parent_scope_ids": ["fixture_coding"],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_initiative"],
+      "source_status": "fixture_synthetic"
+    },
+    {
+      "scope_id": "fixture_health",
+      "display_name": "Health",
+      "scope_kind": "industry",
+      "status": "active",
+      "aliases": ["Health", "Healthcare"],
+      "containment_parent_scope_ids": [],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://scope/fixture_health"],
+      "source_status": "fixture_synthetic"
+    }
+  ],
+  "taxonomies": [
+    {
+      "dimension_id": "research_workstream",
+      "display_name": "Research workstream",
+      "labels": [
+        {"label_id": "pretraining", "display_name": "Pre-training", "aliases": ["pretraining", "pre-training", "foundation model training"]},
+        {"label_id": "posttraining", "display_name": "Post-training", "aliases": ["posttraining", "post-training", "alignment"]},
+        {"label_id": "midtraining", "display_name": "Mid-training", "aliases": ["midtraining", "mid-training", "continued pretraining"]},
+        {"label_id": "evaluation", "display_name": "Evaluation", "aliases": ["evaluation", "evals", "model evaluation"]},
+        {"label_id": "benchmark", "display_name": "Benchmark", "aliases": ["benchmark", "benchmarking", "leaderboard"]},
+        {"label_id": "infrastructure", "display_name": "Infrastructure", "aliases": ["infrastructure", "training systems", "distributed systems"]},
+        {"label_id": "data", "display_name": "Data", "aliases": ["data", "dataset", "data curation"]},
+        {"label_id": "coding", "display_name": "Coding", "aliases": ["coding", "code generation", "software engineering"]},
+        {"label_id": "mathematics", "display_name": "Mathematics", "aliases": ["mathematics", "math", "theorem proving"]},
+        {"label_id": "multimodal", "display_name": "Multimodal", "aliases": ["multimodal", "vision-language", "audio-language"]}
+      ]
+    },
+    {
+      "dimension_id": "industry_domain",
+      "display_name": "Industry domain",
+      "labels": [
+        {"label_id": "health", "display_name": "Health", "aliases": ["health", "healthcare", "biomedicine"]},
+        {"label_id": "finance", "display_name": "Finance", "aliases": ["finance", "financial services", "fintech"]},
+        {"label_id": "design", "display_name": "Design", "aliases": ["design", "creative tools", "human-computer interaction"]}
+      ]
+    }
+  ],
+  "coverage_assertions": [
+    {
+      "coverage_id": "fixture_lab_core_family_coverage",
+      "root_scope_id": "fixture_lab",
+      "scope_kinds": ["model", "product", "capability"],
+      "member_scope_ids": ["fixture_coding", "fixture_model", "fixture_product"],
+      "member_set_sha256": "b59804d0d3849654284599db0547d9f9fcf14ae2898c947fc6c59b29baf58a37",
+      "coverage_status": "complete",
+      "refresh_method": "manual_verified",
+      "source_status": "fixture_synthetic",
+      "open_gaps": [],
+      "last_verified_at": "2026-07-18T00:00:00Z",
+      "refresh_after": "2026-08-18T00:00:00Z",
+      "evidence_refs": ["fixture://coverage/fixture_lab_core_family"]
+    }
+  ],
+  "catalog_sha256": "6730a9e079df2e25e74f9ba6b91b454a340cbc475e74829b984cf3a907f9b28b"
+}

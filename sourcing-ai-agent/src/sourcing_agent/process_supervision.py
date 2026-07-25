@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import time
+from pathlib import Path
 from typing import Any, Callable
+
+from .runtime_environment import provider_isolation_env_overrides
 
 
 def build_subprocess_env(project_root: Path, *, base_env: dict[str, str] | None = None) -> dict[str, str]:
@@ -13,6 +15,14 @@ def build_subprocess_env(project_root: Path, *, base_env: dict[str, str] | None 
     existing_pythonpath = str(env.get("PYTHONPATH") or "").strip()
     env["PYTHONPATH"] = os.pathsep.join([src_path, existing_pythonpath]) if existing_pythonpath else src_path
     env.setdefault("PYTHONUNBUFFERED", "1")
+    env.update(
+        provider_isolation_env_overrides(
+            provider_mode=env.get("SOURCING_EXTERNAL_PROVIDER_MODE"),
+            runtime_environment=env.get("SOURCING_RUNTIME_ENVIRONMENT"),
+            runtime_dir=env.get("SOURCING_RUNTIME_DIR"),
+            environ=env,
+        )
+    )
     return env
 
 

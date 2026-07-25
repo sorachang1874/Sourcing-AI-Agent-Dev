@@ -1,0 +1,67 @@
+{
+  "candidate_count": 6,
+  "candidate_refs_sha256": "99d661164f906d7995934661cdffec50e15660311c151af4a6521d86af75be09",
+  "candidates": [
+    {
+      "candidate_ref": "fixture_candidate_001",
+      "current_handle": "fixturemap001",
+      "lab_affiliation_prior": {"evidence_status": "fixture_asserted", "state": "current"},
+      "platform_user_id": "900001",
+      "pretraining_experience_prior": {"evidence_status": "fixture_asserted", "state": "current"},
+      "profile_url": "https://x.invalid/fixturemap001"
+    },
+    {
+      "candidate_ref": "fixture_candidate_002",
+      "current_handle": "fixturemap002",
+      "lab_affiliation_prior": {"evidence_status": "fixture_asserted", "state": "current"},
+      "platform_user_id": "900002",
+      "pretraining_experience_prior": {"evidence_status": "fixture_asserted", "state": "historical"},
+      "profile_url": "https://x.invalid/fixturemap002"
+    },
+    {
+      "candidate_ref": "fixture_candidate_003",
+      "current_handle": "fixturemap003",
+      "lab_affiliation_prior": {"evidence_status": "fixture_asserted", "state": "historical"},
+      "platform_user_id": "900003",
+      "pretraining_experience_prior": {"evidence_status": "fixture_asserted", "state": "current"},
+      "profile_url": "https://x.invalid/fixturemap003"
+    },
+    {
+      "candidate_ref": "fixture_candidate_004",
+      "current_handle": "fixturemap004",
+      "lab_affiliation_prior": {"evidence_status": "fixture_asserted", "state": "historical"},
+      "platform_user_id": "900004",
+      "pretraining_experience_prior": {"evidence_status": "fixture_asserted", "state": "historical"},
+      "profile_url": "https://x.invalid/fixturemap004"
+    },
+    {
+      "candidate_ref": "fixture_candidate_005",
+      "current_handle": "fixturemap005",
+      "lab_affiliation_prior": {"evidence_status": "fixture_asserted", "state": "ambiguous"},
+      "platform_user_id": "900005",
+      "pretraining_experience_prior": {"evidence_status": "unsupported", "state": "unsupported"},
+      "profile_url": "https://x.invalid/fixturemap005"
+    },
+    {
+      "candidate_ref": "fixture_candidate_006",
+      "current_handle": "fixturemap006",
+      "lab_affiliation_prior": {"evidence_status": "unsupported", "state": "unsupported"},
+      "platform_user_id": "900006",
+      "pretraining_experience_prior": {"evidence_status": "fixture_asserted", "state": "ambiguous"},
+      "profile_url": "https://x.invalid/fixturemap006"
+    }
+  ],
+  "lab_descriptor": {
+    "affiliation_aliases": ["Fixture Lab", "@fixture_lab"],
+    "descriptor_id": "fixture_lab_descriptor_v1",
+    "display_name": "Fixture Lab",
+    "lab_id": "fixture_lab",
+    "official_handles": ["fixture_lab"],
+    "project_aliases": ["Fixture Project"],
+    "x_url_host": "x.invalid"
+  },
+  "lab_descriptor_sha256": "85e081fd9fdf26f3ca3502ea129925950b6abdd96fd5bed0e3aec19818e6f438",
+  "manifest_id": "fixture_mapping_manifest_v1",
+  "manifest_sha256": "6792173f145ed39fe939068be6b7ced14d91c3c6c2c81d54daecb0dfe7599b29",
+  "schema_version": "x.source_neutral.mapping.candidate_manifest.v1"
+}

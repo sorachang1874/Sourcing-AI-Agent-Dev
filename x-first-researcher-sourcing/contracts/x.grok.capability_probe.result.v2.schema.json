@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.capability_probe.result.v2.schema.json",
+  "title": "X-first bounded live Grok/X capability-probe result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probe_id",
+    "request_sha256",
+    "execution_mode",
+    "run",
+    "task",
+    "capability",
+    "provenance",
+    "usage",
+    "observations",
+    "errors",
+    "retention",
+    "candidate_packets",
+    "identity_link_proposals",
+    "assertions",
+    "canonical_writes",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.capability_probe.result.v2"},
+    "probe_id": {"const": "xprobe_live_openai_official_v1"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_mode": {"const": "live_bounded"},
+    "run": {"$ref": "#/$defs/run"},
+    "task": {"$ref": "#/$defs/task"},
+    "capability": {"$ref": "#/$defs/capability"},
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "usage": {"$ref": "#/$defs/usage"},
+    "observations": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "errors": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/error"}},
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "delete_after_hours",
+        "delete_after",
+        "deletion_status",
+        "full_body_stored",
+        "session_transcript_persisted"
+      ],
+      "properties": {
+        "class": {"const": "private_live_probe_24h"},
+        "delete_after_hours": {"const": 24},
+        "delete_after": {"type": "string", "format": "date-time"},
+        "deletion_status": {"const": "pending"},
+        "full_body_stored": {"const": false},
+        "session_transcript_persisted": {"const": false}
+      }
+    },
+    "candidate_packets": {"type": "array", "maxItems": 0},
+    "identity_link_proposals": {"type": "array", "maxItems": 0},
+    "assertions": {"type": "array", "maxItems": 0},
+    "canonical_writes": {"type": "array", "maxItems": 0},
+    "claims": {
+      "const": {
+        "exhaustive": false,
+        "current_employment_guaranteed": false,
+        "outreach_permission": false,
+        "researcher_mapping_authorized": false
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["capability"],
+        "properties": {
+          "capability": {
+            "required": ["verdict"],
+            "properties": {
+              "verdict": {"enum": ["x_native_identity_ready", "post_retrieval_only"]}
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "provider_request_id": {"type": "string"}
+            }
+          },
+          "usage": {
+            "properties": {
+              "x_search_calls": {"const": 1},
+              "result_sets": {"const": 1},
+              "model_turns": {"maximum": 4},
+              "elapsed_ms": {"maximum": 180000}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["provenance"],
+        "properties": {
+          "provenance": {
+            "required": ["tool_receipt_sha256"],
+            "properties": {"tool_receipt_sha256": {"type": "string"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {"provenance": {"properties": {"session_id": {"type": "string"}}}}
+      },
+      "else": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "session_id": {"type": "null"},
+              "session_updates_sha256": {"type": "null"}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "status", "started_at", "completed_at"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^xprobe_run_[0-9a-f]{32}$"},
+        "status": {"enum": ["completed", "failed"]},
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "status", "stop_reason"],
+      "properties": {
+        "task_id": {"const": "xprobe_task_live_openai_official_v1"},
+        "status": {"enum": ["succeeded", "failed"]},
+        "stop_reason": {
+          "enum": [
+            "x_native_identity_ready",
+            "post_retrieval_only",
+            "capability_unavailable",
+            "budget_exceeded",
+            "probe_error",
+            "deadline_exceeded",
+            "invalid_provider_evidence",
+            "result_validation_failed",
+            "process_spawn_failed",
+            "monitor_failed",
+            "runner_io_failed",
+            "process_group_cleanup_failed",
+            "runner_cleanup_failed",
+            "output_budget_exceeded",
+            "provider_evidence_budget_exceeded",
+            "tool_kill_switch_tripped"
+          ]
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "proof_scope",
+        "x_native_access_proven",
+        "stable_account_id_proven",
+        "stage2_eligible_for_owner_review"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "x_native_identity_ready",
+            "post_retrieval_only",
+            "capability_unavailable",
+            "budget_exceeded",
+            "probe_error"
+          ]
+        },
+        "proof_scope": {"const": "bounded_live_official_account"},
+        "x_native_access_proven": {"type": "boolean"},
+        "stable_account_id_proven": {"type": "boolean"},
+        "stage2_eligible_for_owner_review": {"type": "boolean"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "access_mode",
+        "model_id",
+        "tool_id",
+        "provider_request_id",
+        "session_id",
+        "prompt_version",
+        "prompt_sha256",
+        "session_updates_sha256",
+        "raw_result_post_ids",
+        "raw_result_author_user_ids",
+        "observed_model_ids",
+        "evidence_projection",
+        "approval_receipt_sha256",
+        "tool_receipt_sha256",
+        "grok_binary_sha256"
+      ],
+      "properties": {
+        "provider_id": {"const": "grok_cli_oauth"},
+        "access_mode": {"enum": ["x_search", "unavailable"]},
+        "model_id": {"const": "grok-4.5"},
+        "tool_id": {"const": "x_search"},
+        "provider_request_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[^\\uD800-\\uDFFF]+$"
+        },
+        "session_id": {"type": ["string", "null"]},
+        "prompt_version": {"const": "x-first-grok-x-native-capability-v1"},
+        "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "session_updates_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "raw_result_post_ids": {
+          "type": "array",
+          "maxItems": 25,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]{5,32}$"}
+        },
+        "raw_result_author_user_ids": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]{3,32}$"}
+        },
+        "observed_model_ids": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[^\\uD800-\\uDFFF]+$"
+          }
+        },
+        "evidence_projection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["raw_result_posts", "raw_result_author_user_ids", "observed_model_ids"],
+          "properties": {
+            "raw_result_posts": {"$ref": "#/$defs/evidence_projection"},
+            "raw_result_author_user_ids": {"$ref": "#/$defs/evidence_projection"},
+            "observed_model_ids": {"$ref": "#/$defs/evidence_projection"}
+          }
+        },
+        "approval_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "tool_receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "grok_binary_sha256": {"const": "01bcacec12e7c2a164d23975f1595400ff7f3cbd74f50b1858f6a5a14eb9ff81"}
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executions",
+        "x_search_calls",
+        "result_sets",
+        "evidence_projection",
+        "observations",
+        "model_turns",
+        "cost_status",
+        "cost_usd",
+        "elapsed_ms"
+      ],
+      "properties": {
+        "executions": {"const": 1},
+        "x_search_calls": {"type": "integer", "minimum": 0, "maximum": 9},
+        "result_sets": {"type": "integer", "minimum": 0, "maximum": 9},
+        "evidence_projection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x_search_calls", "result_sets"],
+          "properties": {
+            "x_search_calls": {"$ref": "#/$defs/evidence_projection"},
+            "result_sets": {"$ref": "#/$defs/evidence_projection"}
+          }
+        },
+        "observations": {"type": "integer", "minimum": 0, "maximum": 5},
+        "model_turns": {"type": "integer", "minimum": 0, "maximum": 8},
+        "cost_status": {"enum": ["reported", "unreported"]},
+        "cost_usd": {"type": ["number", "null"], "minimum": 0},
+        "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 200000}
+      }
+    },
+    "evidence_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "relation", "retained", "truncated"],
+      "properties": {
+        "observed": {"type": "integer", "minimum": 0, "maximum": 26},
+        "relation": {"enum": ["exact", "at_least"]},
+        "retained": {"type": "integer", "minimum": 0, "maximum": 25},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "platform_object_id",
+        "platform_user_id",
+        "author_handle",
+        "canonical_url",
+        "authored_at",
+        "observed_at",
+        "excerpt",
+        "full_body_stored"
+      ],
+      "properties": {
+        "observation_id": {"type": "string", "pattern": "^xprobe_obs_[0-9]{5,32}$"},
+        "platform_object_id": {"type": "string", "pattern": "^[0-9]{5,32}$"},
+        "platform_user_id": {"type": ["string", "null"], "pattern": "^[0-9]{3,32}$"},
+        "author_handle": {"const": "OpenAI"},
+        "canonical_url": {"type": "string", "pattern": "^https://x\\.com/OpenAI/status/[0-9]{5,32}$"},
+        "authored_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280,
+          "pattern": "^[^\\uD800-\\uDFFF]+$"
+        },
+        "full_body_stored": {"const": false}
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "message": {"type": "string", "maxLength": 160},
+        "retryable": {"const": false}
+      }
+    }
+  }
+}

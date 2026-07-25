@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.candidate_manifest.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "lab_descriptor",
+    "lab_descriptor_sha256",
+    "candidate_count",
+    "candidate_refs_sha256",
+    "candidates",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.candidate_manifest.v1"},
+    "manifest_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "lab_descriptor": {"$ref": "#/$defs/lab_descriptor"},
+    "lab_descriptor_sha256": {"$ref": "#/$defs/sha256"},
+    "candidate_count": {"type": "integer", "minimum": 1},
+    "candidate_refs_sha256": {"$ref": "#/$defs/sha256"},
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+    "lab_descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "descriptor_id",
+        "lab_id",
+        "display_name",
+        "official_handles",
+        "affiliation_aliases",
+        "project_aliases",
+        "x_url_host"
+      ],
+      "properties": {
+        "descriptor_id": {"$ref": "#/$defs/id"},
+        "lab_id": {"$ref": "#/$defs/id"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 160},
+        "official_handles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/handle"}},
+        "affiliation_aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}},
+        "project_aliases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}},
+        "x_url_host": {"type": "string", "pattern": "^[a-z0-9.-]{1,253}$"}
+      }
+    },
+    "prior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "evidence_status"],
+      "properties": {
+        "state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
+        "evidence_status": {"enum": ["fixture_asserted", "source_bound", "model_mediated_unverified", "unsupported"]}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_ref",
+        "platform_user_id",
+        "current_handle",
+        "profile_url",
+        "lab_affiliation_prior",
+        "pretraining_experience_prior"
+      ],
+      "properties": {
+        "candidate_ref": {"$ref": "#/$defs/id"},
+        "platform_user_id": {"type": ["string", "null"], "pattern": "^[1-9][0-9]{0,31}$"},
+        "current_handle": {"$ref": "#/$defs/handle"},
+        "profile_url": {"type": "string", "minLength": 1, "maxLength": 512},
+        "lab_affiliation_prior": {"$ref": "#/$defs/prior"},
+        "pretraining_experience_prior": {"$ref": "#/$defs/prior"}
+      }
+    }
+  }
+}

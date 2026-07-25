@@ -1,0 +1,149 @@
+{
+  "schema_version": "x.reported_profile_text.semantic.model_output_fixture_set.v1",
+  "items": [
+    {
+      "schema_version": "x.reported_profile_text.semantic.model_output.v1",
+      "item_request_id": "xrpt_item_687500e12614d16ff2ab2b1b",
+      "observation_id": "xrpt_obs_a5e0a68fdb48fa8830afc7ee",
+      "text_sha256": "09bc1594dac7324948878bf89319500e4d29b123fb2241f686d6653d9d919e7f",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "professional_china_digital_ecosystem",
+          "relation_state": "not_applicable",
+          "span_start": 0,
+          "span_end": 47,
+          "excerpt": "Professional publishing account on Xiaohongshu.",
+          "reason_codes": [
+            "explicit_china_digital_ecosystem_activity"
+          ],
+          "reason": "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true
+        }
+      ],
+      "authority": {
+        "external_facts_used": false,
+        "protected_identity_inferred": false,
+        "discovery_or_ranking_recommended": false,
+        "eligibility_decided": false,
+        "canonical_employment_asserted": false,
+        "canonical_write_recommended": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.model_output.v1",
+      "item_request_id": "xrpt_item_850ebc006bb4cbc4a4c61b31",
+      "observation_id": "xrpt_obs_c3dc65cdf4570a68ef249935",
+      "text_sha256": "74ba9136075f5af66d9992d4bd241a14475e9fef7c345eedb84e6d07a7f17dc0",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "observed_chinese_professional_content",
+          "relation_state": "not_applicable",
+          "span_start": 0,
+          "span_end": 10,
+          "excerpt": "发布模型训练技术笔记",
+          "reason_codes": [
+            "observed_chinese_professional_content"
+          ],
+          "reason": "The cited Bio span contains observed Chinese-language professional content.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true
+        }
+      ],
+      "authority": {
+        "external_facts_used": false,
+        "protected_identity_inferred": false,
+        "discovery_or_ranking_recommended": false,
+        "eligibility_decided": false,
+        "canonical_employment_asserted": false,
+        "canonical_write_recommended": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.model_output.v1",
+      "item_request_id": "xrpt_item_43b3642c12aff1e5532dd6aa",
+      "observation_id": "xrpt_obs_b222b24ea7435b57472dbec2",
+      "text_sha256": "63be52e88fdf8e46b7c80d985546a147d8cd11cbeb26cb211b2f87014eac59ed",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "professional_region_experience",
+          "relation_state": "not_applicable",
+          "span_start": 0,
+          "span_end": 38,
+          "excerpt": "Worked on model training in Singapore.",
+          "reason_codes": [
+            "explicit_professional_region_experience"
+          ],
+          "reason": "The cited Bio span explicitly states professional region experience.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true
+        }
+      ],
+      "authority": {
+        "external_facts_used": false,
+        "protected_identity_inferred": false,
+        "discovery_or_ranking_recommended": false,
+        "eligibility_decided": false,
+        "canonical_employment_asserted": false,
+        "canonical_write_recommended": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.model_output.v1",
+      "item_request_id": "xrpt_item_85b8afbffe4331ba92a0640d",
+      "observation_id": "xrpt_obs_84c22470d64f3b99e650f840",
+      "text_sha256": "a1795fedb6ca007f32836575e135168a23af9cb2e9b523c20e86ebc1343be93c",
+      "verdict": "proposals_available",
+      "proposals": [
+        {
+          "proposal_type": "professional_affiliation",
+          "relation_state": "previous_claimed",
+          "span_start": 0,
+          "span_end": 38,
+          "excerpt": "Previously Researcher at @fixture_lab.",
+          "reason_codes": [
+            "explicit_previous_organization_claim"
+          ],
+          "reason": "The cited Bio span explicitly states a previous claimed organization affiliation.",
+          "reason_source": "closed_deterministic_explanation_template_v2.2",
+          "confidence": "high",
+          "evidence_basis": "model_mediated_unverified_text_only",
+          "requires_independent_verification": true
+        }
+      ],
+      "authority": {
+        "external_facts_used": false,
+        "protected_identity_inferred": false,
+        "discovery_or_ranking_recommended": false,
+        "eligibility_decided": false,
+        "canonical_employment_asserted": false,
+        "canonical_write_recommended": false
+      }
+    },
+    {
+      "schema_version": "x.reported_profile_text.semantic.model_output.v1",
+      "item_request_id": "xrpt_item_7e95c5dda9594abd014ea960",
+      "observation_id": "xrpt_obs_02074a63b897626b3e718bbe",
+      "text_sha256": "14d3328773d16b6b9cb23daff83b00b0721679c7b8bc077c7b86f9a13133793c",
+      "verdict": "no_supported_professional_context",
+      "proposals": [],
+      "authority": {
+        "external_facts_used": false,
+        "protected_identity_inferred": false,
+        "discovery_or_ranking_recommended": false,
+        "eligibility_decided": false,
+        "canonical_employment_asserted": false,
+        "canonical_write_recommended": false
+      }
+    }
+  ]
+}

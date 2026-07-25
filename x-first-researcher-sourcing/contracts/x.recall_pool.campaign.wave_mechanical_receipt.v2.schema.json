@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.recall_pool.campaign.wave_mechanical_receipt.v2.schema.json",
+  "title": "X-first replayed wave mechanical receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "wave_id", "result_sha256", "upstream_request_sha256", "prompt_sha256", "session_id", "request_id", "model_id", "source_replay_status", "terminal_pairing", "cli_turn_completed", "provider_terminal_verified", "provider_terminal_usage_verified", "assistant_output_sha256", "assistant_terminal_json_sha256", "assistant_output_binding_status", "assistant_terminal_json_start_byte_offset", "assistant_terminal_json_end_byte_offset_exclusive", "assistant_terminal_json_start_chunk_index", "assistant_terminal_json_end_chunk_index", "assistant_terminal_json_start_update_index", "assistant_terminal_json_end_update_index", "terminal_json_start_chunk_after_all_tool_events", "last_native_x_update_index", "final_assistant_update_index", "allowed_tool_registry_version", "source_payload_replay_status", "started_tool_calls", "completed_tool_calls", "tool_counts", "call_identity_sha256s", "query_identity_sha256s", "unique_query_count", "raw_session_sha256", "strategy_id", "strategy_definition_sha256", "strategy_definition_binding_status", "query_family_ids", "query_family_coverage_status", "query_family_call_counts", "query_family_call_profiles", "family_attribution_binding_status", "family_attribution_plan_sha256", "prior_exclusion_binding_status", "user_visible_chat_context_sha256", "user_visible_chat_context_binding_status", "request_context_replay_status", "wave_request_schema_version", "wave_result_schema_version", "candidate_surface_attempts", "candidate_surface_coverage"],
+  "properties": {
+    "schema_version": {"const": "x.recall_pool.campaign.wave_mechanical_receipt.v2"},
+    "wave_id": {"$ref": "#/$defs/slug"},
+    "result_sha256": {"$ref": "#/$defs/sha256"},
+    "upstream_request_sha256": {"$ref": "#/$defs/sha256"},
+    "prompt_sha256": {"$ref": "#/$defs/sha256"},
+    "session_id": {"$ref": "#/$defs/uuid"},
+    "request_id": {"$ref": "#/$defs/uuid"},
+    "model_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "source_replay_status": {"const": "verified"},
+    "terminal_pairing": {"const": "exact_started_completed"},
+    "cli_turn_completed": {"const": true},
+    "provider_terminal_verified": {"const": false},
+    "provider_terminal_usage_verified": {"const": false},
+    "assistant_output_sha256": {"$ref": "#/$defs/sha256"},
+    "assistant_terminal_json_sha256": {"$ref": "#/$defs/sha256"},
+    "assistant_output_binding_status": {"const": "terminal_json_canonical_match"},
+    "assistant_terminal_json_start_byte_offset": {"type": "integer", "minimum": 0},
+    "assistant_terminal_json_end_byte_offset_exclusive": {"type": "integer", "minimum": 1},
+    "assistant_terminal_json_start_chunk_index": {"type": "integer", "minimum": 0},
+    "assistant_terminal_json_end_chunk_index": {"type": "integer", "minimum": 0},
+    "assistant_terminal_json_start_update_index": {"type": "integer", "minimum": 0},
+    "assistant_terminal_json_end_update_index": {"type": "integer", "minimum": 0},
+    "terminal_json_start_chunk_after_all_tool_events": {"const": true},
+    "last_native_x_update_index": {"type": "integer", "minimum": 0},
+    "final_assistant_update_index": {"type": "integer", "minimum": 1},
+    "allowed_tool_registry_version": {"const": "native_x_tools.v1"},
+    "source_payload_replay_status": {"const": "unavailable_model_mediated_only"},
+    "started_tool_calls": {"type": "integer", "minimum": 1},
+    "completed_tool_calls": {"type": "integer", "minimum": 1},
+    "tool_counts": {"$ref": "#/$defs/counts"},
+    "call_identity_sha256s": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "query_identity_sha256s": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+    "unique_query_count": {"type": "integer", "minimum": 1},
+    "raw_session_sha256": {
+      "type": "object", "additionalProperties": false,
+      "required": ["summary.json", "updates.jsonl", "events.jsonl", "chat_history.jsonl", "system_prompt.txt", "prompt_context.json"],
+      "properties": {"summary.json": {"$ref": "#/$defs/sha256"}, "updates.jsonl": {"$ref": "#/$defs/sha256"}, "events.jsonl": {"$ref": "#/$defs/sha256"}, "chat_history.jsonl": {"$ref": "#/$defs/sha256"}, "system_prompt.txt": {"$ref": "#/$defs/sha256"}, "prompt_context.json": {"$ref": "#/$defs/sha256"}}
+    },
+    "strategy_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "strategy_definition_sha256": {"$ref": "#/$defs/sha256"},
+    "strategy_definition_binding_status": {"enum": ["versioned_complete", "legacy_ids_only_unbound"]},
+    "query_family_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/slug"}},
+    "query_family_coverage_status": {"enum": ["verified_complete", "insufficient_proof"]},
+    "query_family_call_counts": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/counts"}]},
+    "query_family_call_profiles": {"oneOf": [{"type": "null"}, {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/family_profile"}}]},
+    "family_attribution_binding_status": {"enum": ["precommitted_runner_bound", "legacy_unbound"]},
+    "family_attribution_plan_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+    "prior_exclusion_binding_status": {"enum": ["not_applicable", "system_prompt_hash_bound_operator_asserted"]},
+    "user_visible_chat_context_sha256": {"$ref": "#/$defs/sha256"},
+    "user_visible_chat_context_binding_status": {"enum": ["precommitted_exact", "legacy_unbound"]},
+    "request_context_replay_status": {"enum": ["complete", "operator_asserted"]},
+    "wave_request_schema_version": {"enum": ["x.recall_pool.campaign.wave_request.v1", "x.recall_pool.campaign.wave_request.v2"]},
+    "wave_result_schema_version": {"enum": ["x.grok_cli.recall_wave.result_adapter.v1", "x.grok_cli.recall_wave.result_adapter.v2"]},
+    "candidate_surface_attempts": {
+      "type": "array", "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["handle_key", "surface", "query_argument_sha256"],
+        "properties": {
+          "handle_key": {"type": "string", "pattern": "^[a-z0-9_]{1,15}$"},
+          "surface": {"enum": ["authored_post", "authored_reply"]},
+          "query_argument_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "candidate_surface_coverage": {
+      "type": "array", "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["handle_key", "authored_post", "authored_reply"],
+        "properties": {
+          "handle_key": {"type": "string", "pattern": "^[a-z0-9_]{1,15}$"},
+          "authored_post": {"$ref": "#/$defs/surface_coverage"},
+          "authored_reply": {"$ref": "#/$defs/surface_coverage"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "slug": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "surface_coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempted", "query_argument_sha256s"],
+      "properties": {
+        "attempted": {"type": "boolean"},
+        "query_argument_sha256s": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}}
+      }
+    },
+    "counts": {"type": "object", "minProperties": 1, "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"}, "additionalProperties": {"type": "integer", "minimum": 0}},
+    "family_profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["family_id", "completed_call_count", "call_shapes"],
+      "properties": {
+        "family_id": {"$ref": "#/$defs/slug"},
+        "completed_call_count": {"type": "integer", "minimum": 1},
+        "call_shapes": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["tool_name", "limit", "count", "mode", "min_score_threshold", "thread_argument_shape", "completed_call_count"],
+            "properties": {
+              "tool_name": {"enum": ["x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"]},
+              "limit": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 1, "maximum": 100}]},
+              "count": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 1, "maximum": 50}]},
+              "mode": {"oneOf": [{"type": "null"}, {"enum": ["Latest", "Top"]}]},
+              "min_score_threshold": {"oneOf": [{"type": "null"}, {"type": "number", "minimum": 0, "maximum": 1}]},
+              "thread_argument_shape": {"oneOf": [{"type": "null"}, {"enum": ["post_id", "tweet_id", "url", "query"]}]},
+              "completed_call_count": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

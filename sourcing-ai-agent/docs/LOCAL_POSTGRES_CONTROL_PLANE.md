@@ -1,0 +1,274 @@
+# Local Postgres Control Plane
+
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+> Revision (2026-06-11): macOS 现在有官方 Docker 路径。`make local-pg-up` 用 `postgres:16-alpine` 启动持久容器 `sourcing-local-postgres`（host `127.0.0.1:55432`，volume `sourcing-local-postgres-data`，user `sourcing` / db `sourcing_agent`，loopback `trust` 免密，与既有 DSN 形状 `postgresql://sourcing@127.0.0.1:55432/sourcing_agent` 完全一致），并刷新仓库根目录 `.local-postgres.env`，让 `resolve_control_plane_postgres_dsn` 零消费方改动地发现它。配套：`make local-pg-status` / `make local-pg-down`；实现见 `src/sourcing_agent/local_postgres_docker.py`。本文其余的 `.local-postgres/{extract,data}` + `pg_ctl` 段落仍是 Linux/WSL 路径。
+
+
+这份文档定义本仓库本地 `Postgres-first` control-plane 的默认发现、启动与排障方式，避免再出现“本地明明有 PG 资产，但运行时没有识别到 DSN”的情况。
+
+## 默认约定
+
+- live control plane 默认目标是 Postgres，而不是磁盘 SQLite
+- 如果存在显式的 `.local-postgres.env` / `connection.env`，系统也会把它视为本地 PG 发现入口
+- 当仓库或其上级目录存在 `.local-postgres/` 且其中包含：
+  - `extract/`
+  - `data/`
+- 系统会自动推导：
+  - `SOURCING_CONTROL_PLANE_POSTGRES_DSN=postgresql://sourcing@127.0.0.1:55432/sourcing_agent`
+  - `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
+- 当检测到可用本地 PG 时，`load_settings()` 默认把 `db_path` 设为：
+  - `runtime/control_plane.shadow.db`
+
+这个 `control_plane.shadow.db` 只是 compatibility shadow seed path，不再是 live authoritative store。
+在 `postgres_only` 下，真正的 shadow 连接目标应看 `show-control-plane-runtime` 输出里的：
+
+- `compatibility_shadow_connect_target`
+- `compatibility_shadow_ephemeral`
+- `control_plane_storage_banner`
+
+## 一条命令确认当前解析结果
+
+在仓库根目录运行：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli show-control-plane-runtime
+```
+
+这条命令会直接打印：
+
+- 当前解析到的 `resolved_control_plane_postgres_dsn`
+- `resolved_control_plane_postgres_live_mode`
+- 默认 `db_path`
+- `default_db_path_role`
+- SQLite shadow 是否是 `shared_memory`
+- compatibility shadow 的真实连接 target
+- 本地 `.local-postgres` 是否可用、是否已启动
+- 当前是否通过 `.local-postgres.env` / `connection.env` 提供了显式配置
+- 本地 PG 的 `server_encoding` / `database_encoding`
+
+如果你不确定问题是不是 DSN，而是 shell / venv / PATH 选错了，先跑：
+
+```bash
+make dev-doctor
+```
+
+优先把解释器和脚本入口确认干净，再判断是不是 Postgres 发现问题。
+
+## 编码健康要求
+
+- 本地 control-plane PG 必须是 `UTF8`
+- 如果你看到：
+  - `server_encoding = SQL_ASCII`
+  - 或 `database_encoding = SQL_ASCII`
+- 这说明当前 `.local-postgres` 是历史坏库；虽然代码现在会在连接层强制 `client_encoding=UTF8` 并对脏值做读写归一化，但这只是兼容兜底，不是理想终态
+- `SQL_ASCII` 的直接风险是：
+  - psycopg 把 text 列返回成 `bytes`
+  - 上层一旦对这些值做 `str(...)`，就会生成 `"b'...'"` 脏字符串
+  - 这些脏字符串再被写回 control plane，会污染 `snapshot_id`、`target_company`、`default_acquisition_mode`、甚至表名/标识符
+
+推荐检查：
+
+```bash
+source scripts/dev_postgres_env.sh
+PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli show-control-plane-runtime
+```
+
+如果确认是 `SQL_ASCII`，推荐重新准备一个 UTF8 的本地 PG cluster / database，再做一次 control-plane sync；不要把 `SQL_ASCII` 当成长期开发基线。
+
+## Python 依赖
+
+- 纯 Postgres control-plane 路径要求当前 Python 环境可导入 `psycopg[binary]`
+- 项目 `pyproject.toml` 已将它声明为正式依赖
+- 在 Mac 上不要直接假设 Homebrew/system `python3` 就是项目解释器；优先使用仓库 `.venv/bin/python`
+- `bash ./scripts/dev_backend.sh` 与 `bash ./scripts/run_hosted_trial_backend.sh` 现在也会优先选择仓库 `.venv/bin/python`
+- 如果你切换到了新的解释器或新虚拟环境，先确认：
+
+```bash
+.venv/bin/python -c "import psycopg, requests; print(psycopg.__version__); print(requests.__version__)"
+```
+
+如果 `show-control-plane-runtime` 报 `ModuleNotFoundError: requests`，通常不是仓库缺依赖，而是你跑到了系统解释器。
+
+## 发现优先级
+
+DSN 解析按这个顺序：
+
+1. 显式环境变量 `SOURCING_CONTROL_PLANE_POSTGRES_DSN`
+2. 显式环境文件 `SOURCING_LOCAL_POSTGRES_ENV_FILE`
+3. 当前仓库及其父目录中的：
+   - `.local-postgres.env`
+   - `.local-postgres/connection.env`
+4. `SOURCING_LOCAL_POSTGRES_ROOT` 或 `LOCAL_PG_ROOT`
+5. 当前仓库及其父目录中的 `.local-postgres/`
+
+因此：
+
+- 如果你要连远端或手动指定 PG，直接显式 export `SOURCING_CONTROL_PLANE_POSTGRES_DSN`
+- 如果你要用 Linux/WSL 风格的本地 PG，通常不需要手动写 DSN，只需要保证 `.local-postgres/` 存在
+- 如果你要用 Mac/Homebrew/外部 PG，推荐在 repo 根目录放 `.local-postgres.env`
+
+## 推荐的 env 文件
+
+跨平台开发时，推荐从这份示例开始：
+
+```bash
+cp configs/local_postgres.env.example .local-postgres.env
+```
+
+最小内容例如：
+
+```bash
+SOURCING_CONTROL_PLANE_POSTGRES_DSN=postgresql://sourcing@127.0.0.1:55432/sourcing_agent
+SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only
+```
+
+这样即使你的 Postgres 并不在 `.local-postgres/{extract,data}` 下，运行时和 `scripts/dev_postgres_env.sh` 也能正确识别。
+
+## import 后刷新模式
+
+`import_cloud_assets(...)` 在导入完 bundle / generation 后，还可能继续做两类后置刷新：
+
+- organization asset registry warmup
+- linkedin profile registry backfill
+
+在 PG 环境里，这两项现在默认会走后台线程，不再阻塞 import 返回；这样 ECS 上第一次冷启动公司资产时，不会把 scoped search 前台请求拖成“导入成功但要等 warmup/backfill 跑完才能返回”。
+
+如需强制切回同步模式，可显式设置：
+
+```bash
+export SOURCING_IMPORT_POST_REFRESH_MODE=inline
+```
+
+如需显式保持后台模式：
+
+```bash
+export SOURCING_IMPORT_POST_REFRESH_MODE=background
+```
+
+后台任务状态会落到：
+
+```text
+runtime/maintenance/import_refresh_jobs/*.json
+```
+
+## 推荐入口
+
+在仓库根目录运行：
+
+```bash
+source scripts/dev_postgres_env.sh
+```
+
+这个脚本会：
+
+- 优先读取 `.local-postgres.env` / `.local-postgres/connection.env`
+- export `SOURCING_CONTROL_PLANE_POSTGRES_DSN`
+- export `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
+- export `SOURCING_LOCAL_POSTGRES_ROOT`
+- 把本地 PG binary 加入 `PATH`
+
+如果你之后还要起 backend，推荐继续用这些脚本：
+
+```bash
+source scripts/dev_postgres_env.sh
+pg_isready -h 127.0.0.1 -p "$LOCAL_PG_PORT" -d postgres -U "$LOCAL_PG_USER"
+```
+
+## 自动启动行为
+
+当代码路径使用自动发现到的本地 PG，且没有显式远端 DSN 时：
+
+- live control-plane adapter 会在连接前尝试启动本地 PG
+- control-plane snapshot / runtime sync 到 PG 时也会先尝试启动本地 PG
+
+因此本地开发一般不再要求你先手动 export DSN 再手动起库。
+
+## 常用排障命令
+
+```bash
+source scripts/dev_postgres_env.sh
+pg_isready -h 127.0.0.1 -p "$LOCAL_PG_PORT" -d postgres -U "$LOCAL_PG_USER"
+psql "$SOURCING_CONTROL_PLANE_POSTGRES_DSN" -Atqc "select current_database(), current_user;"
+```
+
+## 从 runtime 重建 PG control plane
+
+如果你已经迁移了 `runtime/company_assets` / `runtime/jobs`，但新的 Postgres 只有部分表有数据，优先使用正式重建命令，而不是手工逐个 backfill：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli rebuild-runtime-control-plane
+```
+
+常用变体：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli rebuild-runtime-control-plane --company OpenAI
+PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli rebuild-runtime-control-plane --skip-jobs
+PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli rebuild-runtime-control-plane --skip-company-assets
+```
+
+这条命令会：
+
+- 从 `runtime/company_assets` 重建 organization asset registry / generation / membership
+- 必要时先修复缺失的 normalized manifests
+- 从 `runtime/jobs/*.json` 重建 `jobs` 和 `job_result_views`
+- 把旧机器遗留的 snapshot `source_path` 尽量改写成当前机器可解析的本地路径
+
+不会自动重建的部分：
+
+- `frontend_history_links`
+  - `history_id` 不持久化在 `runtime/jobs` 里，无法无损逆向恢复
+- 浏览器本地缓存 / LocalStorage
+- profile registry
+  - 如需回填，继续使用 `backfill-linkedin-profile-registry`
+
+如果 PG 没起来：
+
+```bash
+source scripts/dev_postgres_env.sh
+pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN -p $LOCAL_PG_PORT -h 127.0.0.1" start
+```
+
+## 迁移与磁盘语义
+
+- `runtime/sourcing_agent.db` 不应再被视为 ECS / hosted 的必需资产
+- Linux/WSL 的 `.local-postgres/data` 也不应被视为跨平台可直接复制的资产
+- hosted 默认路径应是：
+  - Postgres control plane
+  - generation-first object storage
+  - local hot cache
+- `sqlite_snapshot` 已退役；不要再导出、上传、下载、导入或恢复 SQLite snapshot
+- generic control-plane snapshot（`export-control-plane-snapshot` / `sync-control-plane-postgres` / bundle 里的
+  `control_plane_snapshot.json`）只是 projection/domain-only 的迁移快照：完整的 PG-only durable runtime 因果聚合
+  （`workflow_commands`、`workflow_events`、`workflow_current_state`、`runtime_outbox`、`agent_actions`、
+  `operation_runs`、`agent_tool_result_slots` / `agent_tool_result_attempts` / `agent_tool_result_journal`、
+  `workflow_activity_runs`、`workflow_activity_attempts`、`workflow_entity_deltas`、`operation_events`，
+  以及其 Action/Operation/command/event owner 同属该聚合的 acquisition 运行时行
+  `acquisition_runs`、`acquisition_discovery_lanes`，以及携带不可变 causal/cost 引用与不可复活 purge
+  tombstone 的 `model_invocation_envelopes`）
+  以及不可移植的 live execution/recovery/lease/cost-control 协调表
+  （`workflow_job_leases`、`workflow_recovery_intents`、`runtime_provider_limiter_leases`、
+  活跃 worker 行 `agent_worker_runs`、profile-URL 调度租约 `linkedin_profile_registry_leases`，
+  以及完整的 profile-scheduler owner 聚合 `linkedin_profile_registry` /
+  `linkedin_profile_registry_aliases` / `linkedin_profile_registry_events` /
+  `linkedin_profile_registry_backfill_runs`（retry 等待、coalescing 计时、终态与 dispatch 身份））
+  一律不进入 generic export；可移植性分类的唯一权威是 canonical per-table registry
+  `CONTROL_PLANE_TABLE_PORTABILITY_REGISTRY`（`DEFAULT_CONTROL_PLANE_TABLES`、
+  `PG_ONLY_DURABLE_RUNTIME_CAUSAL_AGGREGATE_TABLES`、`NONPORTABLE_RUNTIME_COORDINATION_TABLES`、
+  `GENERIC_POSTGRES_IMPORT_EXCLUDED_TABLES` 全部由它派生，不存在第二份手工维护的集合）；
+  snapshot 头部用 `excluded_pg_only_durable_runtime_tables` 显式记录这个 typed gap，
+  且所有 generic import/restore 边界（PG snapshot sync、runtime mirror sync、SQLite restore）在导入前强制要求
+  这份 exact schema-versioned exclusion declaration（缺失或不匹配即拒绝）、拒绝这些表、并把验证过的 gap 复制到
+  每个 restore/sync/cloud-import summary，因此任何部分聚合或 live 协调切片都无法冒充完整恢复。
+  durable runtime 的备份/恢复必须走 quiesced 的 PG 逻辑备份，而不是 generic snapshot。
+- 如果要把环境迁到另一台 Mac，优先使用：
+  - Postgres logical dump
+  - `.local-postgres.env`
+  - `docs/archive/MAC_DEV_ENV_MIGRATION.md`
+
+## 开发要求
+
+- 新代码不要再假设“只有 `runtime/sourcing_agent.db` 才是 authoritative”
+- 新文档、脚本和排障说明默认写 Postgres-first 路径
+- 如果某个模块还保留 SQLite 代码，必须限定为 migration-only 或 ephemeral test shadow，不能作为 live/default fallback

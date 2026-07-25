@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.live_grant.v1.schema.json",
+  "title": "Adaptive Grok recall-wave preissued live grant v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "grant_id_hash", "execution_scope_sha256", "request_id", "target_sha256", "model_id",
+    "emergency_sha256", "technical_limits_sha256", "issued_at", "expires_at", "issuer", "state"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.adaptive_recall_wave.live_grant.v1"},
+    "grant_id_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_scope_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "request_id": {"type": "string", "pattern": "^xwave_req_[0-9a-f]{32}$"},
+    "target_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "model_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "emergency_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "technical_limits_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "issued_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"},
+    "expires_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"},
+    "issuer": {"const": "local_owner_explicit_cli"},
+    "state": {"const": "preissued_single_use"}
+  }
+}

@@ -1,22 +1,467 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
+import time
+from concurrent.futures import Future
+from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Protocol
 from urllib import error, request
+
 import requests
 
 from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
+from .model_usage import ModelUsage as OpenAIModelUsage
 from .query_intent_policy import build_supported_rewrite_policy_prompt_context
+from .runtime_environment import assert_live_provider_access_allowed, external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
 
-
 _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater_china_scope"
+_SCRIPTED_LIVE_MODEL_PLANNING_ENV = "SOURCING_SCRIPTED_LIVE_MODEL_PLANNING"
+# WS7/W7.2 S2 (docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §2, OQ7): opt-in scripted
+# profile-batch-divider client for offline AI-path exercise. Absent → the
+# divide method returns {} (ruling-④ F1 fallback marker). Dedicated flag by
+# ruling — it deliberately does NOT piggyback the scripted-planning flag.
+_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV = "SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER"
+# OQ8 RATIFIED 2026-07-23: the divider call gets its own bounded timeout
+# (default 20 s) instead of ModelProviderSettings.timeout_seconds (45 s),
+# because it runs inside the wave-mint path (design §2.4).
+_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_ENV = "SOURCING_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS"
+_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_DEFAULT = 20
+_PROFILE_BATCH_DIVIDER_MAX_OUTPUT_TOKENS = 1000
+# Wire keys of the divide_profile_prefetch_batches response envelope (S2
+# invocation-surface contract, consumed by profile_batch_division.py):
+#   {}                                   → divider unavailable (F1)
+#   {"error": "..."}                     → call failed; circuit-open errors keep
+#                                          the "model_provider_circuit_open" prefix (F2 vs F3)
+#   {"division": {...}, "provenance": {...}, "raw_response_preview": "..."}
+#                                        → raw, UNVALIDATED model output + client-side
+#                                          call facts; validation is single-sourced in
+#                                          profile_batch_division_contract (S1).
+PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY = "division"
+PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY = "provenance"
+PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY = "error"
+PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY = "raw_response_preview"
+PROFILE_BATCH_DIVIDER_CIRCUIT_ERROR_PREFIX = "model_provider_circuit_open"
+# WS7/W7.3 S2 (docs/WS7_AI_PROMOTE_DESIGN.md §3, OQ8): opt-in scripted
+# organization-asset promote-judge client for offline AI-path exercise. Absent →
+# judge_organization_asset_promotion returns {} (ruling-④ F1 keep-incumbent
+# marker). Dedicated flag by ruling — it deliberately does NOT piggyback the
+# scripted-planning or scripted-divider flag (different blast radius).
+_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV = "SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE"
+# ---------------------------------------------------------------------------
+# WS7 SHADOW SEAM SAFETY GATE (2026-07-25 — adversarial finding "the wiring
+# opens a BILLED, synchronous model call on the authoritative write path").
+#
+# Both S3 shadow recorders used to engage on a BARE structural capability probe
+# ("does this client override the deterministic stub?"). That probe is True for
+# the REAL provider clients as well (`OpenAICompatibleChatModelClient` and
+# `QwenResponsesModelClient` both override both methods), so once the 2026-07-25
+# promote wiring threaded `self.model_client` down from the production callers,
+# a live-mode process would have made a billed provider call from inside a path
+# that is by definition optional and record-only:
+#   * promote  — synchronously inside `upsert_organization_asset_registry_with_guard`,
+#                i.e. on the AUTHORITATIVE WRITE PATH, once per contested decision;
+#   * divider  — synchronously inside the enrichment mint seam while the
+#                scheduler lock is held, once per wave mint >300 eligible urls.
+# Structural capability is therefore NOT sufficient any more. A client that does
+# not DECLARE itself billing-free must additionally carry the seam's dedicated
+# opt-in env, and both opt-ins are OFF by default — so with no opt-in the seams
+# cannot reach a provider no matter what client production threads into them.
+# The real path is thus never easier to trigger than the scripted one, which has
+# always required `SOURCING_SCRIPTED_*` to return anything but the F1 marker.
+# Documented in docs/WS7_AI_PROMOTE_DESIGN.md §7.1 and
+# docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §5.1.
+# ---------------------------------------------------------------------------
+WS7_SHADOW_BILLING_FREE_ATTR = "ws7_shadow_billing_free"
+WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL_ENV = "SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL"
+WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV = "SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL"
+# OQ8 RATIFIED 2026-07-24: the promote-judge call gets its own bounded timeout
+# (default 20 s) instead of ModelProviderSettings.timeout_seconds (45 s). Promote
+# is a materialize→promote decision point, not a hot serving path, but a bounded
+# timeout keeps a slow model from stalling the registration/consolidation flow;
+# on timeout the caller keeps the incumbent (ruling ④, design §3.4/§4).
+_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_ENV = "SOURCING_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS"
+_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_DEFAULT = 20
+_ORGANIZATION_PROMOTE_JUDGE_MAX_OUTPUT_TOKENS = 1000
+# Wire keys of the judge_organization_asset_promotion response envelope (S2
+# invocation-surface contract, consumed by organization_promote_judgment.py):
+#   {}                                   → judge unavailable (F1 keep-incumbent)
+#   {"error": "..."}                     → call failed; circuit-open errors keep
+#                                          the "model_provider_circuit_open" prefix (F2 vs F3)
+#   {"judgment": {...}, "provenance": {...}, "raw_response_preview": "..."}
+#                                        → the RAW model output ({decision, reason,
+#                                          reason_code}) + client-side call facts;
+#                                          validation is single-sourced in
+#                                          organization_promote_contract (S1).
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY = "judgment"
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY = "provenance"
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY = "error"
+ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY = "raw_response_preview"
+ORGANIZATION_PROMOTE_JUDGE_CIRCUIT_ERROR_PREFIX = "model_provider_circuit_open"
+_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS"
+_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV = "SOURCING_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS"
+_MODEL_PROVIDER_CIRCUIT_DISABLED_ENV = "SOURCING_MODEL_PROVIDER_CIRCUIT_DISABLED"
+_MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV = "SOURCING_MODEL_PROVIDER_CALL_MAX_ATTEMPTS"
+_MODEL_PROVIDER_CIRCUITS: dict[tuple[str, str, str], dict[str, Any]] = {}
+_MODEL_PROVIDER_HEALTHCHECK_FLIGHTS: dict[
+    tuple[str, str, str], Future[dict[str, Any]]
+] = {}
+_MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK = Lock()
+_MODEL_PROVIDER_USAGE_TOKEN_LIMIT = 1_000_000_000
+CRM_PUBLIC_WEB_PRODUCT_MODEL = "gpt-5.6-sol"
+
+
+# Compatibility import alias for existing provider callers. ``ModelUsage`` is
+# the only class owner; new provider-neutral code should import it directly.
+
+
+@dataclass(frozen=True, slots=True)
+class OpenAIModelCallResult:
+    text: str
+    requested_model: str
+    response_model: str
+    usage: OpenAIModelUsage
+
+    @property
+    def effective_model(self) -> str:
+        return self.response_model
+
+    @property
+    def model_identity_provenance(self) -> str:
+        return "provider_response" if self.response_model else ""
+
+    def metadata(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "requested_model": self.requested_model,
+            "model_usage": self.usage.to_record(),
+        }
+        if self.response_model:
+            result.update(
+                {
+                    "response_model": self.response_model,
+                    "effective_model": self.response_model,
+                    "model_identity_provenance": "provider_response",
+                }
+            )
+        return result
+
+
+def _openai_model_identity_failure(
+    *,
+    requested_model: str,
+    response_model: str,
+) -> tuple[str, str]:
+    requested = str(requested_model or "").strip()
+    response = str(response_model or "").strip()
+    if not response:
+        return (
+            "model_identity_missing",
+            f"model_response_identity_missing: requested_model={requested}",
+        )
+    if response != requested:
+        return (
+            "model_identity_mismatch",
+            f"model_response_identity_mismatch: requested_model={requested} response_model={response}",
+        )
+    return "", ""
+
+
+def _bounded_usage_token_count(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return min(_MODEL_PROVIDER_USAGE_TOKEN_LIMIT, max(0, parsed))
+
+
+def _first_usage_token_count(*values: Any) -> int | None:
+    for value in values:
+        parsed = _bounded_usage_token_count(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _extract_openai_model_usage(payload: dict[str, Any]) -> OpenAIModelUsage:
+    raw_usage = payload.get("usage")
+    usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
+    raw_input_details = usage.get("input_tokens_details") or usage.get("prompt_tokens_details")
+    input_details = dict(raw_input_details) if isinstance(raw_input_details, dict) else {}
+    raw_output_details = usage.get("output_tokens_details") or usage.get("completion_tokens_details")
+    output_details = dict(raw_output_details) if isinstance(raw_output_details, dict) else {}
+    return OpenAIModelUsage(
+        input_tokens=_first_usage_token_count(usage.get("input_tokens"), usage.get("prompt_tokens")),
+        output_tokens=_first_usage_token_count(usage.get("output_tokens"), usage.get("completion_tokens")),
+        total_tokens=_first_usage_token_count(usage.get("total_tokens")),
+        cached_input_tokens=_first_usage_token_count(input_details.get("cached_tokens")),
+        reasoning_output_tokens=_first_usage_token_count(output_details.get("reasoning_tokens")),
+    )
+
+
+def _openai_model_call_result(
+    payload: dict[str, Any],
+    *,
+    requested_model: str,
+    text: str,
+) -> OpenAIModelCallResult:
+    raw_response_model = payload.get("model")
+    return OpenAIModelCallResult(
+        text=str(text or ""),
+        requested_model=str(requested_model or "").strip(),
+        response_model=raw_response_model.strip() if isinstance(raw_response_model, str) else "",
+        usage=_extract_openai_model_usage(payload),
+    )
 
 
 def _external_provider_mode() -> str:
-    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
+    return external_provider_mode()
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = str(os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on", "y"}
+
+
+def model_client_is_ws7_shadow_billing_free(model_client: Any) -> bool:
+    """True when the client's class DECLARES that its WS7 shadow methods make no
+    billed provider call (``ws7_shadow_billing_free = True``).
+
+    The declaration is a class attribute rather than an isinstance check so that
+    local test doubles and future offline clients can opt in without importing
+    the scripted classes. The real provider clients
+    (``OpenAICompatibleChatModelClient`` / ``QwenResponsesModelClient``)
+    deliberately do NOT carry it; ``tests/test_organization_promote_shadow.py``
+    pins the exact set of classes that do.
+    """
+
+    if model_client is None:
+        return False
+    return bool(getattr(type(model_client), WS7_SHADOW_BILLING_FREE_ATTR, False))
+
+
+def ws7_shadow_model_calls_permitted(model_client: Any, *, allow_real_model_env: str) -> bool:
+    """The WS7 shadow seams' SAFETY gate (see the block comment above).
+
+    Returns True only when the client is declared billing-free, or the seam's
+    dedicated real-model opt-in env is explicitly set. Both shadow recorders
+    call this IN ADDITION to their structural capability probe, so with no
+    opt-in the seam cannot reach a provider no matter what client is threaded
+    into it.
+    """
+
+    if model_client is None:
+        return False
+    if model_client_is_ws7_shadow_billing_free(model_client):
+        return True
+    return _env_bool(allow_real_model_env, False)
+
+
+def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: int | None = None) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        value = default
+    else:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = default
+    if minimum is not None:
+        value = max(minimum, value)
+    if maximum is not None:
+        value = min(maximum, value)
+    return value
+
+
+def _scripted_live_model_planning_enabled(*, provider_mode: str) -> bool:
+    return str(provider_mode or "").strip().lower() == "scripted" and _env_bool(
+        _SCRIPTED_LIVE_MODEL_PLANNING_ENV,
+        False,
+    )
+
+
+def _scripted_profile_batch_divider_enabled(*, provider_mode: str) -> bool:
+    """OQ7 opt-in: scripted divider client, offline provider modes only.
+
+    Unlike scripted-live planning (scripted mode only), the divider's offline
+    exercise path must also cover simulate e2e (design §5.4 / discrepancy D2),
+    so any offline mode qualifies. Live mode never uses the scripted divider.
+    """
+    return str(provider_mode or "").strip().lower() in {"simulate", "replay", "scripted"} and _env_bool(
+        _SCRIPTED_PROFILE_BATCH_DIVIDER_ENV,
+        False,
+    )
+
+
+def _profile_batch_divider_timeout_seconds() -> int:
+    return _env_int(
+        _PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_ENV,
+        _PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS_DEFAULT,
+        minimum=1,
+        maximum=300,
+    )
+
+
+def _scripted_organization_promote_judge_enabled(*, provider_mode: str) -> bool:
+    """OQ8 opt-in: scripted promote-judge client, offline provider modes only.
+
+    Mirrors the scripted-divider gate (design §3.1 / discrepancy D2): any offline
+    mode qualifies so simulate/replay/scripted e2e can drive the AI promote branch
+    without a billed call; live mode never uses the scripted judge.
+    """
+    return str(provider_mode or "").strip().lower() in {"simulate", "replay", "scripted"} and _env_bool(
+        _SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV,
+        False,
+    )
+
+
+def _organization_promote_judge_timeout_seconds() -> int:
+    return _env_int(
+        _ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_ENV,
+        _ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS_DEFAULT,
+        minimum=1,
+        maximum=300,
+    )
+
+
+def _model_call_error_message(exc: Exception) -> str:
+    return " ".join(str(exc or "").strip().split())[:500]
+
+
+def _model_provider_circuit_key(provider: str, base_url: str, model: str) -> tuple[str, str, str]:
+    return (
+        str(provider or "").strip() or "model_provider",
+        str(base_url or "").strip().rstrip("/"),
+        str(model or "").strip() or "unknown_model",
+    )
+
+
+def _claim_model_provider_healthcheck_flight(
+    key: tuple[str, str, str],
+) -> tuple[Future[dict[str, Any]], bool]:
+    with _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK:
+        existing = _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS.get(key)
+        if existing is not None:
+            return existing, False
+        flight: Future[dict[str, Any]] = Future()
+        _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS[key] = flight
+        return flight, True
+
+
+def _release_model_provider_healthcheck_flight(
+    key: tuple[str, str, str],
+    flight: Future[dict[str, Any]],
+) -> None:
+    with _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS_LOCK:
+        if _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS.get(key) is flight:
+            _MODEL_PROVIDER_HEALTHCHECK_FLIGHTS.pop(key, None)
+
+
+def _model_provider_circuit_error(key: tuple[str, str, str]) -> str:
+    if _env_bool(_MODEL_PROVIDER_CIRCUIT_DISABLED_ENV, False):
+        return ""
+    state = _MODEL_PROVIDER_CIRCUITS.get(key) or {}
+    open_until = float(state.get("open_until") or 0)
+    now = time.time()
+    if open_until <= now:
+        if state:
+            _MODEL_PROVIDER_CIRCUITS.pop(key, None)
+        return ""
+    reason = str(state.get("reason") or "previous_model_provider_failure").strip()
+    remaining = int(max(1, open_until - now))
+    return f"model_provider_circuit_open:{remaining}s_remaining:{reason}"
+
+
+def _record_model_provider_failure(key: tuple[str, str, str], error_text: str) -> None:
+    if _env_bool(_MODEL_PROVIDER_CIRCUIT_DISABLED_ENV, False):
+        return
+    cooldown = _env_int(_MODEL_PROVIDER_FAILURE_COOLDOWN_SECONDS_ENV, 900, minimum=1, maximum=86_400)
+    _MODEL_PROVIDER_CIRCUITS[key] = {
+        "open_until": time.time() + cooldown,
+        "reason": " ".join(str(error_text or "").strip().split())[:240],
+        "cooldown_seconds": cooldown,
+    }
+
+
+def _record_model_provider_success(key: tuple[str, str, str]) -> None:
+    _MODEL_PROVIDER_CIRCUITS.pop(key, None)
+
+
+def _reset_model_provider_circuits_for_tests() -> None:
+    _MODEL_PROVIDER_CIRCUITS.clear()
+
+
+def _model_fallback_reason(*, response: str, error: str, parsed: dict[str, Any]) -> str:
+    if error:
+        return "model_call_failed"
+    if response and not parsed:
+        return "model_response_parse_failed"
+    if not response:
+        return "empty_model_response"
+    return ""
+
+
+def _annotate_public_web_model_fallback(
+    result: dict[str, Any],
+    *,
+    response: str,
+    error: str,
+    parsed: dict[str, Any],
+    fallback_reason_override: str = "",
+) -> None:
+    fallback_used = not bool(parsed)
+    result["fallback_used"] = fallback_used
+    if not fallback_used:
+        return
+    reason = str(fallback_reason_override or "").strip() or _model_fallback_reason(
+        response=response,
+        error=error,
+        parsed=parsed,
+    )
+    if reason:
+        result["fallback_reason"] = reason
+    if error:
+        result["model_error"] = error
+    elif response:
+        result["raw_response_preview"] = response[:300]
+
+
+def _crm_public_web_model_configuration_fallback(
+    *,
+    fallback: dict[str, Any],
+    provider: str,
+    requested_model: str,
+) -> dict[str, Any]:
+    requested = str(requested_model or "").strip()
+    result = _normalize_public_web_signal_adjudication({}, fallback=fallback)
+    result.update(
+        {
+            "provider": str(provider or "").strip(),
+            "model": requested,
+            "model_version": requested,
+            "requested_model": requested,
+        }
+    )
+    _annotate_public_web_model_fallback(
+        result,
+        response="",
+        error=(
+            "crm_public_web_product_model_mismatch: "
+            f"expected_model={CRM_PUBLIC_WEB_PRODUCT_MODEL} "
+            f"requested_model={requested or 'empty'}"
+        ),
+        parsed={},
+        fallback_reason_override="model_configuration_mismatch",
+    )
+    return result
 
 
 def _build_outreach_layer_system_prompt() -> str:
@@ -58,13 +503,10 @@ def _execution_preferences_schema_prompt() -> str:
         "execution_preferences must be an object and may contain only "
         "acquisition_strategy_override, "
         "use_company_employees_lane, "
-        "keyword_priority_only, "
         "former_keyword_queries_only, "
         "provider_people_search_query_strategy, "
         "provider_people_search_max_queries, "
-        "large_org_keyword_probe_mode, "
         "force_fresh_run, "
-        "allow_high_cost_sources, "
         "precision_recall_bias, "
         "confirmed_company_scope, "
         "extra_source_families, "
@@ -74,9 +516,22 @@ def _execution_preferences_schema_prompt() -> str:
         "(full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster). "
         "Do not misuse acquisition_strategy_override as a proxy for keyword priority, company-employees lane choice, "
         "former coverage, or people-search union strategy. "
+        "There are no org-size or keyword-probe lane knobs: the company-employees roster lane always uses one "
+        "unified method for every company — per-function shard queries (one request per selected function id) "
+        "with the request location axes. Express function targeting (researcher / engineer / product manager) "
+        "through must_have_primary_role_buckets, never through lane switches. "
         "provider_people_search_query_strategy must be all_queries_union or first_hit. "
         "provider_people_search_max_queries must be a small positive integer. "
         "Omit uncertain fields from execution_preferences. "
+    )
+
+
+def _explicit_thematic_keyword_boundary_prompt() -> str:
+    return (
+        "Use the user's explicit topical vocabulary as the boundary for keywords and research_direction_keywords. "
+        "Do not expand a single direction into sibling, parent, child, or adjacent directions unless those exact terms also appear in the request. "
+        "For example, if the request says Multimodal, keep Multimodal as the direction keyword and do not add Text, Vision, vision-language, or video generation unless they are explicitly present in the user text. "
+        "Likewise, preserve the exact explicit topic set instead of broadening it into related families. "
     )
 
 
@@ -89,7 +544,6 @@ def _build_review_instruction_system_prompt() -> str:
         + _execution_preferences_schema_prompt()
         + "Only include fields directly supported by the instruction and editable_fields. "
         "Examples: "
-        "'keyword-first' -> keyword_priority_only=true. "
         "'不要 company-employees' -> use_company_employees_lane=false. "
         "'former 也要' -> run_former_search_seed=true when applicable. "
         "'多 query 并集' -> provider_people_search_query_strategy=all_queries_union. "
@@ -111,13 +565,18 @@ def _build_request_normalization_system_prompt() -> str:
         "Represent the user's real intent with four orthogonal dimensions whenever possible: "
         "population boundary (categories + employment_statuses), "
         "scope boundary (target_company + organization_keywords + scope_disambiguation + confirmed_company_scope), "
-        "acquisition lane policy (acquisition_strategy_override + use_company_employees_lane + keyword_priority_only + former_keyword_queries_only + large_org_keyword_probe_mode), "
-        "and fallback policy (force_fresh_run + allow_high_cost_sources + provider_people_search_query_strategy + provider_people_search_max_queries + reuse_existing_roster + run_former_search_seed). "
+        "acquisition lane policy (acquisition_strategy_override + use_company_employees_lane + former_keyword_queries_only), "
+        "and fallback policy (force_fresh_run + provider_people_search_query_strategy + provider_people_search_max_queries + reuse_existing_roster + run_former_search_seed). "
         + _execution_preferences_schema_prompt()
         + "scope_disambiguation must be an object and may contain only inferred_scope,sub_org_candidates,confidence,rationale. "
         "inferred_scope must be one of parent,sub_org_only,both,uncertain. "
         "sub_org_candidates must be concise org/team/product labels. confidence must be 0..1. "
         "Use scope_disambiguation when parent-company scope is ambiguous (for example Google vs DeepMind/Gemini/Veo). "
+        "Negation and exclusion instructions are scope signals, never keywords: phrases such as 'NOT X', '不要X', "
+        "'不包括X', '排除X', or 'exclude X' must move the excluded entity into scope_disambiguation rationale and "
+        "sub_org candidates instead of any keyword field; never return negation markers (NOT/不要/排除/exclude) or "
+        "negated entities as keywords. A target-lab-only request limits membership to the lab in current or past "
+        "companies and does not by itself exclude the person's other employer history. "
         "When disambiguating Google vs Google DeepMind, remember LinkedIn profiles may list employer as Google even for DeepMind members; "
         "treat this as an ambiguity signal and surface sub_org_candidates instead of collapsing too early. "
         "For example, for Gemini-related requests, prefer target_company=Google and preserve Gemini / Google DeepMind as organization or scope clues when relevant. "
@@ -125,8 +584,15 @@ def _build_request_normalization_system_prompt() -> str:
         "Do not invent lab/model/product names that are not in the user text unless they are high-confidence standard aliases. "
         "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it, "
         "and prefer uncertain scope over confident hallucination. "
+        "Organization names may legitimately contain generic-looking suffixes such as AI, Lab, Labs, Research, Systems, or Studio; "
+        "when such a token is part of the resolved organization or sub-org name, keep it attached to that name instead of surfacing it again as a standalone ambiguous keyword. "
         "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
         "and direction/topic/model/technology terms in keywords. "
+        + _explicit_thematic_keyword_boundary_prompt()
+        +
+        "Common AI direction terms such as Coding, Agent, Math, Text, Audio, Vision/Visual, Multimodal, Reasoning, "
+        "Pre-train, Post-train, World model, Alignment, and Safety should usually be preserved as explicit keywords "
+        "and, when applicable, repeated in research_direction_keywords instead of being dropped as generic language. "
         "If a term is both a team/sub-org clue and an important retrieval/search constraint, it may appear in both organization_keywords and keywords. "
         "Important extraction rule: only return atomic search/retrieval terms. "
         "Never return wrapper phrases or narrative fragments such as '在Veo和Nano Banana团队', '参与Veo和Nano Banana', "
@@ -137,6 +603,9 @@ def _build_request_normalization_system_prompt() -> str:
         "Populate product/model/research-direction optional keys whenever possible; if not found, return empty arrays. "
         "categories should prefer employee, former_employee, investor, researcher, engineer. "
         "employment_statuses should use current or former. "
+        "If the user asks for people in a technical direction/topic (for example Pre-train, Post-train, Reasoning, "
+        "Infra, Multimodal, Eval, RL, Coding, Agent, or Math) and does not explicitly say researcher-only or engineer-only, "
+        "prefer categories=['researcher','engineer'] instead of narrowing to one side. "
         "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
         "Unless the user explicitly limits the scope, default employment_statuses to both current and former members. "
         "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
@@ -150,7 +619,7 @@ def _build_request_normalization_system_prompt() -> str:
         "\"organization_keywords\":[\"Google DeepMind\",\"Veo\",\"Nano Banana\"],"
         "\"keywords\":[\"multimodal\",\"Veo\",\"Nano Banana\"],"
         "\"must_have_facets\":[\"multimodal\"],"
-        "\"execution_preferences\":{\"keyword_priority_only\":true,\"provider_people_search_query_strategy\":\"all_queries_union\"},"
+        "\"execution_preferences\":{\"provider_people_search_query_strategy\":\"all_queries_union\"},"
         "\"scope_disambiguation\":{\"inferred_scope\":\"both\",\"sub_org_candidates\":[\"Google DeepMind\",\"Veo\",\"Nano Banana\"],\"confidence\":0.8}}. "
         "Example 2 input: 我想找OpenAI在ChatGPT项目，做Reasoning的人. "
         "Example 2 output: "
@@ -164,7 +633,12 @@ def _build_request_normalization_system_prompt() -> str:
         "{\"target_company\":\"Meta\",\"employment_statuses\":[\"current\",\"former\"],"
         "\"organization_keywords\":[\"TBD\"],"
         "\"keywords\":[\"infra\",\"TBD\"],"
-        "\"scope_disambiguation\":{\"inferred_scope\":\"uncertain\",\"sub_org_candidates\":[\"TBD\"],\"confidence\":0.4}}."
+        "\"scope_disambiguation\":{\"inferred_scope\":\"uncertain\",\"sub_org_candidates\":[\"TBD\"],\"confidence\":0.4}}. "
+        "Example 4 input: 给我Anthropic做Coding、Math和Audio方向的人. "
+        "Example 4 output: "
+        "{\"target_company\":\"Anthropic\",\"employment_statuses\":[\"current\",\"former\"],"
+        "\"keywords\":[\"Coding\",\"Math\",\"Audio\"],"
+        "\"research_direction_keywords\":[\"Coding\",\"Math\",\"Audio\"]}."
     )
 
 
@@ -308,6 +782,8 @@ class ModelClient(Protocol):
 
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]: ...
@@ -315,6 +791,10 @@ class ModelClient(Protocol):
     def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def provider_name(self) -> str: ...
 
@@ -435,6 +915,112 @@ class DeterministicModelClient:
             "notes": "Deterministic page analysis fallback.",
         }
 
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
+        candidate = dict(payload.get("candidate") or {})
+        candidate_name = str(candidate.get("candidate_name") or "").strip().lower()
+        current_company = str(candidate.get("current_company") or "").strip().lower()
+        name_tokens = [token for token in re.findall(r"[a-z0-9]+", candidate_name) if len(token) > 1][:4]
+        company_tokens = [token for token in re.findall(r"[a-z0-9]+", current_company) if len(token) > 1][:4]
+        assessments: list[dict[str, Any]] = []
+        for item in list(payload.get("email_candidates") or []):
+            if not isinstance(item, dict):
+                continue
+            email = str(item.get("normalized_value") or item.get("value") or "").strip().lower()
+            local_part = email.split("@", 1)[0]
+            evidence = " ".join(
+                [
+                    str(item.get("source_title") or ""),
+                    str(item.get("source_url") or ""),
+                    str(item.get("evidence_excerpt") or ""),
+                ]
+            ).lower()
+            identity_score = 0.2
+            if name_tokens and any(token in local_part or token in evidence for token in name_tokens):
+                identity_score += 0.35
+            if company_tokens and any(token in evidence for token in company_tokens):
+                identity_score += 0.15
+            if str(item.get("source_family") or "") in {
+                "profile_web_presence",
+                "resume_and_documents",
+                "candidate_publication_presence",
+            }:
+                identity_score += 0.15
+            identity_score = min(identity_score, 0.95)
+            suppression_reason = str(item.get("suppression_reason") or "").strip()
+            confidence_score = min(max(float(item.get("confidence_score") or 0.0), identity_score), 0.65)
+            suppression_reason = suppression_reason or "model_fallback_requires_ai_review"
+            assessments.append(
+                {
+                    "email": email,
+                    "email_type": str(item.get("email_type") or "unknown").strip() or "unknown",
+                    "confidence_label": "medium" if confidence_score >= 0.45 else "low",
+                    "confidence_score": round(min(confidence_score, 0.95), 2),
+                    "publishable": False,
+                    "promotion_status": "not_promoted",
+                    "suppression_reason": suppression_reason,
+                    "identity_match_label": (
+                        "needs_review"
+                        if identity_score >= 0.35
+                        else "ambiguous_identity"
+                    ),
+                    "identity_match_score": round(identity_score, 2),
+                    "rationale": "Deterministic public-web signal adjudication fallback.",
+                }
+            )
+        return {
+            "summary": "Deterministic public-web signal adjudication fallback.",
+            "email_assessments": assessments,
+            "link_assessments": self._deterministic_public_web_link_assessments(payload),
+            "academic_summary": _build_deterministic_academic_summary(payload),
+            "notes": [],
+        }
+
+    def _deterministic_public_web_link_assessments(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        candidate = dict(payload.get("candidate") or {})
+        candidate_name = str(candidate.get("candidate_name") or "").strip().lower()
+        current_company = str(candidate.get("current_company") or "").strip().lower()
+        name_tokens = [token for token in re.findall(r"[a-z0-9]+", candidate_name) if len(token) > 1][:4]
+        company_tokens = [token for token in re.findall(r"[a-z0-9]+", current_company) if len(token) > 1][:4]
+        assessments: list[dict[str, Any]] = []
+        for item in list(payload.get("entry_links") or []):
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("normalized_url") or item.get("url") or "").strip()
+            text = " ".join(
+                [
+                    str(item.get("title") or ""),
+                    str(item.get("snippet") or ""),
+                    url,
+                ]
+            ).lower()
+            identity_score = 0.15
+            if name_tokens and all(token in text for token in name_tokens[:2]):
+                identity_score += 0.45
+            elif name_tokens and any(token in text for token in name_tokens):
+                identity_score += 0.2
+            if company_tokens and any(token in text for token in company_tokens):
+                identity_score += 0.1
+            signal_type = str(item.get("entry_type") or "other").strip() or "other"
+            if signal_type in {"github_url", "x_url", "substack_url", "scholar_url", "personal_homepage", "academic_profile"}:
+                identity_score += 0.1
+            if signal_type == "company_page":
+                identity_score -= 0.05
+            identity_score = max(0.0, min(identity_score, 0.95))
+            label = "needs_review" if identity_score >= 0.35 else "ambiguous_identity"
+            assessments.append(
+                {
+                    "url": url,
+                    "signal_type": signal_type,
+                    "identity_match_label": label,
+                    "identity_match_score": round(min(identity_score, 0.64), 2),
+                    "confidence_label": "medium" if identity_score >= 0.45 else "low",
+                    "user_visible_signal": False,
+                    "review_queue_reason": "deterministic_fallback_requires_live_ai_review",
+                    "rationale": "Deterministic public-web link adjudication fallback.",
+                }
+            )
+        return assessments
+
     def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
         observed = list(payload.get("observed_companies") or [])
         matched_label = ""
@@ -460,26 +1046,300 @@ class DeterministicModelClient:
     def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {}
 
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        # WS7/W7.2 S2: {} is the structural "divider unavailable" marker — the
+        # caller (profile_batch_division.propose_and_validate_division) maps it
+        # to the ruling-④ F1 fallback (`divider_model_unavailable`), so
+        # deterministic/offline runs take the rule-ladder path by construction
+        # (design §2.1 / discrepancy D2).
+        return {}
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        # WS7/W7.3 S2: {} is the structural "judge unavailable" marker — the
+        # caller (organization_promote_judgment.judge_and_validate_promotion)
+        # maps it to the ruling-④ F1 keep-incumbent fallback
+        # (`judge_model_unavailable`). OfflineModelClient inherits this, so
+        # simulate/replay are keep-incumbent-by-construction (design §3.1 / §4);
+        # a failure NEVER flips authority (unlike the divider's rule-ladder
+        # fallback, promotion is asset-correctness-conservative).
+        return {}
+
 
 class OfflineModelClient(DeterministicModelClient):
     def __init__(self, *, mode: str) -> None:
         normalized_mode = str(mode or "simulate").strip().lower() or "simulate"
-        self.mode = normalized_mode if normalized_mode in {"simulate", "replay"} else "simulate"
+        self.mode = normalized_mode if normalized_mode in {"simulate", "replay", "scripted"} else "simulate"
 
     def provider_name(self) -> str:
         return "offline_model"
 
     def healthcheck(self) -> dict[str, Any]:
-        note = (
-            "Simulated model provider; no external model request will be sent."
-            if self.mode == "simulate"
-            else "Replay model provider; external model requests are disabled."
-        )
+        if self.mode == "simulate":
+            note = "Simulated model provider; no external model request will be sent."
+        elif self.mode == "replay":
+            note = "Replay model provider; external model requests are disabled."
+        else:
+            note = "Scripted model provider; external model requests are disabled and orchestration uses scripted fixtures."
         return {
             "provider": self.provider_name(),
             "status": "ready",
             "provider_mode": self.mode,
             "note": note,
+        }
+
+
+class ScriptedLivePlanningModelClient(DeterministicModelClient):
+    """Use a live model only for front-door planning in scripted provider tests."""
+
+    def __init__(self, delegate: ModelClient, *, mode: str) -> None:
+        self.delegate = delegate
+        self.mode = str(mode or "scripted").strip().lower() or "scripted"
+
+    def provider_name(self) -> str:
+        return "scripted_live_planning_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "delegate_provider": self.delegate.provider_name(),
+            "live_model_scope": [
+                "normalize_request",
+                "normalize_review_instruction",
+                "normalize_refinement_instruction",
+                "interpret_intent",
+                "draft_intent_brief",
+                "plan_search_strategy",
+            ],
+            "note": (
+                "Scripted providers remain offline; only front-door planning calls may use the live model."
+            ),
+        }
+
+    def supports_outreach_ai_verification(self) -> bool:
+        return False
+
+    def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.normalize_request(payload)
+
+    def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.normalize_review_instruction(payload)
+
+    def normalize_refinement_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.normalize_refinement_instruction(payload)
+
+    def interpret_intent(self, request: JobRequest, draft_plan: dict[str, Any]) -> str:
+        return self.delegate.interpret_intent(request, draft_plan)
+
+    def draft_intent_brief(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.draft_intent_brief(request, draft_payload)
+
+    def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        return self.delegate.plan_search_strategy(request, draft_payload)
+
+
+class ScriptedProfileBatchDividerModelClient(OfflineModelClient):
+    """Offline scripted divider (WS7/W7.2 S2, OQ7): deterministic, schema-valid
+    profile-batch divisions without a billed model call.
+
+    Mirrors the ScriptedLivePlanningModelClient opt-in pattern behind its own
+    dedicated env `SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER` (design §2.1). The
+    env is re-checked per call as a belt-and-braces gate: even a directly
+    constructed instance returns {} (the F1 fallback marker) when the opt-in is
+    absent. Every other ModelClient method keeps OfflineModelClient semantics.
+
+    The scripted division is a contiguous near-equal split of the eligible
+    (non-retry_wait) inventory indices into `clamp(ceil(eligible/300), 4, 8)`
+    batches. It satisfies the full S1 acceptance battery for eligible sizes in
+    (300, 2400] at the default inflight of 4; outside that range no division
+    can satisfy V1+V2/V9 simultaneously and the battery rejects it into the
+    ruling-④ fallback — deliberately NOT special-cased here (the mint site
+    bounds windows before engaging the divider; S3 scope).
+    """
+
+    # WS7 shadow safety gate: this client never contacts a provider, so the
+    # divider shadow seam may engage it without the real-model opt-in env.
+    ws7_shadow_billing_free = True
+
+    def provider_name(self) -> str:
+        return "scripted_profile_batch_divider_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "scripted_divider_enabled": _env_bool(_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV, False),
+            "note": (
+                "Offline scripted profile-batch divider (OQ7 opt-in via "
+                f"{_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV}); only divide_profile_prefetch_batches "
+                "is scripted, every other model call stays offline-deterministic."
+            ),
+        }
+
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not _env_bool(_SCRIPTED_PROFILE_BATCH_DIVIDER_ENV, False):
+            return {}
+        inventory = payload.get("inventory") if isinstance(payload.get("inventory"), dict) else {}
+        budget = payload.get("budget") if isinstance(payload.get("budget"), dict) else {}
+        retry_wait = payload.get("retry_wait") if isinstance(payload.get("retry_wait"), dict) else {}
+        try:
+            inventory_size = max(0, int(inventory.get("size") or 0))
+        except (TypeError, ValueError):
+            inventory_size = 0
+        try:
+            envelope = max(1, int(budget.get("provider_envelope_max_urls") or 300))
+        except (TypeError, ValueError):
+            envelope = 300
+        retry_indices = {
+            int(index)
+            for index in (retry_wait.get("indices") or [])
+            if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < inventory_size
+        }
+        eligible = [index for index in range(inventory_size) if index not in retry_indices]
+        if not eligible:
+            return {}
+        batch_count = min(8, max(4, -(-len(eligible) // envelope)))
+        base_size, remainder = divmod(len(eligible), batch_count)
+        batches: list[dict[str, Any]] = []
+        cursor = 0
+        for ordinal in range(1, batch_count + 1):
+            size = base_size + (1 if ordinal <= remainder else 0)
+            members = eligible[cursor : cursor + size]
+            cursor += size
+            ranges: list[list[int]] = []
+            for index in members:
+                if ranges and index == ranges[-1][1] + 1:
+                    ranges[-1][1] = index
+                else:
+                    ranges.append([index, index])
+            batches.append(
+                {
+                    "batch_index": ordinal,
+                    "member_index_ranges": [[start, end] for start, end in ranges],
+                    "member_count": len(members),
+                    "reason": (
+                        f"scripted contiguous chunk {ordinal}/{batch_count} of "
+                        f"{len(eligible)} eligible members (offline AI-path exercise)"
+                    ),
+                    "reason_code": "ai_division",
+                }
+            )
+        snapshot = json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str)
+        return {
+            PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY: {"batches": batches},
+            PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": "scripted-profile-batch-divider-v1",
+                "response_model": "scripted-profile-batch-divider-v1",
+                "prompt_sha256": hashlib.sha256(b"scripted_profile_batch_divider:v1").hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(snapshot.encode("utf-8")).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": 0,
+            },
+            PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
+            PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "",
+        }
+
+
+class ScriptedOrganizationPromoteJudgeModelClient(OfflineModelClient):
+    """Offline scripted promote judge (WS7/W7.3 S2, OQ8): deterministic,
+    schema-valid ai_promote_decision.v1 verdicts without a billed model call.
+
+    Mirrors ScriptedProfileBatchDividerModelClient behind its own dedicated env
+    `SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE` (design §3.1). The env is
+    re-checked per call as a belt-and-braces gate: even a directly constructed
+    instance returns {} (the F1 keep-incumbent marker) when the opt-in is absent.
+    Every other ModelClient method keeps OfflineModelClient semantics.
+
+    The scripted verdict reads ONLY the AI-visible candidate descriptor the
+    caller sends (never the guard verdict, which has no schema slot — design §2.2)
+    and authors exactly {decision, reason, reason_code}, the same wire shape a
+    real model authors: reject on simulate/placeholder provenance
+    (`ai_provenance_suspect`) or strictly narrower lane coverage
+    (`ai_coverage_not_superset`), otherwise promote (`ai_coverage_superset`). The
+    caller (organization_promote_judgment) still runs the full S1 battery over the
+    output, so a scripted promote that a floor rejects keeps the incumbent by
+    construction.
+    """
+
+    # WS7 shadow safety gate: this client never contacts a provider, so the
+    # promote shadow seam may engage it without the real-model opt-in env.
+    ws7_shadow_billing_free = True
+
+    def provider_name(self) -> str:
+        return "scripted_organization_promote_judge_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "scripted_promote_judge_enabled": _env_bool(_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV, False),
+            "note": (
+                "Offline scripted organization-asset promote judge (OQ8 opt-in via "
+                f"{_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV}); only judge_organization_asset_promotion "
+                "is scripted, every other model call stays offline-deterministic."
+            ),
+        }
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not _env_bool(_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV, False):
+            return {}
+        descriptor = payload.get("candidate_descriptor") if isinstance(payload.get("candidate_descriptor"), dict) else {}
+        candidate = descriptor.get("candidate") if isinstance(descriptor.get("candidate"), dict) else {}
+        incumbent = descriptor.get("incumbent") if isinstance(descriptor.get("incumbent"), dict) else {}
+        prior = (
+            descriptor.get("prior_snapshot_comparison")
+            if isinstance(descriptor.get("prior_snapshot_comparison"), dict)
+            else {}
+        )
+        candidate_metrics = candidate.get("metrics") if isinstance(candidate.get("metrics"), dict) else {}
+        incumbent_metrics = incumbent.get("metrics") if isinstance(incumbent.get("metrics"), dict) else {}
+
+        def _lane_total(metrics: dict[str, Any]) -> int:
+            try:
+                return int(metrics.get("effective_lane_total") or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        if bool(prior.get("simulate_or_placeholder_provenance")):
+            decision, reason_code, reason = (
+                "reject",
+                "ai_provenance_suspect",
+                "candidate carries simulate/placeholder provenance; a promote would risk repeating incident #2",
+            )
+        elif _lane_total(candidate_metrics) < _lane_total(incumbent_metrics):
+            decision, reason_code, reason = (
+                "reject",
+                "ai_coverage_not_superset",
+                "candidate effective lane coverage is strictly narrower than the incumbent; not a superset",
+            )
+        else:
+            decision, reason_code, reason = (
+                "promote",
+                "ai_coverage_superset",
+                "candidate coverage is at least as wide as the incumbent with no completeness regression",
+            )
+        snapshot = json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str)
+        return {
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY: {
+                "decision": decision,
+                "reason": reason,
+                "reason_code": reason_code,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": "scripted-organization-promote-judge-v1",
+                "response_model": "scripted-organization-promote-judge-v1",
+                "prompt_sha256": hashlib.sha256(b"scripted_organization_promote_judge:v1").hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(snapshot.encode("utf-8")).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": 0,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: "",
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY: "",
         }
 
 
@@ -563,6 +1423,8 @@ class QwenResponsesModelClient(DeterministicModelClient):
             "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it. "
             "Prefer canonical company names in target_company context, team/sub-org/project labels in organization_keywords, "
             "and direction/topic/model/technology terms in keywords or the optional keyword-family fields. "
+            + _explicit_thematic_keyword_boundary_prompt()
+            +
             "If the instruction narrows scope to a subset, prefer preserving those terms rather than collapsing them away. "
             "Only include fields directly supported by the instruction. "
             "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
@@ -656,6 +1518,14 @@ class QwenResponsesModelClient(DeterministicModelClient):
         )
         return result
 
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
+        fallback = super().analyze_public_web_candidate_signals(payload)
+        return _crm_public_web_model_configuration_fallback(
+            fallback=fallback,
+            provider=self.provider_name(),
+            requested_model=self.settings.model,
+        )
+
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
             "You are designing a sourcing search plan. Return strict JSON with keys "
@@ -740,22 +1610,146 @@ class QwenResponsesModelClient(DeterministicModelClient):
             return {"error": "non_json_response", "raw_preview": response[:240]}
         return _normalize_outreach_profile_response(parsed)
 
-    def _run_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # WS7/W7.2 S2: same wire contract as the OpenAI-compatible client.
+        # NOTE (design discrepancy D6): the Qwen transport has no circuit
+        # breaker, so the F2 class never arises here — every call failure maps
+        # to F3 (`divider_call_failed`) at the caller.
+        system_prompt = _build_profile_batch_division_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        response, error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=_PROFILE_BATCH_DIVIDER_MAX_OUTPUT_TOKENS,
+            timeout_seconds=_profile_batch_divider_timeout_seconds(),
+        )
+        if error:
+            return {PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: error}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(response)
+        return {
+            PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY: parsed,
+            PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": str(self.settings.model or ""),
+                # The Qwen text-extraction path drops the response body's model
+                # identity; recorded honestly as empty rather than echoed.
+                "response_model": "",
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": latency_ms,
+            },
+            PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
+            PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else response[:240],
+        }
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # WS7/W7.3 S2: same wire contract as the OpenAI-compatible client.
+        # NOTE (design discrepancy D6, inherited): the Qwen transport has no
+        # circuit breaker, so the F2 class never arises here — every call failure
+        # maps to F3 (`judge_call_failed`) at the caller.
+        system_prompt = _build_organization_promote_judge_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        response, error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=_ORGANIZATION_PROMOTE_JUDGE_MAX_OUTPUT_TOKENS,
+            timeout_seconds=_organization_promote_judge_timeout_seconds(),
+        )
+        if error:
+            return {ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: error}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(response)
+        return {
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY: parsed,
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": str(self.settings.model or ""),
+                # The Qwen text-extraction path drops the response body's model
+                # identity; recorded honestly as empty rather than echoed.
+                "response_model": "",
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "latency_ms": latency_ms,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: "",
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else response[:240],
+        }
+
+    def _run_text_prompt(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> str:
         input_text = f"System instruction:\n{system_prompt}\n\nUser input:\n{user_prompt}"
-        return self._call_responses_api(input_text)
+        if timeout_seconds is None:
+            # Keep the pre-S2 call shape when no override is requested so
+            # subclass fakes/overrides with the original signature keep working.
+            return self._call_responses_api(input_text, max_tokens=max_tokens)
+        return self._call_responses_api(input_text, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
 
-    def _safe_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
+    def _safe_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None) -> str:
+        response, _error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
+            max_tokens=max_tokens,
+        )
+        return response
+
+    def _safe_text_prompt_with_error(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> tuple[str, str]:
         try:
-            return self._run_text_prompt(system_prompt, user_prompt)
-        except Exception:
-            return ""
+            if timeout_seconds is None:
+                # Keep the pre-S2 call shape when no override is requested so
+                # subclass fakes/overrides with the original signature keep working.
+                return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens), ""
+            return (
+                self._run_text_prompt(
+                    system_prompt,
+                    user_prompt,
+                    max_tokens=max_tokens,
+                    timeout_seconds=timeout_seconds,
+                ),
+                "",
+            )
+        except Exception as exc:
+            return "", _model_call_error_message(exc)
 
-    def _call_responses_api(self, input_text: str) -> str:
+    def _call_responses_api(
+        self,
+        input_text: str,
+        *,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> str:
         endpoint = f"{self.settings.base_url}/responses"
         payload = {
             "model": self.settings.model,
             "input": input_text,
         }
+        if max_tokens is not None:
+            payload["max_output_tokens"] = max(32, int(max_tokens or 32))
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         http_request = request.Request(
             endpoint,
@@ -767,7 +1761,10 @@ class QwenResponsesModelClient(DeterministicModelClient):
             method="POST",
         )
         try:
-            with request.urlopen(http_request, timeout=self.settings.timeout_seconds) as response:
+            effective_timeout = (
+                timeout_seconds if timeout_seconds is not None else self.settings.timeout_seconds
+            )
+            with request.urlopen(http_request, timeout=effective_timeout) as response:
                 body = json.loads(response.read().decode("utf-8"))
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")
@@ -780,9 +1777,39 @@ class QwenResponsesModelClient(DeterministicModelClient):
 class OpenAICompatibleChatModelClient(DeterministicModelClient):
     def __init__(self, settings: ModelProviderSettings) -> None:
         self.settings = settings
+        self._healthcheck_cache: dict[str, Any] | None = None
+        self._healthcheck_cache_expires_at = 0.0
 
     def provider_name(self) -> str:
         return self.settings.provider_name or "openai_compatible"
+
+    def _circuit_key(self) -> tuple[str, str, str]:
+        return _model_provider_circuit_key(self.provider_name(), self.settings.base_url, self.settings.model)
+
+    def _healthcheck_cache_seconds(self) -> int:
+        return _env_int(_MODEL_PROVIDER_HEALTHCHECK_CACHE_SECONDS_ENV, 300, minimum=0, maximum=86_400)
+
+    def _cache_healthcheck(self, payload: dict[str, Any]) -> dict[str, Any]:
+        ttl = self._healthcheck_cache_seconds()
+        result = dict(payload)
+        result.setdefault("healthcheck_cache_seconds", ttl)
+        if ttl > 0:
+            self._healthcheck_cache = dict(result)
+            self._healthcheck_cache_expires_at = time.time() + ttl
+        return result
+
+    def _cached_healthcheck(self) -> dict[str, Any] | None:
+        # A cached ready result must never mask a later model-call circuit.
+        # Live validation uses /api/providers/health as a cost gate before
+        # starting external provider work, so circuit state is always current.
+        if _model_provider_circuit_error(self._circuit_key()):
+            return None
+        if self._healthcheck_cache and self._healthcheck_cache_expires_at > time.time():
+            payload = dict(self._healthcheck_cache)
+            payload["cache_hit"] = True
+            payload["cache_expires_in_seconds"] = int(max(1, self._healthcheck_cache_expires_at - time.time()))
+            return payload
+        return None
 
     def supports_outreach_ai_verification(self) -> bool:
         return True
@@ -861,6 +1888,8 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it. "
             "Prefer canonical company names in target_company context, team/sub-org/project labels in organization_keywords, "
             "and direction/topic/model/technology terms in keywords or the optional keyword-family fields. "
+            + _explicit_thematic_keyword_boundary_prompt()
+            +
             "If the instruction narrows scope to a subset, prefer preserving those terms rather than collapsing them away. "
             "Only include fields directly supported by the instruction. "
             "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
@@ -937,6 +1966,54 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                     "notes",
                 }
             }
+        )
+        return result
+
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
+        fallback = super().analyze_public_web_candidate_signals(payload)
+        requested_model = str(self.settings.model or "").strip()
+        if requested_model != CRM_PUBLIC_WEB_PRODUCT_MODEL:
+            return _crm_public_web_model_configuration_fallback(
+                fallback=fallback,
+                provider=self.provider_name(),
+                requested_model=requested_model,
+            )
+        call_result, model_error = self._safe_public_web_prompt_result_with_error(
+            _build_public_web_signal_adjudication_prompt(),
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=900,
+        )
+        response = call_result.text if call_result is not None else ""
+        parsed = _safe_json_object(response)
+        identity_fallback_reason = ""
+        if call_result is not None:
+            identity_fallback_reason, identity_error = _openai_model_identity_failure(
+                requested_model=requested_model,
+                response_model=call_result.response_model,
+            )
+            if identity_error:
+                _record_model_provider_failure(self._circuit_key(), identity_error)
+                model_error = identity_error
+                parsed = {}
+        result = _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
+        result["provider"] = self.provider_name()
+        if requested_model:
+            # Legacy aliases remain available, but effective identity is carried
+            # separately and is only provider-authored when the response says so.
+            result["model"] = requested_model
+            result["model_version"] = requested_model
+            result["requested_model"] = requested_model
+        if call_result is not None:
+            result.update(call_result.metadata())
+            if call_result.effective_model and not identity_fallback_reason:
+                result["model"] = call_result.effective_model
+                result["model_version"] = call_result.effective_model
+        _annotate_public_web_model_fallback(
+            result,
+            response=response,
+            error=model_error,
+            parsed=parsed,
+            fallback_reason_override=identity_fallback_reason,
         )
         return result
 
@@ -1029,40 +2106,305 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             return {"error": "non_json_response", "raw_preview": response[:240]}
         return _normalize_outreach_profile_response(parsed)
 
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """WS7/W7.2 S2 divider call (design §2.1/§2.3, OQ1/OQ8).
+
+        Returns the RAW parsed model output plus client-side call facts —
+        validation is single-sourced in profile_batch_division_contract (S1)
+        and belongs to the caller. Uses the divider-scoped bounded timeout
+        (OQ8, default 20 s) and the shared per-(provider, base_url, model)
+        circuit: a circuit-open or transport failure surfaces as the
+        truncated `_model_call_error_message` string under the "error" key
+        (same convention as `_safe_text_prompt_with_error`).
+        """
+        system_prompt = _build_profile_batch_division_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        try:
+            call_result = self._require_business_model_identity(
+                self._call_prompt_result(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max(
+                        _PROFILE_BATCH_DIVIDER_MAX_OUTPUT_TOKENS,
+                        int(getattr(self.settings, "min_max_tokens", 0) or 0),
+                    ),
+                    timeout_seconds=_profile_batch_divider_timeout_seconds(),
+                )
+            )
+        except Exception as exc:
+            return {PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: _model_call_error_message(exc)}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(call_result.text)
+        return {
+            PROFILE_BATCH_DIVIDER_RESPONSE_DIVISION_KEY: parsed,
+            PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": call_result.requested_model,
+                "response_model": call_result.response_model,
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {
+                    "input_tokens": int(call_result.usage.input_tokens or 0),
+                    "output_tokens": int(call_result.usage.output_tokens or 0),
+                },
+                "latency_ms": latency_ms,
+            },
+            PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY: "",
+            PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else call_result.text[:240],
+        }
+
+    def judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """WS7/W7.3 S2 promote-judge call (design §3, OQ8).
+
+        Returns the RAW parsed model output ({decision, reason, reason_code})
+        plus client-side call facts — validation is single-sourced in
+        organization_promote_contract (S1) and belongs to the caller. Uses the
+        judge-scoped bounded timeout (OQ8, default 20 s) and the shared
+        per-(provider, base_url, model) circuit: a circuit-open or transport
+        failure surfaces as the truncated `_model_call_error_message` string
+        under the "error" key (F2/F3 at the caller — a failure keeps the
+        incumbent, never flips authority, ruling ④). The model never sees or
+        authors the lineage-guard verdict (design §2.2).
+        """
+        system_prompt = _build_organization_promote_judge_system_prompt()
+        user_prompt = json.dumps(payload, ensure_ascii=False)
+        started = time.time()
+        try:
+            call_result = self._require_business_model_identity(
+                self._call_prompt_result(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max(
+                        _ORGANIZATION_PROMOTE_JUDGE_MAX_OUTPUT_TOKENS,
+                        int(getattr(self.settings, "min_max_tokens", 0) or 0),
+                    ),
+                    timeout_seconds=_organization_promote_judge_timeout_seconds(),
+                )
+            )
+        except Exception as exc:
+            return {ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: _model_call_error_message(exc)}
+        latency_ms = int(max(0.0, time.time() - started) * 1000)
+        parsed = _safe_json_object(call_result.text)
+        return {
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY: parsed,
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY: {
+                "model_provider": self.provider_name(),
+                "requested_model": call_result.requested_model,
+                "response_model": call_result.response_model,
+                "prompt_sha256": hashlib.sha256(
+                    f"{system_prompt}\n{user_prompt}".encode("utf-8")
+                ).hexdigest(),
+                "input_snapshot_sha256": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+                ).hexdigest(),
+                "usage": {
+                    "input_tokens": int(call_result.usage.input_tokens or 0),
+                    "output_tokens": int(call_result.usage.output_tokens or 0),
+                },
+                "latency_ms": latency_ms,
+            },
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_ERROR_KEY: "",
+            ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY: "" if parsed else call_result.text[:240],
+        }
+
     def healthcheck(self) -> dict[str, Any]:
+        circuit_key = self._circuit_key()
+        flight, is_leader = _claim_model_provider_healthcheck_flight(circuit_key)
+        if not is_leader:
+            shared_result = dict(flight.result())
+            if _model_provider_circuit_error(circuit_key):
+                return self._healthcheck_once()
+            shared_result.pop("cache_hit", None)
+            shared_result.pop("cache_expires_in_seconds", None)
+            return self._cache_healthcheck(shared_result)
+        try:
+            result = self._healthcheck_once()
+        except BaseException as exc:
+            flight.set_exception(exc)
+            raise
+        else:
+            flight.set_result(dict(result))
+            return result
+        finally:
+            _release_model_provider_healthcheck_flight(circuit_key, flight)
+
+    def _healthcheck_once(self) -> dict[str, Any]:
+        cached = self._cached_healthcheck()
+        if cached is not None:
+            return cached
+        circuit_error = _model_provider_circuit_error(self._circuit_key())
+        if circuit_error:
+            return self._cache_healthcheck(
+                {
+                    "provider": self.provider_name(),
+                    "status": "degraded",
+                    "model": self.settings.model,
+                    "requested_model": self.settings.model,
+                    "base_url": self.settings.base_url,
+                    "models_status": "not_checked",
+                    "chat_status": "circuit_open",
+                    "error": circuit_error,
+                    "available_models": [],
+                    "model_usage": {},
+                    "circuit_open": True,
+                }
+            )
+        models: list[str] = []
+        models_status = "not_checked"
+        models_error = ""
         try:
             body = self._list_models()
             models = _extract_openai_models(body)
-            return {
-                "provider": self.provider_name(),
-                "status": "ready" if self.settings.model in models else "model_missing",
-                "model": self.settings.model,
-                "base_url": self.settings.base_url,
-                "available_models": models[:8],
-            }
+            models_status = "ready" if self.settings.model in models else "model_missing"
         except Exception as exc:
-            return {
+            models_status = "degraded"
+            models_error = str(exc)
+        try:
+            call_result = self._call_prompt_result(
+                [
+                    {
+                        "role": "system",
+                        "content": "Healthcheck. Reply with exactly: MODEL_OK",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Reply with exactly: MODEL_OK",
+                    },
+                ],
+                max_tokens=32,
+            )
+            preview = call_result.text
+            identity_failure_reason, identity_error = _openai_model_identity_failure(
+                requested_model=self.settings.model,
+                response_model=call_result.response_model,
+            )
+            if identity_failure_reason:
+                chat_status = identity_failure_reason
+            else:
+                chat_status = "ready" if "MODEL_OK" in preview else "unexpected_response"
+            status = "ready" if chat_status == "ready" and models_status == "ready" else "degraded"
+            health_error = identity_error
+            if not health_error and chat_status == "unexpected_response":
+                health_error = "unexpected_model_healthcheck_response"
+            if not health_error and models_status != "ready":
+                health_error = (
+                    f"model_inventory_not_ready: status={models_status} requested_model={self.settings.model}"
+                )
+            if health_error:
+                _record_model_provider_failure(self._circuit_key(), health_error)
+            payload = {
+                "provider": self.provider_name(),
+                "status": status,
+                "model": call_result.effective_model or self.settings.model,
+                "model_version": call_result.effective_model or self.settings.model,
+                "base_url": self.settings.base_url,
+                "models_status": models_status,
+                "chat_status": chat_status,
+                "chat_preview": preview[:80],
+                "available_models": models[:8],
+                **call_result.metadata(),
+            }
+            if health_error:
+                payload["error"] = health_error
+            if models_error:
+                payload["models_error"] = models_error
+            return self._cache_healthcheck(payload)
+        except Exception as exc:
+            error_text = _model_call_error_message(exc)
+            _record_model_provider_failure(self._circuit_key(), error_text)
+            payload = {
                 "provider": self.provider_name(),
                 "status": "degraded",
                 "model": self.settings.model,
+                "requested_model": self.settings.model,
                 "base_url": self.settings.base_url,
-                "error": str(exc),
+                "models_status": models_status,
+                "chat_status": "degraded",
+                "error": error_text,
+                "available_models": models[:8],
+                "model_usage": {},
             }
+            if models_error:
+                payload["models_error"] = models_error
+            return self._cache_healthcheck(payload)
 
     def _safe_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:
-        try:
-            return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens)
-        except Exception:
-            return ""
-
-    def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:
-        return self._call_chat_completions(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+        response, _error = self._safe_text_prompt_with_error(
+            system_prompt,
+            user_prompt,
             max_tokens=max_tokens,
         )
+        return response
+
+    def _safe_text_prompt_with_error(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> tuple[str, str]:
+        try:
+            return self._run_text_prompt(system_prompt, user_prompt, max_tokens=max_tokens), ""
+        except Exception as exc:
+            return "", _model_call_error_message(exc)
+
+    def _safe_public_web_prompt_result_with_error(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+    ) -> tuple[OpenAIModelCallResult | None, str]:
+        try:
+            return (
+                self._call_prompt_result(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max_tokens,
+                ),
+                "",
+            )
+        except Exception as exc:
+            return None, _model_call_error_message(exc)
+
+    def _run_text_prompt(self, system_prompt: str, user_prompt: str, *, max_tokens: int) -> str:
+        return self._run_prompt_result(system_prompt, user_prompt, max_tokens=max_tokens).text
+
+    def _run_prompt_result(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+    ) -> OpenAIModelCallResult:
+        effective_max_tokens = max(int(max_tokens or 0), int(getattr(self.settings, "min_max_tokens", 0) or 0))
+        return self._require_business_model_identity(
+            self._call_prompt_result(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=effective_max_tokens,
+            )
+        )
+
+    def _require_business_model_identity(
+        self,
+        call_result: OpenAIModelCallResult,
+    ) -> OpenAIModelCallResult:
+        _failure_reason, identity_error = _openai_model_identity_failure(
+            requested_model=self.settings.model,
+            response_model=call_result.response_model,
+        )
+        if identity_error:
+            _record_model_provider_failure(self._circuit_key(), identity_error)
+            raise RuntimeError(identity_error)
+        return call_result
 
     def _list_models(self) -> dict[str, Any]:
         endpoint = f"{self.settings.base_url}/models"
@@ -1084,7 +2426,44 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         except requests.RequestException as exc:
             raise RuntimeError(f"OpenAI-compatible request failed: {exc}") from exc
 
+    def _call_prompt(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        return self._require_business_model_identity(
+            self._call_prompt_result(messages, max_tokens=max_tokens)
+        ).text
+
+    def _call_prompt_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+        timeout_seconds: int | None = None,
+    ) -> OpenAIModelCallResult:
+        api_style = str(self.settings.api_style or "openai_chat_completions").strip().lower()
+        # Forward the divider-scoped timeout only when explicitly requested so
+        # subclass fakes/overrides with the original signature keep working.
+        timeout_kwargs: dict[str, int] = {} if timeout_seconds is None else {"timeout_seconds": timeout_seconds}
+        if api_style == "openai_responses":
+            return self._call_responses_api_result(messages, max_tokens=max_tokens, **timeout_kwargs)
+        if api_style in {"", "openai_chat_completions"}:
+            return self._call_chat_completions_result(messages, max_tokens=max_tokens, **timeout_kwargs)
+        raise RuntimeError(f"Unsupported OpenAI-compatible api_style: {self.settings.api_style}")
+
     def _call_chat_completions(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        return self._require_business_model_identity(
+            self._call_chat_completions_result(messages, max_tokens=max_tokens)
+        ).text
+
+    def _call_chat_completions_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+        timeout_seconds: int | None = None,
+    ) -> OpenAIModelCallResult:
+        circuit_error = _model_provider_circuit_error(self._circuit_key())
+        if circuit_error:
+            raise RuntimeError(circuit_error)
+        max_attempts = _env_int(_MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV, 1, minimum=1, maximum=3)
         endpoint = f"{self.settings.base_url}/chat/completions"
         payload = {
             "model": self.settings.model,
@@ -1092,26 +2471,106 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             "max_tokens": max(32, int(max_tokens or 32)),
             "temperature": 0,
         }
-        try:
-            response = requests.post(
-                endpoint,
-                timeout=self.settings.timeout_seconds,
-                headers={
-                    "Authorization": f"Bearer {self.settings.api_key}",
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
-        except requests.HTTPError as exc:
-            detail = exc.response.text if exc.response is not None else str(exc)
-            status_code = exc.response.status_code if exc.response is not None else "?"
-            raise RuntimeError(f"OpenAI-compatible HTTP {status_code}: {detail[:200]}") from exc
-        except requests.RequestException as exc:
-            raise RuntimeError(f"OpenAI-compatible request failed: {exc}") from exc
-        return _extract_openai_chat_text(body)
+        last_error: RuntimeError | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(
+                    endpoint,
+                    timeout=timeout_seconds if timeout_seconds is not None else self.settings.timeout_seconds,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+                _record_model_provider_success(self._circuit_key())
+                return _openai_model_call_result(
+                    body,
+                    requested_model=self.settings.model,
+                    text=_extract_openai_chat_text(body),
+                )
+            except requests.HTTPError as exc:
+                detail = exc.response.text if exc.response is not None else str(exc)
+                status_code = exc.response.status_code if exc.response is not None else "?"
+                last_error = RuntimeError(f"OpenAI-compatible HTTP {status_code}: {detail[:200]}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+            except requests.RequestException as exc:
+                last_error = RuntimeError(f"OpenAI-compatible request failed: {exc}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("OpenAI-compatible request failed: no attempts executed")
+
+    def _call_responses_api(self, messages: list[dict[str, str]], *, max_tokens: int) -> str:
+        return self._require_business_model_identity(
+            self._call_responses_api_result(messages, max_tokens=max_tokens)
+        ).text
+
+    def _call_responses_api_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+        timeout_seconds: int | None = None,
+    ) -> OpenAIModelCallResult:
+        circuit_error = _model_provider_circuit_error(self._circuit_key())
+        if circuit_error:
+            raise RuntimeError(circuit_error)
+        max_attempts = _env_int(_MODEL_PROVIDER_CALL_MAX_ATTEMPTS_ENV, 1, minimum=1, maximum=3)
+        endpoint = f"{self.settings.base_url}/responses"
+        input_text = "\n\n".join(
+            f"{str(message.get('role') or 'user').strip()}: {str(message.get('content') or '').strip()}"
+            for message in messages
+        ).strip()
+        payload = {
+            "model": self.settings.model,
+            "input": input_text,
+            "max_output_tokens": max(32, int(max_tokens or 32)),
+            "temperature": 0,
+        }
+        last_error: RuntimeError | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.post(
+                    endpoint,
+                    timeout=timeout_seconds if timeout_seconds is not None else self.settings.timeout_seconds,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+                _record_model_provider_success(self._circuit_key())
+                return _openai_model_call_result(
+                    body,
+                    requested_model=self.settings.model,
+                    text=_extract_output_text(body),
+                )
+            except requests.HTTPError as exc:
+                detail = exc.response.text if exc.response is not None else str(exc)
+                status_code = exc.response.status_code if exc.response is not None else "?"
+                last_error = RuntimeError(f"OpenAI-compatible HTTP {status_code}: {detail[:200]}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+            except requests.RequestException as exc:
+                last_error = RuntimeError(f"OpenAI-compatible request failed: {exc}")
+                if attempt >= max_attempts:
+                    _record_model_provider_failure(self._circuit_key(), _model_call_error_message(last_error))
+                    raise last_error from exc
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("OpenAI-compatible request failed: no attempts executed")
 
 
 def _extract_output_text(payload: dict[str, Any]) -> str:
@@ -1147,6 +2606,289 @@ def _safe_json_object(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _build_profile_batch_division_system_prompt() -> str:
+    """WS7/W7.2 S2 divider prompt (design §2.2/§2.3, OQ1).
+
+    The payload never contains raw URLs (index-range membership per the
+    ai_batch_division.v1 contract) and the model is explicitly forbidden from
+    echoing URLs or inventing url-like strings — indices only.
+    """
+    return (
+        "You are dividing one wave of LinkedIn profile-prefetch queue items into paid-provider "
+        "dispatch batches. The payload describes a canonically ordered candidate inventory ONLY by "
+        "integer indices (aggregate groups with inclusive index ranges), plus url-level failure "
+        "history summaries, prior-round context, retry_wait indices, and budget constants. "
+        "Return strict JSON with a single top-level key batches. "
+        "batches must be an array of 4 to 8 objects, each with exactly the keys "
+        "batch_index,member_index_ranges,member_count,reason,reason_code. "
+        "batch_index is the 1-based ordinal in output order. "
+        "member_index_ranges is an array of inclusive [start,end] integer pairs over the inventory "
+        "ordering; NEVER echo URLs, url fragments, or any url-like strings — indices only. "
+        "member_count must equal the total number of indices covered by the ranges. "
+        "Together the batches must cover every eligible inventory index exactly once, where "
+        "eligible means every index in [0, inventory.size) that is NOT listed in "
+        "retry_wait.indices; never include retry_wait indices, duplicates, or indices outside the "
+        "inventory. Every batch must have at most budget.provider_envelope_max_urls members. "
+        "ceil(batch_count / budget.actor_global_inflight) must be <= budget.max_actor_wave_rounds. "
+        "A batch smaller than budget.min_non_tiny_batch_size members is only allowed with one of "
+        "the legal tiny reason_code values listed in budget.legal_tiny_reason_codes; otherwise use "
+        "reason_code ai_division. reason is a concise explanation (<= 240 chars) of why the batch "
+        "is grouped this way (source-shard affinity, failure-history cohorting, envelope packing). "
+        "Group members to maximize retry efficiency and provider-envelope utilization. "
+        "Do not output markdown."
+    )
+
+
+def _build_organization_promote_judge_system_prompt() -> str:
+    """WS7/W7.3 S2 promote-judge prompt (design §3.3, OQ4/OQ8).
+
+    The model judges ONE contested authoritative-snapshot promotion: given the
+    incumbent and candidate coverage/lineage/completeness evidence in
+    candidate_descriptor, decide whether the candidate should replace the
+    incumbent. It authors exactly {decision, reason, reason_code} and NOTHING
+    else — the lineage-guard verdict is never in the payload and must never be
+    emitted (design §2.2). The prompt is explicit that the judge is one gate
+    among several: a hard lineage guard and retained validators run regardless,
+    so a promote verdict can be overruled but a reject is final — the judge can
+    only be MORE conservative than the rules.
+    """
+    return (
+        "You are judging whether ONE candidate materialized snapshot should replace the current "
+        "authoritative (incumbent) snapshot for an organization's asset registry. The payload's "
+        "candidate_descriptor gives you the incumbent and candidate faces (metric pairs, "
+        "completeness_score and band, selected_snapshot_ids and generation lineage evidence, "
+        "per-shard request-population coverage evidence, and a simulate/placeholder-provenance flag) "
+        "plus the contested-decision context. Judge asset-promotion CORRECTNESS: promote only when "
+        "the candidate genuinely covers the incumbent (equal-or-wider coverage, no material "
+        "completeness regression, trustworthy provenance); otherwise reject and keep the incumbent. "
+        "Return strict JSON with EXACTLY the keys decision, reason, reason_code and no others. "
+        "decision must be exactly 'promote' or 'reject'. "
+        "reason is a concise (<= 240 chars) non-empty explanation of the verdict. "
+        "reason_code must be one of: for a promote — ai_coverage_superset, ai_material_coverage_gain, "
+        "ai_quality_recovery; for a reject — ai_coverage_not_superset, ai_completeness_regression_risk, "
+        "ai_generation_regression_risk, ai_provenance_suspect, ai_no_material_gain. "
+        "You are ONE gate among several: an independent fail-closed lineage/generation guard and "
+        "coverage/provenance/lifecycle validators run regardless of your verdict and can overrule a "
+        "promote. You can never force a promote past them — you can only be MORE conservative by "
+        "rejecting. When in doubt, reject: keeping the incumbent is always a safe outcome. "
+        "Never output the guard's verdict, store internals, or any key other than the three required. "
+        "Do not output markdown."
+    )
+
+
+def _build_public_web_signal_adjudication_prompt() -> str:
+    return (
+        "Adjudicate public-web evidence for one candidate. Return strict JSON only with keys: "
+        "summary,email_assessments,link_assessments,academic_summary,notes. "
+        "email_assessments items: email,email_type,confidence_label,confidence_score,publishable,"
+        "promotion_status,suppression_reason,identity_match_label,identity_match_score,rationale. "
+        "link_assessments items: url,signal_type,identity_match_label,identity_match_score,confidence_label,"
+        "user_visible_signal,review_queue_reason,rationale. "
+        "academic_summary keys: research_directions,notable_work,academic_affiliations,publication_signals,"
+        "outreach_angles,confidence_label,evidence_sources. Lists must be concise. "
+        "Allowed identity labels: confirmed,likely_same_person,needs_review,ambiguous_identity,not_same_person. "
+        "Be conservative. Same name, same first name, or weak company mention is not enough. "
+        "Use candidate LinkedIn/headline/work/education plus URL/title/snippet/evidence_slices. "
+        "For each link, set user_visible_signal=true only when it is a candidate-owned profile/homepage or a "
+        "high-value reviewable lead with concrete identity evidence; set it false for low-value same-name results, "
+        "third-party mentions, unrelated Scholar profiles, repository/blob pages, articles, obituaries, videos, "
+        "company pages, and publication-only pages. review_queue_reason must briefly explain why the link should "
+        "or should not be shown to a human reviewer. "
+        "Publication/article/YouTube/company-blog/Substack-post pages are evidence only, not profile/homepage links. "
+        "Use publication evidence only if the candidate is clearly an author. Prefer confirmed Scholar profile or owned homepage "
+        "for research directions. Reject same-name Scholar/publication/profile pages when work/education/employer conflicts. "
+        "Emails are publishable only with full-name or owned-page evidence; suppress generic, coauthor, grouped, paper-title, "
+        "verified-domain text, and same-name-collision emails. "
+        "Set promotion_status=promotion_recommended only when a human should review a high-confidence candidate-owned signal; "
+        "otherwise use not_promoted or suppressed. When uncertain, use needs_review/ambiguous_identity and low confidence."
+    )
+
+
+def _normalize_public_web_signal_adjudication(
+    parsed: dict[str, Any],
+    *,
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    if not parsed:
+        return {
+            **fallback,
+            "email_assessments": [],
+            "link_assessments": [],
+        }
+    normalized: dict[str, Any] = {
+        "summary": str(parsed.get("summary") or fallback.get("summary") or "").strip(),
+        "email_assessments": [],
+        "link_assessments": [],
+        "academic_summary": _normalize_academic_summary(
+            parsed.get("academic_summary"),
+            fallback=dict(fallback.get("academic_summary") or {}),
+        ),
+        "notes": [str(item).strip() for item in list(parsed.get("notes") or []) if str(item).strip()][:10],
+    }
+    for item in list(parsed.get("email_assessments") or []):
+        if not isinstance(item, dict):
+            continue
+        email = str(item.get("email") or item.get("value") or "").strip().lower()
+        if not email:
+            continue
+        confidence_label = str(item.get("confidence_label") or "low").strip().lower()
+        if confidence_label not in {"high", "medium", "low"}:
+            confidence_label = "low"
+        try:
+            confidence_score = max(0.0, min(float(item.get("confidence_score") or 0.0), 1.0))
+        except (TypeError, ValueError):
+            confidence_score = 0.0
+        promotion_status = str(item.get("promotion_status") or "not_promoted").strip().lower()
+        if promotion_status not in {"not_promoted", "promotion_recommended", "rejected", "suppressed"}:
+            promotion_status = "not_promoted"
+        try:
+            identity_match_score = max(0.0, min(float(item.get("identity_match_score") or 0.0), 1.0))
+        except (TypeError, ValueError):
+            identity_match_score = 0.0
+        normalized["email_assessments"].append(
+            {
+                "email": email,
+                "email_type": str(item.get("email_type") or "unknown").strip().lower() or "unknown",
+                "confidence_label": confidence_label,
+                "confidence_score": round(confidence_score, 2),
+                "publishable": bool(item.get("publishable", False)),
+                "promotion_status": promotion_status,
+                "suppression_reason": str(item.get("suppression_reason") or "").strip(),
+                "identity_match_label": str(item.get("identity_match_label") or "needs_review").strip(),
+                "identity_match_score": round(identity_match_score, 2),
+                "user_visible_signal": bool(item.get("user_visible_signal", False)),
+                "review_queue_reason": str(item.get("review_queue_reason") or "").strip(),
+                "rationale": str(item.get("rationale") or "").strip(),
+            }
+        )
+    for item in list(parsed.get("link_assessments") or []):
+        if isinstance(item, dict):
+            try:
+                identity_match_score = max(0.0, min(float(item.get("identity_match_score") or 0.0), 1.0))
+            except (TypeError, ValueError):
+                identity_match_score = 0.0
+            normalized["link_assessments"].append(
+                {
+                    "url": str(item.get("url") or "").strip(),
+                    "signal_type": str(item.get("signal_type") or "").strip(),
+                    "identity_match_label": str(item.get("identity_match_label") or "needs_review").strip(),
+                    "identity_match_score": round(identity_match_score, 2),
+                    "confidence_label": str(item.get("confidence_label") or "low").strip(),
+                    "user_visible_signal": bool(item.get("user_visible_signal", False)),
+                    "review_queue_reason": str(item.get("review_queue_reason") or "").strip(),
+                    "rationale": str(item.get("rationale") or "").strip(),
+                }
+            )
+    return normalized
+
+
+def _build_deterministic_academic_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    research_directions: list[str] = []
+    affiliations: list[str] = []
+    publication_signals: list[str] = []
+    notable_work: list[dict[str, str]] = []
+    evidence_sources: list[str] = []
+    for evidence_slice in list(payload.get("evidence_slices") or []):
+        if not isinstance(evidence_slice, dict):
+            continue
+        source_type = str(evidence_slice.get("source_type") or "").strip()
+        if source_type not in {"google_scholar_profile", "publication_pdf", "academic_profile", "personal_homepage", "resume_or_cv"}:
+            continue
+        source_url = str(evidence_slice.get("final_url") or evidence_slice.get("source_url") or "").strip()
+        if source_url:
+            evidence_sources.append(source_url)
+        structured = dict(evidence_slice.get("structured_signals") or {})
+        for item in list(structured.get("research_interests") or []):
+            text = str(item or "").strip()
+            if text and text not in research_directions:
+                research_directions.append(text)
+        for item in list(structured.get("affiliation_signals") or []):
+            if not isinstance(item, dict):
+                continue
+            organization = str(item.get("organization") or "").strip()
+            if organization and organization not in affiliations:
+                affiliations.append(organization)
+        for item in list(structured.get("scholar_publications") or []):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            if not title:
+                continue
+            record = {
+                "title": title,
+                "year": str(item.get("year") or "").strip(),
+                "venue": str(item.get("venue") or "").strip(),
+                "why_it_matters": "High-signal Google Scholar publication candidate.",
+                "evidence": str(item.get("citations") or item.get("authors") or source_url).strip(),
+            }
+            if record not in notable_work:
+                notable_work.append({key: value for key, value in record.items() if value})
+                publication_signals.append(title)
+    confidence_label = "high" if notable_work or len(research_directions) >= 2 else "medium" if research_directions or affiliations else "low"
+    outreach_angles = []
+    for direction in research_directions[:3]:
+        outreach_angles.append(f"Reference their work in {direction}.")
+    for work in notable_work[:2]:
+        title = str(work.get("title") or "").strip()
+        if title:
+            outreach_angles.append(f"Mention the publication/technical work: {title}.")
+    return {
+        "research_directions": research_directions[:8],
+        "notable_work": notable_work[:8],
+        "academic_affiliations": affiliations[:6],
+        "publication_signals": publication_signals[:8],
+        "outreach_angles": outreach_angles[:6],
+        "confidence_label": confidence_label,
+        "evidence_sources": _dedupe_strings(evidence_sources)[:8],
+    }
+
+
+def _normalize_academic_summary(value: Any, *, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    fallback = fallback or {}
+    confidence_label = str(raw.get("confidence_label") or fallback.get("confidence_label") or "low").strip().lower()
+    if confidence_label not in {"high", "medium", "low"}:
+        confidence_label = "low"
+    notable_work: list[dict[str, str]] = []
+    for item in list(raw.get("notable_work") or fallback.get("notable_work") or []):
+        if isinstance(item, dict):
+            record = {
+                key: str(item.get(key) or "").strip()
+                for key in ("title", "year", "venue", "why_it_matters", "evidence")
+                if str(item.get(key) or "").strip()
+            }
+            if record and record not in notable_work:
+                notable_work.append(record)
+        elif str(item or "").strip():
+            notable_work.append({"title": str(item).strip()})
+    return {
+        "research_directions": _string_list_or_fallback(raw.get("research_directions"), fallback.get("research_directions"))[:10],
+        "notable_work": notable_work[:10],
+        "academic_affiliations": _string_list_or_fallback(raw.get("academic_affiliations"), fallback.get("academic_affiliations"))[:8],
+        "publication_signals": _string_list_or_fallback(raw.get("publication_signals"), fallback.get("publication_signals"))[:10],
+        "outreach_angles": _string_list_or_fallback(raw.get("outreach_angles"), fallback.get("outreach_angles"))[:8],
+        "confidence_label": confidence_label,
+        "evidence_sources": _string_list_or_fallback(raw.get("evidence_sources"), fallback.get("evidence_sources"))[:10],
+    }
+
+
+def _string_list_or_fallback(value: Any, fallback: Any) -> list[str]:
+    items = value if isinstance(value, list) else fallback if isinstance(fallback, list) else []
+    return _dedupe_strings([str(item or "").strip() for item in items if str(item or "").strip()])
+
+
+def _dedupe_strings(items: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        normalized = str(item or "").strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            deduped.append(normalized)
+    return deduped
+
 
 def _extract_openai_chat_text(payload: dict[str, Any]) -> str:
     for choice in payload.get("choices", []) or []:
@@ -1212,10 +2954,40 @@ def build_model_client(
     qwen_settings: QwenSettings | None = None,
 ) -> ModelClient:
     external_mode = _external_provider_mode()
-    if external_mode in {"simulate", "replay"}:
+    if external_mode in {"simulate", "replay", "scripted"}:
+        if _scripted_live_model_planning_enabled(provider_mode=external_mode):
+            if model_settings and model_settings.enabled:
+                return ScriptedLivePlanningModelClient(OpenAICompatibleChatModelClient(model_settings), mode=external_mode)
+            if qwen_settings and qwen_settings.enabled:
+                return ScriptedLivePlanningModelClient(QwenResponsesModelClient(qwen_settings), mode=external_mode)
+        # WS7/W7.2 S2 (OQ7): scripted divider opt-in for offline AI-path
+        # exercise. Precedence is deliberate: when scripted-live planning is
+        # engaged above it wins (the two opt-ins are not composable in one
+        # client yet; combining both flags keeps planning-only behavior and the
+        # divider falls back per ruling ④).
+        if _scripted_profile_batch_divider_enabled(provider_mode=external_mode):
+            return ScriptedProfileBatchDividerModelClient(mode=external_mode)
+        # WS7/W7.3 S2 (OQ8): scripted promote-judge opt-in for offline AI-path
+        # exercise. Same non-composable precedence stance as the divider: the
+        # earlier scripted opt-in (planning, then divider) wins when several
+        # flags are set, and the promote judge falls back per ruling ④ (its
+        # deterministic default {} keeps the incumbent — always a safe state).
+        if _scripted_organization_promote_judge_enabled(provider_mode=external_mode):
+            return ScriptedOrganizationPromoteJudgeModelClient(mode=external_mode)
         return OfflineModelClient(mode=external_mode)
-    if qwen_settings and qwen_settings.enabled:
-        return QwenResponsesModelClient(qwen_settings)
+    # Genuine live mode: a billed LLM client must clear the same fail-closed gate as
+    # every other live provider — outside production it requires the explicit
+    # SOURCING_LIVE_PROVIDER_CONFIRM/ALLOW_ISOLATED dual-confirm. This fires only when
+    # external_mode == "live" (scripted-live-model-planning is handled above), so it
+    # does not affect the intentional scripted planning opt-in.
+    if (model_settings and model_settings.enabled) or (qwen_settings and qwen_settings.enabled):
+        assert_live_provider_access_allowed(
+            provider_name="model_provider",
+            operation="build_live_model_client",
+            provider_mode=external_mode,
+        )
     if model_settings and model_settings.enabled:
         return OpenAICompatibleChatModelClient(model_settings)
+    if qwen_settings and qwen_settings.enabled:
+        return QwenResponsesModelClient(qwen_settings)
     return DeterministicModelClient()

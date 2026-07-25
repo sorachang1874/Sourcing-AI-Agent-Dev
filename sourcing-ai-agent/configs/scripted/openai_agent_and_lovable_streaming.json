@@ -1,0 +1,16 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_agent_delta_plus_lovable_live_roster",
+    "purpose": "Interactive no-cost scripted environment for testing both OpenAI Agent scoped delta streaming and Lovable 100+ live-roster behavior from one backend.",
+    "driver_queries": [
+      "帮我找OpenAI做Agent方向的人",
+      "帮我找Lovable的全部成员"
+    ],
+    "real_api_calls_required": false
+  },
+  "includes": [
+    "openai_agent_scoped_delta_streaming.json",
+    "lovable_live_roster.json",
+    "target_candidate_public_web_search.json"
+  ]
+}

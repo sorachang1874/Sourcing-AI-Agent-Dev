@@ -4,11 +4,17 @@ from typing import Any
 
 from .acquisition_strategy import compile_acquisition_strategy
 from .asset_catalog import AssetCatalog
-from .company_shard_planning import (
-    build_default_company_employee_shard_policy,
-    build_large_org_keyword_probe_shard_policy,
-)
+from .cohort_provider_compiler import CohortProviderCompiler
+from .cohort_selection import explicit_cohort_selection
 from .company_registry import normalize_company_key
+from .company_shard_planning import (
+    MODEL_WRITTEN_PLANNING_MODES,
+    build_default_company_employee_shard_policy,
+    build_request_scoped_company_employee_query_plan,
+    build_request_scoped_former_search_shard_plan,
+    build_request_scoped_keyword_union_shard_policy,
+    resolve_roster_lane_function_ids,
+)
 from .domain import (
     AcquisitionStrategyPlan,
     AcquisitionTask,
@@ -22,58 +28,99 @@ from .domain import (
     SourcingPlan,
 )
 from .model_provider import DeterministicModelClient, ModelClient
+from .provider_execution_policy import normalize_former_member_search_contract
 from .publication_planning import compile_publication_coverage_plan
 from .query_intent_rewrite import summarize_query_intent_rewrite
-from .request_normalization import build_effective_request_payload, build_request_intent_axes_payload, resolve_request_intent_view
+from .request_normalization import (
+    build_effective_job_request,
+    build_effective_request_payload,
+    build_request_intent_axes_payload,
+    coerce_intent_axis_mapping,
+    resolve_request_intent_view,
+)
 from .search_planning import compile_search_strategy
 
-MODEL_WRITTEN_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
 FULL_COMPANY_EMPLOYEES_PAGE_LIMIT = 25
-FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES = 20
-FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES = 100
-FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS = {
-    "anthropic",
-    "openai",
-    "meta",
-    "facebook",
-    "google",
-    "alphabet",
-    "microsoft",
-    "amazon",
-    "apple",
-    "bytedance",
-    "tiktok",
+# One unified roster paging budget for every company (no org-size bands);
+# per-function shard roots and the provider result cap bound the paid volume.
+FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES = 100
+
+FULL_PROFILE_PREFETCH_STRATEGY_TYPES = {
+    "full_company_roster",
+    "scoped_search_roster",
+    "former_employee_search",
+    "investor_firm_roster",
 }
+
+
+def _requires_full_profile_prefetch(strategy_type: str) -> bool:
+    return str(strategy_type or "").strip() in FULL_PROFILE_PREFETCH_STRATEGY_TYPES
+
+
 def build_sourcing_plan(
     request: JobRequest,
     catalog: AssetCatalog,
     model_client: ModelClient,
+    organization_execution_profile: dict[str, Any] | None = None,
 ) -> SourcingPlan:
-    intent_view = resolve_request_intent_view(
+    effective_request, intent_view = build_effective_job_request(
         request,
         fallback_categories=_infer_categories(request),
         fallback_employment_statuses=_infer_employment_statuses(request),
     )
-    effective_target_company = str(intent_view.get("target_company") or request.target_company).strip()
-    categories = list(intent_view.get("categories") or [])
-    employment_statuses = list(intent_view.get("employment_statuses") or [])
-    retrieval_plan = _build_retrieval_plan(request, categories, intent_view=intent_view)
-    acquisition_strategy = compile_acquisition_strategy(request, categories, employment_statuses, retrieval_plan)
-    publication_coverage = compile_publication_coverage_plan(request, acquisition_strategy)
-    search_strategy = compile_search_strategy(request, acquisition_strategy, publication_coverage, model_client)
+    effective_target_company = str(effective_request.target_company or request.target_company).strip()
+    categories = list(effective_request.categories or [])
+    employment_statuses = list(effective_request.employment_statuses or [])
+    retrieval_plan = _build_retrieval_plan(effective_request, categories, intent_view=intent_view)
+    acquisition_strategy = compile_acquisition_strategy(
+        effective_request,
+        categories,
+        employment_statuses,
+        retrieval_plan,
+        organization_execution_profile=organization_execution_profile,
+        target_locations=effective_request.target_locations,
+        exclude_target_locations=effective_request.exclude_target_locations,
+    )
+    publication_coverage = compile_publication_coverage_plan(effective_request, acquisition_strategy)
+    search_strategy = compile_search_strategy(
+        effective_request, acquisition_strategy, publication_coverage, model_client
+    )
+    # Roster function selection is resolved ONCE from the submitted (raw)
+    # request record — the effective request may carry deterministic
+    # text-materialized buckets, which never narrow a paid roster query
+    # (operator directive 2026-07-20).  In model-written planning modes the
+    # effective request's buckets are AI-authored and do count.
+    roster_function_ids = resolve_roster_lane_function_ids(
+        request.to_record(),
+        resolved_role_buckets=list(effective_request.must_have_primary_role_buckets or []),
+        planning_mode=request.planning_mode,
+    )
     acquisition_tasks = _build_acquisition_tasks(
-        request,
+        effective_request,
         categories,
         employment_statuses,
         acquisition_strategy,
         publication_coverage,
         search_strategy,
         intent_view=intent_view,
+        roster_function_ids=roster_function_ids,
     )
-    criteria_summary = _criteria_summary(request, categories, employment_statuses, intent_view=intent_view)
-    assumptions = _build_assumptions(request, categories, retrieval_plan.strategy, acquisition_strategy)
+    legacy_provider_execution_manifest = _build_provider_execution_manifest(
+        acquisition_strategy=acquisition_strategy,
+        acquisition_tasks=acquisition_tasks,
+    )
+    cohort = explicit_cohort_selection(effective_request.to_record())
+    if cohort is not None and str(cohort.get("source") or "") == "user_explicit":
+        acquisition_strategy.provider_execution_manifest = CohortProviderCompiler().compile(
+            effective_request.to_record(),
+            base_filter_hints=dict(acquisition_strategy.filter_hints or {}),
+        )
+    else:
+        acquisition_strategy.provider_execution_manifest = legacy_provider_execution_manifest
+    criteria_summary = _criteria_summary(effective_request, categories, employment_statuses, intent_view=intent_view)
+    assumptions = _build_assumptions(effective_request, categories, retrieval_plan.strategy, acquisition_strategy)
     open_questions = _build_open_questions(
-        request,
+        effective_request,
         categories,
         employment_statuses,
         acquisition_strategy,
@@ -92,10 +139,11 @@ def build_sourcing_plan(
         "criteria_summary": criteria_summary,
         "assumptions": assumptions,
         "open_questions": open_questions,
+        "organization_execution_profile": dict(acquisition_strategy.organization_execution_profile or {}),
     }
     intent_brief = _build_intent_brief(
         model_client=model_client,
-        request=request,
+        request=effective_request,
         draft_plan=draft_plan,
         categories=categories,
         employment_statuses=employment_statuses,
@@ -106,13 +154,13 @@ def build_sourcing_plan(
     )
     draft_plan["intent_brief"] = intent_brief.to_record()
     if request.planning_mode.lower() in MODEL_WRITTEN_PLANNING_MODES:
-        intent_summary = model_client.interpret_intent(request, draft_plan)
+        intent_summary = model_client.interpret_intent(effective_request, draft_plan)
     else:
-        intent_summary = DeterministicModelClient().interpret_intent(request, draft_plan)
+        intent_summary = DeterministicModelClient().interpret_intent(effective_request, draft_plan)
 
     return SourcingPlan(
         target_company=effective_target_company,
-        target_scope=request.target_scope,
+        target_scope=effective_request.target_scope,
         intent_summary=intent_summary,
         criteria_summary=criteria_summary,
         retrieval_plan=retrieval_plan,
@@ -120,6 +168,7 @@ def build_sourcing_plan(
         publication_coverage=publication_coverage,
         search_strategy=search_strategy,
         acquisition_tasks=acquisition_tasks,
+        organization_execution_profile=dict(acquisition_strategy.organization_execution_profile or {}),
         intent_brief=intent_brief,
         assumptions=assumptions,
         open_questions=open_questions,
@@ -192,6 +241,9 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
             cost_policy=dict(acquisition_payload.get("cost_policy") or {}),
             confirmation_points=list(acquisition_payload.get("confirmation_points") or []),
             reasoning=list(acquisition_payload.get("reasoning") or []),
+            provider_execution_manifest=dict(acquisition_payload.get("provider_execution_manifest") or {}),
+            organization_execution_profile=dict(acquisition_payload.get("organization_execution_profile") or {}),
+            strategy_decision_explanation=dict(acquisition_payload.get("strategy_decision_explanation") or {}),
         ),
         publication_coverage=PublicationCoveragePlan(
             coverage_goal=str(publication_payload.get("coverage_goal") or ""),
@@ -210,10 +262,13 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
         ),
         acquisition_tasks=acquisition_tasks,
         asset_reuse_plan=dict(payload.get("asset_reuse_plan") or {}),
+        organization_execution_profile=dict(payload.get("organization_execution_profile") or {}),
         intent_brief=IntentPlanBrief(
             identified_request=list((payload.get("intent_brief") or {}).get("identified_request") or []),
             target_output=list((payload.get("intent_brief") or {}).get("target_output") or []),
-            default_execution_strategy=list((payload.get("intent_brief") or {}).get("default_execution_strategy") or []),
+            default_execution_strategy=list(
+                (payload.get("intent_brief") or {}).get("default_execution_strategy") or []
+            ),
             review_focus=list((payload.get("intent_brief") or {}).get("review_focus") or []),
         ),
         assumptions=list(payload.get("assumptions") or []),
@@ -292,9 +347,11 @@ def _deterministic_intent_brief(
         fallback_categories=categories,
         fallback_employment_statuses=employment_statuses,
     )
-    intent_axes = dict(intent_view.get("intent_axes") or build_request_intent_axes_payload(request=request))
-    acquisition_lane_policy = dict(intent_axes.get("acquisition_lane_policy") or {})
-    fallback_policy = dict(intent_axes.get("fallback_policy") or {})
+    intent_axes = coerce_intent_axis_mapping(
+        intent_view.get("intent_axes") or build_request_intent_axes_payload(request=request)
+    )
+    acquisition_lane_policy = coerce_intent_axis_mapping(intent_axes.get("acquisition_lane_policy"))
+    fallback_policy = coerce_intent_axis_mapping(intent_axes.get("fallback_policy"))
     target_company = str(intent_view.get("target_company") or request.target_company).strip() or "待确认组织"
     effective_categories = list(intent_view.get("categories") or categories or [])
     effective_employment_statuses = list(intent_view.get("employment_statuses") or employment_statuses or [])
@@ -338,17 +395,21 @@ def _deterministic_intent_brief(
         _search_strategy_line(search_strategy),
         "结果输出时显式附带 manual review items、关键证据和需要用户确认的风险点。",
     ]
-    if bool(acquisition_lane_policy.get("use_company_employees_lane") or request.execution_preferences.get("use_company_employees_lane")):
-        execution_strategy.insert(2, "当前计划优先走 Harvest company-employees lane，先拿当前组织 roster 再进入后续检索。")
-    if bool(fallback_policy.get("force_fresh_run") or request.execution_preferences.get("force_fresh_run")):
-        execution_strategy.insert(3, "本次按 fresh run 执行，不复用 cached roster、共享 provider cache 或历史 profile inheritance。")
-    if (
-        ("allow_high_cost_sources" in fallback_policy or "allow_high_cost_sources" in request.execution_preferences)
-        and not bool(fallback_policy.get("allow_high_cost_sources", request.execution_preferences.get("allow_high_cost_sources")))
+    if bool(
+        acquisition_lane_policy.get("use_company_employees_lane")
+        or request.execution_preferences.get("use_company_employees_lane")
     ):
-        execution_strategy.insert(4, "默认不启用高成本 LinkedIn source，只有用户后续显式放开才升级。")
-    else:
-        execution_strategy.insert(4, "公开网页和低成本 search 优先，只有在无法确认成员关系时才升级到高成本 LinkedIn provider。")
+        execution_strategy.insert(
+            2, "当前计划优先走 Harvest company-employees lane，先拿当前组织 roster 再进入后续检索。"
+        )
+    if bool(fallback_policy.get("force_fresh_run") or request.execution_preferences.get("force_fresh_run")):
+        execution_strategy.insert(
+            3, "本次按 fresh run 执行，不复用 cached roster、共享 provider cache 或历史 profile inheritance。"
+        )
+    execution_strategy.insert(
+        4,
+        "默认先复用 authoritative baseline 与低成本公开信号；company-scoped LinkedIn roster/search 仅用于组织级 current/former 召回，不用于单人姓名检索。",
+    )
 
     review_focus = [_localize_review_question(item) for item in open_questions[:4]]
     return IntentPlanBrief(
@@ -413,10 +474,7 @@ def _target_output_line(
     if scope_terms:
         company_fragment = f"{target_company} 的 {' / '.join(scope_terms[:3])}"
     if focus_terms:
-        return (
-            f"找到与 {company_fragment} 相关、方向偏 {' / '.join(focus_terms[:5])} 的"
-            f" {population_label}。"
-        )
+        return f"找到与 {company_fragment} 相关、方向偏 {' / '.join(focus_terms[:5])} 的 {population_label}。"
     return f"找到与 {company_fragment} 相关的 {population_label}。"
 
 
@@ -493,9 +551,7 @@ def _build_retrieval_plan(
         structured_filters.append(f"must_have_facets={effective_must_have_facets}")
     if effective_role_buckets:
         filter_key = (
-            "must_have_primary_role_buckets"
-            if primary_role_bucket_mode == "hard"
-            else "soft_primary_role_buckets"
+            "must_have_primary_role_buckets" if primary_role_bucket_mode == "hard" else "soft_primary_role_buckets"
         )
         structured_filters.append(f"{filter_key}={effective_role_buckets}")
     if effective_organization_keywords:
@@ -507,7 +563,9 @@ def _build_retrieval_plan(
         reason = "Criteria are ambiguous or narrative-heavy, so semantic ranking should dominate."
     else:
         strategy = "hybrid"
-        reason = "Use structured filters to reduce the search space, then semantic matching or reranking for corner cases."
+        reason = (
+            "Use structured filters to reduce the search space, then semantic matching or reranking for corner cases."
+        )
 
     return RetrievalPlan(
         strategy=strategy,
@@ -527,6 +585,7 @@ def _build_acquisition_tasks(
     search_strategy: SearchStrategyPlan,
     *,
     intent_view: dict[str, Any] | None = None,
+    roster_function_ids: list[str] | None = None,
 ) -> list[AcquisitionTask]:
     intent_view = dict(intent_view or resolve_request_intent_view(request))
     effective_execution_preferences = dict(intent_view.get("execution_preferences") or {})
@@ -536,23 +595,82 @@ def _build_acquisition_tasks(
         effective_target_company,
         acquisition_strategy,
     )
-    include_former_search_seed = _should_include_default_former_search_seed(
-        categories=categories,
-        employment_statuses=employment_statuses,
-        acquisition_strategy=acquisition_strategy,
-        execution_preferences=effective_execution_preferences,
+    explicit_cohort = explicit_cohort_selection(request.to_record())
+    explicit_cohort_owns_employment_lanes = bool(
+        explicit_cohort is not None and str(explicit_cohort.get("source") or "") == "user_explicit"
+    )
+    include_former_search_seed = (
+        not explicit_cohort_owns_employment_lanes
+        and _should_include_default_former_search_seed(
+            categories=categories,
+            employment_statuses=employment_statuses,
+            acquisition_strategy=acquisition_strategy,
+            execution_preferences=effective_execution_preferences,
+        )
     )
     task_intent_view = _build_task_intent_view_metadata(
+        effective_request=request,
         intent_view=intent_view,
         acquisition_strategy=acquisition_strategy,
         search_strategy=search_strategy,
     )
+    request_roster_plan: dict[str, Any] = {"shards": [], "company_filters": {}, "function_ids": [], "locations": [], "exclude_locations": []}
+    if acquisition_strategy.strategy_type == "full_company_roster":
+        # Request-scoped roster parameters (location, functionIDs) are one
+        # unified contract for every company — no company-name branches, no
+        # org-size forks.  The function selection was resolved once from the
+        # submitted request by ``resolve_roster_lane_function_ids`` (explicit
+        # cohort > operator/AI-authored buckets > technical default).
+        request_roster_plan = build_request_scoped_company_employee_query_plan(
+            target_locations=request.target_locations,
+            function_ids=list(roster_function_ids or []),
+            max_pages=roster_max_pages,
+            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+            exclude_target_locations=request.exclude_target_locations,
+        )
+    scoped_keyword_union_shard_policy: dict[str, Any] = {}
+    if acquisition_strategy.strategy_type == "scoped_search_roster":
+        # WS1 Step 4a (2026-07-22): a scoped request mints its keyword-union
+        # shard policy at plan time (reviewable contract; execution cutover is
+        # Step 4b — until then the seed-pool path still executes, and this
+        # policy is the pinned migration target).
+        scoped_keyword_union_shard_policy = build_request_scoped_keyword_union_shard_policy(
+            keywords=list(acquisition_strategy.search_seed_queries or [])
+            or list((acquisition_strategy.filter_hints or {}).get("keywords") or []),
+            function_ids=list(roster_function_ids or []),
+            locations=request.target_locations,
+            exclude_locations=request.exclude_target_locations,
+            max_pages=roster_max_pages,
+            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+        )
+    former_function_shard_plan: dict[str, Any] = {}
+    if acquisition_strategy.strategy_type == "former_employee_search":
+        # WS1 Step 2b-ii (2026-07-22): a former-ONLY plan mints the same
+        # request-scoped per-function former shard plan the full-roster
+        # companion seed uses (employment status is a lane parameter, not a
+        # strategy fork). The plan is reviewable at plan time; execution
+        # re-derives past companies from the RESOLVED company identity
+        # (request-wins), so the planning-time list is the request scope.
+        former_function_shard_plan = build_request_scoped_former_search_shard_plan(
+            function_ids=list(roster_function_ids or []),
+            past_companies=list(acquisition_strategy.company_scope or []),
+            locations=request.target_locations,
+            exclude_locations=request.exclude_target_locations,
+        )
+    request_roster_function_ids = list(request_roster_plan.get("function_ids") or [])
     company_employee_shard_policy = _default_full_company_roster_shard_policy(
         target_company=effective_target_company,
         acquisition_strategy=acquisition_strategy,
         max_pages=roster_max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+        locations=list(request_roster_plan.get("locations") or []) if acquisition_strategy.strategy_type == "full_company_roster" else None,
+        exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
+        request_function_ids=request_roster_function_ids,
     )
+    # One lane shape for every company: the unified policy expands into
+    # per-function probe roots during shard planning; there is no separate
+    # small-company unsharded path.
+    company_employee_shard_strategy = str(company_employee_shard_policy.get("strategy_id") or "").strip()
     linkedin_stage_metadata = {
         "acquisition_phase": "linkedin_stage_1",
         "acquisition_phase_title": "LinkedIn Stage 1",
@@ -561,6 +679,10 @@ def _build_acquisition_tasks(
         "acquisition_phase": "public_web_stage_2",
         "acquisition_phase_title": "Public Web Stage 2",
     }
+    include_public_web_stage = _should_include_public_web_stage_2(
+        request=request,
+        execution_preferences=effective_execution_preferences,
+    )
 
     tasks = [
         AcquisitionTask(
@@ -593,17 +715,29 @@ def _build_acquisition_tasks(
                 "cost_policy": acquisition_strategy.cost_policy,
                 "max_pages": roster_max_pages,
                 "page_limit": FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+                "company_employee_base_filters": dict(request_roster_plan.get("company_filters") or {}),
                 "company_employee_shards": [],
                 "company_employee_shard_policy": company_employee_shard_policy,
-                "company_employee_shard_strategy": str(company_employee_shard_policy.get("strategy_id") or "").strip(),
+                "company_employee_shard_strategy": company_employee_shard_strategy,
+                **(
+                    {"scoped_keyword_union_shard_policy": scoped_keyword_union_shard_policy}
+                    if scoped_keyword_union_shard_policy
+                    else {}
+                ),
+                **(
+                    {"former_function_shard_plan": former_function_shard_plan}
+                    if former_function_shard_plan
+                    else {}
+                ),
                 "include_former_search_seed": include_former_search_seed,
                 "intent_view": _task_intent_view_with_overrides(
                     task_intent_view,
                     max_pages=roster_max_pages,
                     page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+                    company_employee_base_filters=dict(request_roster_plan.get("company_filters") or {}),
                     company_employee_shards=[],
                     company_employee_shard_policy=company_employee_shard_policy,
-                    company_employee_shard_strategy=str(company_employee_shard_policy.get("strategy_id") or "").strip(),
+                    company_employee_shard_strategy=company_employee_shard_strategy,
                     include_former_search_seed=include_former_search_seed,
                     acquisition_phase="linkedin_stage_1",
                     acquisition_phase_title="LinkedIn Stage 1",
@@ -613,6 +747,17 @@ def _build_acquisition_tasks(
         ),
     ]
     if include_former_search_seed:
+        former_search_contract = normalize_former_member_search_contract(
+            strategy_type="former_employee_search",
+            employment_statuses=["former"],
+            search_channel_order=["harvest_profile_search"],
+            cost_policy=acquisition_strategy.cost_policy,
+            min_expected_results=50,
+        )
+        former_search_channel_order = list(
+            former_search_contract.get("search_channel_order") or ["harvest_profile_search"]
+        )
+        former_task_cost_policy = dict(former_search_contract.get("cost_policy") or acquisition_strategy.cost_policy)
         tasks.append(
             AcquisitionTask(
                 task_id="acquire-former-search-seed",
@@ -625,17 +770,19 @@ def _build_acquisition_tasks(
                 metadata={
                     "strategy_type": "former_employee_search",
                     "employment_statuses": ["former"],
-                    "search_channel_order": ["harvest_profile_search"],
+                    "search_channel_order": former_search_channel_order,
                     "search_seed_queries": acquisition_strategy.search_seed_queries,
-                    "search_query_bundles": [bundle.to_record() for bundle in search_strategy.query_bundles],
+                    "search_query_bundles": [],
                     "filter_hints": acquisition_strategy.filter_hints,
-                    "cost_policy": acquisition_strategy.cost_policy,
+                    "cost_policy": former_task_cost_policy,
                     "former_provider_people_search_min_expected_results": 50,
                     "intent_view": _task_intent_view_with_overrides(
                         task_intent_view,
                         strategy_type="former_employee_search",
                         employment_statuses=["former"],
-                        search_channel_order=["harvest_profile_search"],
+                        search_channel_order=former_search_channel_order,
+                        search_query_bundles=[],
+                        cost_policy=former_task_cost_policy,
                         former_provider_people_search_min_expected_results=50,
                         acquisition_phase="linkedin_stage_1",
                         acquisition_phase_title="LinkedIn Stage 1",
@@ -660,14 +807,16 @@ def _build_acquisition_tasks(
                     "cost_policy": acquisition_strategy.cost_policy,
                     "slug_resolution_limit": request.slug_resolution_limit,
                     "profile_detail_limit": request.profile_detail_limit,
-                    "full_roster_profile_prefetch": acquisition_strategy.strategy_type == "full_company_roster",
+                    "full_roster_profile_prefetch": _requires_full_profile_prefetch(acquisition_strategy.strategy_type),
                     "reuse_existing_roster": bool(effective_execution_preferences.get("reuse_existing_roster")),
                     "enrichment_scope": "linkedin_stage_1",
                     "intent_view": _task_intent_view_with_overrides(
                         task_intent_view,
                         slug_resolution_limit=request.slug_resolution_limit,
                         profile_detail_limit=request.profile_detail_limit,
-                        full_roster_profile_prefetch=acquisition_strategy.strategy_type == "full_company_roster",
+                        full_roster_profile_prefetch=_requires_full_profile_prefetch(
+                            acquisition_strategy.strategy_type
+                        ),
                         reuse_existing_roster=bool(effective_execution_preferences.get("reuse_existing_roster")),
                         enrichment_scope="linkedin_stage_1",
                         acquisition_phase="linkedin_stage_1",
@@ -676,6 +825,10 @@ def _build_acquisition_tasks(
                     **linkedin_stage_metadata,
                 },
             ),
+        ]
+    )
+    if include_public_web_stage:
+        tasks.append(
             AcquisitionTask(
                 task_id="enrich-public-web-signals",
                 task_type="enrich_public_web_signals",
@@ -709,41 +862,54 @@ def _build_acquisition_tasks(
                     ),
                     **public_web_stage_metadata,
                 },
-            ),
-        ]
-    )
+            )
+        )
     tasks.extend(
         [
-        AcquisitionTask(
-            task_id="normalize-asset-snapshot",
-            task_type="normalize_asset_snapshot",
-            title="Normalize and version the asset snapshot",
-            description="Write a versioned candidate/evidence snapshot that can be reused by later queries.",
-            source_hint="SQLite + versioned JSON artifact",
-            status="ready" if has_target_company else "needs_input",
-            blocking=False,
-        ),
-        AcquisitionTask(
-            task_id="build-retrieval-index",
-            task_type="build_retrieval_index",
-            title="Build retrieval index",
-            description="Prepare structured filters and semantic-ready candidate documents for later retrieval.",
-            source_hint="SQLite filters + candidate document index + future vector index",
-            status="ready" if has_target_company else "needs_input",
-            blocking=False,
-        ),
+            AcquisitionTask(
+                task_id="normalize-asset-snapshot",
+                task_type="normalize_asset_snapshot",
+                title="Normalize and version the asset snapshot",
+                description="Write a versioned candidate/evidence snapshot that can be reused by later queries.",
+                source_hint="Postgres control plane + generation-first snapshot artifacts",
+                status="ready" if has_target_company else "needs_input",
+                blocking=False,
+            ),
+            AcquisitionTask(
+                task_id="build-retrieval-index",
+                task_type="build_retrieval_index",
+                title="Build retrieval index",
+                description="Prepare structured filters and semantic-ready candidate documents for later retrieval.",
+                source_hint="Registry-backed filters + candidate document index + future vector index",
+                status="ready" if has_target_company else "needs_input",
+                blocking=False,
+            ),
         ]
     )
     return tasks
 
 
+def _should_include_public_web_stage_2(
+    *,
+    request: JobRequest,
+    execution_preferences: dict[str, Any] | None = None,
+) -> bool:
+    analysis_stage_mode = str(getattr(request, "analysis_stage_mode", "") or "").strip().lower()
+    if analysis_stage_mode == "two_stage":
+        return True
+    prefs = dict(execution_preferences or {})
+    return bool(prefs.get("require_stage2_confirmation"))
+
+
 def _build_task_intent_view_metadata(
     *,
+    effective_request: JobRequest,
     intent_view: dict[str, Any],
     acquisition_strategy: AcquisitionStrategyPlan,
     search_strategy: SearchStrategyPlan | None = None,
 ) -> dict[str, Any]:
     return {
+        "effective_request": effective_request.to_record(),
         "target_company": str(intent_view.get("target_company") or "").strip(),
         "categories": list(intent_view.get("categories") or []),
         "employment_statuses": list(intent_view.get("employment_statuses") or []),
@@ -766,11 +932,14 @@ def _build_task_intent_view_metadata(
         "strategy_type": str(acquisition_strategy.strategy_type or "").strip(),
         "search_channel_order": list(acquisition_strategy.search_channel_order or []),
         "cost_policy": dict(acquisition_strategy.cost_policy or {}),
+        "organization_execution_profile": dict(acquisition_strategy.organization_execution_profile or {}),
+        "strategy_decision_explanation": dict(acquisition_strategy.strategy_decision_explanation or {}),
     }
 
 
 def _clone_task_intent_view_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     return {
+        "effective_request": dict(metadata.get("effective_request") or {}),
         "target_company": str(metadata.get("target_company") or "").strip(),
         "categories": list(metadata.get("categories") or []),
         "employment_statuses": list(metadata.get("employment_statuses") or []),
@@ -787,10 +956,16 @@ def _clone_task_intent_view_metadata(metadata: dict[str, Any]) -> dict[str, Any]
         "filter_keywords": list(metadata.get("filter_keywords") or []),
         "function_ids": list(metadata.get("function_ids") or []),
         "search_seed_queries": list(metadata.get("search_seed_queries") or []),
-        "search_query_bundles": [dict(item) for item in list(metadata.get("search_query_bundles") or []) if isinstance(item, dict)],
+        "search_query_bundles": [
+            dict(item) for item in list(metadata.get("search_query_bundles") or []) if isinstance(item, dict)
+        ],
         "strategy_type": str(metadata.get("strategy_type") or "").strip(),
-        "search_channel_order": [str(item).strip() for item in list(metadata.get("search_channel_order") or []) if str(item).strip()],
+        "search_channel_order": [
+            str(item).strip() for item in list(metadata.get("search_channel_order") or []) if str(item).strip()
+        ],
         "cost_policy": dict(metadata.get("cost_policy") or {}),
+        "organization_execution_profile": dict(metadata.get("organization_execution_profile") or {}),
+        "strategy_decision_explanation": dict(metadata.get("strategy_decision_explanation") or {}),
     }
 
 
@@ -800,13 +975,174 @@ def _task_intent_view_with_overrides(metadata: dict[str, Any], **overrides: Any)
         if isinstance(value, dict):
             cloned[key] = dict(value)
         elif isinstance(value, list):
-            cloned[key] = [
-                dict(item) if isinstance(item, dict) else item
-                for item in value
-            ]
+            cloned[key] = [dict(item) if isinstance(item, dict) else item for item in value]
         elif value is not None:
             cloned[key] = value
     return cloned
+
+
+def _build_provider_execution_manifest(
+    *,
+    acquisition_strategy: AcquisitionStrategyPlan,
+    acquisition_tasks: list[AcquisitionTask],
+) -> dict[str, Any]:
+    lanes: list[dict[str, Any]] = []
+    strategy_type = str(acquisition_strategy.strategy_type or "").strip()
+    filter_hints = {
+        str(key): [str(item).strip() for item in list(value or []) if str(item).strip()]
+        for key, value in dict(acquisition_strategy.filter_hints or {}).items()
+        if str(key).strip()
+    }
+
+    def _add_lane(
+        *,
+        lane_id: str,
+        employment_status: str,
+        provider: str,
+        operation: str,
+        query_texts: list[str] | None = None,
+        company_filters: dict[str, list[str]] | None = None,
+        provider_facing_query: bool = False,
+        display_label: str = "",
+        reason: str = "",
+        task_id: str = "",
+        max_pages: int | None = None,
+        page_limit: int | None = None,
+        request_function_ids: list[str] | None = None,
+    ) -> None:
+        lane = {
+            "lane_id": lane_id,
+            "employment_status": employment_status,
+            "provider": provider,
+            "operation": operation,
+            "query_texts": [str(item).strip() for item in list(query_texts or []) if str(item).strip()],
+            "company_filters": {
+                str(key): [str(item).strip() for item in list(value or []) if str(item).strip()]
+                for key, value in dict(company_filters or {}).items()
+                if str(key).strip()
+            },
+            "provider_facing_query": bool(provider_facing_query),
+            "display_label": display_label,
+            "reason": reason,
+            "task_id": task_id,
+        }
+        if max_pages is not None:
+            lane["max_pages"] = int(max_pages)
+        if page_limit is not None:
+            lane["page_limit"] = int(page_limit)
+        if request_function_ids:
+            lane["request_function_ids"] = [str(item).strip() for item in request_function_ids if str(item).strip()]
+        lanes.append(lane)
+
+    acquire_task = next((task for task in acquisition_tasks if task.task_type == "acquire_full_roster"), None)
+    former_task = next((task for task in acquisition_tasks if task.task_type == "acquire_former_search_seed"), None)
+    if strategy_type == "full_company_roster":
+        acquire_metadata = dict(getattr(acquire_task, "metadata", {}) or {})
+        shard_policy = dict(acquire_metadata.get("company_employee_shard_policy") or {})
+        current_companies = list(filter_hints.get("current_companies") or filter_hints.get("companies") or [])
+        roster_task_id = str(getattr(acquire_task, "task_id", "") or "")
+        roster_max_pages = int(acquire_metadata.get("max_pages") or 0) or None
+        roster_page_limit = int(acquire_metadata.get("page_limit") or 0) or None
+        # Unified probe-driven lane for every company: execution expands this
+        # planned scope into per-function shard roots (the policy always
+        # carries request_function_ids); the manifest records the exact
+        # planned scope.  No keyword-probe or unsharded small-company lanes.
+        _add_lane(
+            lane_id="current_company_employees",
+            employment_status="current",
+            provider="harvest_company_employees",
+            operation="company_employees",
+            company_filters={
+                "current_companies": current_companies,
+                # Stored pre-unification plans carry no adaptive policy; their
+                # location axes live in company_employee_base_filters — fall
+                # back so the lane view never drops the request scope.
+                **(
+                    dict(shard_policy.get("root_filters") or {})
+                    or dict(acquire_metadata.get("company_employee_base_filters") or {})
+                ),
+            },
+            display_label="Harvest company employees",
+            reason="adaptive_shard_probe_pending",
+            task_id=roster_task_id,
+            max_pages=roster_max_pages,
+            page_limit=roster_page_limit,
+            request_function_ids=list(shard_policy.get("request_function_ids") or []),
+        )
+        if former_task is not None:
+            former_keywords = [
+                str(item).strip()
+                for item in list(dict(getattr(former_task, "metadata", {}) or {}).get("search_seed_queries") or [])
+                if str(item).strip()
+            ]
+            broad_former = bool(
+                dict(getattr(former_task, "metadata", {}) or {})
+                .get("cost_policy", {})
+                .get("former_broad_past_company_only")
+            )
+            _add_lane(
+                lane_id="former_past_company_search",
+                employment_status="former",
+                provider="harvest_profile_search",
+                operation="profile_search",
+                query_texts=[] if broad_former else former_keywords,
+                company_filters={
+                    "past_companies": list(
+                        filter_hints.get("past_companies") or filter_hints.get("current_companies") or []
+                    )
+                },
+                provider_facing_query=bool(former_keywords and not broad_former),
+                display_label="Harvest profile search",
+                reason="former_broad_past_company_filter" if broad_former else "former_keyword_profile_search",
+                task_id=str(getattr(former_task, "task_id", "") or ""),
+            )
+    elif strategy_type in {"scoped_search_roster", "former_employee_search"}:
+        seed_queries = [
+            str(item).strip() for item in list(acquisition_strategy.search_seed_queries or []) if str(item).strip()
+        ]
+        statuses = {
+            str(item or "").strip().lower()
+            for item in list(dict(getattr(acquire_task, "metadata", {}) or {}).get("employment_statuses") or [])
+        }
+        if not statuses:
+            statuses = {"former"} if strategy_type == "former_employee_search" else {"current"}
+        if "current" in statuses or strategy_type == "scoped_search_roster":
+            _add_lane(
+                lane_id="current_profile_search",
+                employment_status="current",
+                provider="harvest_profile_search",
+                operation="profile_search",
+                query_texts=seed_queries,
+                company_filters={"current_companies": list(filter_hints.get("current_companies") or [])},
+                provider_facing_query=bool(seed_queries),
+                display_label="Harvest profile search",
+                reason="scoped_keyword_profile_search",
+                task_id=str(getattr(acquire_task, "task_id", "") or ""),
+            )
+        if "former" in statuses and former_task is not None:
+            _add_lane(
+                lane_id="former_profile_search",
+                employment_status="former",
+                provider="harvest_profile_search",
+                operation="profile_search",
+                query_texts=seed_queries,
+                company_filters={
+                    "past_companies": list(
+                        filter_hints.get("past_companies") or filter_hints.get("current_companies") or []
+                    )
+                },
+                provider_facing_query=bool(seed_queries),
+                display_label="Harvest profile search",
+                reason="scoped_former_keyword_profile_search",
+                task_id=str(getattr(former_task, "task_id", "") or ""),
+            )
+
+    return {
+        "version": 1,
+        "source": "planning_contract",
+        "strategy_type": strategy_type,
+        "lanes": lanes,
+    }
 
 
 def _default_full_company_roster_max_pages(
@@ -815,10 +1151,10 @@ def _default_full_company_roster_max_pages(
 ) -> int:
     if acquisition_strategy.strategy_type != "full_company_roster":
         return 10
-    company_key = normalize_company_key(target_company)
-    if company_key in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
-        return FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES
-    return FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES
+    # Unified roster contract (operator directive 2026-07-20): one paging
+    # budget for every company — no org-size bands.  Per-function shard roots
+    # and the provider result cap bound the actual paid volume.
+    return FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES
 
 
 def _default_full_company_roster_shard_policy(
@@ -827,25 +1163,18 @@ def _default_full_company_roster_shard_policy(
     acquisition_strategy: AcquisitionStrategyPlan,
     max_pages: int,
     page_limit: int,
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
+    request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if acquisition_strategy.strategy_type != "full_company_roster":
         return {}
-    company_key = normalize_company_key(target_company)
-    if bool(acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode")):
-        large_org_policy = build_large_org_keyword_probe_shard_policy(
-            company_key,
-            company_scope=list(acquisition_strategy.company_scope or []),
-            keyword_hints=list(acquisition_strategy.filter_hints.get("keywords") or []),
-            function_ids=list(acquisition_strategy.filter_hints.get("function_ids") or []),
-            max_pages=max_pages,
-            page_limit=page_limit,
-        )
-        if large_org_policy:
-            return large_org_policy
     return build_default_company_employee_shard_policy(
-        company_key,
         max_pages=max_pages,
         page_limit=page_limit,
+        locations=locations,
+        exclude_locations=exclude_locations,
+        request_function_ids=request_function_ids,
     )
 
 
@@ -861,8 +1190,10 @@ def _should_include_default_former_search_seed(
     preferences = dict(execution_preferences or {})
     if "run_former_search_seed" in preferences:
         return bool(preferences.get("run_former_search_seed"))
-    normalized_statuses = {str(item or "").strip().lower() for item in list(employment_statuses or []) if str(item or "").strip()}
-    if acquisition_strategy.strategy_type == "scoped_search_roster" and "former" not in normalized_statuses:
+    normalized_statuses = {
+        str(item or "").strip().lower() for item in list(employment_statuses or []) if str(item or "").strip()
+    }
+    if "former" not in normalized_statuses:
         return False
     normalized_categories = {str(item or "").strip().lower() for item in categories if str(item or "").strip()}
     if "investor" in normalized_categories:
@@ -904,6 +1235,9 @@ def _infer_retrieval_strategy(
     effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
     effective_organization_keywords = list(intent_view.get("organization_keywords") or [])
     effective_keywords = list(intent_view.get("keywords") or [])
+    analysis_stage_mode = str(getattr(request, "analysis_stage_mode", "") or "").strip().lower()
+    if analysis_stage_mode == "two_stage" and effective_keywords:
+        return "hybrid"
     if (
         effective_must_have_keywords
         or effective_must_have_facets
@@ -950,15 +1284,23 @@ def _criteria_summary(
 
 def _build_assumptions(request: JobRequest, categories: list[str], strategy: str, acquisition_strategy) -> list[str]:
     assumptions = []
-    assumptions.append("Acquisition must happen before retrieval so that criteria do not bias which people enter the asset pool.")
+    assumptions.append(
+        "Acquisition must happen before retrieval so that criteria do not bias which people enter the asset pool."
+    )
     if strategy == "hybrid":
-        assumptions.append("Corner cases will need semantic matching or model-assisted reranking after structured filtering.")
+        assumptions.append(
+            "Corner cases will need semantic matching or model-assisted reranking after structured filtering."
+        )
     if "investor" not in categories:
         assumptions.append("The primary retrieval population is company members rather than investors.")
-    if "general_web_search_relation_check" in acquisition_strategy.search_channel_order:
-        assumptions.append("Low-cost relation verification and public web search should run before paid LinkedIn people search.")
+    if acquisition_strategy.strategy_type in {"full_company_roster", "scoped_search_roster", "former_employee_search"}:
+        assumptions.append(
+            "Core roster acquisition should follow the provider-backed LinkedIn lane defined by the execution contract."
+        )
     if acquisition_strategy.strategy_type == "scoped_search_roster":
-        assumptions.append("Large-company requests should prefer a scoped roster over a company-wide roster unless the user confirms otherwise.")
+        assumptions.append(
+            "Large-company requests should prefer a scoped roster over a company-wide roster unless the user confirms otherwise."
+        )
     return assumptions
 
 

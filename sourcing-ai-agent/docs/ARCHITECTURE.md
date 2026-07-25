@@ -1,5 +1,8 @@
 # Architecture
 
+> Status: Reference — 2026-04 content, PENDING REFRESH (flagged in docs/INDEX.md). Where it conflicts with code or Tier 1 contracts, code and contracts win.
+
+
 ## 1. 设计原则
 
 - Agent-first：系统围绕 job、artifact、adapter、state 组织，而不是围绕单次脚本组织
@@ -132,7 +135,7 @@
   - 执行 lane budget arbitration
   - 对已完成 worker 复用持久化 output，而不是重复外部调用
 - 当前已支持跨进程常驻恢复：
-  - 通过 `agent_worker_runs.lease_owner / lease_expires_at` 做 SQLite lease 协调
+  - 通过 `agent_worker_runs.lease_owner / lease_expires_at` 做 control-plane lease 协调
   - 独立 daemon 进程可扫描 recoverable worker 并 claim 后恢复
   - `stale running` worker 会在恢复前被视作 `resume_from_checkpoint`
 
@@ -156,19 +159,19 @@
 - 当前已实现：
   - `company_snapshot bundle`
   - `company_handoff bundle`
-  - `sqlite_snapshot bundle`
+  - `control_plane_snapshot bundle`
+  - `sqlite_snapshot bundle` 已退役，CLI、import、upload、download、restore 都不再支持
 - 当前默认云端恢复路径：
-  - 优先 `sqlite_snapshot + canonical company_snapshot`
+  - 优先 `control_plane_snapshot + canonical company_snapshot`
   - `company_handoff` 只保留为可选的重型 handoff 载体，不再作为默认 server bootstrap 入口
 - 当前还已接入 object storage sync：
   - `upload-asset-bundle`
   - `download-asset-bundle`
   - `import-cloud-assets`
-  - `restore-sqlite-snapshot`
 - 当前默认 server/cloud 恢复入口已收敛为：
-  - `import-cloud-assets` 先恢复 `sqlite_snapshot`
+  - `import-cloud-assets` 先恢复 `control_plane_snapshot`
   - 再恢复 canonical `company_snapshot`
-- `download-asset-bundle + restore-*` 现在只保留为低层排障路径
+- `download-asset-bundle + restore-asset-bundle` 现在只保留为低层排障路径；`sqlite_snapshot` 旧包不再有恢复入口
 - 这一层不直接把业务逻辑绑死到某个云厂商；先以 bundle 为边界，再通过 object storage provider 上传/下载
 
 ### `object_storage.py`
@@ -276,7 +279,8 @@
 
 ### `storage.py`
 
-- SQLite schema
+- PostgreSQL control-plane schema（PG-pure：SQLite 双路径与 in-memory compatibility shadow 已退役；schema 仅由 `migrations/0001_baseline.sql` + `migration_runner.py` 版本化迁移创建）
+- `ControlPlaneStore` 要求 resolved PG DSN 且 `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
 - candidate / evidence / job / job_result 持久化
 - 支持按 `target_company` 替换单家公司 snapshot，而不覆盖其他公司数据
 - 已新增 criteria feedback / criteria pattern 持久化
@@ -332,7 +336,7 @@
   - 将 candidate 的 `role / team / focus_areas / education / work_history / notes` 组织成 multi-field semantic document
   - 对 query term 做扩展、field weighting 和稀疏向量相似度计算
   - 为 `hybrid / semantic` 结果提供 corner-case recall 与 rerank
-- 默认优先本地 sparse retrieval；只有 `allow_high_cost_sources=true` 且配置了 external semantic provider 时，才会上升到 embedding / rerank provider
+- 默认优先本地 sparse retrieval；external semantic provider 只保留为 legacy/experimental supplement path，不应继续作为常规 operator 开关
 - 这不是最终的 dense embedding / vector DB 方案，但已经让 semantic retrieval 真正进入执行链，而不是只停留在接口预留
 
 ### `semantic_provider.py`
@@ -552,7 +556,7 @@ User Request
 
 ## 8. 存储策略
 
-- 当前：执行日志、raw page、snapshot manifest、SQLite retrieval store 全部落在本地 runtime
+- 当前：执行日志、raw page、snapshot manifest、candidate artifacts 落在本地 runtime；control-plane/result stores 落在 PostgreSQL（postgres_only，schema 由版本化迁移创建）
 - 当前 raw-first / compact-context 规则：
   - 外部 API 返回默认先落盘，再做解析或模型分析
   - 模型消费 `analysis_input` 这类压缩资产，而不是直接读取完整 raw payload

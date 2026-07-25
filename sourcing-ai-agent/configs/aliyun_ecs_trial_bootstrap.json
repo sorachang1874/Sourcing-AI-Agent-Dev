@@ -1,0 +1,31 @@
+{
+  "profile_id": "aliyun-hk-ecs-trial-2c4g-40g",
+  "frontend_origin": "https://demo.111874.xyz",
+  "backend_api_origin": "https://api.111874.xyz",
+  "runtime_dir": "/srv/sourcing-ai-agent/runtime",
+  "repo_dir": "/srv/sourcing-ai-agent/repo/sourcing-ai-agent",
+  "recommended_external_provider_mode": "live",
+  "recommended_api_parallel_requests": 2,
+  "initial_company_keys": [
+    "reflectionai",
+    "openai",
+    "anthropic",
+    "xai",
+    "physicalintelligence"
+  ],
+  "optional_company_keys": [
+    "thinkingmachineslab",
+    "humansand",
+    "langchain",
+    "skildai"
+  ],
+  "defer_company_keys": [
+    "google"
+  ],
+  "skip_initial_sqlite_snapshot": true,
+  "notes": [
+    "The current local runtime is around 72G and the SQLite database alone is around 21G, so a full runtime copy is not suitable for this ECS trial host.",
+    "Start with selected company snapshots plus secrets. Restore large assets such as Google only on demand.",
+    "Do not point a Cloudflare Pages production build at localhost; use an HTTPS API origin such as https://api.111874.xyz."
+  ]
+}

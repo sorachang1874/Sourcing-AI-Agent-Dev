@@ -1,0 +1,17 @@
+{
+  "schema_version": "sourcing.x_first.fixture_semantic_validation_registry.v1",
+  "registry_version": "x_first_fixture_semantic_validation_registry.v1",
+  "fixtures": [
+    {
+      "fixture_id": "x_first_selected_people_fixture_v1",
+      "manifest_sha256": "f2ac74a74bfc21c105b52e07167afddcff48b2c7408a809d08211cbc8e033407",
+      "receipt_sha256": "615e9c068c3ba9fe12ad86f9b955ab3f5c41f8a668a81f43872e5fa40621537e",
+      "validator_revision_sha256": "f44f61134d689efc5115fff538fd6149150847a24dc4ab1acccd570c92ffb10d"
+    }
+  ],
+  "authority": {
+    "caller_supplied_pin_allowed": false,
+    "live_authority": false,
+    "product_writes_allowed": false
+  }
+}

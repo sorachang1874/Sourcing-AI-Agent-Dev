@@ -1,0 +1,38 @@
+{
+  "schema_version": "x.profile.bio.professional_experience_proxy_policy.v1",
+  "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+  "source_status": "unverified_model_derived",
+  "regions": [
+    "china",
+    "asia"
+  ],
+  "strength_order": [
+    "none",
+    "weak_proxy",
+    "strong_proxy"
+  ],
+  "unmapped_strength": "none",
+  "proposal_mappings": {
+    "professional_china_digital_ecosystem": {
+      "strength": "strong_proxy",
+      "regions": [
+        "china",
+        "asia"
+      ]
+    },
+    "observed_chinese_professional_content": {
+      "strength": "weak_proxy",
+      "regions": [
+        "china",
+        "asia"
+      ]
+    }
+  },
+  "usage_boundary": {
+    "machine_use": "independently_governed_high_recall_verification_queue_only",
+    "final_eligibility_or_ranking": false,
+    "physical_region_inference": false,
+    "protected_identity_inference": false,
+    "canonical_employment": false
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "behavior_fixture": "google_gemini_large_baseline_small_former_real_asset_long_latency",
+    "purpose": "Nightly long-latency overlay for the Google 8k+ baseline and small Gemini former-shard pressure case. It reuses the canonical real-asset fixture and only overrides provider timing fields.",
+    "real_api_calls_required": false,
+    "generated_profile_fallback_allowed": false,
+    "fresh_runtime_required": true,
+    "effective_acquisition_mode": "baseline_reuse_with_delta",
+    "baseline_seed": "SOURCING_SEED_GOOGLE_LARGE_BASELINE_REAL_ASSET=1"
+  },
+  "includes": ["google_gemini_large_baseline_small_former_real_asset_streaming.json"],
+  "harvest": {
+    "rules": [
+      {
+        "name": "google_gemini_current_profile_search_true_zero_real_asset",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 70,
+        "scripted_actor_run_duration_ms": 70000,
+        "scripted_dataset_download_duration_ms": 3200
+      },
+      {
+        "name": "google_gemini_former_profile_search_small_real_asset",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 90,
+        "scripted_actor_run_duration_ms": 90000,
+        "scripted_dataset_download_duration_ms": 3800
+      },
+      {
+        "name": "google_gemini_profile_scraper_small_real_asset_batches",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 240,
+        "scripted_actor_run_duration_ms": 240000,
+        "scripted_dataset_download_duration_ms": 6000
+      }
+    ]
+  }
+}

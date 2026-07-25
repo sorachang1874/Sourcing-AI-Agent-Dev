@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.recall_pool.campaign.request.v1.schema.json",
+  "title": "X-first recall-pool campaign request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "target", "waves"],
+  "properties": {
+    "schema_version": {"const": "x.recall_pool.campaign.request.v1"},
+    "campaign_id": {"$ref": "#/$defs/slug"},
+    "target": {"$ref": "#/$defs/target"},
+    "waves": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["wave_id", "source_path", "source_sha256", "upstream_request", "prompt", "raw_session_directory"],
+        "properties": {
+          "wave_id": {"$ref": "#/$defs/slug"},
+          "source_path": {"$ref": "#/$defs/path"},
+          "source_sha256": {"$ref": "#/$defs/sha256"},
+          "upstream_request": {"$ref": "#/$defs/source"},
+          "prompt": {"$ref": "#/$defs/source"},
+          "raw_session_directory": {"$ref": "#/$defs/path"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "slug": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lab_id", "research_focus_id"],
+      "properties": {"lab_id": {"$ref": "#/$defs/slug"}, "research_focus_id": {"$ref": "#/$defs/slug"}}
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.live_canary.approval_receipt.v2.schema.json",
+  "title": "Luna semantic live-canary consumed approval receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_origin",
+    "owner_id",
+    "owner_approval_id",
+    "probe_id",
+    "semantic_request_schema_version",
+    "semantic_review_schema_version",
+    "semantic_adjudication_api_version",
+    "semantic_adjudication_implementation_sha256",
+    "request_sha256",
+    "run_id",
+    "consumed_at",
+    "state"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.profile.bio_semantic.live_canary.approval.v2"},
+    "execution_origin": {"enum": ["production_http", "offline_fixture"]},
+    "owner_id": {
+      "enum": [
+        "user_state:x-first-researcher-sourcing/luna-live-approvals/v2",
+        "offline_fixture:x-first-researcher-sourcing/luna-live-approvals/v2"
+      ]
+    },
+    "owner_approval_id": {
+      "enum": [
+        "user_approved_2026_07_14_chshapi_luna_receipt_first_v2",
+        "offline_fixture_chshapi_luna_receipt_first_v2"
+      ]
+    },
+    "probe_id": {
+      "enum": [
+        "profile_bio_semantic_v22_chshapi_luna_receipt_first_v2",
+        "profile_bio_semantic_v22_chshapi_luna_offline_fixture_v2"
+      ]
+    },
+    "semantic_request_schema_version": {"const": "x.profile.bio_semantic.request.v2.2"},
+    "semantic_review_schema_version": {"const": "x.profile.bio_semantic.review.v2.2"},
+    "semantic_adjudication_api_version": {"const": "x.profile.bio_semantic.pure_adjudication.v1"},
+    "semantic_adjudication_implementation_sha256": {
+      "const": "875bfdc49c6f409409575514bfcdf6f55ba27ff577ab81247ea7de271e99e070"
+    },
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "run_id": {"type": "string"},
+    "consumed_at": {"$ref": "#/$defs/timestamp"},
+    "state": {"const": "consumed_before_catalog"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "execution_origin": {"const": "production_http"},
+        "owner_id": {"const": "user_state:x-first-researcher-sourcing/luna-live-approvals/v2"},
+        "owner_approval_id": {"const": "user_approved_2026_07_14_chshapi_luna_receipt_first_v2"},
+        "probe_id": {"const": "profile_bio_semantic_v22_chshapi_luna_receipt_first_v2"},
+        "run_id": {"pattern": "^luna_canary_v2_run_[0-9a-f]{32}$"}
+      }
+    },
+    {
+      "properties": {
+        "execution_origin": {"const": "offline_fixture"},
+        "owner_id": {"const": "offline_fixture:x-first-researcher-sourcing/luna-live-approvals/v2"},
+        "owner_approval_id": {"const": "offline_fixture_chshapi_luna_receipt_first_v2"},
+        "probe_id": {"const": "profile_bio_semantic_v22_chshapi_luna_offline_fixture_v2"},
+        "run_id": {"pattern": "^luna_canary_v2_fixture_run_[0-9a-f]{32}$"}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  }
+}

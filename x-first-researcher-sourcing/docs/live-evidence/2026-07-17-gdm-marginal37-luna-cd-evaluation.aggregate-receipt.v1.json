@@ -1,0 +1,227 @@
+{
+  "artifact_id": "gdm-marginal37-luna-cd-evaluation-2026-07-17",
+  "claim_status": "semantic_campaign_complete_model_mediated_unverified_not_promoted",
+  "contract_version": "x-first.luna-cd.aggregate-receipt.v1",
+  "privacy_class": "candidate_free_aggregate",
+  "source": {
+    "private_queue_count": 37,
+    "private_queue_sha256": "8a6463c5f9437d06459738bb288616236f1ac2bb6a9498f77b4a95f56f0b78f7",
+    "profile_records_sha256": "ca8ade7cd711cdcda5df16d9ba1bd26d1849d033a37731b2a32107eee6d34db8",
+    "hydrated_evidence_records_sha256": "11d83b3afd6cce9cc0d852342ebaa4278fc1f3a23fd2552d956417bf03d9f4b8",
+    "profile_input_count": 37,
+    "profile_exact_matched_count": 33,
+    "phase_c_observation_count": 88,
+    "hydrated_status_id_count": 20,
+    "reconciled_source_ref_count": 57
+  },
+  "runtime": {
+    "endpoint_family": "responses",
+    "model_id": "gpt-5.6-luna",
+    "reasoning_effort": "low",
+    "tools": [],
+    "store": false,
+    "fallback_allowed": false,
+    "same_intent_retry_count": 0,
+    "catalog_external_call_count": 1,
+    "model_external_call_count": 7,
+    "http_200_attempt_count": 7,
+    "exact_returned_model_attempt_count": 7,
+    "accepted_attempt_elapsed_ms": 250650,
+    "usage_totals": {
+      "input_tokens": 35254,
+      "output_tokens": 12486,
+      "total_tokens": 47740
+    },
+    "business_candidate_cap": null,
+    "workspace_head_at_receipt": "332eab0db9b7eed68609f76514891c696933716c"
+  },
+  "phase_c": {
+    "input_candidate_count": 37,
+    "accepted_candidate_count": 37,
+    "failed_candidate_count": 0,
+    "unprocessed_candidate_count": 0,
+    "terminal_total": true,
+    "status": "complete",
+    "attempt_count": 6,
+    "attempt_input_counts": [1, 8, 8, 8, 8, 4],
+    "attempt_http_statuses": [200, 200, 200, 200, 200, 200],
+    "request_byte_controller": {
+      "controller": "request_bytes_primary",
+      "operating_point_sample_candidate_count": 8,
+      "operating_point_request_bytes": 20316,
+      "business_candidate_cap": null,
+      "planned_batch_counts_after_canary": [8, 8, 8, 8, 4],
+      "planned_request_bytes_after_canary": [20316, 20107, 19514, 19714, 15612]
+    },
+    "lab_by_pretraining_matrix": {
+      "current": {"current": 2, "historical": 0, "ambiguous": 0, "unsupported": 15},
+      "historical": {"current": 0, "historical": 0, "ambiguous": 2, "unsupported": 7},
+      "ambiguous": {"current": 0, "historical": 0, "ambiguous": 0, "unsupported": 4},
+      "unsupported": {"current": 0, "historical": 0, "ambiguous": 4, "unsupported": 3}
+    },
+    "base_evidence_supported_recall_pool_count": 4,
+    "base_qualified_unambiguous_count": 2,
+    "current_current_precision_tranche_count": 2,
+    "current_lab_historical_pretraining_count": 0,
+    "historical_lab_current_pretraining_count": 0,
+    "historical_lab_historical_pretraining_count": 0,
+    "historical_lab_ambiguous_pretraining_count": 2
+  },
+  "phase_d": {
+    "input_candidate_count": 4,
+    "accepted_candidate_count": 4,
+    "failed_candidate_count": 0,
+    "unprocessed_candidate_count": 0,
+    "terminal_total": true,
+    "status": "complete",
+    "attempt_count": 1,
+    "attempt_input_counts": [4],
+    "attempt_http_statuses": [200],
+    "planned_request_bytes": [13125],
+    "china_proxy_counts": {"strong": 0, "weak": 0, "none": 4},
+    "asia_proxy_counts": {"strong": 0, "weak": 0, "none": 4},
+    "identity_inference_used_count": 0,
+    "name_or_handle_signal_used_count": 0
+  },
+  "citation_projection": {
+    "raw_citation_count": 39,
+    "unique_exact_span_projection_count": 25,
+    "projection_rate_pct": 64.102564,
+    "zero_or_multiple_match_projection_count": 0,
+    "source_or_input_hash_mismatch_count": 0,
+    "raw_model_output_mutated": false,
+    "independent_private_repair_receipt_count": 7
+  },
+  "replay_validation": {
+    "accepted_attempt_count": 7,
+    "strict_validator_error_count": 0,
+    "candidate_sequence_or_identity_error_count": 0,
+    "phase_d_input_rebuild_error_count": 0,
+    "repair_binding_error_count": 0,
+    "canonical_request_hash_error_count": 0,
+    "response_hash_error_count": 0,
+    "repair_receipt_hash_error_count": 0,
+    "usage_reconciliation_error_count": 0,
+    "rejected_batch_records_committed": 0,
+    "secret_leak_file_count": 0
+  },
+  "method_evolution": {
+    "discarded_whole_batch_input_count": 36,
+    "discarded_whole_batch_request_bytes": 70616,
+    "discarded_whole_batch_elapsed_ms": 63996,
+    "discarded_whole_batch_http_status": null,
+    "discarded_whole_batch_error": "transport_failure_unknown_no_response",
+    "discarded_whole_batch_records_committed": 0,
+    "accepted_campaign_transport_control_call_count": 0,
+    "accepted_campaign_adaptive_child_intent_count": 0
+  },
+  "report_binding": {
+    "path": "docs/live-evidence/2026-07-17-gdm-marginal37-luna-cd-evaluation.md",
+    "sha256": "8f7e45c4d5a1ba1e5648635772a8e50a2ed89b314c666cf389323bb76df9d79f"
+  },
+  "limitations": [
+    "model_mediated_unverified_not_source_bound",
+    "phase_b_hydrated_only_discovery_attached_status_ids",
+    "no_per_candidate_technical_post_reply_search_before_phase_c",
+    "four_of_thirty_seven_is_evidence_availability_not_population_precision_or_recall",
+    "phase_d_none_does_not_prove_regional_professional_experience_absence",
+    "no_human_label_precision_or_recall_evaluation",
+    "no_candidate_qualification_promotion_ranking_export_or_outreach",
+    "no_population_exhaustion_claim"
+  ],
+  "source_artifact_bindings": [
+    {
+      "source_id": "luna-v6-private-operator",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/luna_cd_operator.py",
+      "sha256": "e031931c696f750c1d77379c9daffe99f4cf973ae61b8be253ad1db06cbe7ec7"
+    },
+    {
+      "source_id": "campaign-input-binding",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/campaign-input-binding.json",
+      "sha256": "d499883bb3e222dc0c7db09a517f627e16f12aff63a4e957e9816581a3666f23"
+    },
+    {
+      "source_id": "catalog-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/catalog-receipt.json",
+      "sha256": "4c3dcaf89ba1746e9fbc342ee872f486d4759811e9480d677e998a56b6cd0b40"
+    },
+    {
+      "source_id": "compatibility-canary-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/compatibility-canary-receipt.json",
+      "sha256": "a29f17fc4830fac678234c2fa4818ed9b85f0b3ccfa51a3087cae1891bce0655"
+    },
+    {
+      "source_id": "phase-c-technical-batch-plan",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-c/technical-batch-plan.json",
+      "sha256": "ad86b0ad1240a8b00038a1d4f9efae9285b26d4101ffca933ba2b43eadce8e87"
+    },
+    {
+      "source_id": "phase-c-summary",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-c/phase-summary.json",
+      "sha256": "a2b9ab84cc0088dab4ff34ee6ed77cc3e841dd091eb3119e5da09bbf4b99eb84"
+    },
+    {
+      "source_id": "phase-c-private-results",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-c/results.private.json",
+      "sha256": "3e27016e577a8e87af7b9f8fddc012283aaccb5df5ac70c49172c7677c400cea"
+    },
+    {
+      "source_id": "phase-d-technical-batch-plan",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-d/technical-batch-plan.json",
+      "sha256": "a50e51c178002037c0278b8dc1d50a7282cff56c1d7d7f68c561100fea62c48a"
+    },
+    {
+      "source_id": "phase-d-private-inputs",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-d/inputs.private.json",
+      "sha256": "f948034c607f506760c2160230184652ecad798a4db6e002ae24278e57ec6249"
+    },
+    {
+      "source_id": "phase-d-summary",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-d/phase-summary.json",
+      "sha256": "0ba1975c8ce656c805424c8405d1d84196b81ae91ae9409fe96ca9cb59d2ab26"
+    },
+    {
+      "source_id": "phase-d-private-results",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-d/results.private.json",
+      "sha256": "233a21d61773ecd218ef4a91e03f7200d763b2b3eafa85db55090c529d07f54c"
+    },
+    {
+      "source_id": "campaign-summary",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/campaign-summary.json",
+      "sha256": "375851cda7f93505cf42a2a91f140009bc1faed367592cca5faf60f76f887a52"
+    },
+    {
+      "source_id": "execution-receipt-manifest",
+      "digest_scope": "sha256_of_canonical_sorted_relative_path_and_sha256_manifest",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-*/attempts/attempt-*/execution-receipt.json",
+      "file_count": 7,
+      "sha256": "55f300771defe367ad416991e4326a738ddd719fb39e48ff7ad18cec020e7255"
+    },
+    {
+      "source_id": "span-repair-receipt-manifest",
+      "digest_scope": "sha256_of_canonical_sorted_relative_path_and_sha256_manifest",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-*/attempts/attempt-*/span-repair-receipt.private.json",
+      "file_count": 7,
+      "sha256": "a2ddf574f2e5842e8d5e8b8f4225cda0c3422e5fb9164a81bb6f9d6762bc4bb4"
+    },
+    {
+      "source_id": "accepted-result-manifest",
+      "digest_scope": "sha256_of_canonical_sorted_relative_path_and_sha256_manifest",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-*/attempts/attempt-*/accepted-results.private.json",
+      "file_count": 7,
+      "sha256": "017fc0b89b721cb8879ecea817d542130e139ab6fc2ab889629717477a765641"
+    },
+    {
+      "source_id": "raw-response-manifest",
+      "digest_scope": "sha256_of_canonical_sorted_relative_path_and_sha256_manifest",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v6-20260716T161000Z/phase-*/attempts/attempt-*/response.private.json",
+      "file_count": 7,
+      "sha256": "d3f01b6366ce997dd92e8550eaccbe809037d264f4dc2846ba31ff6fed656ba0"
+    },
+    {
+      "source_id": "discarded-v5-whole-batch-execution-receipt",
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/luna-diagnostics/gdm-marginal37-luna-cd-v5-20260716T155830Z/phase-c/attempts/attempt-0001-n36/execution-receipt.json",
+      "sha256": "6aeda3d8f679e696ebc4dc8945487ec1093bb8bf33f3a4dbd55648d58570461b"
+    }
+  ]
+}

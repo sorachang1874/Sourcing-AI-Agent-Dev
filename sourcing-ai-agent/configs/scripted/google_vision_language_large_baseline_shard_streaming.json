@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "behavior_fixture": "google_vision_language_large_baseline_shard_streaming",
+    "driver_query": "帮我找Google做vision-language方向的人",
+    "purpose": "Real-asset scripted pressure fixture for a large Google baseline plus a large Vision-language shard. The profile-search and scraper responses are replayed from existing candidate_documents/raw-profile assets, not generated fixtures.",
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "generated_profile_fallback_allowed": false,
+      "fresh_runtime_required": true,
+      "effective_acquisition_mode": "baseline_reuse_with_delta",
+      "baseline_seed": "SOURCING_SEED_GOOGLE_LARGE_BASELINE_REAL_ASSET=1",
+      "baseline_candidate_count": 5000,
+      "delta_profile_search_current_count": 529,
+      "delta_profile_search_former_count": 1855,
+      "delta_profile_search_total_count": 2384,
+      "delta_profile_non_member_count": 48,
+      "expected_board_candidate_count": 7336
+    }
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "google_vision_language_current_profile_search_real_asset",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Vision-language"]
+        },
+        "scripted_actor_run_duration_ms": 42000,
+        "scripted_dataset_download_duration_ms": 3200,
+        "sample_candidate_documents_path": "runtime/company_assets/google/20260428T011339/candidate_documents.json",
+        "sample_candidate_employment_scope": "current",
+        "sample_candidate_contains": ["vision-language"],
+        "sample_candidate_require_profile_source": true,
+        "sample_fallback_generated": false
+      },
+      {
+        "name": "google_vision_language_former_profile_search_real_asset",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "google", "Vision-language"]
+        },
+        "scripted_actor_run_duration_ms": 52000,
+        "scripted_dataset_download_duration_ms": 3800,
+        "sample_candidate_documents_path": "runtime/company_assets/google/20260428T011339/candidate_documents.json",
+        "sample_candidate_employment_scope": "former",
+        "sample_candidate_contains": ["vision-language"],
+        "sample_candidate_require_profile_source": true,
+        "sample_fallback_generated": false
+      },
+      {
+        "name": "google_vision_language_profile_scraper_real_asset_batches",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["linkedin.com/in/"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 1,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 1,
+        "scripted_actor_run_duration_ms": 60000,
+        "scripted_dataset_download_duration_ms": 4500,
+        "pending_message": "Scripted Google Vision-language real-asset profile batch is running.",
+        "sample_candidate_documents_path": "runtime/company_assets/google/20260428T011339/candidate_documents.json",
+        "sample_candidate_contains": ["vision-language"],
+        "sample_candidate_require_profile_source": true,
+        "sample_fallback_generated": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.result.v2.schema.json",
+  "title": "Adaptive Grok recall-wave model result v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "status_reason",
+    "native_x_tool_provenance",
+    "counts",
+    "candidates",
+    "excluded_examples",
+    "limitations",
+    "local_reconciliation"
+  ],
+  "properties": {
+    "status": {"enum": ["X_SEARCH_OK", "X_SEARCH_PARTIAL", "X_SEARCH_BLOCKED"]},
+    "status_reason": {"type": "string", "minLength": 1, "maxLength": 20000},
+    "native_x_tool_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools_reported", "tool_calls_reported", "queries", "generic_web_used"],
+      "properties": {
+        "tools_reported": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"]}
+        },
+        "tool_calls_reported": {"type": "integer", "minimum": 0},
+        "queries": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 20000}},
+        "generic_web_used": {"const": false}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observations_inspected_reported", "candidates_retained"],
+      "properties": {
+        "observations_inspected_reported": {"type": "integer", "minimum": 0},
+        "candidates_retained": {"type": "integer", "minimum": 0}
+      }
+    },
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}},
+    "excluded_examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["handle", "reason"],
+        "properties": {
+          "handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 4000}},
+    "local_reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_records_validated",
+        "evidence_items_validated",
+        "post_urls_structurally_validated",
+        "provider_post_bodies_replayable",
+        "tool_calls_completed",
+        "tool_counts"
+      ],
+      "properties": {
+        "candidate_records_validated": {"type": "integer", "minimum": 0},
+        "evidence_items_validated": {"type": "integer", "minimum": 0},
+        "post_urls_structurally_validated": {"type": "integer", "minimum": 0},
+        "provider_post_bodies_replayable": {"const": false},
+        "tool_calls_completed": {"type": "integer", "minimum": 0},
+        "tool_counts": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"]
+          },
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handle",
+        "profile_url",
+        "platform_user_id",
+        "bio_excerpt",
+        "target_lab_affiliation_state",
+        "pretraining_experience_state",
+        "confidence",
+        "evidence",
+        "caveats",
+        "overlap_status"
+      ],
+      "properties": {
+        "handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "profile_url": {
+          "type": "string",
+          "pattern": "^https://(?:x\\.com|profiles\\.invalid)/[A-Za-z0-9_]{1,15}$"
+        },
+        "platform_user_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+        "bio_excerpt": {"type": ["string", "null"], "minLength": 1, "maxLength": 2000},
+        "target_lab_affiliation_state": {
+          "enum": ["current", "historical", "ambiguous", "unsupported"]
+        },
+        "pretraining_experience_state": {
+          "enum": ["current", "historical", "ambiguous", "unsupported"]
+        },
+        "confidence": {"enum": ["high", "medium", "low"]},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+        "caveats": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+        "overlap_status": {"enum": ["novel", "prior_material_update"]}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "relationship",
+        "subject_handle",
+        "author_handle",
+        "post_id",
+        "url",
+        "published_at",
+        "excerpt",
+        "thread_relation",
+        "supports"
+      ],
+      "properties": {
+        "kind": {"enum": ["bio", "post", "mention", "thread"]},
+        "relationship": {"enum": ["self", "official_lab", "colleague_or_team", "third_party", "historical"]},
+        "subject_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "author_handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+        "post_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 32},
+        "url": {"type": ["string", "null"], "minLength": 1, "maxLength": 2048},
+        "published_at": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+        "excerpt": {"type": "string", "minLength": 1, "maxLength": 280},
+        "thread_relation": {
+          "type": ["string", "null"],
+          "enum": [null, "self_post", "reply", "quote", "thread_root", "thread_reply"]
+        },
+        "supports": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/support_claim"}
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {"const": "bio"},
+            "thread_relation": {"const": null}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"enum": ["post", "mention", "thread"]},
+            "thread_relation": {
+              "enum": ["self_post", "reply", "quote", "thread_root", "thread_reply"]
+            }
+          }
+        }
+      ]
+    },
+    "support_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "asserted_value"],
+      "properties": {
+        "dimension": {"enum": ["target_lab_affiliation_state", "pretraining_experience_state"]},
+        "asserted_value": {"enum": ["current", "historical", "ambiguous", "unsupported"]}
+      }
+    }
+  }
+}

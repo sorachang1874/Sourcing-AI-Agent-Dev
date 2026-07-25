@@ -1,0 +1,30 @@
+{
+  "schema_version": "x.grok_cli.exploration.query_policy_descriptor.v2",
+  "policy_version": "openai-pretrain-base-discovery-2026-07-14-v1",
+  "purpose": "base_researcher_discovery",
+  "lab_id": "openai",
+  "commitment_scheme": "hmac-sha256-v1",
+  "commitment_issuance_id": "qci_3b5939ca3949f15a0494b20a",
+  "commitment_key_id": "f8eb1635d042945e64ff2ca25098894638b70a69a6151f57bd6eabbe1ef5f3bb",
+  "commitment_nonce_id": "c034604c772d7ec1a4ace412ca2d4fc9bb43a18e406a0f5f652dddf9bbf54112",
+  "run_binding_commitment": "d6f54c517e46a434d9b249aa7320be77b7920cb3d21d2e7e2e5d44390e672db9",
+  "legacy_full_policy_commitment": "af2f3f538f5a03e1a718810c27eb65feae7b6ef92147565847c31413b9fa5e4b",
+  "allowed_decision_dimensions": [
+    "lab_affiliation",
+    "role_function",
+    "pretraining_relevance"
+  ],
+  "professional_experience_proxy_query_allowed": false,
+  "protected_identity_query_allowed": false,
+  "protected_category_boundary_version": "base-discovery-protected-category-boundary-v3",
+  "query_manifest": [
+    {"sequence": 0, "tool_name": "x_keyword_search", "call_commitment": "239f012451680d45ccd65921d8113897bec512a7ac146871dd53dfd162c4fed6"},
+    {"sequence": 1, "tool_name": "x_semantic_search", "call_commitment": "06aa8bce9a585022ed9256319dce7049e1432458bcd81711b941424f15d35562"},
+    {"sequence": 2, "tool_name": "x_semantic_search", "call_commitment": "2d840cbf4d30017bca73415fdcfe985646f8d083d28b7ef92ac28f38322ba790"},
+    {"sequence": 3, "tool_name": "x_keyword_search", "call_commitment": "1e64facb7ddd32ea4ea0f83376e3f35356d5dd80fce562e56f4f6ed08a18f475"},
+    {"sequence": 4, "tool_name": "x_user_search", "call_commitment": "f330ccec28a9222ba8e9b7ffc0ba50bf28206908e90700bf83ef665774118a2f"},
+    {"sequence": 5, "tool_name": "x_user_search", "call_commitment": "b360976be4a521f31d869cab8c5314df7c03050a3ed33df5f0fc40fe43edc3dc"},
+    {"sequence": 6, "tool_name": "x_keyword_search", "call_commitment": "66449427ecabeab4f52b1ec3df10c1959d21bf0e45b1348c95fd63989293d4eb"},
+    {"sequence": 7, "tool_name": "x_keyword_search", "call_commitment": "38afded82ae2e864eb9f8fab4788df22ee19754e4319c51570648ff53cb93d86"}
+  ]
+}

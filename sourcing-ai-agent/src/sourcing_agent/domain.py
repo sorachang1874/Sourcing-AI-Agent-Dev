@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from hashlib import sha1
-import re
 from typing import Any
 
+from .cohort_selection import (
+    CohortSelectionValidationError,
+    apply_user_explicit_cohort_authority,
+    canonicalize_cohort_selection_request_payload,
+)
 from .company_registry import builtin_company_identity, infer_target_company_from_text
 from .execution_preferences import (
     apply_execution_preference_policy,
@@ -13,6 +18,7 @@ from .execution_preferences import (
     normalize_execution_preferences,
 )
 from .query_intent_rewrite import apply_query_intent_rewrite
+from .query_signal_knowledge import match_thematic_signals
 
 
 def _clean(value: Any) -> str:
@@ -39,6 +45,187 @@ def make_candidate_id(name_en: str, organization: str, target_company: str) -> s
 def make_evidence_id(candidate_id: str, source_dataset: str, title: str, url: str) -> str:
     payload = "|".join([candidate_id, source_dataset, title, url])
     return sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
+SOURCE_MATCH_SCALAR_METADATA_KEYS = ("seed_query", "source_query", "query")
+SOURCE_MATCH_LIST_METADATA_KEYS = ("scope_keywords", "seed_keywords", "intent_keywords", "matched_keywords")
+SOURCE_MATCH_RECORD_METADATA_KEYS = ("source_matches", "source_provenance")
+
+
+def candidate_source_match_keywords_from_metadata(metadata: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for record in candidate_source_match_records_from_metadata(metadata):
+        value = _clean(record.get("matched_on") or record.get("keyword") or record.get("query"))
+        if value:
+            values.append(value)
+    for key in SOURCE_MATCH_SCALAR_METADATA_KEYS:
+        value = _clean(metadata.get(key))
+        if value:
+            values.append(value)
+    for key in SOURCE_MATCH_LIST_METADATA_KEYS:
+        values.extend(_metadata_text_values(metadata.get(key)))
+    return _dedupe_metadata_texts(values)
+
+
+def candidate_source_match_records_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(metadata, dict):
+        return []
+    records: list[dict[str, Any]] = []
+    for key in SOURCE_MATCH_RECORD_METADATA_KEYS:
+        for item in _metadata_record_values(metadata.get(key)):
+            normalized = _normalize_source_match_record(item, fallback_field="source_seed_query", metadata=metadata)
+            if normalized:
+                records.append(normalized)
+    for key in SOURCE_MATCH_SCALAR_METADATA_KEYS:
+        value = _clean(metadata.get(key))
+        if value:
+            records.append(_build_source_match_record(value, field=key, metadata=metadata))
+    for key in (item for item in SOURCE_MATCH_LIST_METADATA_KEYS if item != "matched_keywords"):
+        for value in _metadata_text_values(metadata.get(key)):
+            if value:
+                records.append(_build_source_match_record(value, field=key, metadata=metadata))
+    return _dedupe_source_match_records(records)
+
+
+def merge_candidate_source_match_metadata(
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+    *,
+    base: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    merged = dict(base if base is not None else existing)
+    keywords = _dedupe_metadata_texts(
+        [
+            *candidate_source_match_keywords_from_metadata(existing),
+            *candidate_source_match_keywords_from_metadata(incoming),
+            *candidate_source_match_keywords_from_metadata(merged),
+        ]
+    )
+    if keywords:
+        merged["matched_keywords"] = keywords
+    source_matches = _dedupe_source_match_records(
+        [
+            *candidate_source_match_records_from_metadata(existing),
+            *candidate_source_match_records_from_metadata(incoming),
+            *candidate_source_match_records_from_metadata(merged),
+        ]
+    )
+    if source_matches:
+        merged["source_matches"] = source_matches
+    return merged
+
+
+def _metadata_record_values(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        return [dict(value)]
+    if isinstance(value, (list, tuple)):
+        return [dict(item) for item in value if isinstance(item, dict)]
+    return []
+
+
+def _metadata_text_values(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [_clean(value)] if _clean(value) else []
+    if isinstance(value, dict):
+        return []
+    if isinstance(value, (list, tuple, set)):
+        values: list[str] = []
+        for item in value:
+            values.extend(_metadata_text_values(item))
+        return values
+    text = _clean(value)
+    return [text] if text else []
+
+
+def _build_source_match_record(value: str, *, field: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    source_type = _clean(metadata.get("seed_source_type") or metadata.get("source_type") or metadata.get("provider"))
+    normalized_field = _clean(field)
+    record: dict[str, Any] = {
+        "field": "source_seed_query"
+        if normalized_field in {"seed_query", "source_query", "query"}
+        else normalized_field,
+        "matched_on": value,
+    }
+    if source_type:
+        record["source_type"] = source_type
+    source_query = _clean(metadata.get("seed_query") or metadata.get("source_query") or metadata.get("query"))
+    if source_query:
+        record["source_query"] = source_query
+    for key in ("source_path", "source_dataset", "seed_slug", "provider_account_id"):
+        metadata_value = _clean(metadata.get(key))
+        if metadata_value:
+            record[key] = metadata_value
+    return record
+
+
+def _normalize_source_match_record(
+    record: dict[str, Any],
+    *,
+    fallback_field: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    matched_on = _clean(record.get("matched_on") or record.get("keyword") or record.get("query") or record.get("value"))
+    if not matched_on:
+        return {}
+    normalized = _build_source_match_record(
+        matched_on,
+        field=_clean(record.get("field")) or fallback_field,
+        metadata=metadata,
+    )
+    for key in (
+        "field",
+        "source_type",
+        "source_query",
+        "source_path",
+        "source_dataset",
+        "seed_slug",
+        "provider_account_id",
+    ):
+        value = _clean(record.get(key))
+        if value:
+            normalized[key] = value
+    return normalized
+
+
+def _dedupe_source_match_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        matched_on = _clean(record.get("matched_on"))
+        if not matched_on:
+            continue
+        normalized = {key: value for key, value in record.items() if _clean(value)}
+        key = (
+            matched_on.lower(),
+            _clean(normalized.get("field")).lower(),
+            _clean(normalized.get("source_type")).lower(),
+            _clean(normalized.get("source_query")).lower(),
+            _clean(normalized.get("source_path")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(normalized)
+    return results
+
+
+def _dedupe_metadata_texts(values: list[str]) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = " ".join(_clean(value).split())
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(text)
+    return results
 
 
 @dataclass(slots=True)
@@ -109,6 +296,16 @@ class JobRequest:
     execution_preferences: dict[str, Any] = field(default_factory=dict)
     scope_disambiguation: dict[str, Any] = field(default_factory=dict)
     intent_axes: dict[str, Any] = field(default_factory=dict)
+    requested_population_boundary: dict[str, Any] = field(default_factory=dict)
+    cohort_selection: dict[str, Any] | None = None
+    # Location is a SIBLING REQUEST FIELD pair (never part of the closed
+    # five-field cohort_selection.v1 object).  None means absent: explicit
+    # Cohort requests then receive the planner's US default; an explicit []
+    # opts out of location filtering (single-writer rule — user values beat
+    # the default, never merged).  Legacy records lack the keys entirely, so
+    # to_record() omits them when None and stays byte-compatible.
+    target_locations: list[str] | None = None
+    exclude_target_locations: list[str] | None = None
     semantic_rerank_limit: int = 0
     top_k: int = 10
     slug_resolution_limit: int = 8
@@ -120,7 +317,12 @@ class JobRequest:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "JobRequest":
-        normalized_payload = apply_query_intent_rewrite(payload)
+        cohort_authoritative_payload = canonicalize_cohort_selection_request_payload(payload)
+        normalized_payload = apply_query_intent_rewrite(cohort_authoritative_payload)
+        normalized_payload = apply_user_explicit_cohort_authority(
+            cohort_authoritative_payload,
+            normalized_payload,
+        )
         if isinstance(normalized_payload, dict) and isinstance(normalized_payload.get("intent_axes"), dict):
             from .request_normalization import materialize_request_payload
 
@@ -135,8 +337,12 @@ class JobRequest:
             target_company = str(inferred_company.get("canonical_name") or "").strip()
             if target_company:
                 normalized_payload["target_company"] = target_company
-        explicit_execution_preferences = normalize_execution_preferences(normalized_payload, target_company=target_company)
-        inferred_execution_preferences = infer_execution_preferences_from_text(raw_user_request, target_company=target_company)
+        explicit_execution_preferences = normalize_execution_preferences(
+            normalized_payload, target_company=target_company
+        )
+        inferred_execution_preferences = infer_execution_preferences_from_text(
+            raw_user_request, target_company=target_company
+        )
         merged_execution_preferences = merge_execution_preferences(
             explicit_execution_preferences,
             inferred_execution_preferences,
@@ -144,6 +350,20 @@ class JobRequest:
         normalized_employment_statuses = _normalize_list(normalized_payload.get("employment_statuses"))
         if not normalized_employment_statuses:
             normalized_employment_statuses = _infer_default_employment_statuses(raw_user_request)
+        normalized_keywords = _normalize_list(normalized_payload.get("keywords"))
+        normalized_must_have_facets = normalize_requested_facets(
+            normalized_payload.get("must_have_facets")
+            if normalized_payload.get("must_have_facets") is not None
+            else normalized_payload.get("must_have_facet")
+        )
+        if target_company:
+            from .request_normalization import normalize_must_have_facets_for_request_fields
+
+            normalized_must_have_facets, normalized_keywords = normalize_must_have_facets_for_request_fields(
+                must_have_facets=normalized_must_have_facets,
+                keywords=normalized_keywords,
+                target_company=target_company,
+            )
         return cls(
             raw_user_request=raw_user_request,
             query=_clean(normalized_payload.get("query")),
@@ -152,12 +372,8 @@ class JobRequest:
             target_scope=_clean(normalized_payload.get("target_scope")) or "full_company_asset",
             categories=_normalize_list(normalized_payload.get("categories")),
             employment_statuses=normalized_employment_statuses,
-            keywords=_normalize_list(normalized_payload.get("keywords")),
-            must_have_facets=normalize_requested_facets(
-                normalized_payload.get("must_have_facets")
-                if normalized_payload.get("must_have_facets") is not None
-                else normalized_payload.get("must_have_facet")
-            ),
+            keywords=normalized_keywords,
+            must_have_facets=normalized_must_have_facets,
             must_have_primary_role_buckets=normalize_requested_role_buckets(
                 normalized_payload.get("must_have_primary_role_buckets")
                 if normalized_payload.get("must_have_primary_role_buckets") is not None
@@ -174,7 +390,7 @@ class JobRequest:
                 raw_text=raw_user_request,
                 target_company=target_company,
                 categories=_normalize_list(normalized_payload.get("categories")),
-                employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
+                employment_statuses=normalized_employment_statuses,
             ),
             scope_disambiguation=_normalize_scope_disambiguation(
                 normalized_payload.get("scope_disambiguation"),
@@ -183,13 +399,37 @@ class JobRequest:
             intent_axes=dict(normalized_payload.get("intent_axes") or {})
             if isinstance(normalized_payload.get("intent_axes"), dict)
             else {},
+            requested_population_boundary=dict(normalized_payload.get("requested_population_boundary") or {})
+            if isinstance(normalized_payload.get("requested_population_boundary"), dict)
+            else {},
+            cohort_selection=dict(normalized_payload.get("cohort_selection") or {})
+            if isinstance(normalized_payload.get("cohort_selection"), dict)
+            else None,
+            target_locations=_normalize_location_list(
+                normalized_payload.get("target_locations", _REQUEST_FIELD_MISSING),
+                field_name="target_locations",
+            ),
+            exclude_target_locations=_normalize_location_list(
+                normalized_payload.get("exclude_target_locations", _REQUEST_FIELD_MISSING),
+                field_name="exclude_target_locations",
+            ),
             semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
             top_k=_normalize_top_k(normalized_payload.get("top_k")),
-            slug_resolution_limit=_normalize_small_limit(normalized_payload.get("slug_resolution_limit"), default=8, maximum=50),
-            profile_detail_limit=_normalize_small_limit(normalized_payload.get("profile_detail_limit"), default=5, maximum=50),
-            publication_scan_limit=_normalize_small_limit(normalized_payload.get("publication_scan_limit"), default=8, maximum=50),
-            publication_lead_limit=_normalize_small_limit(normalized_payload.get("publication_lead_limit"), default=12, maximum=100),
-            exploration_limit=_normalize_small_limit(normalized_payload.get("exploration_limit"), default=6, maximum=50),
+            slug_resolution_limit=_normalize_small_limit(
+                normalized_payload.get("slug_resolution_limit"), default=8, maximum=50
+            ),
+            profile_detail_limit=_normalize_small_limit(
+                normalized_payload.get("profile_detail_limit"), default=5, maximum=50
+            ),
+            publication_scan_limit=_normalize_small_limit(
+                normalized_payload.get("publication_scan_limit"), default=8, maximum=50
+            ),
+            publication_lead_limit=_normalize_small_limit(
+                normalized_payload.get("publication_lead_limit"), default=12, maximum=100
+            ),
+            exploration_limit=_normalize_small_limit(
+                normalized_payload.get("exploration_limit"), default=6, maximum=50
+            ),
             scholar_coauthor_follow_up_limit=_normalize_small_limit(
                 normalized_payload.get("scholar_coauthor_follow_up_limit"),
                 default=0,
@@ -198,7 +438,71 @@ class JobRequest:
         )
 
     def to_record(self) -> dict[str, Any]:
-        return asdict(self)
+        record = asdict(self)
+        if self.cohort_selection is None:
+            record.pop("cohort_selection", None)
+        if self.target_locations is None:
+            record.pop("target_locations", None)
+        if self.exclude_target_locations is None:
+            record.pop("exclude_target_locations", None)
+        return record
+
+
+_REQUEST_LOCATION_MAX_ITEMS = 16
+_REQUEST_LOCATION_ITEM_MAX_LENGTH = 240
+_REQUEST_FIELD_MISSING = object()
+
+
+def _normalize_location_list(value: Any, *, field_name: str) -> list[str] | None:
+    """Fail-closed normalization for the sibling request location fields.
+
+    Free-text provider location names: trimmed, deduped (first occurrence
+    wins, case-insensitive), order-preserved; at most 16 items of 1-240
+    characters each (the provider compiler's bounded-list convention).  Wrong
+    container types, non-string or null-present items, and over-bound lists
+    raise CohortSelectionValidationError so invalid requests fail closed with
+    the same fail-closed posture as Cohort ingress, before any downstream
+    write.  Returns None only when the field is ABSENT so legacy records stay
+    byte-compatible; a present JSON null is NOT field absence and raises the
+    same stable invalid-type error as any other non-list value.
+    """
+
+    if value is _REQUEST_FIELD_MISSING:
+        return None
+    if value is None or not isinstance(value, list):
+        raise CohortSelectionValidationError(
+            "request_location_invalid_type",
+            field_name,
+            f"{field_name} must be an array of location strings",
+        )
+    if len(value) > _REQUEST_LOCATION_MAX_ITEMS:
+        raise CohortSelectionValidationError(
+            "request_location_too_many_items",
+            field_name,
+            f"{field_name} accepts at most {_REQUEST_LOCATION_MAX_ITEMS} items",
+        )
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise CohortSelectionValidationError(
+                "request_location_invalid_item",
+                field_name,
+                f"{field_name} items must be strings",
+            )
+        trimmed = item.strip()
+        if not trimmed or len(trimmed) > _REQUEST_LOCATION_ITEM_MAX_LENGTH:
+            raise CohortSelectionValidationError(
+                "request_location_item_length_invalid",
+                field_name,
+                f"{field_name} items must be 1-{_REQUEST_LOCATION_ITEM_MAX_LENGTH} characters",
+            )
+        key = trimmed.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(trimmed)
+    return normalized
 
 
 def _normalize_list(value: Any) -> list[str]:
@@ -360,7 +664,7 @@ FACET_ALIAS_MAP = {
     "recruiting": {"recruiting", "recruiter", "talent", "talent acquisition"},
     "ops": {"ops", "operations", "business operations", "people operations", "programs", "chief of staff"},
     "product_management": {"product_management", "product management", "product manager", "产品经理", "pm"},
-    "infra_systems": {"infra_systems", "infra", "infrastructure", "systems", "platform", "distributed systems"},
+    "infra_systems": {"infra_systems", "infra systems", "systems", "platform", "distributed systems"},
     "research": {"research", "researcher", "scientist", "applied scientist"},
     "engineering": {"engineering", "engineer", "technical staff", "member of technical staff"},
     "multimodal": {"multimodal", "multimodality", "vision-language", "vision language"},
@@ -390,7 +694,17 @@ ROLE_BUCKET_ALIAS_MAP = {
     "recruiting": {"recruiter", "talent", "talent acquisition", "sourcer"},
     "ops": {"operations", "operation", "bizops", "business operations", "people operations", "chief of staff"},
     "product_management": {"product management", "product manager", "产品经理", "pm"},
-    "infra_systems": {"infra", "infrastructure", "systems", "system", "platform", "distributed systems"},
+    "infra_systems": {
+        "infra",
+        "infra systems",
+        "infra engineer",
+        "infrastructure engineer",
+        "infrastructure engineering",
+        "systems",
+        "system",
+        "platform",
+        "distributed systems",
+    },
     "research": {"researcher", "scientist", "applied scientist"},
     "engineering": {"engineer", "eng", "technical staff", "member of technical staff"},
     "generalist": {"general", "generalists", "member"},
@@ -408,7 +722,7 @@ def merge_candidate(existing: Candidate, incoming: Candidate) -> Candidate:
         if key == "metadata":
             meta = dict(existing.metadata)
             meta.update(incoming.metadata)
-            merged["metadata"] = meta
+            merged["metadata"] = merge_candidate_source_match_metadata(existing.metadata, incoming.metadata, base=meta)
             continue
         if not _clean(merged.get(key)) and _clean(value):
             merged[key] = value
@@ -484,6 +798,7 @@ def candidate_profile_signal_text(candidate: Candidate, *, include_notes: bool =
         [
             str(metadata.get("headline") or "").strip(),
             str(metadata.get("summary") or "").strip(),
+            str(metadata.get("about") or "").strip(),
             " / ".join(_normalize_metadata_text_list(metadata.get("languages"), limit=8)),
             " / ".join(_normalize_metadata_text_list(metadata.get("skills"), limit=16)),
             str(metadata.get("profile_location") or "").strip(),
@@ -494,6 +809,7 @@ def candidate_profile_signal_text(candidate: Candidate, *, include_notes: bool =
 
 
 def candidate_searchable_text(candidate: Candidate, *, include_notes: bool = True) -> str:
+    timeline_text = candidate_timeline_signal_text(candidate)
     parts = _dedupe_preserve_order(
         [
             candidate.display_name,
@@ -505,11 +821,22 @@ def candidate_searchable_text(candidate: Candidate, *, include_notes: bool = Tru
             candidate.education,
             candidate.work_history,
             candidate_profile_signal_text(candidate, include_notes=include_notes),
+            timeline_text,
             candidate.ethnicity_background,
             candidate.current_destination,
         ]
     )
     return " | ".join(parts)
+
+
+def candidate_timeline_signal_text(candidate: Candidate) -> str:
+    metadata = dict(candidate.metadata or {})
+    return " | ".join(
+        _dedupe_preserve_order(
+            _normalize_metadata_text_list(metadata.get("experience_lines"), limit=16)
+            + _normalize_metadata_text_list(metadata.get("education_lines"), limit=8)
+        )
+    )
 
 
 def normalize_requested_facet(value: str) -> str:
@@ -608,7 +935,9 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         ],
     ):
         facets.append("ops")
-    if _contains_any(text, ["product manager", "product management", "产品经理", "group product manager", "senior product manager"]):
+    if _contains_any(
+        text, ["product manager", "product management", "产品经理", "group product manager", "senior product manager"]
+    ):
         facets.append("product_management")
     if _contains_any(
         text,
@@ -617,39 +946,75 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
             "infra",
             "platform",
             "distributed systems",
-            "systems",
+            "systems engineer",
+            "operating systems",
             "runtime",
             "serving",
             "compiler",
             "kernel",
             "cluster",
             "gpu",
-            "compute",
+            "gpu compute",
+            "compute infrastructure",
             "backend",
             "performance",
         ],
     ):
         facets.append("infra_systems")
-    if _contains_any(text, ["research scientist", "research engineer", "researcher", "scientist", "applied scientist", "research"]):
+    if _contains_any(
+        text, ["research scientist", "research engineer", "researcher", "scientist", "applied scientist", "research"]
+    ):
         facets.append("research")
-    if _contains_any(text, ["engineer", "engineering", "member of technical staff", "technical staff", "developer", "architect"]):
+    if _contains_any(
+        text, ["engineer", "engineering", "member of technical staff", "technical staff", "developer", "architect"]
+    ):
         facets.append("engineering")
-    if _contains_any(text, ["multimodal", "multimodality", "vision-language", "vision language", "vision", "image", "video", "audio", "speech", "diffusion"]):
+    if _contains_any(
+        text,
+        [
+            "multimodal",
+            "multimodality",
+            "vision-language",
+            "vision language",
+            "vision",
+            "image",
+            "video",
+            "audio",
+            "speech",
+            "diffusion",
+        ],
+    ):
         facets.append("multimodal")
     if _contains_any(text, ["alignment", "safety", "red team", "red-teaming", "evals", "evaluation"]):
         facets.append("safety")
-    if _contains_any(text, ["training", "pretraining", "pre-training", "post-training", "finetuning", "fine-tuning", "reinforcement learning"]):
+    if _contains_any(
+        text,
+        [
+            "training",
+            "pretraining",
+            "pre-training",
+            "post-training",
+            "finetuning",
+            "fine-tuning",
+            "reinforcement learning",
+        ],
+    ):
         facets.append("training")
     if _contains_any(text, ["inference", "decoding", "latency", "serving runtime"]):
         facets.append("inference")
     if _contains_any(text, ["data engineer", "data platform", "data infrastructure", "dataset", "data systems"]):
         facets.append("data")
+    facets.extend(_derive_thematic_signal_facets(text))
     facets.extend(_derive_outreach_layer_facets(candidate))
     return _dedupe_preserve_order(facets)
 
 
 def derive_candidate_role_bucket(candidate: Candidate) -> str:
     facets = derive_candidate_facets(candidate)
+    return derive_candidate_role_bucket_from_facets(candidate, facets)
+
+
+def derive_candidate_role_bucket_from_facets(candidate: Candidate, facets: list[str] | tuple[str, ...]) -> str:
     for facet in FACET_PRIORITY:
         if facet in facets:
             return facet
@@ -694,9 +1059,27 @@ def _candidate_signal_text(candidate: Candidate, *, include_notes: bool) -> str:
             candidate.education,
             candidate.work_history,
             candidate_profile_signal_text(candidate, include_notes=include_notes),
+            candidate_timeline_signal_text(candidate),
         ]
         if _clean(part)
     ).lower()
+
+
+def _derive_thematic_signal_facets(text: str) -> list[str]:
+    if not text:
+        return []
+    matched_facets: list[str] = []
+    for spec in match_thematic_signals(text):
+        facet_labels = [str(item).strip() for item in list(spec.get("facet_labels") or []) if str(item).strip()]
+        if not facet_labels:
+            canonical_label = str(spec.get("canonical_label") or "").strip()
+            if canonical_label:
+                facet_labels = [canonical_label.lower().replace("-", " ").replace("_", " ").strip().replace(" ", "_")]
+        for facet in facet_labels:
+            normalized_facet = normalize_requested_facet(facet)
+            if normalized_facet and normalized_facet not in matched_facets:
+                matched_facets.append(normalized_facet)
+    return matched_facets
 
 
 def _derive_outreach_layer_facets(candidate: Candidate) -> list[str]:
@@ -793,6 +1176,9 @@ class AcquisitionStrategyPlan:
     cost_policy: dict[str, Any] = field(default_factory=dict)
     confirmation_points: list[str] = field(default_factory=list)
     reasoning: list[str] = field(default_factory=list)
+    provider_execution_manifest: dict[str, Any] = field(default_factory=dict)
+    organization_execution_profile: dict[str, Any] = field(default_factory=dict)
+    strategy_decision_explanation: dict[str, Any] = field(default_factory=dict)
 
     def to_record(self) -> dict[str, Any]:
         return asdict(self)
@@ -876,6 +1262,7 @@ class SourcingPlan:
     search_strategy: SearchStrategyPlan
     acquisition_tasks: list[AcquisitionTask]
     asset_reuse_plan: dict[str, Any] = field(default_factory=dict)
+    organization_execution_profile: dict[str, Any] = field(default_factory=dict)
     intent_brief: IntentPlanBrief = field(default_factory=IntentPlanBrief)
     assumptions: list[str] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)

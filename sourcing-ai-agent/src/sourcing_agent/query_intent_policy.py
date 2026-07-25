@@ -92,14 +92,10 @@ BUSINESS_REWRITE_POLICIES: tuple[BusinessRewritePolicy, ...] = (
         ),
         scope_rewrite_tags=("multimodal_project_focus",),
         request_patch={
-            "keywords": (
-                "multimodal",
-                "vision-language",
-                "video generation",
-            ),
+            "keywords": ("multimodal",),
             "must_have_facets": ("multimodal",),
         },
-        notes="将多模态意图与相关项目线索合并为可审计职业关键词。",
+        notes="将多模态简称收敛为 canonical keyword=multimodal；相关项目线索仅在显式命中时保留。",
     ),
     BusinessRewritePolicy(
         rewrite_id="researcher_role_focus",

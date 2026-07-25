@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.operator_receipt.v1.schema.json",
+  "title": "Adaptive Grok recall-wave operator receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_id", "request_id", "request_sha256", "execution_mode", "status", "input_binding",
+    "command_binding", "approval", "process", "artifacts", "reconciliation", "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.adaptive_recall_wave.operator_receipt.v1"},
+    "run_id": {"type": "string", "pattern": "^grok_wave_(fixture|live)_[0-9a-f]{32}$"},
+    "request_id": {"type": "string", "pattern": "^xwave_req_[0-9a-f]{32}$"},
+    "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_mode": {"enum": ["fixture", "live"]},
+    "status": {
+      "enum": [
+        "fixture_complete", "completed", "process_failed", "timed_out", "structured_output_noncompliant",
+        "result_contract_invalid", "crash_recovered", "technical_limit_exceeded"
+      ]
+    },
+    "input_binding": {"$ref": "#/$defs/input_binding"},
+    "command_binding": {"$ref": "#/$defs/command_binding"},
+    "approval": {"$ref": "#/$defs/approval"},
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started_at", "completed_at", "elapsed_ms", "exit_code", "timed_out", "term_sent", "kill_sent",
+        "process_spawn_attempted", "child_pid", "process_group_id", "process_ledger_sha256",
+        "kernel_birth_identity_sha256", "process_identity_token_sha256", "process_group_cleanup_confirmed",
+        "execution_error_code", "deadline_ms", "term_grace_ms", "kill_grace_ms", "fallback_used",
+        "technical_limit_exceeded", "technical_limit_kind"
+      ],
+      "properties": {
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "completed_at": {"$ref": "#/$defs/timestamp"},
+        "elapsed_ms": {"type": ["integer", "null"], "minimum": 0},
+        "exit_code": {"type": ["integer", "null"]},
+        "timed_out": {"type": "boolean"},
+        "term_sent": {"type": "boolean"},
+        "kill_sent": {"type": "boolean"},
+        "process_spawn_attempted": {"type": "boolean"},
+        "child_pid": {"type": ["integer", "null"], "minimum": 1},
+        "process_group_id": {"type": ["integer", "null"], "minimum": 1},
+        "process_ledger_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "kernel_birth_identity_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "process_identity_token_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "process_group_cleanup_confirmed": {"type": "boolean"},
+        "execution_error_code": {
+          "enum": ["none", "spawn_failed", "process_execution_failed", "process_group_cleanup_failed", "crash_recovered"]
+        },
+        "deadline_ms": {"type": "integer", "minimum": 1000, "maximum": 3600000},
+        "term_grace_ms": {"type": "integer", "minimum": 100, "maximum": 60000},
+        "kill_grace_ms": {"type": "integer", "minimum": 100, "maximum": 60000},
+        "fallback_used": {"const": false},
+        "technical_limit_exceeded": {"type": "boolean"},
+        "technical_limit_kind": {
+          "type": ["string", "null"],
+          "enum": [null, "stdout_bytes", "stderr_bytes", "json_bytes", "json_structure"]
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_stdout_sha256", "stderr_sha256", "sanitized_output_sha256", "structured_output_compliant",
+        "structured_output_contract_valid", "non_json_prefix_bytes", "non_json_suffix_bytes",
+        "compiled_prompt_sha256", "ephemeral_auth_deleted", "ephemeral_tree_private"
+      ],
+      "properties": {
+        "raw_stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"},
+        "sanitized_output_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "structured_output_compliant": {"type": "boolean"},
+        "structured_output_contract_valid": {"type": "boolean"},
+        "non_json_prefix_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "non_json_suffix_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "compiled_prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "ephemeral_auth_deleted": {"const": true},
+        "ephemeral_tree_private": {"const": true}
+      }
+    },
+    "reconciliation": {"$ref": "#/$defs/reconciliation"},
+    "authority": {"$ref": "x.grok.adaptive_recall_wave.request.v1.schema.json#/properties/authority"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"},
+    "input_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_sha256", "source_prompt_sha256", "compiled_prompt_sha256", "prior_waves",
+        "prior_unique_handle_count", "prior_handle_set_sha256"
+      ],
+      "properties": {
+        "target_sha256": {"$ref": "#/$defs/sha256"},
+        "source_prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "compiled_prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "prior_waves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["wave_id", "sha256", "candidate_count", "unique_handle_count", "handle_set_sha256"],
+            "properties": {
+              "wave_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "candidate_count": {"type": "integer", "minimum": 0},
+              "unique_handle_count": {"type": "integer", "minimum": 0},
+              "handle_set_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        },
+        "prior_unique_handle_count": {"type": "integer", "minimum": 0},
+        "prior_handle_set_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "command_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id", "model_id", "reasoning_effort", "session_id", "grok_binary_sha256",
+        "structured_output_schema_sha256", "cli_flags_sha256", "environment_policy_sha256", "max_turns"
+      ],
+      "properties": {
+        "provider_id": {"const": "grok_cli_oauth"},
+        "model_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+        "reasoning_effort": {"enum": ["low", "medium", "high"]},
+        "session_id": {"type": "string", "format": "uuid"},
+        "grok_binary_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "structured_output_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "cli_flags_sha256": {"$ref": "#/$defs/sha256"},
+        "environment_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "max_turns": {"type": "integer", "minimum": 1, "maximum": 512}
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "grant_id_sha256", "grant_sha256", "consumption_sha256"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "grant_id_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "grant_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "consumption_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_count", "evidence_count", "post_url_count", "prior_overlap_count",
+        "verified_material_update_count", "model_reported_tool_calls", "tool_facts_model_mediated"
+      ],
+      "properties": {
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "evidence_count": {"type": "integer", "minimum": 0},
+        "post_url_count": {"type": "integer", "minimum": 0},
+        "prior_overlap_count": {"type": "integer", "minimum": 0},
+        "verified_material_update_count": {"type": "integer", "minimum": 0},
+        "model_reported_tool_calls": {"type": "integer", "minimum": 0},
+        "tool_facts_model_mediated": {"const": true}
+      }
+    }
+  }
+}

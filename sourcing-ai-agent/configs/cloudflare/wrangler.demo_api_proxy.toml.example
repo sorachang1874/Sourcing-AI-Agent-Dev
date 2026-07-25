@@ -1,0 +1,14 @@
+name = "sourcing-ai-agent-demo-api-proxy"
+main = "configs/cloudflare/demo_api_proxy_worker.mjs"
+compatibility_date = "2026-04-20"
+
+[vars]
+API_UPSTREAM_BASE = "https://api.111874.xyz"
+
+[[routes]]
+pattern = "demo.111874.xyz/api/*"
+zone_name = "111874.xyz"
+
+[[routes]]
+pattern = "demo.111874.xyz/health"
+zone_name = "111874.xyz"

@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.reported_profile_text.semantic.item_review.v1.schema.json",
+  "title": "Deterministic item review for model-mediated reported profile text v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "batch_id",
+    "item_request_id",
+    "observation_id",
+    "observation_sha256",
+    "text_sha256",
+    "source_trust",
+    "reported_platform_user_id_diagnostic",
+    "model_output_sha256",
+    "verdict",
+    "proposals",
+    "professional_experience_proxy_policy",
+    "professional_experience_proxy_rollup",
+    "error_codes",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.reported_profile_text.semantic.item_review.v1"},
+    "status": {"enum": ["completed", "failed"]},
+    "batch_id": {"type": "string", "pattern": "^xrpt_batch_[0-9a-f]{24}$"},
+    "item_request_id": {"type": "string", "pattern": "^xrpt_item_[0-9a-f]{24}$"},
+    "observation_id": {"type": "string", "pattern": "^xrpt_obs_[0-9a-f]{24}$"},
+    "observation_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+    "text_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+    "source_trust": {"const": "model_mediated_unverified"},
+    "reported_platform_user_id_diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "used_as_identity_key"],
+      "properties": {
+        "status": {"enum": ["absent", "model_mediated_unverified"]},
+        "value": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[1-9][0-9]{1,24}$"}
+          ]
+        },
+        "used_as_identity_key": {"const": false}
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {"properties": {"status": {"const": "absent"}, "value": {"type": "null"}}},
+            {
+              "properties": {
+                "status": {"const": "model_mediated_unverified"},
+                "value": {"type": "string", "pattern": "^[1-9][0-9]{1,24}$"}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "model_output_sha256": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/nonzero_sha256"}
+      ]
+    },
+    "verdict": {
+      "enum": [
+        "proposals_available",
+        "no_supported_professional_context",
+        "abstained",
+        "unavailable"
+      ]
+    },
+    "proposals": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {"$ref": "#/$defs/review_proposal"}
+    },
+    "professional_experience_proxy_policy": {
+      "const": {
+        "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "validation_status": "validated_canonical"
+      }
+    },
+    "professional_experience_proxy_rollup": {"$ref": "#/$defs/proxy_rollup"},
+    "error_codes": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {"enum": ["model_output_missing", "model_output_invalid"]}
+    },
+    "authority": {
+      "const": {
+        "source_bound_x_profile_accepted": false,
+        "stable_platform_identity_verified": false,
+        "external_facts_accepted": false,
+        "protected_identity_inferred": false,
+        "physical_region_inferred": false,
+        "discovery_or_ranking_authorized": false,
+        "eligibility_decided": false,
+        "canonical_employment_confirmed": false,
+        "canonical_write_authorized": false,
+        "outreach_authorized": false,
+        "verification_queue_only": true
+      }
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "status": {"const": "completed"},
+            "model_output_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+            "verdict": {
+              "enum": ["proposals_available", "no_supported_professional_context", "abstained"]
+            },
+            "error_codes": {"const": []}
+          },
+          "allOf": [
+            {
+              "oneOf": [
+                {
+                  "properties": {
+                    "verdict": {"const": "proposals_available"},
+                    "proposals": {"type": "array", "minItems": 1, "maxItems": 12}
+                  }
+                },
+                {
+                  "properties": {
+                    "verdict": {"enum": ["no_supported_professional_context", "abstained"]},
+                    "proposals": {"const": []}
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "properties": {
+            "status": {"const": "failed"},
+            "model_output_sha256": {"type": "null"},
+            "verdict": {"const": "unavailable"},
+            "proposals": {"const": []},
+            "professional_experience_proxy_rollup": {
+              "const": {
+                "status": "none",
+                "regions": {
+                  "china": {"strength": "none", "contributing_proposals": []},
+                  "asia": {"strength": "none", "contributing_proposals": []}
+                }
+              }
+            },
+            "error_codes": {"type": "array", "minItems": 1, "maxItems": 1}
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "nonzero_sha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "review_proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal_id",
+        "proposal_type",
+        "relation_state",
+        "span_start",
+        "span_end",
+        "excerpt",
+        "excerpt_sha256",
+        "reason_codes",
+        "reason",
+        "reason_source",
+        "confidence",
+        "evidence_basis",
+        "requires_independent_verification",
+        "verification_status"
+      ],
+      "properties": {
+        "proposal_id": {"type": "string", "pattern": "^xrpt_prop_[0-9a-f]{24}$"},
+        "proposal_type": {
+          "enum": [
+            "professional_region_experience",
+            "professional_china_digital_ecosystem",
+            "professional_affiliation",
+            "observed_chinese_professional_content"
+          ]
+        },
+        "relation_state": {
+          "enum": [
+            "current_claimed",
+            "previous_claimed",
+            "future_or_aspirational",
+            "unspecified",
+            "not_applicable"
+          ]
+        },
+        "span_start": {"type": "integer", "minimum": 0, "maximum": 2000},
+        "span_end": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "excerpt": {"type": "string", "minLength": 1, "maxLength": 500},
+        "excerpt_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "enum": [
+              "explicit_professional_region_experience",
+              "explicit_china_digital_ecosystem_activity",
+              "explicit_current_organization_claim",
+              "explicit_previous_organization_claim",
+              "observed_chinese_professional_content",
+              "ambiguous_professional_context_requires_review"
+            ]
+          }
+        },
+        "reason": {
+          "enum": [
+            "The cited Bio span explicitly states professional region experience.",
+            "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+            "The cited Bio span explicitly states a current claimed organization affiliation.",
+            "The cited Bio span explicitly states a previous claimed organization affiliation.",
+            "The cited Bio span states a future or aspirational organization affiliation.",
+            "The cited Bio span states an organization affiliation with unspecified timing.",
+            "The cited Bio span contains observed Chinese-language professional content."
+          ]
+        },
+        "reason_source": {"const": "closed_deterministic_explanation_template_v2.2"},
+        "confidence": {"enum": ["high", "medium", "low"]},
+        "evidence_basis": {"const": "model_mediated_unverified_text_only"},
+        "requires_independent_verification": {"const": true},
+        "verification_status": {"const": "unverified_reported_profile_text_proposal"}
+      }
+    },
+    "contribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposal_id", "proposal_type", "confidence", "mapped_strength"],
+      "properties": {
+        "proposal_id": {"type": "string", "pattern": "^xrpt_prop_[0-9a-f]{24}$"},
+        "proposal_type": {
+          "enum": ["professional_china_digital_ecosystem", "observed_chinese_professional_content"]
+        },
+        "confidence": {"enum": ["high", "medium", "low"]},
+        "mapped_strength": {"enum": ["strong_proxy", "weak_proxy"]}
+      }
+    },
+    "region_proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strength", "contributing_proposals"],
+      "properties": {
+        "strength": {"enum": ["strong_proxy", "weak_proxy", "none"]},
+        "contributing_proposals": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {"$ref": "#/$defs/contribution"}
+        }
+      }
+    },
+    "proxy_rollup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "regions"],
+      "properties": {
+        "status": {"enum": ["unverified_model_derived", "none"]},
+        "regions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["china", "asia"],
+          "properties": {
+            "china": {"$ref": "#/$defs/region_proxy"},
+            "asia": {"$ref": "#/$defs/region_proxy"}
+          }
+        }
+      }
+    }
+  }
+}

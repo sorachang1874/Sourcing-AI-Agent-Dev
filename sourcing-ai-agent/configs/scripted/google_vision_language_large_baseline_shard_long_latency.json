@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "behavior_fixture": "google_vision_language_large_baseline_shard_long_latency",
+    "purpose": "Nightly long-latency overlay for the Google large-baseline and large-shard pressure case. It reuses the canonical real-asset fixture and only overrides provider timing fields.",
+    "real_api_calls_required": false,
+    "generated_profile_fallback_allowed": false,
+    "fresh_runtime_required": true,
+    "effective_acquisition_mode": "baseline_reuse_with_delta",
+    "baseline_seed": "SOURCING_SEED_GOOGLE_LARGE_BASELINE_REAL_ASSET=1"
+  },
+  "includes": ["google_vision_language_large_baseline_shard_streaming.json"],
+  "harvest": {
+    "rules": [
+      {
+        "name": "google_vision_language_current_profile_search_real_asset",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 90,
+        "scripted_actor_run_duration_ms": 90000,
+        "scripted_dataset_download_duration_ms": 3200
+      },
+      {
+        "name": "google_vision_language_former_profile_search_real_asset",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 120,
+        "scripted_actor_run_duration_ms": 120000,
+        "scripted_dataset_download_duration_ms": 3800
+      },
+      {
+        "name": "google_vision_language_profile_scraper_real_asset_batches",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 300,
+        "scripted_actor_run_duration_ms": 300000,
+        "scripted_dataset_download_duration_ms": 6000
+      }
+    ]
+  }
+}

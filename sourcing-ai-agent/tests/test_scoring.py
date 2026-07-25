@@ -101,6 +101,74 @@ class ScoringOutreachTermTests(unittest.TestCase):
         )
         self.assertFalse(candidate_matches_structured_filters(candidate, topical_request))
 
+    def test_default_technical_population_categories_are_soft_retrieval_hints(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_head_infra",
+            name_en="Head of Infra",
+            display_name="Head of Infra",
+            category="employee",
+            target_company="Reflection AI",
+            organization="Reflection AI",
+            employment_status="current",
+            role="Head of Infrastructure",
+            focus_areas="infra systems",
+        )
+        investor = Candidate(
+            candidate_id="cand_investor",
+            name_en="Infra Investor",
+            display_name="Infra Investor",
+            category="investor",
+            target_company="Reflection AI",
+            organization="Reflection AI",
+            employment_status="current",
+            role="Investor",
+            focus_areas="ai infrastructure investing",
+        )
+        default_technical_request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找 Reflection AI 的 Infra 方向成员",
+                "target_company": "Reflection AI",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Infra"],
+            }
+        )
+        explicit_researcher_request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找 Reflection AI 的 Infra 方向 Researcher",
+                "target_company": "Reflection AI",
+                "categories": ["researcher"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Infra"],
+            }
+        )
+
+        self.assertTrue(candidate_matches_structured_filters(candidate, default_technical_request))
+        self.assertFalse(candidate_matches_structured_filters(investor, default_technical_request))
+        self.assertFalse(candidate_matches_structured_filters(candidate, explicit_researcher_request))
+
+    def test_structured_filter_ignores_unsupported_thematic_must_have_facets(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_pretrain",
+            name_en="Pat Pretrain",
+            display_name="Pat Pretrain",
+            category="employee",
+            target_company="Anthropic",
+            organization="Anthropic",
+            employment_status="current",
+            role="Research Engineer",
+            focus_areas="Large language model training systems",
+        )
+        request = JobRequest(
+            target_company="Anthropic",
+            categories=["employee"],
+            employment_statuses=["current"],
+            must_have_facets=["pre_training"],
+            keywords=["Pre-train"],
+        )
+
+        self.assertTrue(candidate_matches_structured_filters(candidate, request))
+
     def test_profile_metadata_summary_and_skills_are_searchable(self) -> None:
         candidate = Candidate(
             candidate_id="cand_2",
@@ -216,6 +284,108 @@ class ScoringOutreachTermTests(unittest.TestCase):
             keywords=["Veo"],
         )
 
+        scored = score_candidates([candidate], request)
+        self.assertEqual(scored, [])
+
+
+class ScoringSourceMatchProvenanceTests(unittest.TestCase):
+    """Pass-5 H5 contract: candidates whose raw text fields don't contain a queried keyword
+    must still pass recall and scoring when their source-shard provenance proves the match.
+
+    `source_matches` / `matched_keywords` are how scoped sharding records "this candidate came
+    from a profile-search shard for keyword X" without forcing every shard's seed query into
+    every text field. If recall ignores them, the frontend recall filter on a scoped query
+    silently hides candidates the workflow already paid to fetch for that exact keyword.
+    """
+
+    def _make_candidate_without_raw_text_match(self) -> Candidate:
+        return Candidate(
+            candidate_id="cand_source_match_provenance",
+            name_en="Pat Provenance",
+            display_name="Pat Provenance",
+            category="employee",
+            target_company="OpenAI",
+            organization="OpenAI",
+            employment_status="current",
+            role="Member of Technical Staff",
+            team="",
+            focus_areas="",
+            work_history="OpenAI infrastructure",
+            education="",
+            notes="",
+            metadata={
+                "matched_keywords": ["Reasoning"],
+                "source_matches": [
+                    {
+                        "field": "source_seed_query",
+                        "matched_on": "Reasoning",
+                        "source_type": "scoped_search_roster",
+                    }
+                ],
+            },
+        )
+
+    def _request_for_keyword(self, keyword: str) -> JobRequest:
+        # Use a non-magical raw_user_request so the intent normalizer does not infer
+        # must_have_facets/role_buckets that trip earlier filter gates and mask the recall
+        # invariant we care about.
+        return JobRequest.from_payload(
+            {
+                "raw_user_request": f"OpenAI {keyword}",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": [keyword],
+            }
+        )
+
+    def test_candidate_matches_structured_filters_honors_matched_keywords_metadata(self) -> None:
+        """When the request asks for `must_have_keywords=["Reasoning"]` but the candidate's
+        raw text fields don't mention `Reasoning`, the structured-filter gate must still
+        accept the candidate if `metadata.matched_keywords` proves the match."""
+
+        candidate = self._make_candidate_without_raw_text_match()
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "OpenAI Reasoning",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "must_have_keywords": ["Reasoning"],
+            }
+        )
+        self.assertTrue(
+            candidate_matches_structured_filters(candidate, request),
+            "candidate matched only via source_matches must still pass must_have_keywords",
+        )
+
+    def test_score_candidates_returns_candidate_when_only_source_matches_carry_keyword(self) -> None:
+        """Recall test: with no raw-text occurrence of the keyword, scoring must still return
+        the candidate based on the `matched_keywords` provenance."""
+
+        candidate = self._make_candidate_without_raw_text_match()
+        request = self._request_for_keyword("Reasoning")
+        scored = score_candidates([candidate], request)
+        self.assertEqual(len(scored), 1, "candidate must be recalled via source_matches")
+        scored_record = scored[0]
+        self.assertEqual(scored_record.candidate.candidate_id, candidate.candidate_id)
+        # Provenance trail should be reflected in matched_fields so the API surface can
+        # explain WHY the candidate was returned.
+        matched_keywords_in_fields = {
+            str(item.get("matched_on") or item.get("keyword") or "").strip().lower()
+            for item in (scored_record.matched_fields or [])
+        }
+        self.assertTrue(
+            "reasoning" in matched_keywords_in_fields,
+            f"expected `Reasoning` in matched_fields explanation, got {matched_keywords_in_fields}",
+        )
+
+    def test_score_candidates_excludes_candidate_when_neither_text_nor_source_matches_match(self) -> None:
+        """Negative control: if neither raw text nor `matched_keywords` mentions the keyword,
+        the candidate must NOT be returned. (Without this, the H5 fix would over-recall.)"""
+
+        candidate = self._make_candidate_without_raw_text_match()
+        request = self._request_for_keyword("MultimodalUnrelated")
         scored = score_candidates([candidate], request)
         self.assertEqual(scored, [])
 

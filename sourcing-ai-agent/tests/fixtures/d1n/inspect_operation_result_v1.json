@@ -1,0 +1,90 @@
+{
+  "fixture_schema_version": "inspect_operation_historical_result_fixture_v1",
+  "producer_commit": "18c758314643ceb7959163f1767f31d02d598276",
+  "producer_serializer_blob": "c08bfc1655d2b88bfaf31faf29d58183c16c4e01",
+  "producer_test_input_blob": "854a3e7085d0a79e22b626f7a6d0abf3436a06d7",
+  "tool_spec_source_commit": "a1d49e8177f38e83110b4a975e82353767228bd2",
+  "tool_spec_source_blob": "8c09a9e03ae5ce0fe5e5ba8f912bdd77ad235bd0",
+  "tool_spec_version": "inspect_operation_tool_v1",
+  "tool_spec_digest": "03fb54ee910ecd8a3319c7326dd09a1dcf37e6258d103e60968f756676c0d2d8",
+  "result_schema_version": "inspect_operation_result_v1",
+  "result_schema_digest": "acd2538887715a9be0167c7d573345d74baea1e614a38ad62256b96b925100c8",
+  "serialized_result_sha256": "c824a77c4311bd4d7979e65c85662bc4c8de801a701444ce537bca20fe039f45",
+  "historical_reason_probe": {
+    "probe_schema_version": "inspect_operation_historical_reason_probe_v1",
+    "producer_commit": "18c758314643ceb7959163f1767f31d02d598276",
+    "producer_serializer_blob": "c08bfc1655d2b88bfaf31faf29d58183c16c4e01",
+    "base_serialized_result_sha256": "c824a77c4311bd4d7979e65c85662bc4c8de801a701444ce537bca20fe039f45",
+    "progress_reason": "operation_retry_requested",
+    "serialized_result_sha256": "a482982fd143122b81e49c4c47b41b99433ce8a974a37fcec4f74243b86af334"
+  },
+  "serialized_result": {
+    "action_id": "action-123",
+    "control_policy": {
+      "command_type": "acquisition.run.create",
+      "fallback_status": "fail_closed",
+      "owner": "acquisition_run_writer",
+      "running_cancel_supported": true,
+      "running_control_gap_status": "closed",
+      "running_control_maturity": "owner_specific_cancel_resume",
+      "running_control_surface": "workflow_command_control_api_only",
+      "running_resume_supported": true,
+      "source_of_truth": "durable_runtime.workflow_command_control_policy",
+      "status": "available"
+    },
+    "control_state": {
+      "action_status": "planned",
+      "allowed_actions": [
+        "resume",
+        "cancel"
+      ],
+      "can_cancel": true,
+      "can_dispatch": false,
+      "can_resume": true,
+      "can_retry": false,
+      "control_source_of_truth": "operation_runtime.operation_run_control_state",
+      "disabled_reasons": {
+        "dispatch": "dispatch_requires_queued_operation",
+        "retry": "retry_requires_failed_or_cancelled_operation"
+      },
+      "fallback_status": "fail_closed",
+      "module_state_mutated_on_control": false,
+      "operation_phase": "workflow_command_planned",
+      "operation_status": "running",
+      "schema_version": "operation_run_control_state_v1"
+    },
+    "display_contract": {
+      "action_type": "start_acquisition_run",
+      "description": "Start the approved sourcing acquisition plan.",
+      "display_category": "Acquisition",
+      "display_label": "Start acquisition run",
+      "fallback_status": "fail_closed",
+      "operation_type": "acquisition_run",
+      "owner_module": "acquisition_run_writer",
+      "schema_version": "operation_action_display_contract_v1",
+      "source_of_truth": "operation_runtime.ActionRegistry.display_contract_for"
+    },
+    "operation_run_id": "oprun-123",
+    "progress": {
+      "phase": "workflow_command_planned",
+      "source_of_truth": "operation_runs.progress"
+    },
+    "provenance": {
+      "latest_event_type": "OperationCommandPlanned",
+      "latest_workflow_command_id": "cmd-123",
+      "latest_workflow_command_type": "acquisition.run.create",
+      "operation_event_count": 2,
+      "source_of_truth": "operation_runs.agent_actions.workflow_commands.operation_events",
+      "truncated": false,
+      "workflow_command_count": 1
+    },
+    "result_readiness": {
+      "fallback_status": "fail_closed",
+      "result_ref_present": false,
+      "source_of_truth": "operation_query_service.result_readiness_projection",
+      "status": "not_applicable"
+    },
+    "status": "ready",
+    "variant": "success"
+  }
+}

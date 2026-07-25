@@ -4,6 +4,11 @@ import re
 from typing import Any
 
 from .domain import Candidate
+from .request_matching import (
+    build_request_matching_bundle,
+    request_family_signature,
+    request_signature,
+)
 
 
 POSITIVE_FEEDBACK_TYPES = {
@@ -42,8 +47,37 @@ def derive_pattern_suggestions(
     metadata = dict(feedback.get("metadata") or {})
     request_payload = metadata.get("request_payload") if isinstance(metadata.get("request_payload"), dict) else {}
     target_company = str(feedback.get("target_company") or metadata.get("target_company") or "").strip()
-    request_signature = str(metadata.get("request_signature") or "").strip()
-    request_family_signature = str(metadata.get("request_family_signature") or "").strip()
+    request_matching = dict(metadata.get("request_matching") or {})
+    if request_payload:
+        computed_matching = build_request_matching_bundle(request_payload)
+        if not request_matching:
+            request_matching = computed_matching
+        else:
+            request_matching.setdefault(
+                "matching_request_signature",
+                str(computed_matching.get("matching_request_signature") or ""),
+            )
+            request_matching.setdefault(
+                "matching_request_family_signature",
+                str(computed_matching.get("matching_request_family_signature") or ""),
+            )
+    raw_request_signature = str(metadata.get("request_signature") or "").strip()
+    raw_request_family_signature = str(metadata.get("request_family_signature") or "").strip()
+    if request_payload:
+        raw_request_signature = raw_request_signature or request_signature(request_payload)
+        raw_request_family_signature = raw_request_family_signature or request_family_signature(request_payload)
+    matching_request_signature = str(
+        metadata.get("matching_request_signature")
+        or request_matching.get("matching_request_signature")
+        or raw_request_signature
+        or ""
+    ).strip()
+    matching_request_family_signature = str(
+        metadata.get("matching_request_family_signature")
+        or request_matching.get("matching_request_family_signature")
+        or raw_request_family_signature
+        or ""
+    ).strip()
     subject = str(feedback.get("subject") or "").strip()
     explicit_value = str(feedback.get("value") or "").strip()
 
@@ -69,8 +103,10 @@ def derive_pattern_suggestions(
                 explicit_value=explicit_value,
                 signals=signals,
                 target_company=target_company,
-                request_signature=request_signature,
-                request_family_signature=request_family_signature,
+                request_signature=raw_request_signature,
+                request_family_signature=raw_request_family_signature,
+                matching_request_signature=matching_request_signature,
+                matching_request_family_signature=matching_request_family_signature,
                 source_feedback_id=int(feedback.get("feedback_id") or 0),
                 source_job_id=str(feedback.get("job_id") or ""),
                 candidate_id=str(feedback.get("candidate_id") or ""),
@@ -87,8 +123,10 @@ def derive_pattern_suggestions(
                 explicit_value=explicit_value,
                 signals=signals,
                 target_company=target_company,
-                request_signature=request_signature,
-                request_family_signature=request_family_signature,
+                request_signature=raw_request_signature,
+                request_family_signature=raw_request_family_signature,
+                matching_request_signature=matching_request_signature,
+                matching_request_family_signature=matching_request_family_signature,
                 source_feedback_id=int(feedback.get("feedback_id") or 0),
                 source_job_id=str(feedback.get("job_id") or ""),
                 candidate_id=str(feedback.get("candidate_id") or ""),
@@ -106,8 +144,10 @@ def derive_pattern_suggestions(
                     explicit_value=explicit_value,
                     signals=signals,
                     target_company=target_company,
-                    request_signature=request_signature,
-                    request_family_signature=request_family_signature,
+                    request_signature=raw_request_signature,
+                    request_family_signature=raw_request_family_signature,
+                    matching_request_signature=matching_request_signature,
+                    matching_request_family_signature=matching_request_family_signature,
                     source_feedback_id=int(feedback.get("feedback_id") or 0),
                     source_job_id=str(feedback.get("job_id") or ""),
                     candidate_id=str(feedback.get("candidate_id") or ""),
@@ -126,8 +166,10 @@ def derive_pattern_suggestions(
                 explicit_value=explicit_value,
                 signals=signals,
                 target_company=target_company,
-                request_signature=request_signature,
-                request_family_signature=request_family_signature,
+                request_signature=raw_request_signature,
+                request_family_signature=raw_request_family_signature,
+                matching_request_signature=matching_request_signature,
+                matching_request_family_signature=matching_request_family_signature,
                 source_feedback_id=int(feedback.get("feedback_id") or 0),
                 source_job_id=str(feedback.get("job_id") or ""),
                 candidate_id=str(feedback.get("candidate_id") or ""),
@@ -144,8 +186,10 @@ def derive_pattern_suggestions(
                 explicit_value=explicit_value,
                 signals=signals,
                 target_company=target_company,
-                request_signature=request_signature,
-                request_family_signature=request_family_signature,
+                request_signature=raw_request_signature,
+                request_family_signature=raw_request_family_signature,
+                matching_request_signature=matching_request_signature,
+                matching_request_family_signature=matching_request_family_signature,
                 source_feedback_id=int(feedback.get("feedback_id") or 0),
                 source_job_id=str(feedback.get("job_id") or ""),
                 candidate_id=str(feedback.get("candidate_id") or ""),
@@ -167,6 +211,8 @@ def _build_suggestions(
     target_company: str,
     request_signature: str,
     request_family_signature: str,
+    matching_request_signature: str,
+    matching_request_family_signature: str,
     source_feedback_id: int,
     source_job_id: str,
     candidate_id: str,
@@ -197,6 +243,8 @@ def _build_suggestions(
                     "target_company": target_company,
                     "request_signature": request_signature,
                     "request_family_signature": request_family_signature,
+                    "matching_request_signature": matching_request_signature,
+                    "matching_request_family_signature": matching_request_family_signature,
                     "source_feedback_id": source_feedback_id,
                     "source_job_id": source_job_id,
                     "candidate_id": candidate_id,

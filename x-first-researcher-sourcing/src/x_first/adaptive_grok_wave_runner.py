@@ -1,0 +1,9074 @@
+"""Fail-closed operator for adaptive Grok native-X recall waves.
+
+The operator deliberately separates business recall from runtime safety.  It
+does not impose candidate, observation, query, or X-tool-call quotas.  The only
+execution brakes are an operator-owned model-turn ceiling and a monotonic wall
+deadline with process-group TERM/KILL cleanup.
+
+The public CLI defaults to an offline fixture lane.  The live lane requires an
+explicit gate and consumes a request-scoped approval before a process is
+started.  Results remain private experiment artifacts; they do not authorize
+product, identity, CRM, export, ranking, or outreach writes.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import fcntl
+import hashlib
+import json
+import math
+import os
+import platform
+import re
+import selectors
+import shutil
+import signal
+import stat
+import string
+import subprocess
+import sys
+import time
+import unicodedata
+import uuid
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime, parsedate_to_datetime
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Protocol
+from urllib.parse import quote
+
+from x_first.grok_cli_exploration import (
+    BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION,
+    base_discovery_tool_arguments_allowed,
+)
+from x_first.native_x_evidence_contract import (
+    QUERY_SURFACES,
+    SUPPORT_DIMENSIONS,
+    TEMPORAL_STATES,
+    THREAD_RELATIONS,
+    classify_single_handle_query_surface,
+    normalize_support_claims,
+)
+
+REQUEST_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.request.v2"
+RESULT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.result.v3"
+RESULT_SCHEMA_FILE = "x.grok.adaptive_recall_wave.result.v3.schema.json"
+LEGACY_RESULT_SCHEMA_FILE = "x.grok.adaptive_recall_wave.result.v2.schema.json"
+INTENT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.intent.v2"
+RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.operator_receipt.v3"
+GRANT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant.v2"
+CONSUMPTION_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.live_grant_consumption.v2"
+PROCESS_LEDGER_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_ledger.v2"
+LEGACY_PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v1"
+PROCESS_RESULT_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.process_result_journal.v2"
+PROCESS_EVIDENCE_GENERATION = "journal_spool_bound_v1"
+PROCESS_EVIDENCE_POLICY_VERSION = "process-evidence-journal-spool-bound-v1"
+DELETION_JOURNAL_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_journal.v1"
+DELETION_RECEIPT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.deletion_receipt.v1"
+AUTH_TAINT_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_taint.v1"
+AUTH_ACTIVE_USE_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.auth_active_use.v1"
+
+PROVIDER_ID = "grok_cli_oauth"
+DEFAULT_MODEL_ID = "grok-4.5"
+DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[2] / "runtime/adaptive-grok-waves"
+DEFAULT_APPROVAL_ROOT = Path.home() / ".local/state/x-first-researcher-sourcing/adaptive-grok-wave-approvals/v2"
+DEFAULT_DELETION_ROOT = Path.home() / ".local/state/x-first-researcher-sourcing/adaptive-grok-wave-deletions/v2"
+DEFAULT_GROK_BINARY = Path.home() / ".grok/bin/grok"
+DEFAULT_GROK_AUTH = Path.home() / ".grok/auth.json"
+MAX_GROK_BINARY_BYTES = 268_435_456
+MAX_CONTRACT_SCHEMA_BYTES = 16_777_216
+MAX_EFFECTIVE_PROMPT_POLICY_BYTES = 4_194_304
+MAX_SESSION_TREE_DEPTH = 64
+FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS = 5.0
+OAUTH_REFRESH_AVOIDANCE_MARGIN_SECONDS = 600
+XAI_OIDC_ISSUER = "https://auth.x.ai"
+XAI_OIDC_REQUIRED_SCOPES = frozenset(
+    {
+        "api:access",
+        "conversations:read",
+        "conversations:write",
+        "email",
+        "grok-cli:access",
+        "offline_access",
+        "openid",
+        "profile",
+    }
+)
+MAX_ACCESS_JWT_BYTES = 32_768
+MAX_ACCESS_JWT_PAYLOAD_SEGMENT_BYTES = 16_384
+MAX_ACCESS_JWT_PAYLOAD_BYTES = 12_288
+AUTH_STATE_LOCK_ACQUIRE_BUDGET_SECONDS = 0.250
+AUTH_STATE_LOCK_RETRY_SECONDS = 0.005
+DEFAULT_EFFECTIVE_PROMPT_POLICY = (
+    Path(__file__).resolve().parents[2] / "configs/adaptive_grok_wave_effective_prompt_policy.v1.json"
+)
+EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION = "x.grok.adaptive_recall_wave.effective_prompt_policy.v1"
+EFFECTIVE_PROMPT_POLICY_ID = "adaptive_base_discovery_effective_prompts.v1"
+EFFECTIVE_PROMPT_POLICY_OWNER = "x_first_adaptive_wave_operator"
+EFFECTIVE_PROMPT_POLICY_BINDING_VERSION = "adaptive-effective-prompt-entry-semantics-v1"
+MIXED_SESSION_QUERY_POLICY_ID = "mixed_discovery_hydration_v1"
+DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID = "discovery_only_no_person_hydration_v1"
+DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID = (
+    "discovery_only_official_accounts_no_person_hydration_v2"
+)
+SESSION_QUERY_POLICY_IDS = frozenset(
+    {
+        MIXED_SESSION_QUERY_POLICY_ID,
+        DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+    }
+)
+DISCOVERY_ONLY_SESSION_QUERY_POLICY_IDS = frozenset(
+    {
+        DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+    }
+)
+SESSION_QUERY_POLICY_SEMANTICS = {
+    MIXED_SESSION_QUERY_POLICY_ID: {
+        "policy_id": MIXED_SESSION_QUERY_POLICY_ID,
+        "native_x_query_phase": "mixed_discovery_and_person_hydration_v1",
+        "result_projection": "unresolved_candidate_authored_surface_gate_v1",
+    },
+    DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID: {
+        "policy_id": DISCOVERY_ONLY_SESSION_QUERY_POLICY_ID,
+        "from_query": "forbidden_case_insensitive_v1",
+        "handle_like_single_token_query": "forbidden_nfkc_format_stripped_outer_nonhandle_x_handle_grammar_v3",
+        "x_user_search": "unicode_nfkc_full_consumption_target_and_professional_allowlist_v2",
+        "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
+        "result_projection": "force_partial_and_operator_reason_without_hydration_surface_gate_v2",
+    },
+    DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID: {
+        "policy_id": DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID,
+        "from_query": "one_positive_entry_bound_official_account_keyword_only_v1",
+        "handle_like_single_token_query": "forbidden_nfkc_format_stripped_outer_nonhandle_x_handle_grammar_v3",
+        "x_user_search": "unicode_nfkc_full_consumption_target_and_professional_allowlist_v2",
+        "multiword_keyword_or_semantic_person_intent": "post_run_audit_residual_v1",
+        "result_projection": "force_partial_and_operator_reason_without_hydration_surface_gate_v2",
+    },
+}
+REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID = "require_empty_prior_waves_v1"
+PRIOR_INPUT_POLICY_SEMANTICS = {
+    REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID: {
+        "policy_id": REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID,
+        "prior_waves": "require_exact_empty_array_v1",
+    },
+}
+PRIOR_INPUT_POLICY_IDS = frozenset(PRIOR_INPUT_POLICY_SEMANTICS)
+_DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS = frozenset(
+    {
+        "alignment",
+        "applied",
+        "architect",
+        "base",
+        "engineer",
+        "engineering",
+        "inference",
+        "infrastructure",
+        "language",
+        "learning",
+        "member",
+        "model",
+        "multimodal",
+        "people",
+        "pretrain",
+        "pretraining",
+        "research",
+        "researcher",
+        "robotics",
+        "safety",
+        "scaling",
+        "scientist",
+        "staff",
+        "team",
+        "tokenization",
+        "training",
+    }
+)
+_DISCOVERY_USER_SEARCH_CONNECTOR_TERMS = frozenset({"ai", "and", "at", "lab", "labs", "or"})
+_DISCOVERY_USER_SEARCH_CLOSED_SYNTAX_RE = re.compile(r"[a-z0-9\s@\"'()_./-]+")
+_HANDLE_SUBJECT_CHARACTERS = frozenset(string.ascii_letters + string.digits + "_@")
+ALLOWED_DISCOVERY_DIMENSIONS = (
+    "target_lab_affiliation",
+    "professional_role_or_function",
+    "public_research_evidence",
+    "pretraining_relevance",
+)
+
+DISALLOWED_TOOLS = (
+    "run_terminal_cmd",
+    "grep",
+    "read_file",
+    "search_replace",
+    "list_dir",
+    "web_search",
+    "web_fetch",
+    "todo_write",
+    "task",
+    "Agent",
+)
+NATIVE_X_TOOLS = (
+    "x_keyword_search",
+    "x_semantic_search",
+    "x_user_search",
+    "x_thread_fetch",
+)
+_AUXILIARY_GOAL_TOOL_METADATA = {
+    "version": 1,
+    "name": "update_goal",
+    "kind": "goal_update",
+    "namespace": "grok_build",
+    "label": "Update Goal",
+    "read_only": False,
+}
+_SURFACE_COVERAGE_DOWNGRADE_REASON = (
+    "Operator downgraded the result to partial because required per-handle authored Post/Reply coverage "
+    "is incomplete for unresolved pretraining leads."
+)
+_DISCOVERY_CONVERGENCE_UNPROVEN_REASON = (
+    "Operator kept the discovery-only result partial because strategy coverage and population convergence "
+    "have not been mechanically proven from the retained native-X arguments."
+)
+_EVIDENCE_EXCERPT_MAX_CODEPOINTS = 280
+_EVIDENCE_EXCERPT_MAX_NORMALIZABLE_CODEPOINTS = 560
+LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1 = "mechanical-evidence-relationship-downgrade-v1"
+LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2 = (
+    "mechanical-evidence-relationship-and-x-rfc2822-timestamp-v2"
+)
+RESULT_NORMALIZATION_POLICY_VERSION = (
+    "mechanical-evidence-relationship-x-rfc2822-timestamp-and-model-reported-excerpt-prefix-v3"
+)
+OPERATOR_RESULT_ARTIFACT_POLICY_VERSION = "post-transform-json-envelope-and-terminal-limit-replay-v1"
+_RELATIONSHIP_DOWNGRADE_CAVEAT = (
+    "Operator normalized a mechanically impossible self relationship to third_party because the evidence author "
+    "did not match the candidate handle; the raw model output is retained and this evidence requires source review."
+)
+_TIMESTAMP_NORMALIZATION_LIMITATION = (
+    "Operator normalization {policy_version} converted {count} strict native-X IMF-fixdate GMT evidence timestamp(s) "
+    "to canonical UTC ISO-8601 Z. Raw model output is unchanged; no evidence, support claim, candidate state, or "
+    "confidence value was added or upgraded."
+)
+_EXCERPT_PREFIX_NORMALIZATION_CAVEAT = (
+    "Operator mechanically replaced one or more over-limit model-reported evidence excerpts with verbatim "
+    "first-280-code-point display prefixes. Full model text remains in hash-bound raw output; prefix semantic "
+    "completeness is not guaranteed, and typed supports remain model_mediated_unverified pending linked-X-source "
+    "review."
+)
+_EXCERPT_PREFIX_NORMALIZATION_LIMITATION = (
+    "Operator normalization {policy_version} replaced {count} over-limit model-reported evidence excerpt(s) across "
+    "{candidate_count} candidate(s) with verbatim first-{maximum}-code-point display prefixes; maximum original "
+    "length was {maximum_original}. No ellipsis or semantic window was inserted. Raw model output is unchanged and "
+    "hash-bound. Prefix semantic completeness is not guaranteed; this step changed no typed supports, candidate "
+    "states, confidence, or immutable source-identity fields. All such values remain model_mediated_unverified and "
+    "require linked-X-source review."
+)
+AUTHORITY = {
+    "canonical_identity_write_authorized": False,
+    "outreach_authorized": False,
+    "product_write_authorized": False,
+    "protected_identity_inference_authorized": False,
+    "provider_fallback_authorized": False,
+}
+
+# One immutable registry owns every retained run artifact name.  Recovery's
+# post-consumption fence, runtime_layout, and the actual publication call sites
+# all resolve through this table so adding or renaming a durable artifact cannot
+# silently leave the consumption-boundary classifier behind.
+_RUN_ARTIFACT_NAME_REGISTRY = MappingProxyType(
+    {
+        "compiled_prompt": "compiled-prompt.txt",
+        "operator_request": "operator-request.json",
+        "operator_intent": "operator-intent.json",
+        "stdout_spool": ".stdout-spool",
+        "stderr_spool": ".stderr-spool",
+        "process_ledger": "process-ledger.json",
+        "process_result": "process-result.json",
+        "session_updates": "session-updates.jsonl",
+        "raw_stdout": "raw.stdout",
+        "stderr": "stderr.txt",
+        "sanitized": "sanitized.json",
+        "operator_receipt": "operator-receipt.json",
+        "ephemeral_home": "ephemeral-home",
+        "run_lock": "run.lock",
+    }
+)
+_RUNTIME_LAYOUT_ARTIFACT_KEYS = MappingProxyType(
+    {
+        "compiled_prompt_name": "compiled_prompt",
+        "stdout_spool_name": "stdout_spool",
+        "stderr_spool_name": "stderr_spool",
+        "ephemeral_home_name": "ephemeral_home",
+        "session_updates_name": "session_updates",
+        "run_lock_name": "run_lock",
+    }
+)
+_POST_CONSUMPTION_ARTIFACT_KEYS = frozenset(
+    {
+        "stdout_spool",
+        "stderr_spool",
+        "process_ledger",
+        "process_result",
+        "session_updates",
+        "raw_stdout",
+        "stderr",
+        "sanitized",
+        "operator_receipt",
+    }
+)
+_PRE_CONSUMPTION_PENDING_ARTIFACT_KEYS = frozenset(
+    {
+        "compiled_prompt",
+        "operator_request",
+        "operator_intent",
+    }
+)
+
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
+_ID_RE = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}")
+_REQUEST_ID_RE = re.compile(r"xwave_req_[0-9a-f]{32}")
+_RUN_ID_RE = re.compile(r"grok_wave_(?:fixture|live)_[0-9a-f]{32}")
+_SESSION_ID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+_CANONICAL_TIME_RE = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:[0-2][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\.[0-9]{3}Z"
+)
+_OAUTH_EXPIRY_TIME_RE = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T"
+    r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{1,6})?Z"
+)
+_BASE64URL_SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]+")
+_PENDING_RE = re.compile(r"\.pending-(?P<name>[a-z0-9_.-]{1,96})-[0-9a-f]{32}")
+_PERSON_SCOPED_FROM_RE = re.compile(r"(?i)(?:-?from:)")
+_FROM_OPERATOR_WITH_HANDLE_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9_])(?P<negated>-?)from:(?P<handle>[A-Za-z0-9_]{1,15})(?=$|[^A-Za-z0-9_])"
+)
+_BARE_HANDLE_LIKE_QUERY_RE = re.compile(r"@?[A-Za-z0-9_]{1,15}")
+
+_REQUEST_KEYS = {
+    "schema_version",
+    "request_id",
+    "target",
+    "prompt_source",
+    "prior_waves",
+    "transport",
+    "emergency",
+    "technical_limits",
+    "budget",
+    "retention",
+    "approval",
+    "authority",
+}
+_TARGET_KEYS = {"lab_id", "research_focus_id", "scope"}
+_PROMPT_SOURCE_KEYS = {"path", "sha256"}
+_PRIOR_WAVE_KEYS = {"wave_id", "path", "sha256"}
+_TRANSPORT_KEYS = {
+    "provider_id",
+    "model_id",
+    "reasoning_effort",
+    "grok_binary_sha256",
+    "operator_account_ref",
+    "oauth_auth_sha256",
+}
+_EMERGENCY_KEYS = {"max_turns", "deadline_ms", "term_grace_ms", "kill_grace_ms"}
+_TECHNICAL_LIMIT_KEYS = {
+    "max_stdout_bytes",
+    "max_stderr_bytes",
+    "max_json_bytes",
+    "max_json_depth",
+    "max_json_nodes",
+    "max_prompt_bytes",
+    "max_compiled_prompt_bytes",
+    "max_prior_wave_bytes",
+    "max_total_prior_wave_bytes",
+    "max_prior_json_depth",
+    "max_prior_json_nodes",
+    "max_session_files",
+    "max_session_file_bytes",
+    "max_session_total_bytes",
+    "max_session_updates_bytes",
+    "max_session_update_line_bytes",
+}
+_BUDGET_KEYS = {
+    "pricing_policy_id",
+    "max_total_tokens",
+    "max_cost_usd_micros",
+    "input_token_cost_usd_micros_per_million",
+    "output_token_cost_usd_micros_per_million",
+}
+_RETENTION_KEYS = {"policy_id", "ttl_seconds", "deletion_receipt_required"}
+_APPROVAL_KEYS = {"grant_id"}
+_RESULT_KEYS = {
+    "status",
+    "status_reason",
+    "native_x_tool_provenance",
+    "counts",
+    "candidates",
+    "excluded_examples",
+    "limitations",
+    "local_reconciliation",
+}
+_PROVENANCE_KEYS = {"tools_reported", "tool_calls_reported", "queries", "generic_web_used"}
+_COUNT_KEYS = {"observations_inspected_reported", "candidates_retained"}
+_HEADLESS_ENVELOPE_KEYS = {"text", "stopReason", "sessionId", "requestId", "num_turns", "usage"}
+_HEADLESS_OPTIONAL_KEYS = {
+    "modelUsage",
+    "structuredOutput",
+    "structuredOutputError",
+    "thought",
+    "total_cost_usd",
+}
+_HEADLESS_USAGE_KEYS = {"input_tokens", "output_tokens", "total_tokens"}
+_HEADLESS_EXTENDED_USAGE_KEYS = _HEADLESS_USAGE_KEYS | {"cache_read_input_tokens", "reasoning_tokens"}
+_HEADLESS_MODEL_USAGE_KEYS = {"cacheReadInputTokens", "inputTokens", "modelCalls", "outputTokens"}
+_CANDIDATE_KEYS = {
+    "handle",
+    "profile_url",
+    "platform_user_id",
+    "bio_excerpt",
+    "target_lab_affiliation_state",
+    "pretraining_experience_state",
+    "confidence",
+    "evidence",
+    "caveats",
+    "overlap_status",
+}
+_EVIDENCE_KEYS = {
+    "kind",
+    "relationship",
+    "subject_handle",
+    "author_handle",
+    "post_id",
+    "url",
+    "published_at",
+    "excerpt",
+    "thread_relation",
+    "supports",
+}
+_SUPPORT_CLAIM_KEYS = {"dimension", "asserted_value"}
+_EXCLUDED_KEYS = {"handle", "reason"}
+_RECONCILIATION_KEYS = {
+    "candidate_records_validated",
+    "evidence_items_validated",
+    "post_urls_structurally_validated",
+    "provider_post_bodies_replayable",
+    "tool_calls_completed",
+    "tool_counts",
+}
+_INTENT_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_id",
+    "request_sha256",
+    "execution_mode",
+    "started_at",
+    "run_lease_sha256",
+    "input_binding",
+    "command_binding",
+    "approval",
+    "emergency",
+    "technical_limits",
+    "budget",
+    "retention",
+    "runtime_layout",
+    "process_evidence_generation",
+    "authority",
+}
+_LEGACY_INTENT_KEYS = _INTENT_KEYS - {"process_evidence_generation"}
+_RECEIPT_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_id",
+    "request_sha256",
+    "execution_mode",
+    "status",
+    "run_lease_sha256",
+    "input_binding",
+    "command_binding",
+    "approval",
+    "process",
+    "artifacts",
+    "session_proof",
+    "retention",
+    "reconciliation",
+    "authority",
+}
+_INPUT_BINDING_KEYS = {
+    "target_sha256",
+    "source_prompt_sha256",
+    "compiled_prompt_sha256",
+    "prior_waves",
+    "prior_unique_handle_count",
+    "prior_handle_set_sha256",
+}
+_COMMAND_BINDING_KEYS = {
+    "provider_id",
+    "model_id",
+    "reasoning_effort",
+    "session_id",
+    "grok_binary_sha256",
+    "structured_output_schema_sha256",
+    "argv_sha256",
+    "command_policy_sha256",
+    "environment_policy_sha256",
+    "tool_registry_sha256",
+    "effective_prompt_policy_sha256",
+    "effective_prompt_policy_entry_id",
+    "operator_account_ref_sha256",
+    "oauth_auth_sha256",
+    "max_turns",
+}
+_APPROVAL_BINDING_KEYS = {"required", "grant_id_sha256", "grant_sha256", "consumption_sha256"}
+_PROCESS_KEYS = {
+    "started_at",
+    "completed_at",
+    "elapsed_ms",
+    "exit_code",
+    "timed_out",
+    "term_sent",
+    "kill_sent",
+    "process_spawn_attempted",
+    "child_pid",
+    "process_group_id",
+    "process_ledger_sha256",
+    "kernel_birth_identity_sha256",
+    "process_identity_token_sha256",
+    "process_group_cleanup_confirmed",
+    "execution_error_code",
+    "deadline_ms",
+    "term_grace_ms",
+    "kill_grace_ms",
+    "fallback_used",
+    "technical_limit_exceeded",
+    "technical_limit_kind",
+}
+_ARTIFACT_KEYS = {
+    "raw_stdout_sha256",
+    "stderr_sha256",
+    "sanitized_output_sha256",
+    "structured_output_compliant",
+    "structured_output_contract_valid",
+    "non_json_prefix_bytes",
+    "non_json_suffix_bytes",
+    "compiled_prompt_sha256",
+    "session_updates_sha256",
+    "process_result_journal_sha256",
+    "ephemeral_tree_deleted",
+    "session_tree_file_count",
+    "session_tree_entry_count",
+    "session_tree_max_depth",
+    "session_tree_total_bytes",
+    "session_tree_max_file_bytes",
+}
+_LEGACY_ARTIFACT_KEYS = _ARTIFACT_KEYS - {"process_result_journal_sha256"}
+_SESSION_PROOF_KEYS = {
+    "status",
+    "updates_sha256",
+    "update_bytes",
+    "event_count",
+    "provider_prompt_id_sha256",
+    "effective_model_id",
+    "started_tool_calls",
+    "completed_tool_calls",
+    "tool_counts",
+    "query_argument_sha256s",
+    "candidate_surface_attempts",
+    "terminal_stop_reason",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "model_turns",
+    "estimated_cost_usd_micros",
+}
+_SESSION_PROOF_OPTIONAL_KEYS = {"cache_read_input_tokens"}
+_RETENTION_RECEIPT_KEYS = {
+    "policy_id",
+    "ttl_seconds",
+    "delete_after",
+    "purge_state",
+    "deletion_receipt_required",
+}
+_RECONCILIATION_RECEIPT_KEYS = {
+    "candidate_count",
+    "evidence_count",
+    "post_url_count",
+    "prior_overlap_count",
+    "verified_material_update_count",
+    "model_reported_tool_calls",
+    "mechanically_verified_tool_calls",
+    "tool_fact_source",
+    "candidate_surface_coverage",
+}
+_RUNTIME_LAYOUT_KEYS = {
+    "compiled_prompt_name",
+    "stdout_spool_name",
+    "stderr_spool_name",
+    "ephemeral_home_name",
+    "session_updates_name",
+    "run_lock_name",
+}
+_PROCESS_LEDGER_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_id",
+    "run_lease_sha256",
+    "session_id",
+    "child_pid",
+    "process_group_id",
+    "kernel_birth_identity",
+    "process_identity_token",
+    "spawned_at",
+}
+_PROCESS_RESULT_JOURNAL_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_id",
+    "run_lease_sha256",
+    "session_id",
+    "phase",
+    "exit_code",
+    "timed_out",
+    "term_sent",
+    "kill_sent",
+    "process_spawn_attempted",
+    "child_pid",
+    "process_group_id",
+    "kernel_birth_identity_sha256",
+    "process_identity_token_sha256",
+    "process_group_cleanup_confirmed",
+    "execution_error_code",
+    "technical_limit_kind",
+    "stdout_sha256",
+    "stdout_bytes",
+    "stderr_sha256",
+    "stderr_bytes",
+}
+_LEGACY_PROCESS_RESULT_JOURNAL_KEYS = _PROCESS_RESULT_JOURNAL_KEYS - {
+    "stdout_sha256",
+    "stdout_bytes",
+    "stderr_sha256",
+    "stderr_bytes",
+}
+_GRANT_KEYS = {
+    "schema_version",
+    "grant_id_hash",
+    "execution_scope_sha256",
+    "request_id",
+    "target_sha256",
+    "model_id",
+    "grok_binary_sha256",
+    "operator_account_ref_sha256",
+    "oauth_auth_sha256",
+    "result_schema_sha256",
+    "command_policy_sha256",
+    "tool_registry_sha256",
+    "effective_prompt_policy_sha256",
+    "effective_prompt_policy_entry_id",
+    "environment_policy_sha256",
+    "emergency_sha256",
+    "technical_limits_sha256",
+    "budget_sha256",
+    "retention_sha256",
+    "issued_at",
+    "expires_at",
+    "issuer",
+    "state",
+}
+_CONSUMPTION_KEYS = {
+    "schema_version",
+    "grant_id_hash",
+    "grant_sha256",
+    "execution_scope_sha256",
+    "request_sha256",
+    "run_id",
+    "run_lease_sha256",
+    "consumed_at",
+    "state",
+}
+_DELETION_JOURNAL_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_sha256",
+    "run_lease_sha256",
+    "operator_receipt_sha256",
+    "delete_after",
+    "runtime_root_sha256",
+    "created_at",
+    "state",
+}
+_DELETION_RECEIPT_KEYS = {
+    "schema_version",
+    "run_id",
+    "request_sha256",
+    "operator_receipt_sha256",
+    "deletion_journal_sha256",
+    "deleted_at",
+    "state",
+}
+_AUTH_TAINT_KEYS = {
+    "schema_version",
+    "oauth_auth_sha256",
+    "source_run_id",
+    "source_request_sha256",
+    "detected_at",
+    "reason",
+    "state",
+}
+_AUTH_TAINT_REASONS = {
+    "copied_auth_deleted",
+    "copied_auth_mutated",
+    "copied_auth_unreadable",
+    "post_consumption_execution_not_clean",
+}
+_AUTH_ACTIVE_USE_KEYS = {
+    "schema_version",
+    "oauth_auth_sha256",
+    "claim_origin",
+    "run_id",
+    "request_sha256",
+    "run_lease_sha256",
+    "grant_sha256",
+    "claimed_at",
+    "state",
+}
+_AUTH_ACTIVE_USE_ORIGINS = {"live_consumption", "legacy_recovery"}
+_RESULT_STATUSES = {"X_SEARCH_OK", "X_SEARCH_PARTIAL", "X_SEARCH_BLOCKED"}
+_DIMENSION_STATES = set(TEMPORAL_STATES)
+_CONFIDENCE_STATES = {"high", "medium", "low"}
+_EVIDENCE_KINDS = {"bio", "post", "mention", "thread"}
+_RELATIONSHIPS = {"self", "official_lab", "colleague_or_team", "third_party", "historical"}
+_SUPPORTS = set(SUPPORT_DIMENSIONS)
+_TOOL_NAMES = {"x_keyword_search", "x_semantic_search", "x_user_search", "x_thread_fetch"}
+_RECEIPT_STATUSES = {
+    "fixture_complete",
+    "completed",
+    "process_failed",
+    "timed_out",
+    "structured_output_noncompliant",
+    "result_contract_invalid",
+    "provider_evidence_invalid",
+    "crash_recovered",
+    "technical_limit_exceeded",
+}
+_TECHNICAL_LIMIT_KINDS = {
+    "stdout_bytes",
+    "stderr_bytes",
+    "json_bytes",
+    "json_structure",
+    "session_tree_files",
+    "session_tree_file_bytes",
+    "session_tree_total_bytes",
+    "session_updates_bytes",
+    "session_tree_entry_invalid",
+    "session_tree_entries",
+    "session_tree_depth",
+    "session_tree_unexpected_socket",
+    "session_tree_scan_deadline",
+}
+_JSON_TECHNICAL_LIMIT_KINDS = frozenset({"json_bytes", "json_structure"})
+
+
+class AdaptiveWaveValidationError(ValueError):
+    """Raised when an operator input or artifact fails closed validation."""
+
+
+@dataclass(frozen=True)
+class ProcessResult:
+    exit_code: int | None
+    timed_out: bool
+    term_sent: bool
+    kill_sent: bool
+    process_spawn_attempted: bool
+    child_pid: int | None
+    process_group_id: int | None
+    kernel_birth_identity: str | None
+    process_identity_token: str | None
+    process_group_cleanup_confirmed: bool
+    execution_error_code: str
+    technical_limit_kind: str | None
+
+
+@dataclass(frozen=True)
+class ConsumedGrant:
+    grant_sha256: str
+    consumption_sha256: str
+    consumed_at: datetime
+    expires_at: datetime
+    target_release_deadline_monotonic: float
+
+
+@dataclass(frozen=True)
+class SessionProof:
+    updates_sha256: str
+    update_bytes: int
+    event_count: int
+    provider_prompt_id_sha256: str
+    effective_model_id: str
+    started_tool_calls: int
+    completed_tool_calls: int
+    tool_counts: dict[str, int]
+    query_argument_sha256s: tuple[str, ...]
+    candidate_surface_attempts: tuple[dict[str, str], ...]
+    terminal_stop_reason: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    model_turns: int
+    estimated_cost_usd_micros: int
+    # Grok 0.2.101 reports cache reads outside input_tokens but includes them
+    # in total_tokens.  Older retained receipts omit this wire-compatible
+    # optional field; an absent value is valid only when the derived delta is
+    # exactly zero.
+    cache_read_input_tokens: int = 0
+    # Private in-memory material used only to select the terminal structured
+    # result.  The durable session-updates hash binds these bytes; receipt
+    # projection intentionally never exposes the provider text.
+    terminal_assistant_text: str = ""
+
+
+@dataclass(frozen=True)
+class HeadlessEnvelope:
+    """Strict operator projection of the Grok headless stdout envelope."""
+
+    inner_text: str
+    provider_request_id_sha256: str
+    session_id: str
+    terminal_stop_reason: str
+    input_tokens: int
+    output_tokens: int
+    cache_read_input_tokens: int
+    total_tokens: int
+    model_turns: int
+
+
+@dataclass(frozen=True)
+class SessionTreeMeasurement:
+    file_count: int
+    entry_count: int
+    total_bytes: int
+    max_file_bytes: int
+    max_depth: int
+    limit_kind: str | None
+
+
+@dataclass(frozen=True)
+class EffectivePromptPolicyBinding:
+    policy_sha256: str
+    policy_entry_id: str
+    session_query_policy_id: str
+    official_account_handles: tuple[str, ...]
+    prior_input_policy_id: str | None
+
+
+class Executor(Protocol):
+    def __call__(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        environment: Mapping[str, str],
+        stdout_spool: Path,
+        stderr_spool: Path,
+        deadline_at: float,
+        term_grace_ms: int,
+        kill_grace_ms: int,
+        max_stdout_bytes: int,
+        max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
+        monotonic: Callable[[], float],
+        on_spawn: Callable[[int, int, str, str], None],
+    ) -> ProcessResult: ...
+
+
+def canonical_json(value: Any) -> str:
+    return json.dumps(value, allow_nan=False, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def canonical_sha256(value: Any) -> str:
+    return hashlib.sha256(canonical_json(value).encode()).hexdigest()
+
+
+def session_query_policy_semantics_sha256(policy_id: str) -> str:
+    semantics = SESSION_QUERY_POLICY_SEMANTICS.get(policy_id)
+    if semantics is None:
+        raise AdaptiveWaveValidationError("session_query_policy_invalid")
+    return canonical_sha256(semantics)
+
+
+def prior_input_policy_semantics_sha256(policy_id: str) -> str:
+    semantics = PRIOR_INPUT_POLICY_SEMANTICS.get(policy_id)
+    if semantics is None:
+        raise AdaptiveWaveValidationError("prior_input_policy_invalid")
+    return canonical_sha256(semantics)
+
+
+def bytes_sha256(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _process_result_journal_payload(
+    process_result: ProcessResult,
+    *,
+    run_id: str,
+    request_id: str,
+    run_lease_sha256: str,
+    session_id: str,
+    stdout_raw: bytes,
+    stderr_raw: bytes,
+    phase: str = "executor_returned",
+) -> dict[str, Any]:
+    """Project executor facts and bind the exact closed process spools."""
+
+    return {
+        "schema_version": PROCESS_RESULT_JOURNAL_SCHEMA_VERSION,
+        "run_id": run_id,
+        "request_id": request_id,
+        "run_lease_sha256": run_lease_sha256,
+        "session_id": session_id,
+        "phase": phase,
+        "exit_code": process_result.exit_code,
+        "timed_out": process_result.timed_out,
+        "term_sent": process_result.term_sent,
+        "kill_sent": process_result.kill_sent,
+        "process_spawn_attempted": process_result.process_spawn_attempted,
+        "child_pid": process_result.child_pid,
+        "process_group_id": process_result.process_group_id,
+        "kernel_birth_identity_sha256": (
+            bytes_sha256(process_result.kernel_birth_identity.encode())
+            if process_result.kernel_birth_identity is not None
+            else None
+        ),
+        "process_identity_token_sha256": (
+            bytes_sha256(process_result.process_identity_token.encode())
+            if process_result.process_identity_token is not None
+            else None
+        ),
+        "process_group_cleanup_confirmed": process_result.process_group_cleanup_confirmed,
+        "execution_error_code": process_result.execution_error_code,
+        "technical_limit_kind": process_result.technical_limit_kind,
+        "stdout_sha256": bytes_sha256(stdout_raw),
+        "stdout_bytes": len(stdout_raw),
+        "stderr_sha256": bytes_sha256(stderr_raw),
+        "stderr_bytes": len(stderr_raw),
+    }
+
+
+def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_json_key")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite(value: str) -> None:
+    raise ValueError(f"non_finite_number:{value}")
+
+
+def strict_json_loads(value: str | bytes) -> Any:
+    return json.loads(value, object_pairs_hook=_strict_object, parse_constant=_reject_nonfinite)
+
+
+def strict_json_loads_bounded(
+    value: str | bytes,
+    *,
+    max_bytes: int,
+    max_depth: int,
+    max_nodes: int,
+) -> Any:
+    raw = value.encode() if isinstance(value, str) else value
+    if len(raw) > max_bytes:
+        raise AdaptiveWaveValidationError("json_byte_ceiling_exceeded")
+    payload = strict_json_loads(raw)
+    stack: list[tuple[Any, int]] = [(payload, 0)]
+    nodes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if nodes > max_nodes:
+            raise AdaptiveWaveValidationError("json_node_ceiling_exceeded")
+        if depth > max_depth:
+            raise AdaptiveWaveValidationError("json_depth_ceiling_exceeded")
+        if isinstance(current, dict):
+            stack.extend((key, depth + 1) for key in current)
+            stack.extend((item, depth + 1) for item in current.values())
+        elif isinstance(current, list):
+            stack.extend((item, depth + 1) for item in current)
+    return payload
+
+
+def _timestamp(now: datetime) -> str:
+    if now.tzinfo is None:
+        raise ValueError("timezone_aware_clock_required")
+    return now.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _is_int(value: Any) -> bool:
+    return type(value) is int
+
+
+def _is_sha(value: Any) -> bool:
+    return isinstance(value, str) and _SHA256_RE.fullmatch(value) is not None
+
+
+def _is_text(value: Any, *, minimum: int = 1, maximum: int = 4096) -> bool:
+    return isinstance(value, str) and minimum <= len(value) <= maximum and "\x00" not in value
+
+
+def validate_request(request: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(request, dict) or set(request) != _REQUEST_KEYS:
+        return ["request_shape_invalid"]
+    if request.get("schema_version") != REQUEST_SCHEMA_VERSION:
+        errors.append("request_schema_version_invalid")
+    if not isinstance(request.get("request_id"), str) or _REQUEST_ID_RE.fullmatch(request["request_id"]) is None:
+        errors.append("request_id_invalid")
+    target = request.get("target")
+    if not isinstance(target, dict) or set(target) != _TARGET_KEYS:
+        errors.append("target_shape_invalid")
+    elif (
+        not isinstance(target.get("lab_id"), str)
+        or _ID_RE.fullmatch(target["lab_id"]) is None
+        or not isinstance(target.get("research_focus_id"), str)
+        or _ID_RE.fullmatch(target["research_focus_id"]) is None
+        or not _is_text(target.get("scope"), maximum=20_000)
+    ):
+        errors.append("target_value_invalid")
+    prompt = request.get("prompt_source")
+    if not isinstance(prompt, dict) or set(prompt) != _PROMPT_SOURCE_KEYS:
+        errors.append("prompt_source_shape_invalid")
+    elif not _is_text(prompt.get("path"), maximum=4096) or not _is_sha(prompt.get("sha256")):
+        errors.append("prompt_source_value_invalid")
+    prior_waves = request.get("prior_waves")
+    seen_wave_ids: set[str] = set()
+    if not isinstance(prior_waves, list):
+        errors.append("prior_waves_invalid")
+    else:
+        for row in prior_waves:
+            if not isinstance(row, dict) or set(row) != _PRIOR_WAVE_KEYS:
+                errors.append("prior_wave_shape_invalid")
+                continue
+            wave_id = row.get("wave_id")
+            if (
+                not isinstance(wave_id, str)
+                or _ID_RE.fullmatch(wave_id) is None
+                or wave_id in seen_wave_ids
+                or not _is_text(row.get("path"), maximum=4096)
+                or not _is_sha(row.get("sha256"))
+            ):
+                errors.append("prior_wave_value_invalid")
+            else:
+                seen_wave_ids.add(wave_id)
+    transport = request.get("transport")
+    if not isinstance(transport, dict) or set(transport) != _TRANSPORT_KEYS:
+        errors.append("transport_shape_invalid")
+    elif (
+        transport.get("provider_id") != PROVIDER_ID
+        or not isinstance(transport.get("model_id"), str)
+        or _ID_RE.fullmatch(transport["model_id"]) is None
+        or transport.get("reasoning_effort") not in {"low", "medium", "high"}
+        or (transport.get("grok_binary_sha256") is not None and not _is_sha(transport["grok_binary_sha256"]))
+        or (
+            transport.get("operator_account_ref") is not None
+            and (
+                not isinstance(transport["operator_account_ref"], str)
+                or _ID_RE.fullmatch(transport["operator_account_ref"]) is None
+            )
+        )
+        or (transport.get("oauth_auth_sha256") is not None and not _is_sha(transport["oauth_auth_sha256"]))
+        or ((transport.get("operator_account_ref") is None) is not (transport.get("oauth_auth_sha256") is None))
+    ):
+        errors.append("transport_value_invalid")
+    emergency = request.get("emergency")
+    if not isinstance(emergency, dict) or set(emergency) != _EMERGENCY_KEYS:
+        errors.append("emergency_shape_invalid")
+    elif (
+        not _is_int(emergency.get("max_turns"))
+        or not 1 <= emergency["max_turns"] <= 512
+        or not _is_int(emergency.get("deadline_ms"))
+        or not 1_000 <= emergency["deadline_ms"] <= 3_600_000
+        or not _is_int(emergency.get("term_grace_ms"))
+        or not 100 <= emergency["term_grace_ms"] <= 60_000
+        or not _is_int(emergency.get("kill_grace_ms"))
+        or not 100 <= emergency["kill_grace_ms"] <= 60_000
+    ):
+        errors.append("emergency_value_invalid")
+    technical_limits = request.get("technical_limits")
+    if not _technical_limits_valid(technical_limits):
+        errors.append("technical_limits_invalid")
+    budget = request.get("budget")
+    if not _budget_valid(budget):
+        errors.append("budget_invalid")
+    retention = request.get("retention")
+    if not _retention_valid(retention):
+        errors.append("retention_invalid")
+    approval = request.get("approval")
+    if not isinstance(approval, dict) or set(approval) != _APPROVAL_KEYS:
+        errors.append("approval_shape_invalid")
+    elif approval.get("grant_id") is not None and (
+        not isinstance(approval["grant_id"], str) or _ID_RE.fullmatch(approval["grant_id"]) is None
+    ):
+        errors.append("grant_id_invalid")
+    if request.get("authority") != AUTHORITY:
+        errors.append("authority_invalid")
+    return errors
+
+
+def _technical_limits_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _TECHNICAL_LIMIT_KEYS
+        and _is_int(value.get("max_stdout_bytes"))
+        and 1_000_000 <= value["max_stdout_bytes"] <= 536_870_912
+        and _is_int(value.get("max_stderr_bytes"))
+        and 65_536 <= value["max_stderr_bytes"] <= 67_108_864
+        and _is_int(value.get("max_json_bytes"))
+        and 1_000_000 <= value["max_json_bytes"] <= value["max_stdout_bytes"]
+        and _is_int(value.get("max_json_depth"))
+        and 16 <= value["max_json_depth"] <= 512
+        and _is_int(value.get("max_json_nodes"))
+        and 10_000 <= value["max_json_nodes"] <= 5_000_000
+        and _is_int(value.get("max_prompt_bytes"))
+        and 65_536 <= value["max_prompt_bytes"] <= 67_108_864
+        and _is_int(value.get("max_compiled_prompt_bytes"))
+        and value["max_prompt_bytes"] <= value["max_compiled_prompt_bytes"] <= 536_870_912
+        and _is_int(value.get("max_prior_wave_bytes"))
+        and 1_000_000 <= value["max_prior_wave_bytes"] <= 536_870_912
+        and _is_int(value.get("max_total_prior_wave_bytes"))
+        and value["max_prior_wave_bytes"] <= value["max_total_prior_wave_bytes"] <= 1_073_741_824
+        and _is_int(value.get("max_prior_json_depth"))
+        and 16 <= value["max_prior_json_depth"] <= 512
+        and _is_int(value.get("max_prior_json_nodes"))
+        and 10_000 <= value["max_prior_json_nodes"] <= 5_000_000
+        and _is_int(value.get("max_session_files"))
+        and 16 <= value["max_session_files"] <= 100_000
+        and _is_int(value.get("max_session_file_bytes"))
+        and 65_536 <= value["max_session_file_bytes"] <= 536_870_912
+        and _is_int(value.get("max_session_total_bytes"))
+        and value["max_session_file_bytes"] <= value["max_session_total_bytes"] <= 1_073_741_824
+        and _is_int(value.get("max_session_updates_bytes"))
+        and 65_536 <= value["max_session_updates_bytes"] <= value["max_session_file_bytes"]
+        and _is_int(value.get("max_session_update_line_bytes"))
+        and 4_096 <= value["max_session_update_line_bytes"] <= value["max_session_updates_bytes"]
+    )
+
+
+def _budget_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _BUDGET_KEYS
+        and isinstance(value.get("pricing_policy_id"), str)
+        and _ID_RE.fullmatch(value["pricing_policy_id"]) is not None
+        and _is_int(value.get("max_total_tokens"))
+        and 1_000 <= value["max_total_tokens"] <= 100_000_000
+        and _is_int(value.get("max_cost_usd_micros"))
+        and 1 <= value["max_cost_usd_micros"] <= 1_000_000_000_000
+        and _is_int(value.get("input_token_cost_usd_micros_per_million"))
+        and 0 <= value["input_token_cost_usd_micros_per_million"] <= 1_000_000_000_000
+        and _is_int(value.get("output_token_cost_usd_micros_per_million"))
+        and 0 <= value["output_token_cost_usd_micros_per_million"] <= 1_000_000_000_000
+    )
+
+
+def _retention_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _RETENTION_KEYS
+        and isinstance(value.get("policy_id"), str)
+        and _ID_RE.fullmatch(value["policy_id"]) is not None
+        and _is_int(value.get("ttl_seconds"))
+        and 3_600 <= value["ttl_seconds"] <= 604_800
+        and value.get("deletion_receipt_required") is True
+    )
+
+
+def execution_scope_payload(request: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the grant-bound request scope, excluding only the grant locator."""
+
+    return {key: request[key] for key in sorted(request) if key != "approval"}
+
+
+def execution_scope_sha256(request: Mapping[str, Any]) -> str:
+    return canonical_sha256(execution_scope_payload(request))
+
+
+def _validate_handle(value: Any) -> bool:
+    return isinstance(value, str) and _HANDLE_RE.fullmatch(value) is not None
+
+
+def _validate_nonnegative_int(value: Any) -> bool:
+    return _is_int(value) and value >= 0
+
+
+@dataclass(frozen=True)
+class PriorCandidateFacts:
+    wave_ids: frozenset[str]
+    evidence_source_sha256s: frozenset[str]
+    target_lab_affiliation_states: frozenset[str]
+    pretraining_experience_states: frozenset[str]
+    target_lab_affiliation_latest_at: datetime | None
+    pretraining_experience_latest_at: datetime | None
+
+
+def _is_post_url(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"https://x\.com/[A-Za-z0-9_]{1,15}/status/[1-9][0-9]{5,31}", value) is not None
+    )
+
+
+def _parse_post_url(value: Any) -> tuple[str, str] | None:
+    if not isinstance(value, str):
+        return None
+    match = re.fullmatch(r"https://x\.com/([A-Za-z0-9_]{1,15})/status/([1-9][0-9]{5,31})", value)
+    return (match.group(1), match.group(2)) if match is not None else None
+
+
+def _parse_evidence_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _evidence_source_sha256(evidence: Mapping[str, Any], candidate_handle: str) -> str | None:
+    """Fingerprint source identity, not model-editable prose."""
+
+    kind = evidence.get("kind")
+    author = evidence.get("author_handle")
+    subject = evidence.get("subject_handle", candidate_handle)
+    url = evidence.get("url")
+    if (
+        not _validate_handle(candidate_handle)
+        or not _validate_handle(author)
+        or not _validate_handle(subject)
+        or subject.casefold() != candidate_handle.casefold()
+    ):
+        return None
+    if kind == "bio":
+        if url not in {f"https://x.com/{author}", f"https://profiles.invalid/{author}"}:
+            return None
+        return canonical_sha256(
+            {"kind": "bio", "subject_handle": subject.casefold(), "author_handle": author.casefold(), "url": url}
+        )
+    parsed_url = _parse_post_url(url)
+    post_id = evidence.get("post_id")
+    if (
+        kind not in {"post", "mention", "thread"}
+        or parsed_url is None
+        or parsed_url[0].casefold() != author.casefold()
+        or parsed_url[1] != post_id
+    ):
+        return None
+    return canonical_sha256(
+        {
+            "subject_handle": subject.casefold(),
+            "author_handle": author.casefold(),
+            "post_id": post_id,
+            "url": url,
+        }
+    )
+
+
+def _strict_temporal_transition_proved(
+    candidate: Mapping[str, Any],
+    evidence_rows: Sequence[Mapping[str, Any]],
+    baseline: PriorCandidateFacts,
+) -> bool:
+    dimensions = (
+        (
+            "target_lab_affiliation_state",
+            baseline.target_lab_affiliation_states,
+            baseline.target_lab_affiliation_latest_at,
+        ),
+        (
+            "pretraining_experience_state",
+            baseline.pretraining_experience_states,
+            baseline.pretraining_experience_latest_at,
+        ),
+    )
+    for dimension, prior_states, latest_at in dimensions:
+        next_state = candidate.get(dimension)
+        if next_state not in {"current", "historical"} or next_state in prior_states:
+            continue
+        for evidence in evidence_rows:
+            published = _parse_evidence_timestamp(evidence.get("published_at"))
+            supports = evidence.get("supports")
+            source_sha256 = _evidence_source_sha256(evidence, str(candidate.get("handle", "")))
+            try:
+                support_claims = normalize_support_claims(supports, allow_legacy=False)
+            except ValueError:
+                support_claims = ()
+            if (
+                any(
+                    claim.get("dimension") == dimension and claim.get("asserted_value") == next_state
+                    for claim in support_claims
+                )
+                and published is not None
+                and source_sha256 is not None
+                and source_sha256 not in baseline.evidence_source_sha256s
+                and (latest_at is None or published > latest_at)
+            ):
+                return True
+    return False
+
+
+def _material_update_proved(candidate: Mapping[str, Any], baseline: PriorCandidateFacts) -> bool:
+    handle = candidate.get("handle")
+    evidence = candidate.get("evidence")
+    if not isinstance(handle, str) or not isinstance(evidence, list) or not evidence:
+        return False
+    source_sha256s = {
+        digest
+        for row in evidence
+        if isinstance(row, dict)
+        for digest in [_evidence_source_sha256(row, handle)]
+        if digest is not None
+    }
+    if source_sha256s - baseline.evidence_source_sha256s:
+        return True
+    return _strict_temporal_transition_proved(candidate, evidence, baseline)
+
+
+def _candidate_reconciliation(
+    result: Mapping[str, Any],
+    prior_candidates: Mapping[str, PriorCandidateFacts],
+    *,
+    session_proof: SessionProof | None = None,
+    fixture: bool = False,
+) -> dict[str, Any]:
+    candidates = result.get("candidates") if isinstance(result.get("candidates"), list) else []
+    evidence_count = 0
+    post_url_count = 0
+    prior_overlap_count = 0
+    verified_material_updates = 0
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        evidence = candidate.get("evidence") if isinstance(candidate.get("evidence"), list) else []
+        evidence_count += len(evidence)
+        post_url_count += sum(1 for row in evidence if isinstance(row, dict) and _is_post_url(row.get("url")))
+        baseline = prior_candidates.get(str(candidate.get("handle", "")).casefold())
+        if baseline is not None:
+            prior_overlap_count += 1
+            if _material_update_proved(candidate, baseline):
+                verified_material_updates += 1
+    provenance = result.get("native_x_tool_provenance")
+    reported_calls = provenance.get("tool_calls_reported") if isinstance(provenance, dict) else 0
+    surface_attempts: dict[tuple[str, str], set[str]] = {}
+    if session_proof is not None:
+        for attempt in session_proof.candidate_surface_attempts:
+            key = (attempt["handle_key"], attempt["surface"])
+            surface_attempts.setdefault(key, set()).add(attempt["query_argument_sha256"])
+    candidate_surface_coverage: list[dict[str, Any]] = []
+    for candidate in candidates:
+        handle = candidate.get("handle") if isinstance(candidate, dict) else None
+        if not _validate_handle(handle):
+            continue
+        handle_key = handle.casefold()
+        coverage: dict[str, Any] = {"handle_key": handle_key}
+        for surface in ("authored_post", "authored_reply"):
+            hashes = sorted(surface_attempts.get((handle_key, surface), set()))
+            coverage[surface] = {
+                "attempted": bool(hashes),
+                "query_argument_sha256s": hashes,
+            }
+        candidate_surface_coverage.append(coverage)
+    candidate_surface_coverage.sort(key=lambda row: row["handle_key"])
+    return {
+        "candidate_count": len(candidates),
+        "evidence_count": evidence_count,
+        "post_url_count": post_url_count,
+        "prior_overlap_count": prior_overlap_count,
+        "verified_material_update_count": verified_material_updates,
+        "model_reported_tool_calls": reported_calls if _validate_nonnegative_int(reported_calls) else 0,
+        "mechanically_verified_tool_calls": session_proof.completed_tool_calls if session_proof is not None else 0,
+        "tool_fact_source": (
+            "fixture_not_applicable"
+            if fixture
+            else "session_transcript_verified"
+            if session_proof is not None
+            else "session_transcript_unverified"
+        ),
+        "candidate_surface_coverage": candidate_surface_coverage,
+    }
+
+
+def _evidence_binding_valid(
+    evidence: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    live_mode: bool,
+) -> bool:
+    handle = candidate.get("handle")
+    subject = evidence.get("subject_handle")
+    author = evidence.get("author_handle")
+    if (
+        not _validate_handle(handle)
+        or not _validate_handle(subject)
+        or subject.casefold() != handle.casefold()
+        or not _validate_handle(author)
+    ):
+        return False
+    kind = evidence.get("kind")
+    if kind == "bio":
+        allowed_profile_urls = {f"https://x.com/{handle}"}
+        if not live_mode:
+            allowed_profile_urls.add(f"https://profiles.invalid/{handle}")
+        return (
+            author.casefold() == handle.casefold()
+            and evidence.get("relationship") == "self"
+            and evidence.get("post_id") is None
+            and evidence.get("url") in allowed_profile_urls
+            and evidence.get("published_at") is None
+            and evidence.get("thread_relation") is None
+        )
+    parsed_url = _parse_post_url(evidence.get("url"))
+    published = _parse_evidence_timestamp(evidence.get("published_at"))
+    if (
+        kind not in {"post", "mention", "thread"}
+        or parsed_url is None
+        or parsed_url[0].casefold() != author.casefold()
+        or parsed_url[1] != evidence.get("post_id")
+        or published is None
+        or evidence.get("thread_relation") not in THREAD_RELATIONS
+    ):
+        return False
+    return evidence.get("relationship") != "self" or author.casefold() == handle.casefold()
+
+
+def validate_model_result(
+    result: Any,
+    *,
+    prior_candidates: Mapping[str, PriorCandidateFacts] | None = None,
+    live_mode: bool = False,
+    require_operator_projection: bool = True,
+) -> list[str]:
+    """Validate model shape and, when requested, operator-owned projections."""
+
+    prior = prior_candidates or {}
+    errors: list[str] = []
+    if not isinstance(result, dict) or set(result) != _RESULT_KEYS:
+        return ["result_shape_invalid"]
+    if result.get("status") not in _RESULT_STATUSES or not _is_text(result.get("status_reason"), maximum=20_000):
+        errors.append("result_status_invalid")
+    provenance = result.get("native_x_tool_provenance")
+    tools: list[Any] = []
+    queries: list[Any] = []
+    reported_calls: Any = None
+    if not isinstance(provenance, dict) or set(provenance) != _PROVENANCE_KEYS:
+        errors.append("provenance_shape_invalid")
+    else:
+        tools = provenance.get("tools_reported")
+        queries = provenance.get("queries")
+        reported_calls = provenance.get("tool_calls_reported")
+        if (
+            not isinstance(tools, list)
+            or any(not isinstance(tool, str) for tool in tools)
+            or len(set(tools)) != len(tools)
+            or any(tool not in _TOOL_NAMES for tool in tools)
+            or not _validate_nonnegative_int(reported_calls)
+            or not isinstance(queries, list)
+            or any(not _is_text(query, maximum=20_000) for query in queries)
+            or provenance.get("generic_web_used") is not False
+        ):
+            errors.append("provenance_value_invalid")
+    counts = result.get("counts")
+    if (
+        not isinstance(counts, dict)
+        or set(counts) != _COUNT_KEYS
+        or any(not _validate_nonnegative_int(counts.get(key)) for key in _COUNT_KEYS)
+    ):
+        errors.append("counts_invalid")
+    candidates = result.get("candidates")
+    if not isinstance(candidates, list):
+        errors.append("candidates_invalid")
+        candidates = []
+    seen_handles: set[str] = set()
+    for index, candidate in enumerate(candidates):
+        if not isinstance(candidate, dict) or set(candidate) != _CANDIDATE_KEYS:
+            errors.append(f"candidate_shape_invalid:{index}")
+            continue
+        handle = candidate.get("handle")
+        handle_key = handle.casefold() if isinstance(handle, str) else ""
+        if handle_key in seen_handles:
+            errors.append(f"candidate_handle_duplicate:{index}")
+        seen_handles.add(handle_key)
+        allowed_profile_urls = {f"https://x.com/{handle}"}
+        if not live_mode:
+            allowed_profile_urls.add(f"https://profiles.invalid/{handle}")
+        if (
+            not _validate_handle(handle)
+            or candidate.get("profile_url") not in allowed_profile_urls
+            or (
+                candidate.get("platform_user_id") is not None
+                and not _is_text(candidate["platform_user_id"], maximum=64)
+            )
+            or (candidate.get("bio_excerpt") is not None and not _is_text(candidate["bio_excerpt"], maximum=2_000))
+            or candidate.get("target_lab_affiliation_state") not in _DIMENSION_STATES
+            or candidate.get("pretraining_experience_state") not in _DIMENSION_STATES
+            or candidate.get("confidence") not in _CONFIDENCE_STATES
+            or candidate.get("overlap_status") not in {"novel", "prior_material_update"}
+            or not isinstance(candidate.get("caveats"), list)
+            or any(not _is_text(item, maximum=2_000) for item in candidate.get("caveats", []))
+        ):
+            errors.append(f"candidate_value_invalid:{index}")
+        evidence_rows = candidate.get("evidence")
+        if not isinstance(evidence_rows, list):
+            errors.append(f"candidate_evidence_invalid:{index}")
+            continue
+        evidence_digests: set[str] = set()
+        supports_by_dimension: dict[str, set[str]] = {dimension: set() for dimension in _SUPPORTS}
+        for evidence_index, evidence in enumerate(evidence_rows):
+            if not isinstance(evidence, dict) or set(evidence) != _EVIDENCE_KEYS:
+                errors.append(f"evidence_shape_invalid:{index}:{evidence_index}")
+                continue
+            supports = evidence.get("supports")
+            try:
+                support_claims = normalize_support_claims(supports, allow_legacy=False)
+            except ValueError:
+                support_claims = ()
+            digest = canonical_sha256(evidence)
+            if digest in evidence_digests:
+                errors.append(f"evidence_duplicate:{index}:{evidence_index}")
+            evidence_digests.add(digest)
+            if (
+                evidence.get("kind") not in _EVIDENCE_KINDS
+                or evidence.get("relationship") not in _RELATIONSHIPS
+                or not _validate_handle(evidence.get("subject_handle"))
+                or not _validate_handle(evidence.get("author_handle"))
+                or (evidence.get("post_id") is not None and not _is_text(evidence["post_id"], maximum=32))
+                or (evidence.get("url") is not None and not _is_text(evidence["url"], maximum=2_048))
+                or (evidence.get("published_at") is not None and not _is_text(evidence["published_at"], maximum=64))
+                or not _is_text(evidence.get("excerpt"), maximum=_EVIDENCE_EXCERPT_MAX_CODEPOINTS)
+                or not support_claims
+                or not _evidence_binding_valid(evidence, candidate, live_mode=live_mode)
+            ):
+                errors.append(f"evidence_value_invalid:{index}:{evidence_index}")
+            else:
+                for claim in support_claims:
+                    supports_by_dimension[claim["dimension"]].add(claim["asserted_value"])
+        for dimension in _SUPPORTS:
+            state = candidate.get(dimension)
+            if state in {"current", "historical"} and state not in supports_by_dimension[dimension]:
+                errors.append(f"dimension_evidence_missing:{index}:{dimension}")
+        baseline = prior.get(handle_key)
+        if baseline is None:
+            if candidate.get("overlap_status") != "novel":
+                errors.append(f"novel_overlap_status_invalid:{index}")
+        else:
+            if candidate.get("overlap_status") != "prior_material_update" or not _material_update_proved(
+                candidate, baseline
+            ):
+                errors.append(f"prior_overlap_without_material_update:{index}")
+    excluded = result.get("excluded_examples")
+    if not isinstance(excluded, list):
+        errors.append("excluded_examples_invalid")
+    else:
+        for index, row in enumerate(excluded):
+            if (
+                not isinstance(row, dict)
+                or set(row) != _EXCLUDED_KEYS
+                or not _validate_handle(row.get("handle"))
+                or not _is_text(row.get("reason"), maximum=2_000)
+            ):
+                errors.append(f"excluded_example_invalid:{index}")
+    limitations = result.get("limitations")
+    if not isinstance(limitations, list) or any(not _is_text(item, maximum=4_000) for item in limitations):
+        errors.append("limitations_invalid")
+    reconciliation = result.get("local_reconciliation")
+    evidence_count = sum(
+        len(candidate.get("evidence", []))
+        for candidate in candidates
+        if isinstance(candidate, dict) and isinstance(candidate.get("evidence"), list)
+    )
+    post_url_count = sum(
+        1
+        for candidate in candidates
+        if isinstance(candidate, dict) and isinstance(candidate.get("evidence"), list)
+        for evidence in candidate["evidence"]
+        if isinstance(evidence, dict) and _is_post_url(evidence.get("url"))
+    )
+    if not isinstance(reconciliation, dict) or set(reconciliation) != _RECONCILIATION_KEYS:
+        errors.append("local_reconciliation_shape_invalid")
+    else:
+        tool_counts = reconciliation.get("tool_counts")
+        if (
+            not _validate_nonnegative_int(reconciliation.get("candidate_records_validated"))
+            or not _validate_nonnegative_int(reconciliation.get("evidence_items_validated"))
+            or not _validate_nonnegative_int(reconciliation.get("post_urls_structurally_validated"))
+            or reconciliation.get("provider_post_bodies_replayable") is not False
+            or not _validate_nonnegative_int(reconciliation.get("tool_calls_completed"))
+            or not isinstance(tool_counts, dict)
+            or any(key not in _TOOL_NAMES or not _validate_nonnegative_int(value) for key, value in tool_counts.items())
+            or (
+                require_operator_projection
+                and isinstance(tool_counts, dict)
+                and sum(tool_counts.values()) != reconciliation.get("tool_calls_completed")
+            )
+            or (
+                require_operator_projection
+                and (
+                    reconciliation.get("candidate_records_validated") != len(candidates)
+                    or reconciliation.get("evidence_items_validated") != evidence_count
+                    or reconciliation.get("post_urls_structurally_validated") != post_url_count
+                )
+            )
+        ):
+            errors.append("local_reconciliation_value_invalid")
+    if isinstance(counts, dict) and require_operator_projection:
+        if counts.get("candidates_retained") != len(candidates):
+            errors.append("candidate_count_mismatch")
+    if result.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}:
+        if live_mode:
+            operator_calls = reconciliation.get("tool_calls_completed") if isinstance(reconciliation, dict) else None
+            if require_operator_projection and (not _is_int(operator_calls) or operator_calls <= 0):
+                errors.append("native_x_call_required_for_nonblocked_status")
+        elif not _is_int(reported_calls) or reported_calls <= 0:
+            errors.append("native_x_call_required_for_nonblocked_status")
+    if result.get("status") == "X_SEARCH_OK" and not candidates:
+        errors.append("ok_status_requires_candidate")
+    return errors
+
+
+def _canonicalize_native_x_rfc2822_timestamp(value: Any) -> str | None:
+    """Convert only an exact, round-trippable native-X IMF-fixdate GMT value."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        return None
+    canonical_gmt = format_datetime(parsed.astimezone(UTC), usegmt=True)
+    if canonical_gmt != value:
+        return None
+    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _mechanically_bound_model_reported_excerpt(value: Any) -> str | None:
+    """Return the exact display prefix only for a narrowly over-limit UTF-8 scalar string."""
+
+    if (
+        not isinstance(value, str)
+        or "\x00" in value
+        or not (
+            _EVIDENCE_EXCERPT_MAX_CODEPOINTS
+            < len(value)
+            <= _EVIDENCE_EXCERPT_MAX_NORMALIZABLE_CODEPOINTS
+        )
+    ):
+        return None
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return None
+    return value[:_EVIDENCE_EXCERPT_MAX_CODEPOINTS]
+
+
+def _operator_normalize_mechanical_result(
+    result: Any,
+    *,
+    policy_version: str,
+    prior_candidates: Mapping[str, PriorCandidateFacts] | None = None,
+    live_mode: bool,
+    require_operator_projection: bool,
+) -> Any:
+    """Apply one recorded result policy to a copy and admit it only atomically.
+
+    Every version may downgrade a mechanically impossible ``self`` relationship
+    to ``third_party``. V2 and V3 may additionally convert an exact native-X
+    IMF-fixdate GMT timestamp to canonical UTC ISO-8601 Z. V3 may additionally
+    retain only the first 280 code points of an over-limit model excerpt. The
+    raw envelope is untouched, and a partially repaired result is never admitted.
+    """
+
+    if policy_version not in {
+        LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+        RESULT_NORMALIZATION_POLICY_VERSION,
+    }:
+        raise AdaptiveWaveValidationError("result_normalization_policy_invalid")
+    if not isinstance(result, dict) or set(result) != _RESULT_KEYS:
+        return result
+    limitations = result.get("limitations")
+    candidates = result.get("candidates")
+    if (
+        not isinstance(limitations, list)
+        or any(not _is_text(item, maximum=4_000) for item in limitations)
+        or not isinstance(candidates, list)
+    ):
+        return result
+    normalized = strict_json_loads(canonical_json(result))
+    relationship_count = 0
+    timestamp_count = 0
+    excerpt_prefix_count = 0
+    excerpt_prefix_candidate_count = 0
+    excerpt_prefix_maximum_original = 0
+    for candidate in normalized["candidates"]:
+        if not isinstance(candidate, dict) or set(candidate) != _CANDIDATE_KEYS:
+            continue
+        handle = candidate.get("handle")
+        caveats = candidate.get("caveats")
+        evidence_rows = candidate.get("evidence")
+        if (
+            not _validate_handle(handle)
+            or not isinstance(caveats, list)
+            or any(not _is_text(item, maximum=2_000) for item in caveats)
+            or not isinstance(evidence_rows, list)
+        ):
+            continue
+        candidate_downgrade_count = 0
+        candidate_excerpt_prefix_count = 0
+        for evidence in evidence_rows:
+            if (
+                policy_version
+                in {
+                    LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+                    RESULT_NORMALIZATION_POLICY_VERSION,
+                }
+                and isinstance(evidence, dict)
+                and set(evidence) == _EVIDENCE_KEYS
+                and _parse_evidence_timestamp(evidence.get("published_at")) is None
+            ):
+                canonical_timestamp = _canonicalize_native_x_rfc2822_timestamp(
+                    evidence.get("published_at")
+                )
+                if canonical_timestamp is not None:
+                    evidence["published_at"] = canonical_timestamp
+                    timestamp_count += 1
+            bounded_excerpt = (
+                _mechanically_bound_model_reported_excerpt(evidence.get("excerpt"))
+                if policy_version == RESULT_NORMALIZATION_POLICY_VERSION
+                and isinstance(evidence, dict)
+                and set(evidence) == _EVIDENCE_KEYS
+                else None
+            )
+            if bounded_excerpt is not None:
+                original_excerpt = evidence["excerpt"]
+                evidence["excerpt"] = bounded_excerpt
+                candidate_excerpt_prefix_count += 1
+                excerpt_prefix_count += 1
+                excerpt_prefix_maximum_original = max(
+                    excerpt_prefix_maximum_original,
+                    len(original_excerpt),
+                )
+            if (
+                not isinstance(evidence, dict)
+                or set(evidence) != _EVIDENCE_KEYS
+                or evidence.get("kind") not in (_EVIDENCE_KINDS - {"bio"})
+                or evidence.get("relationship") != "self"
+                or not _validate_handle(evidence.get("author_handle"))
+                or evidence["author_handle"].casefold() == handle.casefold()
+            ):
+                continue
+            evidence["relationship"] = "third_party"
+            candidate_downgrade_count += 1
+        if candidate_downgrade_count:
+            relationship_count += candidate_downgrade_count
+            if _RELATIONSHIP_DOWNGRADE_CAVEAT not in caveats:
+                caveats.append(_RELATIONSHIP_DOWNGRADE_CAVEAT)
+        if candidate_excerpt_prefix_count:
+            excerpt_prefix_candidate_count += 1
+            if _EXCERPT_PREFIX_NORMALIZATION_CAVEAT not in caveats:
+                caveats.append(_EXCERPT_PREFIX_NORMALIZATION_CAVEAT)
+    if relationship_count:
+        limitation = (
+            f"Operator normalization {policy_version} downgraded {relationship_count} "
+            "mechanically impossible evidence relationship value(s) from self to third_party because the evidence "
+            "author did not match the candidate handle. Raw model output is unchanged; no evidence, support claim, "
+            "candidate state, or confidence value was upgraded."
+        )
+        normalized["limitations"].append(limitation)
+    if timestamp_count:
+        normalized["limitations"].append(
+            _TIMESTAMP_NORMALIZATION_LIMITATION.format(
+                policy_version=policy_version,
+                count=timestamp_count,
+            )
+        )
+    if excerpt_prefix_count:
+        normalized["limitations"].append(
+            _EXCERPT_PREFIX_NORMALIZATION_LIMITATION.format(
+                policy_version=policy_version,
+                maximum=_EVIDENCE_EXCERPT_MAX_CODEPOINTS,
+                count=excerpt_prefix_count,
+                candidate_count=excerpt_prefix_candidate_count,
+                maximum_original=excerpt_prefix_maximum_original,
+            )
+        )
+    if relationship_count or timestamp_count or excerpt_prefix_count:
+        if not validate_model_result(
+            normalized,
+            prior_candidates=prior_candidates,
+            live_mode=live_mode,
+            require_operator_projection=require_operator_projection,
+        ):
+            return normalized
+    return result
+
+
+def _operator_normalize_mechanical_evidence_relationships(
+    result: Any,
+    *,
+    prior_candidates: Mapping[str, PriorCandidateFacts] | None = None,
+    live_mode: bool,
+    require_operator_projection: bool,
+) -> Any:
+    """Replay-compatible v1 relationship-only normalization helper."""
+
+    return _operator_normalize_mechanical_result(
+        result,
+        policy_version=LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        prior_candidates=prior_candidates,
+        live_mode=live_mode,
+        require_operator_projection=require_operator_projection,
+    )
+
+
+def _operator_project_model_result(
+    result: Mapping[str, Any],
+    *,
+    session_proof: SessionProof | None,
+    fixture: bool,
+    session_query_policy_id: str = MIXED_SESSION_QUERY_POLICY_ID,
+) -> dict[str, Any]:
+    """Replace model-authored ledger claims with replayable operator facts.
+
+    The raw stdout envelope retains the model's original provenance and local
+    reconciliation for diagnosis.  ``sanitized.json`` is the operator-owned
+    projection consumed by later local analysis.
+    """
+
+    projected = strict_json_loads(canonical_json(result))
+    candidates = projected.get("candidates") if isinstance(projected.get("candidates"), list) else []
+    evidence_count = sum(
+        len(candidate.get("evidence", []))
+        for candidate in candidates
+        if isinstance(candidate, dict) and isinstance(candidate.get("evidence"), list)
+    )
+    post_url_count = sum(
+        1
+        for candidate in candidates
+        if isinstance(candidate, dict) and isinstance(candidate.get("evidence"), list)
+        for evidence in candidate["evidence"]
+        if isinstance(evidence, dict) and _is_post_url(evidence.get("url"))
+    )
+    counts = projected.get("counts")
+    if isinstance(counts, dict):
+        counts["candidates_retained"] = len(candidates)
+    completed_tool_calls = 0 if fixture or session_proof is None else session_proof.completed_tool_calls
+    tool_counts = {} if fixture or session_proof is None else dict(session_proof.tool_counts)
+    projected["local_reconciliation"] = {
+        "candidate_records_validated": len(candidates),
+        "evidence_items_validated": evidence_count,
+        "post_urls_structurally_validated": post_url_count,
+        "provider_post_bodies_replayable": False,
+        "tool_calls_completed": completed_tool_calls,
+        "tool_counts": tool_counts,
+    }
+    if session_query_policy_id not in SESSION_QUERY_POLICY_IDS:
+        raise AdaptiveWaveValidationError("session_query_policy_invalid")
+    if (
+        not fixture
+        and session_proof is not None
+        and session_query_policy_id in DISCOVERY_ONLY_SESSION_QUERY_POLICY_IDS
+        and projected.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}
+    ):
+        projected["status"] = "X_SEARCH_PARTIAL"
+        projected["status_reason"] = _DISCOVERY_CONVERGENCE_UNPROVEN_REASON
+        limitations = projected.get("limitations")
+        if isinstance(limitations, list) and _DISCOVERY_CONVERGENCE_UNPROVEN_REASON not in limitations:
+            limitations.append(_DISCOVERY_CONVERGENCE_UNPROVEN_REASON)
+    elif not fixture and session_proof is not None:
+        attempted_surfaces = {
+            (attempt["handle_key"], attempt["surface"])
+            for attempt in session_proof.candidate_surface_attempts
+        }
+        unresolved_gap_count = sum(
+            1
+            for candidate in candidates
+            if isinstance(candidate, dict)
+            and candidate.get("pretraining_experience_state") in {"ambiguous", "unsupported"}
+            and isinstance(candidate.get("handle"), str)
+            and any(
+                (candidate["handle"].casefold(), surface) not in attempted_surfaces
+                for surface in ("authored_post", "authored_reply")
+            )
+        )
+        if unresolved_gap_count and projected.get("status") in {"X_SEARCH_OK", "X_SEARCH_PARTIAL"}:
+            if projected["status"] == "X_SEARCH_OK":
+                projected["status"] = "X_SEARCH_PARTIAL"
+                projected["status_reason"] = _SURFACE_COVERAGE_DOWNGRADE_REASON
+            limitations = projected.get("limitations")
+            limitation = (
+                f"{_SURFACE_COVERAGE_DOWNGRADE_REASON} "
+                f"Unresolved candidate count with a missing surface: {unresolved_gap_count}."
+            )
+            if isinstance(limitations, list) and limitation not in limitations:
+                limitations.append(limitation)
+    return projected
+
+
+def _live_profile_urls_valid(result: Any) -> bool:
+    candidates = result.get("candidates") if isinstance(result, dict) else None
+    return isinstance(candidates, list) and all(
+        isinstance(candidate, dict) and candidate.get("profile_url") == f"https://x.com/{candidate.get('handle')}"
+        for candidate in candidates
+    )
+
+
+def _read_regular_owned_bounded(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    required_mode: int | None = None,
+) -> bytes:
+    """Read one descriptor-bound owner file without a check/open race."""
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("bound_input_unreadable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if before.st_size > maximum_bytes:
+            raise AdaptiveWaveValidationError("bound_input_byte_ceiling_exceeded")
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or before.st_size < 0
+            or (required_mode is not None and stat.S_IMODE(before.st_mode) != required_mode)
+        ):
+            raise AdaptiveWaveValidationError("bound_input_metadata_invalid")
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(1_048_576, remaining))
+            if not chunk:
+                raise AdaptiveWaveValidationError("bound_input_changed_during_read")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise AdaptiveWaveValidationError("bound_input_byte_ceiling_exceeded")
+        after = os.fstat(descriptor)
+        try:
+            current = path.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise AdaptiveWaveValidationError("bound_input_identity_changed") from exc
+
+        def identity(item: os.stat_result) -> tuple[int, int, int, int, int]:
+            return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns, item.st_nlink
+
+        if identity(before) != identity(after) or identity(after) != identity(current):
+            raise AdaptiveWaveValidationError("bound_input_identity_changed")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _load_bound_bytes(
+    path_value: str,
+    expected_sha256: str,
+    *,
+    require_private: bool = False,
+    max_bytes: int | None = None,
+) -> bytes:
+    path = Path(path_value).expanduser()
+    try:
+        value = _read_regular_owned_bounded(
+            path,
+            maximum_bytes=max_bytes if max_bytes is not None else 1_073_741_824,
+            required_mode=0o600 if require_private else None,
+        )
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("bound_input_unreadable") from exc
+    if bytes_sha256(value) != expected_sha256:
+        raise AdaptiveWaveValidationError("bound_input_sha256_mismatch")
+    return value
+
+
+def load_prior_context(
+    request: Mapping[str, Any],
+) -> tuple[list[str], list[dict[str, Any]], dict[str, PriorCandidateFacts]]:
+    """Load SHA-bound exclusions plus immutable facts for material-update proofs."""
+
+    handles: dict[str, str] = {}
+    mutable_facts: dict[str, dict[str, Any]] = {}
+    bindings: list[dict[str, Any]] = []
+    total_prior_bytes = 0
+    for row in request["prior_waves"]:
+        raw = _load_bound_bytes(
+            row["path"],
+            row["sha256"],
+            require_private=True,
+            max_bytes=request["technical_limits"]["max_prior_wave_bytes"],
+        )
+        total_prior_bytes += len(raw)
+        if total_prior_bytes > request["technical_limits"]["max_total_prior_wave_bytes"]:
+            raise AdaptiveWaveValidationError("prior_wave_total_byte_ceiling_exceeded")
+        try:
+            wave = strict_json_loads_bounded(
+                raw,
+                max_bytes=request["technical_limits"]["max_prior_wave_bytes"],
+                max_depth=request["technical_limits"]["max_prior_json_depth"],
+                max_nodes=request["technical_limits"]["max_prior_json_nodes"],
+            )
+        except AdaptiveWaveValidationError:
+            raise
+        except (UnicodeError, ValueError, RecursionError) as exc:
+            raise AdaptiveWaveValidationError("prior_wave_json_invalid") from exc
+        candidates = wave.get("candidates") if isinstance(wave, dict) else None
+        if not isinstance(candidates, list):
+            raise AdaptiveWaveValidationError("prior_wave_candidates_invalid")
+        wave_handle_keys: set[str] = set()
+        for candidate in candidates:
+            handle = candidate.get("handle") if isinstance(candidate, dict) else None
+            if not _validate_handle(handle):
+                raise AdaptiveWaveValidationError("prior_wave_handle_invalid")
+            handle_key = handle.casefold()
+            if handle_key in wave_handle_keys:
+                raise AdaptiveWaveValidationError("prior_wave_casefold_handle_duplicate")
+            wave_handle_keys.add(handle_key)
+            handles.setdefault(handle_key, handle)
+            facts = mutable_facts.setdefault(
+                handle_key,
+                {
+                    "wave_ids": set(),
+                    "evidence_source_sha256s": set(),
+                    "target_lab_affiliation_states": set(),
+                    "pretraining_experience_states": set(),
+                    "target_lab_affiliation_latest_at": None,
+                    "pretraining_experience_latest_at": None,
+                },
+            )
+            facts["wave_ids"].add(row["wave_id"])
+            if isinstance(candidate, dict):
+                for dimension in (
+                    "target_lab_affiliation_state",
+                    "pretraining_experience_state",
+                ):
+                    state = candidate.get(dimension)
+                    if state in _DIMENSION_STATES:
+                        facts[f"{dimension}s"].add(state)
+                evidence = candidate.get("evidence")
+                if isinstance(evidence, list):
+                    for item in evidence:
+                        if not isinstance(item, dict):
+                            continue
+                        source_sha = _evidence_source_sha256(item, handle)
+                        if source_sha is not None:
+                            facts["evidence_source_sha256s"].add(source_sha)
+                        published = _parse_evidence_timestamp(item.get("published_at"))
+                        if published is None:
+                            continue
+                        try:
+                            support_claims = normalize_support_claims(item.get("supports"), allow_legacy=True)
+                        except ValueError:
+                            continue
+                        for dimension in {
+                            claim["dimension"] for claim in support_claims if claim["dimension"] in _SUPPORTS
+                        }:
+                            latest_key = f"{dimension.removesuffix('_state')}_latest_at"
+                            if facts[latest_key] is None or published > facts[latest_key]:
+                                facts[latest_key] = published
+        bindings.append(
+            {
+                "wave_id": row["wave_id"],
+                "sha256": row["sha256"],
+                "candidate_count": len(candidates),
+                "unique_handle_count": len(wave_handle_keys),
+                "handle_set_sha256": canonical_sha256(sorted(wave_handle_keys)),
+            }
+        )
+    immutable_facts = {
+        key: PriorCandidateFacts(
+            wave_ids=frozenset(value["wave_ids"]),
+            evidence_source_sha256s=frozenset(value["evidence_source_sha256s"]),
+            target_lab_affiliation_states=frozenset(value["target_lab_affiliation_states"]),
+            pretraining_experience_states=frozenset(value["pretraining_experience_states"]),
+            target_lab_affiliation_latest_at=value["target_lab_affiliation_latest_at"],
+            pretraining_experience_latest_at=value["pretraining_experience_latest_at"],
+        )
+        for key, value in mutable_facts.items()
+    }
+    return [handles[key] for key in sorted(handles)], bindings, immutable_facts
+
+
+def load_prior_handles(request: Mapping[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
+    handles, bindings, _ = load_prior_context(request)
+    return handles, bindings
+
+
+def compile_prompt(
+    base_prompt: str,
+    target: Mapping[str, Any],
+    prior_handles: Sequence[str],
+    *,
+    result_schema: Mapping[str, Any] | None = None,
+) -> str:
+    if not base_prompt.strip():
+        raise AdaptiveWaveValidationError("prompt_empty")
+    exclusion_json = canonical_json(list(prior_handles))
+    target_json = canonical_json(target)
+    schema_json = canonical_json(result_schema or _load_result_schema())
+    return (
+        f"{base_prompt.rstrip()}\n\n"
+        "--- OPERATOR-OWNED ADAPTIVE RECALL BOUNDARY ---\n"
+        f"Target configuration: {target_json}\n"
+        "The following prior handles are case-insensitive exclusion rules only. They are not evidence, seeds, "
+        "ranking inputs, or a business stop condition:\n"
+        f"{exclusion_json}\n"
+        "Use only Grok native X keyword, semantic, user, and thread tools. Do not use generic web search, local "
+        "files, shell, browser, connectors, memory, or subagents. Do not mutate X. Do not use another provider or "
+        "fallback.\n"
+        "Do not impose a candidate, observation, query, or X-tool-call business quota. Continue adaptively while "
+        "materially different native-X searches yield novel evidence-bearing handles. The external operator owns "
+        "the emergency max-turn ceiling and monotonic deadline.\n"
+        "Base discovery may use only target-lab affiliation, professional role/function, public research evidence, "
+        "and pretraining relevance. Never infer or query protected identity. Keep target-lab affiliation temporality "
+        "and pretraining-experience temporality independent.\n"
+        "For each evidence row, emit an explicit typed support claim with the dimension and asserted temporal value. "
+        "Classify every non-Bio post as self_post, reply, quote, thread_root, or thread_reply; Bio thread_relation is "
+        "always null. These model-organized classifications remain unverified discovery proposals.\n"
+        "Return exactly one JSON object matching the supplied schema. Do not emit Markdown, commentary, a prefix, "
+        "or a suffix. Model-organized evidence remains a discovery lead, not replayable source truth.\n"
+        f"Authoritative result JSON Schema: {schema_json}"
+    )
+
+
+def result_schema_sha256(*, legacy_v2: bool = False) -> str:
+    filename = LEGACY_RESULT_SCHEMA_FILE if legacy_v2 else RESULT_SCHEMA_FILE
+    path = Path(__file__).resolve().parents[2] / "contracts" / filename
+    return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
+
+
+def tool_registry_sha256() -> str:
+    return canonical_sha256(
+        {
+            "allowed_native_x_tools": list(NATIVE_X_TOOLS),
+            "disallowed_tools": list(DISALLOWED_TOOLS),
+            "base_discovery_tool_argument_policy_version": BASE_DISCOVERY_TOOL_ARGUMENT_POLICY_VERSION,
+            "cli_native_x_allowlist_enforced": False,
+            "native_x_session_proof_required": True,
+            "generic_web_disabled": True,
+            "provider_fallback_authorized": False,
+        }
+    )
+
+
+def _load_effective_prompt_policy() -> dict[str, Any]:
+    """Load the module-owned live prompt/target owner with a closed shape."""
+
+    try:
+        raw = _read_regular_owned_bounded(
+            DEFAULT_EFFECTIVE_PROMPT_POLICY,
+            maximum_bytes=MAX_EFFECTIVE_PROMPT_POLICY_BYTES,
+        )
+        policy = strict_json_loads_bounded(
+            raw,
+            max_bytes=MAX_EFFECTIVE_PROMPT_POLICY_BYTES,
+            max_depth=16,
+            max_nodes=10_000,
+        )
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("effective_prompt_policy_unavailable") from exc
+    expected_keys = {
+        "schema_version",
+        "binding_version",
+        "policy_id",
+        "owner",
+        "allowed_discovery_dimensions",
+        "entries",
+    }
+    if (
+        not isinstance(policy, dict)
+        or set(policy) != expected_keys
+        or policy.get("schema_version") != EFFECTIVE_PROMPT_POLICY_SCHEMA_VERSION
+        or policy.get("binding_version") != EFFECTIVE_PROMPT_POLICY_BINDING_VERSION
+        or policy.get("policy_id") != EFFECTIVE_PROMPT_POLICY_ID
+        or policy.get("owner") != EFFECTIVE_PROMPT_POLICY_OWNER
+        or policy.get("allowed_discovery_dimensions") != list(ALLOWED_DISCOVERY_DIMENSIONS)
+        or not isinstance(policy.get("entries"), list)
+    ):
+        raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+    entry_ids: set[str] = set()
+    bindings: set[tuple[str, str]] = set()
+    for entry in policy["entries"]:
+        base_entry_keys = {
+            "policy_entry_id",
+            "target",
+            "source_prompt_sha256",
+            "authority",
+        }
+        session_policy_keys = {
+            "session_query_policy_id",
+            "session_query_policy_sha256",
+        }
+        official_account_keys = {"official_account_handles"}
+        prior_input_policy_keys = {
+            "prior_input_policy_id",
+            "prior_input_policy_sha256",
+        }
+        entry_keys = frozenset(entry) if isinstance(entry, dict) else frozenset()
+        session_policy_pair_complete = session_policy_keys.issubset(entry_keys)
+        prior_input_policy_pair_complete = prior_input_policy_keys.issubset(entry_keys)
+        if (
+            not isinstance(entry, dict)
+            or not base_entry_keys.issubset(entry_keys)
+            or not entry_keys.issubset(
+                base_entry_keys
+                | session_policy_keys
+                | official_account_keys
+                | prior_input_policy_keys
+            )
+            or bool(entry_keys & session_policy_keys) != session_policy_pair_complete
+            or bool(entry_keys & prior_input_policy_keys)
+            != prior_input_policy_pair_complete
+            or (bool(entry_keys & official_account_keys) and not session_policy_pair_complete)
+        ):
+            raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+        entry_id = entry.get("policy_entry_id")
+        target = entry.get("target")
+        source_prompt_sha = entry.get("source_prompt_sha256")
+        session_query_policy_id = entry.get(
+            "session_query_policy_id",
+            MIXED_SESSION_QUERY_POLICY_ID,
+        )
+        prior_input_policy_id = entry.get("prior_input_policy_id")
+        official_account_handles = entry.get("official_account_handles")
+        official_handles_valid = (
+            isinstance(official_account_handles, list)
+            and bool(official_account_handles)
+            and all(_validate_handle(handle) for handle in official_account_handles)
+            and len({handle.casefold() for handle in official_account_handles}) == len(official_account_handles)
+        )
+        if (
+            not isinstance(entry_id, str)
+            or _ID_RE.fullmatch(entry_id) is None
+            or entry_id in entry_ids
+            or not isinstance(target, dict)
+            or set(target) != _TARGET_KEYS
+            or not isinstance(target.get("lab_id"), str)
+            or _ID_RE.fullmatch(target["lab_id"]) is None
+            or not isinstance(target.get("research_focus_id"), str)
+            or _ID_RE.fullmatch(target["research_focus_id"]) is None
+            or not _is_text(target.get("scope"), maximum=20_000)
+            or not _is_sha(source_prompt_sha)
+            or entry.get("authority") not in {"fixture_only", "live_authorized"}
+            or session_query_policy_id not in SESSION_QUERY_POLICY_IDS
+            or (
+                prior_input_policy_id is not None
+                and prior_input_policy_id not in PRIOR_INPUT_POLICY_IDS
+            )
+            or (
+                "session_query_policy_id" in entry
+                and entry.get("session_query_policy_sha256")
+                != session_query_policy_semantics_sha256(entry["session_query_policy_id"])
+            )
+            or (
+                prior_input_policy_id is not None
+                and entry.get("prior_input_policy_sha256")
+                != prior_input_policy_semantics_sha256(prior_input_policy_id)
+            )
+            or (
+                session_query_policy_id == DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+                and not official_handles_valid
+            )
+            or (
+                session_query_policy_id != DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+                and official_account_handles is not None
+            )
+        ):
+            raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+        binding = (canonical_sha256(target), source_prompt_sha)
+        if binding in bindings:
+            raise AdaptiveWaveValidationError("effective_prompt_policy_invalid")
+        entry_ids.add(entry_id)
+        bindings.add(binding)
+    return policy
+
+
+def _effective_prompt_policy_entry_sha256(
+    policy: Mapping[str, Any],
+    entry: Mapping[str, Any],
+) -> str:
+    """Bind immutable owner semantics plus one selected append-only entry.
+
+    The registry is intentionally extensible.  Hashing its complete bytes
+    would make an unrelated additive row invalidate already issued grants and
+    retained bundles.  The wire field keeps its v2 name for compatibility, but
+    its value is this entry-scoped semantic digest rather than a file digest.
+    """
+
+    return canonical_sha256(
+        {
+            "binding_version": policy["binding_version"],
+            "schema_version": policy["schema_version"],
+            "policy_id": policy["policy_id"],
+            "owner": policy["owner"],
+            "allowed_discovery_dimensions": policy["allowed_discovery_dimensions"],
+            "entry": dict(entry),
+        }
+    )
+
+
+def _approved_effective_prompt_binding(request: Mapping[str, Any]) -> EffectivePromptPolicyBinding:
+    policy = _load_effective_prompt_policy()
+    target_sha = canonical_sha256(request["target"])
+    prompt_sha = request["prompt_source"]["sha256"]
+    matches = [
+        entry
+        for entry in policy["entries"]
+        if entry["authority"] == "live_authorized"
+        and canonical_sha256(entry["target"]) == target_sha
+        and entry["source_prompt_sha256"] == prompt_sha
+    ]
+    if len(matches) != 1:
+        raise PermissionError("effective_prompt_target_not_approved")
+    selected_entry = matches[0]
+    prior_input_policy_id = selected_entry.get("prior_input_policy_id")
+    if (
+        prior_input_policy_id == REQUIRE_EMPTY_PRIOR_WAVES_POLICY_ID
+        and request.get("prior_waves") != []
+    ):
+        raise PermissionError("effective_prompt_prior_input_not_approved")
+    return EffectivePromptPolicyBinding(
+        policy_sha256=_effective_prompt_policy_entry_sha256(policy, selected_entry),
+        policy_entry_id=selected_entry["policy_entry_id"],
+        session_query_policy_id=selected_entry.get(
+            "session_query_policy_id",
+            MIXED_SESSION_QUERY_POLICY_ID,
+        ),
+        official_account_handles=tuple(selected_entry.get("official_account_handles", ())),
+        prior_input_policy_id=prior_input_policy_id,
+    )
+
+
+def _command_policy(
+    request: Mapping[str, Any],
+    *,
+    legacy_plain: bool = False,
+    legacy_result_v2: bool = False,
+) -> list[str]:
+    """Build the approved argv template through the one canonical argv builder."""
+
+    builder = _build_legacy_plain_grok_command if legacy_plain else build_grok_command
+    return builder(
+        binary=Path("<grok-binary:sha256-bound>"),
+        cwd=Path("<isolated-empty-directory>"),
+        request=request,
+        prompt_file=Path("<compiled-prompt:sha256-bound>"),
+        leader_socket=Path("<isolated-leader-socket>"),
+        session_id="<operator-session-id>",
+        result_schema={"$operator_bound_schema_sha256": result_schema_sha256(legacy_v2=legacy_result_v2)},
+    )
+
+
+def _legacy_normalization_only_result_v3_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for result-v3 bundles sealed before artifact-policy binding."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+        }
+    )
+
+
+def _legacy_operator_result_v1_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for v1 normalization plus the artifact policy."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+        }
+    )
+
+
+def _legacy_operator_result_v2_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for v2 timestamp normalization plus the artifact policy."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+        }
+    )
+
+
+def _current_operator_result_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+            "process_evidence_policy_version": PROCESS_EVIDENCE_POLICY_VERSION,
+        }
+    )
+
+
+def _legacy_pre_process_evidence_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for bundles sealed before journal-generation binding."""
+
+    return canonical_sha256(
+        {
+            "argv_template": _command_policy(request),
+            "result_normalization_policy_version": RESULT_NORMALIZATION_POLICY_VERSION,
+            "operator_result_artifact_policy_version": OPERATOR_RESULT_ARTIFACT_POLICY_VERSION,
+        }
+    )
+
+
+def command_policy_sha256(request: Mapping[str, Any]) -> str:
+    return _current_operator_result_command_policy_sha256(request)
+
+
+def _legacy_pre_normalization_result_v3_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for retained result-v3 bundles sealed before normalization v1."""
+
+    return canonical_sha256(_command_policy(request))
+
+
+def _legacy_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for retained pre-headless adaptive bundles."""
+
+    return canonical_sha256(_command_policy(request, legacy_plain=True))
+
+
+def _legacy_structured_result_command_policy_sha256(request: Mapping[str, Any]) -> str:
+    """Replay-only digest for retained structured-result-v2 bundles."""
+
+    return canonical_sha256(_command_policy(request, legacy_result_v2=True))
+
+
+def _redacted_policy_from_bindings(
+    input_binding: Mapping[str, Any],
+    command_binding: Mapping[str, Any],
+    *,
+    legacy_plain: bool = False,
+    legacy_result_v2: bool = False,
+    legacy_normalization_only_result_v3: bool = False,
+    legacy_operator_result_v1: bool = False,
+    legacy_operator_result_v2: bool = False,
+    legacy_pre_normalization_result_v3: bool = False,
+    legacy_pre_process_evidence: bool = False,
+) -> list[str] | dict[str, Any]:
+    del input_binding
+    synthetic_request = {
+        "transport": {
+            "model_id": command_binding["model_id"],
+            "reasoning_effort": command_binding["reasoning_effort"],
+        },
+        "emergency": {"max_turns": command_binding["max_turns"]},
+    }
+    argv_template = _command_policy(
+        synthetic_request,
+        legacy_plain=legacy_plain,
+        legacy_result_v2=legacy_result_v2,
+    )
+    if legacy_plain or legacy_result_v2 or legacy_pre_normalization_result_v3:
+        return argv_template
+    policy = {
+        "argv_template": argv_template,
+        "result_normalization_policy_version": (
+            LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+            if legacy_normalization_only_result_v3 or legacy_operator_result_v1
+            else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+            if legacy_operator_result_v2
+            else RESULT_NORMALIZATION_POLICY_VERSION
+        ),
+    }
+    if not legacy_normalization_only_result_v3:
+        policy["operator_result_artifact_policy_version"] = OPERATOR_RESULT_ARTIFACT_POLICY_VERSION
+    if not (
+        legacy_plain
+        or legacy_result_v2
+        or legacy_pre_normalization_result_v3
+        or legacy_normalization_only_result_v3
+        or legacy_operator_result_v1
+        or legacy_operator_result_v2
+        or legacy_pre_process_evidence
+    ):
+        policy["process_evidence_policy_version"] = PROCESS_EVIDENCE_POLICY_VERSION
+    return policy
+
+
+def _process_evidence_generation_from_bindings(
+    input_binding: Mapping[str, Any],
+    command_binding: Mapping[str, Any],
+) -> str | None:
+    """Select the policy generation without trusting optional artifact keys.
+
+    ``transitional`` is the bounded direct-parent digest used both before and
+    during the journal rollout.  Its artifact shape therefore has to be
+    reconciled separately.  New bundles use the independently bound current
+    digest, so optional-key deletion can never downgrade them into this
+    compatibility branch.
+    """
+
+    recorded = command_binding.get("command_policy_sha256")
+    current = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+    if recorded == current:
+        return "current"
+    transitional = canonical_sha256(
+        _redacted_policy_from_bindings(
+            input_binding,
+            command_binding,
+            legacy_pre_process_evidence=True,
+        )
+    )
+    if recorded == transitional:
+        return "transitional"
+    legacy = {
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v1=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v2=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_normalization_only_result_v3=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_normalization_result_v3=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_plain=True,
+            )
+        ),
+        canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_result_v2=True,
+            )
+        ),
+    }
+    return "legacy" if recorded in legacy else None
+
+
+def _redacted_environment_policy() -> dict[str, str]:
+    return {
+        "GROK_DISABLE_AUTOUPDATER": "1",
+        "GROK_HOME": "<ephemeral-home>",
+        "HOME": "<ephemeral-home>",
+        "LANG": "en_US.UTF-8",
+        "LC_ALL": "en_US.UTF-8",
+        "NO_COLOR": "1",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "TERM": "dumb",
+        "TMPDIR": "<ephemeral-home>/tmp",
+        "XDG_CACHE_HOME": "<ephemeral-home>/xdg-cache",
+        "XDG_CONFIG_HOME": "<ephemeral-home>/xdg-config",
+        "XDG_STATE_HOME": "<ephemeral-home>/xdg-state",
+        "X_FIRST_PROCESS_IDENTITY": "<spawn-token>",
+    }
+
+
+def build_grok_command(
+    *,
+    binary: Path,
+    cwd: Path,
+    request: Mapping[str, Any],
+    prompt_file: Path,
+    leader_socket: Path,
+    session_id: str,
+    result_schema: Mapping[str, Any],
+) -> list[str]:
+    emergency = request["emergency"]
+    transport = request["transport"]
+    return [
+        str(binary),
+        "--prompt-file",
+        str(prompt_file),
+        "--verbatim",
+        "--cwd",
+        str(cwd),
+        "--model",
+        transport["model_id"],
+        "--reasoning-effort",
+        transport["reasoning_effort"],
+        "--output-format",
+        "json",
+        "--json-schema",
+        canonical_json(result_schema),
+        "--disable-web-search",
+        "--disallowed-tools",
+        ",".join(DISALLOWED_TOOLS),
+        "--max-turns",
+        str(emergency["max_turns"]),
+        "--session-id",
+        session_id,
+        "--no-subagents",
+        "--no-plan",
+        "--no-memory",
+        "--no-auto-update",
+        "--leader-socket",
+        str(leader_socket),
+        "--permission-mode",
+        "dontAsk",
+        "--sandbox",
+        "read-only",
+    ]
+
+
+def _build_legacy_plain_grok_command(
+    *,
+    binary: Path,
+    cwd: Path,
+    request: Mapping[str, Any],
+    prompt_file: Path,
+    leader_socket: Path,
+    session_id: str,
+    result_schema: Mapping[str, Any],
+) -> list[str]:
+    """Rebuild the pre-headless argv only while replaying retained bundles."""
+
+    del result_schema
+    emergency = request["emergency"]
+    transport = request["transport"]
+    return [
+        str(binary),
+        "--prompt-file",
+        str(prompt_file),
+        "--verbatim",
+        "--cwd",
+        str(cwd),
+        "--model",
+        transport["model_id"],
+        "--reasoning-effort",
+        transport["reasoning_effort"],
+        "--output-format",
+        "plain",
+        "--disable-web-search",
+        "--disallowed-tools",
+        ",".join(DISALLOWED_TOOLS),
+        "--max-turns",
+        str(emergency["max_turns"]),
+        "--session-id",
+        session_id,
+        "--no-subagents",
+        "--no-plan",
+        "--no-memory",
+        "--no-auto-update",
+        "--leader-socket",
+        str(leader_socket),
+        "--permission-mode",
+        "dontAsk",
+        "--sandbox",
+        "read-only",
+    ]
+
+
+_GATED_LAUNCHER_SOURCE = (
+    "import os,sys\n"
+    "os.umask(0o077)\n"
+    "gate=int(sys.argv[1]); ack=int(sys.argv[2])\n"
+    "token=os.environ.get('X_FIRST_PROCESS_IDENTITY','')\n"
+    "os.write(ack,(token+'\\n').encode('ascii')); os.close(ack)\n"
+    "released=os.read(gate,1); os.close(gate)\n"
+    "if released != b'1': os._exit(125)\n"
+    "os.execve(sys.argv[3],sys.argv[3:],os.environ)\n"
+)
+
+
+def _kernel_birth_identity(pid: int) -> str:
+    """Return a kernel/process-table birth identity for PID-reuse protection."""
+
+    proc_stat = Path(f"/proc/{pid}/stat")
+    if proc_stat.is_file():
+        raw = proc_stat.read_text()
+        closing = raw.rfind(")")
+        fields = raw[closing + 2 :].split()
+        if closing < 0 or len(fields) <= 19:
+            raise AdaptiveWaveValidationError("process_birth_identity_unavailable")
+        boot_id_path = Path("/proc/sys/kernel/random/boot_id")
+        boot_id = boot_id_path.read_text().strip() if boot_id_path.is_file() else platform.node()
+        return f"linux:{boot_id}:{fields[19]}"
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed absolute diagnostic binary
+            ["/bin/ps", "-o", "lstart=,ppid=,pgid=", "-p", str(pid)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise AdaptiveWaveValidationError("process_birth_identity_unavailable") from exc
+    identity = " ".join(completed.stdout.split())
+    if completed.returncode != 0 or not identity:
+        raise AdaptiveWaveValidationError("process_birth_identity_unavailable")
+    return f"{platform.system().lower()}:{identity}"
+
+
+def _measure_session_tree(
+    root: Path,
+    *,
+    max_files: int,
+    max_file_bytes: int,
+    max_total_bytes: int,
+    updates_path: Path | None = None,
+    max_updates_bytes: int | None = None,
+    expected_socket_path: Path | None = None,
+    max_depth: int = MAX_SESSION_TREE_DEPTH,
+    deadline_at: float | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> SessionTreeMeasurement:
+    """Measure every child entry under a bounded, deadline-aware traversal.
+
+    ``max_files`` is retained as the v2 wire name, but it is deliberately
+    enforced as the stricter all-entry ceiling (regular files, directories,
+    and the one expected leader socket).  This prevents directory or socket
+    floods from bypassing the original file-only counter.
+    """
+
+    file_count = 0
+    entry_count = 0
+    total_bytes = 0
+    largest = 0
+    deepest = 0
+    limit_kind: str | None = None
+    try:
+        root_metadata = root.lstat()
+    except FileNotFoundError:
+        return SessionTreeMeasurement(0, 0, 0, 0, 0, None)
+    if (
+        root.is_symlink()
+        or not stat.S_ISDIR(root_metadata.st_mode)
+        or root_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(root_metadata.st_mode) != 0o700
+    ):
+        return SessionTreeMeasurement(0, 0, 0, 0, 0, "session_tree_entry_invalid")
+    scan_deadline = deadline_at if deadline_at is not None else float("inf")
+    stack: list[tuple[Path, int]] = [(root, 0)]
+    while stack:
+        if monotonic() >= scan_deadline:
+            limit_kind = "session_tree_scan_deadline"
+            break
+        current, current_depth = stack.pop()
+        try:
+            current_metadata = current.lstat()
+            if (
+                current.is_symlink()
+                or not stat.S_ISDIR(current_metadata.st_mode)
+                or current_metadata.st_uid != os.getuid()
+                or stat.S_IMODE(current_metadata.st_mode) != 0o700
+            ):
+                limit_kind = "session_tree_entry_invalid"
+                break
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    if monotonic() >= scan_deadline:
+                        limit_kind = "session_tree_scan_deadline"
+                        break
+                    path = current / entry.name
+                    metadata = entry.stat(follow_symlinks=False)
+                    if entry_count >= max_files:
+                        limit_kind = "session_tree_entries"
+                        break
+                    entry_count += 1
+                    depth = current_depth + 1
+                    if depth > max_depth:
+                        limit_kind = "session_tree_depth"
+                        break
+                    deepest = max(deepest, depth)
+                    if stat.S_ISLNK(metadata.st_mode) or metadata.st_uid != os.getuid():
+                        limit_kind = "session_tree_entry_invalid"
+                        break
+                    if stat.S_ISDIR(metadata.st_mode):
+                        if stat.S_IMODE(metadata.st_mode) != 0o700:
+                            limit_kind = "session_tree_entry_invalid"
+                            break
+                        stack.append((path, depth))
+                        continue
+                    if stat.S_ISSOCK(metadata.st_mode):
+                        if expected_socket_path is None or path != expected_socket_path or metadata.st_nlink != 1:
+                            limit_kind = "session_tree_unexpected_socket"
+                            break
+                        continue
+                    if (
+                        not stat.S_ISREG(metadata.st_mode)
+                        or metadata.st_nlink != 1
+                        or stat.S_IMODE(metadata.st_mode) != 0o600
+                    ):
+                        limit_kind = "session_tree_entry_invalid"
+                        break
+                    file_count += 1
+                    next_total_bytes = total_bytes + metadata.st_size
+                    total_bytes = min(next_total_bytes, max_total_bytes)
+                    largest = max(largest, min(metadata.st_size, max_file_bytes))
+                    if updates_path is not None and path == updates_path and max_updates_bytes is not None:
+                        if metadata.st_size > max_updates_bytes:
+                            limit_kind = "session_updates_bytes"
+                            break
+                    if metadata.st_size > max_file_bytes:
+                        limit_kind = "session_tree_file_bytes"
+                        break
+                    if next_total_bytes > max_total_bytes:
+                        limit_kind = "session_tree_total_bytes"
+                        break
+                if limit_kind is not None:
+                    break
+        except OSError:
+            limit_kind = "session_tree_entry_invalid"
+            break
+    return SessionTreeMeasurement(file_count, entry_count, total_bytes, largest, deepest, limit_kind)
+
+
+class ProcessGroupExecutor:
+    """Spool bounded output while enforcing a monotonic process-group boundary."""
+
+    @staticmethod
+    def _group_alive(process_group_id: int) -> bool:
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    @classmethod
+    def _reap_leader_after_group_permission_error(
+        cls,
+        process: subprocess.Popen[bytes],
+        *,
+        term_grace_ms: int,
+        kill_grace_ms: int,
+    ) -> bool:
+        """Never leak the direct child even when group signalling is denied."""
+
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=max(0.001, term_grace_ms / 1000))
+            return True
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=max(0.001, kill_grace_ms / 1000))
+                return True
+            except subprocess.TimeoutExpired:
+                return False
+
+    @classmethod
+    def _cleanup_group(
+        cls,
+        process: subprocess.Popen[bytes],
+        process_group_id: int,
+        *,
+        term_grace_ms: int,
+        kill_grace_ms: int,
+        monotonic: Callable[[], float],
+    ) -> tuple[bool, bool, bool]:
+        term_sent = False
+        kill_sent = False
+        if cls._group_alive(process_group_id):
+            term_sent = True
+            try:
+                os.killpg(process_group_id, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                cls._reap_leader_after_group_permission_error(
+                    process,
+                    term_grace_ms=term_grace_ms,
+                    kill_grace_ms=kill_grace_ms,
+                )
+                return term_sent, kill_sent, False
+            term_deadline = monotonic() + term_grace_ms / 1000
+            while cls._group_alive(process_group_id) and monotonic() < term_deadline:
+                time.sleep(0.02)
+        if cls._group_alive(process_group_id):
+            kill_sent = True
+            try:
+                os.killpg(process_group_id, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                cls._reap_leader_after_group_permission_error(
+                    process,
+                    term_grace_ms=term_grace_ms,
+                    kill_grace_ms=kill_grace_ms,
+                )
+                return term_sent, kill_sent, False
+            kill_deadline = monotonic() + kill_grace_ms / 1000
+            while cls._group_alive(process_group_id) and monotonic() < kill_deadline:
+                time.sleep(0.02)
+        remaining = max(0.001, kill_grace_ms / 1000)
+        try:
+            process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            return term_sent, kill_sent, False
+        return term_sent, kill_sent, not cls._group_alive(process_group_id)
+
+    def __call__(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        environment: Mapping[str, str],
+        stdout_spool: Path,
+        stderr_spool: Path,
+        deadline_at: float,
+        term_grace_ms: int,
+        kill_grace_ms: int,
+        max_stdout_bytes: int,
+        max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
+        monotonic: Callable[[], float],
+        on_spawn: Callable[[int, int, str, str], None],
+    ) -> ProcessResult:
+        spool_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            spool_flags |= os.O_NOFOLLOW
+        stdout_fd = os.open(stdout_spool, spool_flags, 0o600)
+        stderr_fd = os.open(stderr_spool, spool_flags, 0o600)
+        os.fchmod(stdout_fd, 0o600)
+        os.fchmod(stderr_fd, 0o600)
+        gate_read, gate_write = os.pipe()
+        ack_read, ack_write = os.pipe()
+        identity_token = os.urandom(32).hex()
+        child_environment = dict(environment)
+        child_environment["X_FIRST_PROCESS_IDENTITY"] = identity_token
+        launcher_command = [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            _GATED_LAUNCHER_SOURCE,
+            str(gate_read),
+            str(ack_write),
+            *command,
+        ]
+        process: subprocess.Popen[bytes] | None = None
+        try:
+            process = subprocess.Popen(  # noqa: S603 - argv is built by the closed operator
+                launcher_command,
+                cwd=cwd,
+                env=child_environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+                pass_fds=(gate_read, ack_write),
+            )
+        except (OSError, ValueError):
+            for descriptor in (gate_read, gate_write, ack_read, ack_write):
+                os.close(descriptor)
+            os.close(stdout_fd)
+            os.close(stderr_fd)
+            return ProcessResult(
+                exit_code=None,
+                timed_out=False,
+                term_sent=False,
+                kill_sent=False,
+                process_spawn_attempted=False,
+                child_pid=None,
+                process_group_id=None,
+                kernel_birth_identity=None,
+                process_identity_token=None,
+                process_group_cleanup_confirmed=True,
+                execution_error_code="spawn_failed",
+                technical_limit_kind=None,
+            )
+        os.close(gate_read)
+        os.close(ack_write)
+        if process.stdout is None or process.stderr is None:  # pragma: no cover - guaranteed by PIPE
+            os.close(gate_write)
+            os.close(ack_read)
+            os.close(stdout_fd)
+            os.close(stderr_fd)
+            return ProcessResult(
+                exit_code=None,
+                timed_out=False,
+                term_sent=False,
+                kill_sent=False,
+                process_spawn_attempted=False,
+                child_pid=None,
+                process_group_id=None,
+                kernel_birth_identity=None,
+                process_identity_token=None,
+                process_group_cleanup_confirmed=False,
+                execution_error_code="spawn_failed",
+                technical_limit_kind=None,
+            )
+        child_pid = process.pid
+        process_group_id = os.getpgid(child_pid)
+        kernel_birth_identity: str | None = None
+        timed_out = False
+        term_sent = False
+        kill_sent = False
+        cleanup_confirmed = False
+        execution_error = "none"
+        technical_limit_kind: str | None = None
+        selector = selectors.DefaultSelector()
+        stream_state = {
+            process.stdout: (stdout_fd, max_stdout_bytes, "stdout_bytes"),
+            process.stderr: (stderr_fd, max_stderr_bytes, "stderr_bytes"),
+        }
+        for stream in stream_state:
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ)
+        try:
+            handshake_ok = False
+            try:
+                os.set_blocking(ack_read, False)
+                ack_selector = selectors.DefaultSelector()
+                ack_selector.register(ack_read, selectors.EVENT_READ)
+                ack_deadline = min(deadline_at, monotonic() + 2.0)
+                acknowledgement = b""
+                while monotonic() < ack_deadline and b"\n" not in acknowledgement:
+                    if ack_selector.select(min(0.05, max(0.0, ack_deadline - monotonic()))):
+                        try:
+                            acknowledgement += os.read(ack_read, 128)
+                        except BlockingIOError:
+                            continue
+                    if len(acknowledgement) > 65:
+                        break
+                ack_selector.close()
+                if acknowledgement != (identity_token + "\n").encode():
+                    raise AdaptiveWaveValidationError("process_identity_handshake_failed")
+                kernel_birth_identity = _kernel_birth_identity(child_pid)
+                on_spawn(child_pid, process_group_id, kernel_birth_identity, identity_token)
+                os.write(gate_write, b"1")
+                handshake_ok = True
+            except BaseException:
+                if monotonic() >= deadline_at:
+                    timed_out = True
+                os.close(gate_write)
+                gate_write = -1
+                term_sent, kill_sent, cleaned = self._cleanup_group(
+                    process,
+                    process_group_id,
+                    term_grace_ms=term_grace_ms,
+                    kill_grace_ms=kill_grace_ms,
+                    monotonic=monotonic,
+                )
+                cleanup_confirmed = cleaned
+                execution_error = "process_execution_failed" if cleaned else "process_group_cleanup_failed"
+            finally:
+                os.close(ack_read)
+                ack_read = -1
+                if gate_write >= 0:
+                    os.close(gate_write)
+                    gate_write = -1
+            while handshake_ok and (selector.get_map() or process.poll() is None):
+                if monotonic() >= deadline_at:
+                    if process.poll() is None or self._group_alive(process_group_id):
+                        timed_out = True
+                        break
+                measurement = _measure_session_tree(
+                    session_tree_root,
+                    max_files=max_session_files,
+                    max_file_bytes=max_session_file_bytes,
+                    max_total_bytes=max_session_total_bytes,
+                    updates_path=session_updates_path,
+                    max_updates_bytes=max_session_updates_bytes,
+                    expected_socket_path=session_tree_root / "leader.sock",
+                    max_depth=MAX_SESSION_TREE_DEPTH,
+                    deadline_at=deadline_at,
+                    monotonic=monotonic,
+                )
+                if measurement.limit_kind is not None:
+                    technical_limit_kind = measurement.limit_kind
+                    break
+                timeout = min(0.05, max(0.0, deadline_at - monotonic()))
+                for key, _ in selector.select(timeout):
+                    stream = key.fileobj
+                    destination_fd, byte_ceiling, limit_name = stream_state[stream]
+                    try:
+                        chunk = os.read(stream.fileno(), 65_536)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        selector.unregister(stream)
+                        stream.close()
+                        continue
+                    current_size = os.fstat(destination_fd).st_size
+                    remaining = max(0, byte_ceiling - current_size)
+                    if remaining:
+                        view = memoryview(chunk[:remaining])
+                        while view:
+                            view = view[os.write(destination_fd, view) :]
+                    if len(chunk) > remaining:
+                        technical_limit_kind = limit_name
+                        break
+                if technical_limit_kind is not None:
+                    break
+                if process.poll() is not None and not selector.get_map():
+                    break
+            if handshake_ok and (
+                timed_out
+                or technical_limit_kind is not None
+                or process.poll() is None
+                or self._group_alive(process_group_id)
+            ):
+                term_sent, kill_sent, cleaned = self._cleanup_group(
+                    process,
+                    process_group_id,
+                    term_grace_ms=term_grace_ms,
+                    kill_grace_ms=kill_grace_ms,
+                    monotonic=monotonic,
+                )
+                cleanup_confirmed = cleaned
+                if not cleaned:
+                    execution_error = "process_group_cleanup_failed"
+            elif handshake_ok:
+                cleanup_confirmed = not self._group_alive(process_group_id)
+        except BaseException:
+            term_sent, kill_sent, cleaned = self._cleanup_group(
+                process,
+                process_group_id,
+                term_grace_ms=term_grace_ms,
+                kill_grace_ms=kill_grace_ms,
+                monotonic=monotonic,
+            )
+            cleanup_confirmed = cleaned
+            execution_error = "process_execution_failed" if cleaned else "process_group_cleanup_failed"
+        finally:
+            for descriptor in (gate_write, ack_read):
+                if descriptor >= 0:
+                    try:
+                        os.close(descriptor)
+                    except OSError:
+                        pass
+            selector.close()
+            for stream in stream_state:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+            os.fsync(stdout_fd)
+            os.fsync(stderr_fd)
+            os.close(stdout_fd)
+            os.close(stderr_fd)
+        return ProcessResult(
+            exit_code=process.returncode,
+            timed_out=timed_out,
+            term_sent=term_sent,
+            kill_sent=kill_sent,
+            process_spawn_attempted=True,
+            child_pid=child_pid,
+            process_group_id=process_group_id,
+            kernel_birth_identity=kernel_birth_identity,
+            process_identity_token=identity_token,
+            process_group_cleanup_confirmed=cleanup_confirmed,
+            execution_error_code=execution_error,
+            technical_limit_kind=technical_limit_kind,
+        )
+
+
+class OfflineFixtureExecutor:
+    """Return a deterministic empty wave without spawning or calling a provider."""
+
+    def __call__(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        environment: Mapping[str, str],
+        stdout_spool: Path,
+        stderr_spool: Path,
+        deadline_at: float,
+        term_grace_ms: int,
+        kill_grace_ms: int,
+        max_stdout_bytes: int,
+        max_stderr_bytes: int,
+        session_tree_root: Path,
+        session_updates_path: Path,
+        max_session_files: int,
+        max_session_file_bytes: int,
+        max_session_total_bytes: int,
+        max_session_updates_bytes: int,
+        monotonic: Callable[[], float],
+        on_spawn: Callable[[int, int, str, str], None],
+    ) -> ProcessResult:
+        del (
+            command,
+            cwd,
+            environment,
+            deadline_at,
+            term_grace_ms,
+            kill_grace_ms,
+            max_stdout_bytes,
+            max_stderr_bytes,
+            session_tree_root,
+            session_updates_path,
+            max_session_files,
+            max_session_file_bytes,
+            max_session_total_bytes,
+            max_session_updates_bytes,
+            monotonic,
+            on_spawn,
+        )
+        payload = {
+            "status": "X_SEARCH_BLOCKED",
+            "status_reason": "Offline fixture lane; no external execution occurred.",
+            "native_x_tool_provenance": {
+                "tools_reported": [],
+                "tool_calls_reported": 0,
+                "queries": [],
+                "generic_web_used": False,
+            },
+            "counts": {"observations_inspected_reported": 0, "candidates_retained": 0},
+            "candidates": [],
+            "excluded_examples": [],
+            "limitations": ["Fixture output proves operator mechanics only."],
+            "local_reconciliation": {
+                "candidate_records_validated": 0,
+                "evidence_items_validated": 0,
+                "post_urls_structurally_validated": 0,
+                "provider_post_bodies_replayable": False,
+                "tool_calls_completed": 0,
+                "tool_counts": {},
+            },
+        }
+        stdout_spool.write_bytes((canonical_json(payload) + "\n").encode())
+        stderr_spool.write_bytes(b"")
+        os.chmod(stdout_spool, 0o600)
+        os.chmod(stderr_spool, 0o600)
+        return ProcessResult(
+            exit_code=0,
+            timed_out=False,
+            term_sent=False,
+            kill_sent=False,
+            process_spawn_attempted=False,
+            child_pid=None,
+            process_group_id=None,
+            kernel_birth_identity=None,
+            process_identity_token=None,
+            process_group_cleanup_confirmed=True,
+            execution_error_code="none",
+            technical_limit_kind=None,
+        )
+
+
+def _ensure_private_directory(path: Path, *, create: bool) -> None:
+    if create:
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("private_directory_unavailable") from exc
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or path.is_symlink()
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) != 0o700
+    ):
+        raise AdaptiveWaveValidationError("private_directory_mode_invalid")
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _atomic_publish(
+    path: Path,
+    value: bytes,
+    *,
+    pre_publish: Callable[[], None] | None = None,
+) -> None:
+    """Durably publish a 0600 regular file without replacement."""
+
+    _ensure_private_directory(path.parent, create=False)
+    pending = path.parent / f".pending-{path.name}-{uuid.uuid4().hex}"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(pending, flags, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        remaining = memoryview(value)
+        while remaining:
+            remaining = remaining[os.write(descriptor, remaining) :]
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        if pre_publish is not None:
+            pre_publish()
+        os.link(pending, path, follow_symlinks=False)
+        _fsync_directory(path.parent)
+    finally:
+        try:
+            pending.unlink()
+        except FileNotFoundError:
+            pass
+        _fsync_directory(path.parent)
+
+
+def recover_pending_publications(run_root: Path) -> int:
+    """Remove only module-owned publish temporaries after validating their shape."""
+
+    _ensure_private_directory(run_root, create=False)
+    recovered = 0
+    for path in run_root.iterdir():
+        if _PENDING_RE.fullmatch(path.name) is None:
+            continue
+        info = path.lstat()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or path.is_symlink()
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
+        ):
+            raise AdaptiveWaveValidationError("pending_publication_invalid")
+        path.unlink()
+        recovered += 1
+    if recovered:
+        _fsync_directory(run_root)
+    return recovered
+
+
+@dataclass(frozen=True)
+class StagedExecutable:
+    path: Path
+    sha256: str
+
+
+def _rehash_staged_executable(path: Path) -> str:
+    try:
+        raw = _read_regular_owned_bounded(
+            path,
+            maximum_bytes=MAX_GROK_BINARY_BYTES,
+            required_mode=0o700,
+        )
+    except AdaptiveWaveValidationError as exc:
+        raise AdaptiveWaveValidationError("staged_grok_binary_invalid") from exc
+    if not raw:
+        raise AdaptiveWaveValidationError("staged_grok_binary_invalid")
+    return bytes_sha256(raw)
+
+
+def _stage_verified_binary(locator: Path, run_root: Path, expected_sha256: str) -> StagedExecutable:
+    """Copy one stable, owner-controlled executable fd into the private run root."""
+
+    try:
+        locator_info = locator.lstat()
+        if locator_info.st_uid != os.getuid() or not (
+            stat.S_ISLNK(locator_info.st_mode) or stat.S_ISREG(locator_info.st_mode)
+        ):
+            raise AdaptiveWaveValidationError("grok_binary_locator_owner_invalid")
+        locator_link = os.readlink(locator) if stat.S_ISLNK(locator_info.st_mode) else None
+        canonical = locator.resolve(strict=True)
+        if canonical.is_symlink():
+            raise AdaptiveWaveValidationError("grok_binary_final_symlink_invalid")
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        source_fd = os.open(canonical, flags)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_binary_open_failed") from exc
+    executable_root = run_root / "executable"
+    executable_root.mkdir(mode=0o700)
+    staged = executable_root / "grok"
+    destination_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        destination_flags |= os.O_NOFOLLOW
+    destination_fd: int | None = None
+    digest = hashlib.sha256()
+    try:
+        before = os.fstat(source_fd)
+        mode = stat.S_IMODE(before.st_mode)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or mode & 0o022
+            or mode & stat.S_IXUSR == 0
+            or before.st_size <= 0
+            or before.st_size > MAX_GROK_BINARY_BYTES
+        ):
+            raise AdaptiveWaveValidationError("grok_binary_metadata_invalid")
+        destination_fd = os.open(staged, destination_flags, 0o700)
+        os.fchmod(destination_fd, 0o700)
+        while True:
+            chunk = os.read(source_fd, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            view = memoryview(chunk)
+            while view:
+                view = view[os.write(destination_fd, view) :]
+        os.fsync(destination_fd)
+        after = os.fstat(source_fd)
+        current = canonical.stat(follow_symlinks=False)
+        locator_after = locator.lstat()
+
+        def identity(item: os.stat_result) -> tuple[int, int, int, int]:
+            return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns
+
+        if (
+            identity(before) != identity(after)
+            or identity(after) != identity(current)
+            or identity(locator_info) != identity(locator_after)
+            or (locator_link is not None and os.readlink(locator) != locator_link)
+        ):
+            raise AdaptiveWaveValidationError("grok_binary_identity_changed")
+        observed_sha256 = digest.hexdigest()
+        if observed_sha256 != expected_sha256:
+            raise AdaptiveWaveValidationError("grok_binary_sha256_mismatch")
+    except BaseException:
+        try:
+            staged.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    finally:
+        os.close(source_fd)
+        if destination_fd is not None:
+            os.close(destination_fd)
+    if _rehash_staged_executable(staged) != expected_sha256:
+        raise AdaptiveWaveValidationError("staged_grok_binary_invalid")
+    _fsync_directory(executable_root)
+    return StagedExecutable(staged, expected_sha256)
+
+
+def _copy_private_auth(source: Path, ephemeral_home: Path) -> Path:
+    """Descriptor-copy OAuth state without exposing its bytes to receipts or logs."""
+
+    try:
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        source_fd = os.open(source, flags)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_open_failed") from exc
+    destination = ephemeral_home / "auth.json"
+    destination_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        destination_flags |= os.O_NOFOLLOW
+    destination_fd: int | None = None
+    try:
+        info = os.fstat(source_fd)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
+            or not 1 <= info.st_size <= 64_000
+        ):
+            raise AdaptiveWaveValidationError("grok_auth_metadata_invalid")
+        destination_fd = os.open(destination, destination_flags, 0o600)
+        os.fchmod(destination_fd, 0o600)
+        copied = 0
+        while True:
+            chunk = os.read(source_fd, 16_384)
+            if not chunk:
+                break
+            copied += len(chunk)
+            if copied > 64_000:
+                raise AdaptiveWaveValidationError("grok_auth_size_invalid")
+            view = memoryview(chunk)
+            while view:
+                view = view[os.write(destination_fd, view) :]
+        os.fsync(destination_fd)
+        if copied != info.st_size:
+            raise AdaptiveWaveValidationError("grok_auth_copy_incomplete")
+        after = os.fstat(source_fd)
+        current = source.stat(follow_symlinks=False)
+
+        def identity(item: os.stat_result) -> tuple[int, int, int, int]:
+            return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns
+
+        if identity(info) != identity(after) or identity(after) != identity(current):
+            raise AdaptiveWaveValidationError("grok_auth_identity_changed")
+    except BaseException:
+        try:
+            destination.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    finally:
+        os.close(source_fd)
+        if destination_fd is not None:
+            os.close(destination_fd)
+    _fsync_directory(ephemeral_home)
+    return destination
+
+
+def _load_result_schema(*, legacy_v2: bool = False) -> dict[str, Any]:
+    filename = LEGACY_RESULT_SCHEMA_FILE if legacy_v2 else RESULT_SCHEMA_FILE
+    path = Path(__file__).resolve().parents[2] / "contracts" / filename
+    try:
+        schema = strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=MAX_CONTRACT_SCHEMA_BYTES))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("result_schema_unavailable") from exc
+    if (
+        not isinstance(schema, dict)
+        or schema.get("$schema") != "https://json-schema.org/draft/2020-12/schema"
+        or schema.get("additionalProperties") is not False
+        or schema.get("properties", {}).get("schema_version") is not None
+    ):
+        raise AdaptiveWaveValidationError("result_schema_invalid")
+    return schema
+
+
+def _structure_within_limits(payload: Any, *, max_depth: int, max_nodes: int) -> bool:
+    stack: list[tuple[Any, int]] = [(payload, 0)]
+    nodes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if nodes > max_nodes or depth > max_depth:
+            return False
+        if isinstance(current, dict):
+            stack.extend((key, depth + 1) for key in current)
+            stack.extend((item, depth + 1) for item in current.values())
+        elif isinstance(current, list):
+            stack.extend((item, depth + 1) for item in current)
+    return True
+
+
+def _parse_headless_envelope(
+    payload: Any,
+    *,
+    expected_session_id: str,
+    expected_model_id: str,
+    max_turns: int,
+    max_inner_bytes: int,
+) -> HeadlessEnvelope:
+    if (
+        not isinstance(payload, dict)
+        or not _HEADLESS_ENVELOPE_KEYS <= set(payload)
+        or not set(payload) <= _HEADLESS_ENVELOPE_KEYS | _HEADLESS_OPTIONAL_KEYS
+    ):
+        raise AdaptiveWaveValidationError("headless_envelope_shape_invalid")
+    inner_text = payload.get("text")
+    request_id = payload.get("requestId")
+    usage = payload.get("usage")
+    model_turns = payload.get("num_turns")
+    cost = payload.get("total_cost_usd")
+    usage_keys = set(usage) if isinstance(usage, dict) else set()
+    extended_usage = usage_keys == _HEADLESS_EXTENDED_USAGE_KEYS
+    cache_read_tokens = usage.get("cache_read_input_tokens", 0) if isinstance(usage, dict) else None
+    reasoning_tokens = usage.get("reasoning_tokens", 0) if isinstance(usage, dict) else None
+    model_usage = payload.get("modelUsage")
+    model_usage_row = model_usage.get(expected_model_id) if isinstance(model_usage, dict) else None
+    thought = payload.get("thought")
+    structured_output = payload.get("structuredOutput")
+    structured_output_error = payload.get("structuredOutputError")
+    if (
+        not isinstance(inner_text, str)
+        or not inner_text.strip()
+        or len(inner_text.encode("utf-8")) > max_inner_bytes
+        or payload.get("stopReason") != "EndTurn"
+        or payload.get("sessionId") != expected_session_id
+        or _SESSION_ID_RE.fullmatch(expected_session_id) is None
+        or not _is_text(request_id, maximum=160)
+        or not _is_int(model_turns)
+        or not 1 <= model_turns <= max_turns
+        or not isinstance(usage, dict)
+        or usage_keys not in (_HEADLESS_USAGE_KEYS, _HEADLESS_EXTENDED_USAGE_KEYS)
+        or any(not _validate_nonnegative_int(usage.get(key)) for key in usage)
+        or usage.get("total_tokens")
+        != usage.get("input_tokens", 0) + usage.get("output_tokens", 0) + cache_read_tokens
+        or (extended_usage and reasoning_tokens > usage.get("output_tokens", 0))
+        or (
+            model_usage is not None
+            and (
+                not extended_usage
+                or not isinstance(model_usage, dict)
+                or set(model_usage) != {expected_model_id}
+                or not isinstance(model_usage_row, dict)
+                or set(model_usage_row) != _HEADLESS_MODEL_USAGE_KEYS
+                or any(not _validate_nonnegative_int(model_usage_row.get(key)) for key in model_usage_row)
+                or model_usage_row.get("cacheReadInputTokens") != cache_read_tokens
+                or model_usage_row.get("inputTokens") != usage.get("input_tokens")
+                or model_usage_row.get("outputTokens") != usage.get("output_tokens")
+                or model_usage_row.get("modelCalls") != model_turns
+            )
+        )
+        or (thought is not None and (not isinstance(thought, str) or len(thought.encode()) > max_inner_bytes))
+        or (
+            structured_output_error is not None
+            and (
+                not isinstance(structured_output_error, str)
+                or len(structured_output_error.encode()) > 20_000
+            )
+        )
+        or (
+            structured_output is not None
+            and (
+                not isinstance(structured_output, dict)
+                or not _structure_within_limits(structured_output, max_depth=64, max_nodes=250_000)
+            )
+        )
+        or (
+            cost is not None
+            and (
+                type(cost) not in {int, float}
+                or (type(cost) is float and not math.isfinite(cost))
+                or cost < 0
+            )
+        )
+    ):
+        raise AdaptiveWaveValidationError("headless_envelope_value_invalid")
+    return HeadlessEnvelope(
+        inner_text=inner_text,
+        provider_request_id_sha256=bytes_sha256(request_id.encode()),
+        session_id=expected_session_id,
+        terminal_stop_reason="end_turn",
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        cache_read_input_tokens=cache_read_tokens,
+        total_tokens=usage["total_tokens"],
+        model_turns=model_turns,
+    )
+
+
+def _serialize_operator_result(
+    result: Any,
+    *,
+    technical_limits: Mapping[str, Any],
+) -> tuple[bytes | None, str | None]:
+    """Serialize an operator transform only when it remains inside its bound envelope."""
+
+    if not _structure_within_limits(
+        result,
+        max_depth=technical_limits["max_json_depth"],
+        max_nodes=technical_limits["max_json_nodes"],
+    ):
+        return None, "json_structure"
+    raw = (canonical_json(result) + "\n").encode()
+    if len(raw) > technical_limits["max_json_bytes"]:
+        return None, "json_bytes"
+    return raw, None
+
+
+def _parse_structured_stdout(
+    raw: bytes,
+    *,
+    technical_limits: Mapping[str, Any],
+    prior_candidates: Mapping[str, PriorCandidateFacts],
+    live_mode: bool,
+    expected_session_id: str | None = None,
+    expected_model_id: str | None = None,
+    max_turns: int = 512,
+    allow_legacy_plain: bool = False,
+    result_normalization_policy_version: str | None = None,
+) -> tuple[Any | None, bytes | None, int, int, bool, bool, str | None, HeadlessEnvelope | None]:
+    if len(raw) > technical_limits["max_json_bytes"]:
+        return None, None, 0, 0, False, False, "json_bytes", None
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None, None, len(raw), 0, False, False, None, None
+    decoder = json.JSONDecoder(object_pairs_hook=_strict_object, parse_constant=_reject_nonfinite)
+    leading_whitespace = len(text) - len(text.lstrip())
+    first_object = text.find("{")
+    if first_object < 0:
+        return None, None, len(raw), 0, False, False, None, None
+    try:
+        payload, end = decoder.raw_decode(text, first_object)
+    except (ValueError, RecursionError):
+        return None, None, len(text[:first_object].encode()), 0, False, False, None, None
+    prefix = text[:first_object]
+    suffix = text[end:]
+    prefix_bytes = len(prefix.encode()) if prefix.strip() else 0
+    suffix_bytes = len(suffix.encode()) if suffix.strip() else 0
+    syntax_compliant = first_object == leading_whitespace and prefix_bytes == 0 and suffix_bytes == 0
+    if not isinstance(payload, dict):
+        return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, None
+    if not _structure_within_limits(
+        payload,
+        max_depth=technical_limits["max_json_depth"],
+        max_nodes=technical_limits["max_json_nodes"],
+    ):
+        return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, "json_structure", None
+    model_payload: Any = payload
+    headless: HeadlessEnvelope | None = None
+    if live_mode:
+        if expected_session_id is None or expected_model_id is None:
+            return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, None
+        try:
+            headless = _parse_headless_envelope(
+                payload,
+                expected_session_id=expected_session_id,
+                expected_model_id=expected_model_id,
+                max_turns=max_turns,
+                max_inner_bytes=technical_limits["max_json_bytes"],
+            )
+            model_payload = strict_json_loads_bounded(
+                headless.inner_text,
+                max_bytes=technical_limits["max_json_bytes"],
+                max_depth=technical_limits["max_json_depth"],
+                max_nodes=technical_limits["max_json_nodes"],
+            )
+        except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
+            if not allow_legacy_plain or set(payload) != _RESULT_KEYS:
+                # Keep the verified outer envelope available even when Grok's
+                # `text` concatenates an interim structured message with the
+                # terminal structured message.  The live lane may recover only
+                # the transcript-proven terminal assistant message later.
+                return payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, headless
+            model_payload = payload
+    if not isinstance(model_payload, dict):
+        return model_payload, None, prefix_bytes, suffix_bytes, syntax_compliant, False, None, headless
+    if result_normalization_policy_version is not None:
+        model_payload = _operator_normalize_mechanical_result(
+            model_payload,
+            policy_version=result_normalization_policy_version,
+            prior_candidates=prior_candidates,
+            live_mode=live_mode,
+            require_operator_projection=headless is None,
+        )
+    sanitized, transform_limit_kind = _serialize_operator_result(
+        model_payload,
+        technical_limits=technical_limits,
+    )
+    if transform_limit_kind is not None:
+        return (
+            model_payload,
+            None,
+            prefix_bytes,
+            suffix_bytes,
+            syntax_compliant,
+            False,
+            transform_limit_kind,
+            headless,
+        )
+    contract_valid = not validate_model_result(
+        model_payload,
+        prior_candidates=prior_candidates,
+        live_mode=live_mode,
+        # Retained plain bundles predate operator normalization and must
+        # replay under their original self-reconciliation semantics.  Only a
+        # strict headless envelope admits diagnostic model counters here.
+        require_operator_projection=headless is None,
+    )
+    return (
+        model_payload,
+        sanitized,
+        prefix_bytes,
+        suffix_bytes,
+        syntax_compliant,
+        contract_valid,
+        None,
+        headless,
+    )
+
+
+def _read_private_json(path: Path) -> Any:
+    try:
+        return strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=67_108_864, required_mode=0o600))
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("private_json_invalid") from exc
+
+
+def _parse_timestamp(value: str) -> datetime:
+    if not isinstance(value, str) or _CANONICAL_TIME_RE.fullmatch(value) is None:
+        raise AdaptiveWaveValidationError("timestamp_invalid")
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise AdaptiveWaveValidationError("timestamp_invalid") from exc
+
+
+def _timestamp_valid(value: Any) -> bool:
+    try:
+        _parse_timestamp(value)
+    except AdaptiveWaveValidationError:
+        return False
+    return True
+
+
+def _approval_binding(
+    request: Mapping[str, Any],
+    *,
+    required: bool,
+    grant_sha256: str | None,
+    consumption_sha256: str | None,
+) -> dict[str, Any]:
+    grant_id = request["approval"]["grant_id"]
+    return {
+        "required": required,
+        "grant_id_sha256": bytes_sha256(grant_id.encode()) if grant_id is not None else None,
+        "grant_sha256": grant_sha256,
+        "consumption_sha256": consumption_sha256,
+    }
+
+
+def _grant_paths(grant_root: Path, grant_id_hash: str) -> tuple[Path, Path]:
+    return grant_root / f"grant-{grant_id_hash}.json", grant_root / f"consumption-{grant_id_hash}.json"
+
+
+def _auth_taint_path(grant_root: Path, oauth_auth_sha256: str) -> Path:
+    if not _is_sha(oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_digest_invalid")
+    return grant_root / f"auth-taint-{oauth_auth_sha256}.json"
+
+
+def _auth_active_use_path(grant_root: Path, oauth_auth_sha256: str) -> Path:
+    if not _is_sha(oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_digest_invalid")
+    return grant_root / f"auth-active-use-{oauth_auth_sha256}.json"
+
+
+@contextmanager
+def _auth_digest_lock(grant_root: Path, oauth_auth_sha256: str) -> Any:
+    """Bound one short auth-state transaction without holding across provider work."""
+
+    if not _is_sha(oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_digest_invalid")
+    _ensure_private_directory(grant_root, create=True)
+    lock_path = grant_root / f"auth-taint-lock-{oauth_auth_sha256}.lock"
+    flags = os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    created = False
+    try:
+        descriptor = os.open(lock_path, flags | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
+    except FileExistsError:
+        try:
+            descriptor = os.open(lock_path, flags)
+        except OSError as exc:
+            raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid") from exc
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid") from exc
+    try:
+        if created:
+            os.fchmod(descriptor, 0o600)
+            os.fsync(descriptor)
+            _fsync_directory(grant_root)
+        def require_current_lock_inode() -> None:
+            metadata = os.fstat(descriptor)
+            try:
+                current = lock_path.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid") from exc
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or (metadata.st_dev, metadata.st_ino) != (current.st_dev, current.st_ino)
+            ):
+                raise AdaptiveWaveValidationError("grok_auth_taint_lock_invalid")
+
+        require_current_lock_inode()
+        deadline = time.monotonic() + AUTH_STATE_LOCK_ACQUIRE_BUDGET_SECONDS
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    raise PermissionError("grok_auth_state_busy") from exc
+                time.sleep(AUTH_STATE_LOCK_RETRY_SECONDS)
+        try:
+            # A replaced path can otherwise leave this process locking an
+            # unlinked inode while another process locks the replacement.
+            require_current_lock_inode()
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
+def _auth_taint_valid(value: Any, *, oauth_auth_sha256: str) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _AUTH_TAINT_KEYS
+        and value.get("schema_version") == AUTH_TAINT_SCHEMA_VERSION
+        and value.get("oauth_auth_sha256") == oauth_auth_sha256
+        and isinstance(value.get("source_run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["source_run_id"]) is not None
+        and _is_sha(value.get("source_request_sha256"))
+        and _timestamp_valid(value.get("detected_at"))
+        and value.get("reason") in _AUTH_TAINT_REASONS
+        and value.get("state") == "blocks_future_grants_for_auth_digest"
+    )
+
+
+def _auth_active_use_valid(value: Any, *, oauth_auth_sha256: str) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _AUTH_ACTIVE_USE_KEYS
+        and value.get("schema_version") == AUTH_ACTIVE_USE_SCHEMA_VERSION
+        and value.get("oauth_auth_sha256") == oauth_auth_sha256
+        and value.get("claim_origin") in _AUTH_ACTIVE_USE_ORIGINS
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and _is_sha(value.get("request_sha256"))
+        and _is_sha(value.get("run_lease_sha256"))
+        and _is_sha(value.get("grant_sha256"))
+        and _timestamp_valid(value.get("claimed_at"))
+        and value.get("state") == "active_until_auth_audit_and_ephemeral_delete"
+    )
+
+
+def _load_auth_active_use(grant_root: Path, oauth_auth_sha256: str) -> dict[str, Any] | None:
+    claim_path = _auth_active_use_path(grant_root, oauth_auth_sha256)
+    try:
+        grant_root.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_active_use_root_invalid") from exc
+    _ensure_private_directory(grant_root, create=False)
+    try:
+        claim_path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_active_use_invalid") from exc
+    try:
+        claim_raw = _read_regular_owned_bounded(
+            claim_path,
+            maximum_bytes=4_096,
+            required_mode=0o600,
+        )
+        claim = strict_json_loads(claim_raw)
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_active_use_invalid") from exc
+    if not _auth_active_use_valid(claim, oauth_auth_sha256=oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_invalid")
+    return claim
+
+
+def _auth_digest_is_tainted(grant_root: Path, oauth_auth_sha256: str) -> bool:
+    """Read one replay-independent owner taint without creating approval state."""
+
+    marker_path = _auth_taint_path(grant_root, oauth_auth_sha256)
+    try:
+        grant_root.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_root_invalid") from exc
+    _ensure_private_directory(grant_root, create=False)
+    try:
+        marker_path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid") from exc
+    try:
+        marker_raw = _read_regular_owned_bounded(
+            marker_path,
+            maximum_bytes=4_096,
+            required_mode=0o600,
+        )
+    except (AdaptiveWaveValidationError, OSError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid") from exc
+    try:
+        marker = strict_json_loads(marker_raw)
+    except (UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid") from exc
+    if not _auth_taint_valid(marker, oauth_auth_sha256=oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid")
+    return True
+
+
+def _require_auth_digest_not_tainted(grant_root: Path, oauth_auth_sha256: str) -> None:
+    if _auth_digest_is_tainted(grant_root, oauth_auth_sha256):
+        raise PermissionError("grok_auth_digest_tainted")
+
+
+def _require_auth_digest_available(grant_root: Path, oauth_auth_sha256: str) -> None:
+    _require_auth_digest_not_tainted(grant_root, oauth_auth_sha256)
+    if _load_auth_active_use(grant_root, oauth_auth_sha256) is not None:
+        raise PermissionError("grok_auth_digest_in_use")
+
+
+def _publish_auth_active_use_unlocked(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+    claimed_at: datetime,
+    claim_origin: str,
+) -> dict[str, Any]:
+    if _load_auth_active_use(grant_root, oauth_auth_sha256) is not None:
+        raise PermissionError("grok_auth_digest_in_use")
+    claim = {
+        "schema_version": AUTH_ACTIVE_USE_SCHEMA_VERSION,
+        "oauth_auth_sha256": oauth_auth_sha256,
+        "claim_origin": claim_origin,
+        "run_id": run_id,
+        "request_sha256": request_sha256,
+        "run_lease_sha256": run_lease_sha256,
+        "grant_sha256": grant_sha256,
+        "claimed_at": _timestamp(claimed_at.astimezone(UTC)),
+        "state": "active_until_auth_audit_and_ephemeral_delete",
+    }
+    if not _auth_active_use_valid(claim, oauth_auth_sha256=oauth_auth_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+    claim_path = _auth_active_use_path(grant_root, oauth_auth_sha256)
+    try:
+        _atomic_publish(claim_path, (canonical_json(claim) + "\n").encode())
+    except FileExistsError as exc:
+        raise PermissionError("grok_auth_digest_in_use") from exc
+    return claim
+
+
+def _auth_active_use_matches(
+    claim: Mapping[str, Any] | None,
+    *,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+) -> bool:
+    return claim is not None and all(
+        claim.get(key) == expected
+        for key, expected in {
+            "run_id": run_id,
+            "request_sha256": request_sha256,
+            "run_lease_sha256": run_lease_sha256,
+            "grant_sha256": grant_sha256,
+        }.items()
+    )
+
+
+def _auth_active_use_owned_by(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+    reject_sibling: bool,
+) -> bool:
+    """Read one claim under its short lock without ever taking sibling ownership."""
+
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        claim = _load_auth_active_use(grant_root, oauth_auth_sha256)
+        if claim is None:
+            return False
+        if _auth_active_use_matches(
+            claim,
+            run_id=run_id,
+            request_sha256=request_sha256,
+            run_lease_sha256=run_lease_sha256,
+            grant_sha256=grant_sha256,
+        ):
+            return True
+        if reject_sibling:
+            raise PermissionError("grok_auth_digest_in_use")
+        return False
+
+
+def _resolve_auth_active_use(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+) -> None:
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        claim = _load_auth_active_use(grant_root, oauth_auth_sha256)
+        if not _auth_active_use_matches(
+            claim,
+            run_id=run_id,
+            request_sha256=request_sha256,
+            run_lease_sha256=run_lease_sha256,
+            grant_sha256=grant_sha256,
+        ):
+            raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+        _auth_active_use_path(grant_root, oauth_auth_sha256).unlink()
+        _fsync_directory(grant_root)
+
+
+def _publish_auth_taint(
+    grant_root: Path,
+    *,
+    oauth_auth_sha256: str,
+    source_run_id: str,
+    source_request_sha256: str,
+    reason: str,
+    detected_at: datetime,
+) -> Path:
+    """Idempotently block future grants without retaining copied credential bytes."""
+
+    if reason not in _AUTH_TAINT_REASONS:
+        raise AdaptiveWaveValidationError("grok_auth_taint_reason_invalid")
+    if _RUN_ID_RE.fullmatch(source_run_id) is None or not _is_sha(source_request_sha256):
+        raise AdaptiveWaveValidationError("grok_auth_taint_source_invalid")
+    marker_path = _auth_taint_path(grant_root, oauth_auth_sha256)
+    marker = {
+        "schema_version": AUTH_TAINT_SCHEMA_VERSION,
+        "oauth_auth_sha256": oauth_auth_sha256,
+        "source_run_id": source_run_id,
+        "source_request_sha256": source_request_sha256,
+        "detected_at": _timestamp(detected_at.astimezone(UTC)),
+        "reason": reason,
+        "state": "blocks_future_grants_for_auth_digest",
+    }
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        try:
+            _atomic_publish(marker_path, (canonical_json(marker) + "\n").encode())
+        except FileExistsError:
+            if not _auth_digest_is_tainted(grant_root, oauth_auth_sha256):
+                raise AdaptiveWaveValidationError("grok_auth_taint_marker_invalid")
+    return marker_path
+
+
+def _auth_fingerprint(path: Path) -> str:
+    return bytes_sha256(_read_regular_owned_bounded(path, maximum_bytes=64_000, required_mode=0o600))
+
+
+def _decode_access_jwt_payload(access_token: Any) -> dict[str, Any]:
+    """Decode only a bounded JWT payload; signature verification is provider-owned."""
+
+    if not isinstance(access_token, str) or not 1 <= len(access_token.encode()) <= MAX_ACCESS_JWT_BYTES:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    segments = access_token.split(".")
+    if (
+        len(segments) != 3
+        or any(_BASE64URL_SEGMENT_RE.fullmatch(segment) is None for segment in segments)
+        or not 1 <= len(segments[1].encode()) <= MAX_ACCESS_JWT_PAYLOAD_SEGMENT_BYTES
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    payload_segment = segments[1]
+    padding = "=" * (-len(payload_segment) % 4)
+    try:
+        raw_payload = base64.b64decode(
+            payload_segment + padding,
+            altchars=b"-_",
+            validate=True,
+        )
+        payload = strict_json_loads_bounded(
+            raw_payload,
+            max_bytes=MAX_ACCESS_JWT_PAYLOAD_BYTES,
+            max_depth=4,
+            max_nodes=64,
+        )
+    except (AdaptiveWaveValidationError, binascii.Error, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+    if not isinstance(payload, dict):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    return payload
+
+
+def _jwt_epoch(value: Any) -> datetime:
+    if not _is_int(value) or not 0 <= value <= 253_402_300_799:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    try:
+        return datetime.fromtimestamp(value, tz=UTC)
+    except (OSError, OverflowError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+
+
+def _oauth_access_expires_at(path: Path, *, now: datetime) -> datetime:
+    """Select exactly one current Grok 0.2.101 xAI OIDC access credential."""
+
+    try:
+        payload = strict_json_loads(
+            _read_regular_owned_bounded(path, maximum_bytes=64_000, required_mode=0o600)
+        )
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+    if not isinstance(payload, dict) or len(payload) != 1:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    locator, record = next(iter(payload.items()))
+    if (
+        not isinstance(locator, str)
+        or not isinstance(record, dict)
+        or record.get("auth_mode") != "oidc"
+        or record.get("oidc_issuer") != XAI_OIDC_ISSUER
+        or not _is_text(record.get("oidc_client_id"), maximum=256)
+        or locator != f'{record["oidc_issuer"]}::{record["oidc_client_id"]}'
+        or not _is_text(record.get("key"), maximum=MAX_ACCESS_JWT_BYTES)
+        or not _is_text(record.get("refresh_token"), maximum=16_384)
+        or not _is_text(record.get("principal_id"), maximum=512)
+        or not _is_text(record.get("principal_type"), maximum=128)
+        or not _is_text(record.get("team_id"), maximum=512)
+        or not _is_text(record.get("user_id"), maximum=512)
+        or not isinstance(record.get("expires_at"), str)
+        or _OAUTH_EXPIRY_TIME_RE.fullmatch(record["expires_at"]) is None
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    try:
+        expires_at = datetime.fromisoformat(record["expires_at"][:-1] + "+00:00")
+    except ValueError as exc:
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid") from exc
+    if expires_at.tzinfo is None or expires_at.utcoffset() != timedelta(0):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    claims = _decode_access_jwt_payload(record["key"])
+    required_claims = {
+        "aud",
+        "client_id",
+        "exp",
+        "iat",
+        "iss",
+        "principal_id",
+        "principal_type",
+        "scope",
+        "sub",
+        "team_id",
+    }
+    if (
+        not required_claims.issubset(claims)
+        or claims.get("iss") != record["oidc_issuer"]
+        or claims.get("aud") != record["oidc_client_id"]
+        or claims.get("client_id") != record["oidc_client_id"]
+        or claims.get("sub") != record["user_id"]
+        or claims.get("principal_id") != record["principal_id"]
+        or record["user_id"] != record["principal_id"]
+        or claims.get("principal_type") != record["principal_type"]
+        or claims.get("team_id") != record["team_id"]
+        or not isinstance(claims.get("scope"), str)
+        or not XAI_OIDC_REQUIRED_SCOPES.issubset(claims["scope"].split())
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_invalid")
+    issued_at = _jwt_epoch(claims["iat"])
+    jwt_expires_at = _jwt_epoch(claims["exp"])
+    not_before = _jwt_epoch(claims["nbf"]) if "nbf" in claims else issued_at
+    canonical_now = now.astimezone(UTC)
+    if (
+        not issued_at < jwt_expires_at
+        or not_before >= jwt_expires_at
+        or canonical_now < issued_at
+        or canonical_now < not_before
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_session_not_yet_valid")
+    return min(expires_at.astimezone(UTC), jwt_expires_at)
+
+
+def _live_auth_runtime_window(request: Mapping[str, Any]) -> timedelta:
+    emergency = request["emergency"]
+    return timedelta(
+        milliseconds=(
+            emergency["deadline_ms"]
+            + emergency["term_grace_ms"]
+            + emergency["kill_grace_ms"]
+        ),
+        seconds=OAUTH_REFRESH_AVOIDANCE_MARGIN_SECONDS,
+    )
+
+
+def _require_live_auth_freshness(
+    path: Path,
+    *,
+    request: Mapping[str, Any],
+    now: datetime,
+    grant_ttl_seconds: int = 0,
+) -> None:
+    required_until = now.astimezone(UTC) + _live_auth_runtime_window(request) + timedelta(
+        seconds=grant_ttl_seconds
+    )
+    if _oauth_access_expires_at(path, now=now) <= required_until:
+        raise AdaptiveWaveValidationError("grok_auth_access_window_insufficient")
+
+
+def _audit_copied_auth_after_provider(
+    copied_auth: Path,
+    *,
+    expected_sha256: str,
+    source_run_id: str,
+    source_request_sha256: str,
+    grant_root: Path,
+    wall_clock: Callable[[], datetime],
+    force_taint_reason: str | None = None,
+) -> None:
+    """Leave an exact clean copy reusable; taint every other terminal state."""
+
+    if force_taint_reason is not None and force_taint_reason not in _AUTH_TAINT_REASONS:
+        raise AdaptiveWaveValidationError("grok_auth_taint_reason_invalid")
+    try:
+        copied_auth.lstat()
+    except FileNotFoundError:
+        reason = "copied_auth_deleted"
+    except OSError:
+        reason = "copied_auth_unreadable"
+    else:
+        try:
+            observed_sha256 = _auth_fingerprint(copied_auth)
+        except (AdaptiveWaveValidationError, OSError):
+            reason = "copied_auth_unreadable"
+        else:
+            if observed_sha256 == expected_sha256:
+                if force_taint_reason is None:
+                    return
+                reason = force_taint_reason
+            else:
+                reason = "copied_auth_mutated"
+    try:
+        detected_at = wall_clock().astimezone(UTC)
+    except BaseException:
+        detected_at = _utc_now()
+    _publish_auth_taint(
+        grant_root,
+        oauth_auth_sha256=expected_sha256,
+        source_run_id=source_run_id,
+        source_request_sha256=source_request_sha256,
+        reason=reason,
+        detected_at=detected_at,
+    )
+
+
+def _validate_grant(
+    grant: Any,
+    request: Mapping[str, Any],
+    *,
+    now: datetime,
+    replay_command_policy_sha256: str | None = None,
+    replay_result_schema_sha256: str | None = None,
+) -> list[str]:
+    if not isinstance(grant, dict) or set(grant) != _GRANT_KEYS:
+        return ["grant_shape_invalid"]
+    grant_id = request["approval"]["grant_id"]
+    expected_id_hash = bytes_sha256(grant_id.encode()) if isinstance(grant_id, str) else None
+    account_ref = request.get("transport", {}).get("operator_account_ref")
+    expected_account_hash = bytes_sha256(account_ref.encode()) if isinstance(account_ref, str) else None
+    try:
+        prompt_policy_binding = _approved_effective_prompt_binding(request)
+    except (AdaptiveWaveValidationError, PermissionError):
+        prompt_policy_binding = None
+    errors: list[str] = []
+    if (
+        grant.get("schema_version") != GRANT_SCHEMA_VERSION
+        or grant.get("grant_id_hash") != expected_id_hash
+        or grant.get("execution_scope_sha256") != execution_scope_sha256(request)
+        or grant.get("request_id") != request["request_id"]
+        or grant.get("target_sha256") != canonical_sha256(request["target"])
+        or grant.get("model_id") != request["transport"]["model_id"]
+        or grant.get("grok_binary_sha256") != request["transport"]["grok_binary_sha256"]
+        or grant.get("operator_account_ref_sha256") != expected_account_hash
+        or grant.get("oauth_auth_sha256") != request["transport"]["oauth_auth_sha256"]
+        or grant.get("result_schema_sha256")
+        != (replay_result_schema_sha256 or result_schema_sha256())
+        or grant.get("command_policy_sha256")
+        != (replay_command_policy_sha256 or command_policy_sha256(request))
+        or grant.get("tool_registry_sha256") != tool_registry_sha256()
+        or prompt_policy_binding is None
+        or grant.get("effective_prompt_policy_sha256") != prompt_policy_binding.policy_sha256
+        or grant.get("effective_prompt_policy_entry_id") != prompt_policy_binding.policy_entry_id
+        or grant.get("environment_policy_sha256") != canonical_sha256(_redacted_environment_policy())
+        or grant.get("emergency_sha256") != canonical_sha256(request["emergency"])
+        or grant.get("technical_limits_sha256") != canonical_sha256(request["technical_limits"])
+        or grant.get("budget_sha256") != canonical_sha256(request["budget"])
+        or grant.get("retention_sha256") != canonical_sha256(request["retention"])
+        or grant.get("issuer") != "local_owner_explicit_cli"
+        or grant.get("state") != "preissued_single_use"
+    ):
+        errors.append("grant_binding_invalid")
+    try:
+        issued = _parse_timestamp(grant.get("issued_at"))
+        expires = _parse_timestamp(grant.get("expires_at"))
+    except (TypeError, AdaptiveWaveValidationError):
+        errors.append("grant_time_invalid")
+    else:
+        canonical_now = now.astimezone(UTC)
+        if not issued <= canonical_now < expires or expires <= issued or (expires - issued).total_seconds() > 3_600:
+            errors.append("grant_expired_or_lifetime_invalid")
+    return errors
+
+
+def issue_live_grant(
+    *,
+    request_path: Path,
+    grant_root: Path = DEFAULT_APPROVAL_ROOT,
+    auth_source: Path = DEFAULT_GROK_AUTH,
+    ttl_seconds: int = 900,
+    wall_clock: Callable[[], datetime] = _utc_now,
+) -> tuple[dict[str, Any], Path]:
+    """Preissue a request-bound owner-only grant without executing Grok."""
+
+    if not _is_int(ttl_seconds) or not 60 <= ttl_seconds <= 3_600:
+        raise AdaptiveWaveValidationError("grant_ttl_invalid")
+    request = _load_request(request_path)
+    prompt_policy_binding = _approved_effective_prompt_binding(request)
+    grant_id = request["approval"]["grant_id"]
+    transport = request["transport"]
+    observed_auth_sha256 = _auth_fingerprint(auth_source)
+    if (
+        not isinstance(grant_id, str)
+        or not _is_sha(transport["grok_binary_sha256"])
+        or not isinstance(transport["operator_account_ref"], str)
+        or not _is_sha(transport["oauth_auth_sha256"])
+        or observed_auth_sha256 != transport["oauth_auth_sha256"]
+    ):
+        raise AdaptiveWaveValidationError("live_grant_request_invalid")
+    _require_auth_digest_available(grant_root, transport["oauth_auth_sha256"])
+    now = wall_clock().astimezone(UTC)
+    _require_live_auth_freshness(
+        auth_source,
+        request=request,
+        now=now,
+        grant_ttl_seconds=ttl_seconds,
+    )
+    grant_id_hash = bytes_sha256(grant_id.encode())
+    grant = {
+        "schema_version": GRANT_SCHEMA_VERSION,
+        "grant_id_hash": grant_id_hash,
+        "execution_scope_sha256": execution_scope_sha256(request),
+        "request_id": request["request_id"],
+        "target_sha256": canonical_sha256(request["target"]),
+        "model_id": request["transport"]["model_id"],
+        "grok_binary_sha256": request["transport"]["grok_binary_sha256"],
+        "operator_account_ref_sha256": bytes_sha256(request["transport"]["operator_account_ref"].encode()),
+        "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
+        "result_schema_sha256": result_schema_sha256(),
+        "command_policy_sha256": command_policy_sha256(request),
+        "tool_registry_sha256": tool_registry_sha256(),
+        "effective_prompt_policy_sha256": prompt_policy_binding.policy_sha256,
+        "effective_prompt_policy_entry_id": prompt_policy_binding.policy_entry_id,
+        "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
+        "emergency_sha256": canonical_sha256(request["emergency"]),
+        "technical_limits_sha256": canonical_sha256(request["technical_limits"]),
+        "budget_sha256": canonical_sha256(request["budget"]),
+        "retention_sha256": canonical_sha256(request["retention"]),
+        "issued_at": _timestamp(now),
+        "expires_at": _timestamp(now + timedelta(seconds=ttl_seconds)),
+        "issuer": "local_owner_explicit_cli",
+        "state": "preissued_single_use",
+    }
+    grant_path, _ = _grant_paths(grant_root, grant_id_hash)
+    with _auth_digest_lock(grant_root, transport["oauth_auth_sha256"]):
+        _require_auth_digest_available(grant_root, transport["oauth_auth_sha256"])
+        _atomic_publish(grant_path, (canonical_json(grant) + "\n").encode())
+    return grant, grant_path
+
+
+def _load_preissued_grant(
+    grant_root: Path,
+    *,
+    request: Mapping[str, Any],
+    now: datetime,
+) -> tuple[dict[str, Any], bytes]:
+    grant_id = request["approval"]["grant_id"]
+    if not isinstance(grant_id, str):
+        raise PermissionError("preissued_live_grant_required")
+    _ensure_private_directory(grant_root, create=True)
+    grant_path, _ = _grant_paths(grant_root, bytes_sha256(grant_id.encode()))
+    try:
+        grant_raw = _read_regular_owned_bounded(grant_path, maximum_bytes=1_048_576, required_mode=0o600)
+        grant = strict_json_loads(grant_raw)
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError) as exc:
+        raise PermissionError("preissued_live_grant_invalid") from exc
+    if _validate_grant(grant, request, now=now):
+        raise PermissionError("preissued_live_grant_invalid")
+    return grant, grant_raw
+
+
+def _load_and_consume_grant(
+    grant_root: Path,
+    *,
+    request: Mapping[str, Any],
+    run_id: str,
+    run_lease_sha256: str,
+    request_sha256: str,
+    expected_grant_sha256: str,
+    monotonic: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+) -> ConsumedGrant:
+    grant_id = request["approval"]["grant_id"]
+    if not isinstance(grant_id, str):
+        raise PermissionError("preissued_live_grant_required")
+    _ensure_private_directory(grant_root, create=True)
+    oauth_auth_sha256 = request["transport"]["oauth_auth_sha256"]
+    _require_auth_digest_available(grant_root, oauth_auth_sha256)
+    grant_id_hash = bytes_sha256(grant_id.encode())
+    grant_path, consumption_path = _grant_paths(grant_root, grant_id_hash)
+    # Read first, then obtain the authoritative clock immediately before the
+    # exclusive consumption publication.  A timestamp captured at intent or
+    # auth-preflight time could cross the grant expiry before atomic use.
+    grant_path_raw = _read_regular_owned_bounded(grant_path, maximum_bytes=1_048_576, required_mode=0o600)
+    try:
+        grant = strict_json_loads(grant_path_raw)
+    except (UnicodeError, ValueError) as exc:
+        raise PermissionError("preissued_live_grant_invalid") from exc
+    consumed_at = _timestamp(wall_clock().astimezone(UTC))
+    if _validate_grant(grant, request, now=_parse_timestamp(consumed_at)):
+        raise PermissionError("preissued_live_grant_invalid")
+    grant_raw = grant_path_raw
+    grant_sha = bytes_sha256(grant_raw)
+    if grant_sha != expected_grant_sha256:
+        raise PermissionError("preissued_live_grant_changed")
+    payload = {
+        "schema_version": CONSUMPTION_SCHEMA_VERSION,
+        "grant_id_hash": grant_id_hash,
+        "grant_sha256": grant_sha,
+        "execution_scope_sha256": execution_scope_sha256(request),
+        "request_sha256": request_sha256,
+        "run_id": run_id,
+        "run_lease_sha256": run_lease_sha256,
+        "consumed_at": consumed_at,
+        "state": "consumed_after_binary_auth_preflight_before_process_spawn",
+    }
+    raw = (canonical_json(payload) + "\n").encode()
+
+    def revalidate_immediately_before_link() -> None:
+        _require_auth_digest_not_tainted(grant_root, oauth_auth_sha256)
+        atomic_clock = wall_clock().astimezone(UTC)
+        if atomic_clock < _parse_timestamp(consumed_at) or _validate_grant(grant, request, now=atomic_clock):
+            raise PermissionError("preissued_live_grant_invalid")
+
+    with _auth_digest_lock(grant_root, oauth_auth_sha256):
+        _require_auth_digest_available(grant_root, oauth_auth_sha256)
+        try:
+            consumption_path.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise AdaptiveWaveValidationError("live_grant_consumption_state_invalid") from exc
+        else:
+            raise PermissionError("live_grant_already_consumed")
+        _publish_auth_active_use_unlocked(
+            grant_root,
+            oauth_auth_sha256=oauth_auth_sha256,
+            run_id=run_id,
+            request_sha256=request_sha256,
+            run_lease_sha256=run_lease_sha256,
+            grant_sha256=grant_sha,
+            claimed_at=_parse_timestamp(consumed_at),
+            claim_origin="live_consumption",
+        )
+        try:
+            _atomic_publish(consumption_path, raw, pre_publish=revalidate_immediately_before_link)
+        except FileExistsError as exc:
+            raise PermissionError("live_grant_already_consumed") from exc
+    # The exclusive link is the actual single-use transition. Re-read the
+    # authoritative wall clock after that transition; a grant that expires in
+    # the pre-link/link window remains consumed but must never release Grok.
+    post_link_monotonic = monotonic()
+    post_link_clock = wall_clock().astimezone(UTC)
+    consumed_clock = _parse_timestamp(consumed_at)
+    expires_clock = _parse_timestamp(grant["expires_at"])
+    if post_link_clock < consumed_clock or _validate_grant(grant, request, now=post_link_clock):
+        raise PermissionError("preissued_live_grant_expired_after_consumption")
+    release_budget_seconds = (expires_clock - post_link_clock).total_seconds()
+    if release_budget_seconds <= 0:
+        raise PermissionError("preissued_live_grant_expired_after_consumption")
+    return ConsumedGrant(
+        grant_sha256=grant_sha,
+        consumption_sha256=bytes_sha256(raw),
+        consumed_at=consumed_clock,
+        expires_at=expires_clock,
+        target_release_deadline_monotonic=post_link_monotonic + release_budget_seconds,
+    )
+
+
+def _load_bound_recovery_consumption(
+    grant_root: Path,
+    *,
+    request: Mapping[str, Any],
+    run_id: str,
+    run_lease_sha256: str,
+    request_sha256: str,
+    grant_sha256: str,
+) -> tuple[dict[str, Any], bytes] | None:
+    """Read only a consumption record exactly owned by the recovering run."""
+
+    grant_id = request["approval"]["grant_id"]
+    if not isinstance(grant_id, str):
+        raise AdaptiveWaveValidationError("recovery_grant_id_invalid")
+    _, consumption_path = _grant_paths(grant_root, bytes_sha256(grant_id.encode()))
+    try:
+        consumption_path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("recovery_grant_consumption_invalid") from exc
+    try:
+        raw = _read_regular_owned_bounded(consumption_path, maximum_bytes=1_048_576, required_mode=0o600)
+        consumption = strict_json_loads(raw)
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("recovery_grant_consumption_invalid") from exc
+    expected = {
+        "schema_version": CONSUMPTION_SCHEMA_VERSION,
+        "grant_id_hash": bytes_sha256(grant_id.encode()),
+        "grant_sha256": grant_sha256,
+        "execution_scope_sha256": execution_scope_sha256(request),
+        "request_sha256": request_sha256,
+        "run_id": run_id,
+        "run_lease_sha256": run_lease_sha256,
+        "consumed_at": consumption.get("consumed_at") if isinstance(consumption, dict) else None,
+        "state": "consumed_after_binary_auth_preflight_before_process_spawn",
+    }
+    if (
+        not isinstance(consumption, dict)
+        or set(consumption) != _CONSUMPTION_KEYS
+        or not _timestamp_valid(consumption.get("consumed_at"))
+        or consumption != expected
+    ):
+        raise AdaptiveWaveValidationError("recovery_grant_consumption_invalid")
+    return consumption, raw
+
+
+def _isolated_environment(ephemeral_home: Path) -> dict[str, str]:
+    tmp = ephemeral_home / "tmp"
+    xdg_config = ephemeral_home / "xdg-config"
+    xdg_state = ephemeral_home / "xdg-state"
+    xdg_cache = ephemeral_home / "xdg-cache"
+    for path in (tmp, xdg_config, xdg_state, xdg_cache):
+        path.mkdir(mode=0o700, exist_ok=False)
+    environment = {
+        "HOME": str(ephemeral_home),
+        "GROK_HOME": str(ephemeral_home),
+        "TMPDIR": str(tmp),
+        "XDG_CONFIG_HOME": str(xdg_config),
+        "XDG_STATE_HOME": str(xdg_state),
+        "XDG_CACHE_HOME": str(xdg_cache),
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "LANG": "en_US.UTF-8",
+        "LC_ALL": "en_US.UTF-8",
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+        "GROK_DISABLE_AUTOUPDATER": "1",
+    }
+    return environment
+
+
+def _session_updates_path(ephemeral_home: Path, cwd: Path, session_id: str) -> Path:
+    encoded_cwd = quote(str(cwd.resolve()), safe="")
+    return ephemeral_home / "sessions" / encoded_cwd / session_id / "updates.jsonl"
+
+
+def _usage_values(value: Any, expected_model_id: str) -> tuple[int, int, int, int]:
+    expected = {
+        "inputTokens",
+        "outputTokens",
+        "totalTokens",
+        "cachedReadTokens",
+        "reasoningTokens",
+        "modelCalls",
+        "apiDurationMs",
+        "modelUsage",
+        "numTurns",
+    }
+    nested_fields = expected - {"modelUsage", "numTurns"}
+    if not isinstance(value, dict) or set(value) != expected:
+        raise AdaptiveWaveValidationError("session_usage_shape_invalid")
+    scalar_fields = expected - {"modelUsage"}
+    if any(not _is_int(value.get(field)) or value[field] < 0 for field in scalar_fields):
+        raise AdaptiveWaveValidationError("session_usage_value_invalid")
+    if (
+        value["totalTokens"] != value["inputTokens"] + value["outputTokens"]
+        or value["cachedReadTokens"] > value["inputTokens"]
+        or value["reasoningTokens"] > value["outputTokens"]
+        or value["modelCalls"] < 1
+        or value["numTurns"] < 1
+    ):
+        raise AdaptiveWaveValidationError("session_usage_reconciliation_invalid")
+    model_usage = value["modelUsage"]
+    if not isinstance(model_usage, dict) or set(model_usage) != {expected_model_id}:
+        raise AdaptiveWaveValidationError("session_usage_model_invalid")
+    nested = model_usage[expected_model_id]
+    if (
+        not isinstance(nested, dict)
+        or set(nested) != nested_fields
+        or any(not _is_int(nested.get(field)) or nested[field] < 0 for field in nested_fields)
+        or any(nested[field] != value[field] for field in nested_fields)
+    ):
+        raise AdaptiveWaveValidationError("session_usage_model_reconciliation_invalid")
+    return value["inputTokens"], value["outputTokens"], value["totalTokens"], value["numTurns"]
+
+
+def _estimated_cost_usd_micros(input_tokens: int, output_tokens: int, budget: Mapping[str, Any]) -> int:
+    numerator = (
+        input_tokens * budget["input_token_cost_usd_micros_per_million"]
+        + output_tokens * budget["output_token_cost_usd_micros_per_million"]
+    )
+    return (numerator + 999_999) // 1_000_000
+
+
+def _session_query_phase_arguments_allowed(
+    arguments: Mapping[str, Any],
+    tool_name: str,
+    *,
+    session_query_policy_id: str,
+    discovery_target_lab_id: str | None = None,
+    approved_official_account_handles: Sequence[str] = (),
+) -> bool:
+    """Enforce the effective-prompt entry's mechanically provable phase boundary."""
+
+    if tool_name not in NATIVE_X_TOOLS:
+        return False
+    if session_query_policy_id == MIXED_SESSION_QUERY_POLICY_ID:
+        return True
+    if session_query_policy_id not in DISCOVERY_ONLY_SESSION_QUERY_POLICY_IDS:
+        return False
+    query = arguments.get("query")
+    if not isinstance(query, str):
+        return True
+    normalized_query = "".join(
+        character
+        for character in unicodedata.normalize("NFKC", query.strip())
+        if unicodedata.category(character) != "Cf"
+    )
+    start = 0
+    end = len(normalized_query)
+    while start < end and normalized_query[start] not in _HANDLE_SUBJECT_CHARACTERS:
+        start += 1
+    while end > start and normalized_query[end - 1] not in _HANDLE_SUBJECT_CHARACTERS:
+        end -= 1
+    possible_handle_subject = normalized_query[start:end]
+    from_markers = tuple(_PERSON_SCOPED_FROM_RE.finditer(normalized_query))
+    if from_markers:
+        from_operators = tuple(_FROM_OPERATOR_WITH_HANDLE_RE.finditer(normalized_query))
+        approved_handles = {
+            handle.casefold()
+            for handle in approved_official_account_handles
+            if _validate_handle(handle)
+        }
+        if (
+            session_query_policy_id != DISCOVERY_ONLY_OFFICIAL_SESSION_QUERY_POLICY_ID
+            or tool_name != "x_keyword_search"
+            or len(from_markers) != 1
+            or len(from_operators) != 1
+            or from_markers[0].start() != from_operators[0].start()
+            or from_operators[0].group("negated")
+            or from_operators[0].group("handle").casefold() not in approved_handles
+        ):
+            return False
+    if _BARE_HANDLE_LIKE_QUERY_RE.fullmatch(possible_handle_subject) is not None:
+        return False
+    if tool_name != "x_user_search":
+        return True
+    if not isinstance(discovery_target_lab_id, str) or _ID_RE.fullmatch(discovery_target_lab_id) is None:
+        return False
+    normalized_user_query = normalized_query.casefold()
+    if (
+        not normalized_user_query.isascii()
+        or _DISCOVERY_USER_SEARCH_CLOSED_SYNTAX_RE.fullmatch(normalized_user_query) is None
+    ):
+        return False
+    query_tokens = frozenset(re.findall(r"[a-z0-9]+", normalized_user_query))
+    target_tokens = frozenset(
+        token
+        for token in re.findall(r"[a-z0-9]+", discovery_target_lab_id.casefold())
+        if token not in {"ai", "lab", "labs"}
+    )
+    return bool(
+        target_tokens
+        and query_tokens.intersection(target_tokens)
+        and query_tokens.intersection(_DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS)
+        and query_tokens.issubset(
+            target_tokens
+            | _DISCOVERY_USER_SEARCH_PROFESSIONAL_TERMS
+            | _DISCOVERY_USER_SEARCH_CONNECTOR_TERMS
+        )
+    )
+
+
+def _parse_session_proof(
+    raw: bytes,
+    *,
+    expected_session_id: str,
+    expected_model_id: str,
+    expected_stdout: bytes,
+    headless_envelope: HeadlessEnvelope | None = None,
+    max_line_bytes: int,
+    max_turns: int,
+    budget: Mapping[str, Any],
+    session_query_policy_id: str = MIXED_SESSION_QUERY_POLICY_ID,
+    discovery_target_lab_id: str | None = None,
+    approved_official_account_handles: Sequence[str] = (),
+) -> SessionProof:
+    if not raw or not raw.endswith(b"\n"):
+        raise AdaptiveWaveValidationError("session_updates_incomplete")
+    lines = raw.splitlines()
+    started: set[str] = set()
+    completed: set[str] = set()
+    auxiliary_started: set[str] = set()
+    auxiliary_completed: set[str] = set()
+    provider_call_ids: set[str] = set()
+    tool_counts: dict[str, int] = {}
+    query_hashes: list[str] = []
+    surface_attempts: set[tuple[str, str, str]] = set()
+    prompt_ids: set[str] = set()
+    model_ids: list[str] = []
+    assistant_chunks: list[str] = []
+    terminal_assistant_chunks: list[str] = []
+    retry_attempts: list[int] = []
+    retry_maximum: int | None = None
+    user_events = 0
+    terminal: tuple[str, tuple[int, int, int, int]] | None = None
+    last_kind: str | None = None
+    for index, raw_line in enumerate(lines):
+        if len(raw_line) > max_line_bytes:
+            raise AdaptiveWaveValidationError("session_update_line_ceiling_exceeded")
+        try:
+            event = strict_json_loads_bounded(
+                raw_line,
+                max_bytes=max_line_bytes,
+                max_depth=64,
+                max_nodes=100_000,
+            )
+        except (UnicodeError, ValueError) as exc:
+            raise AdaptiveWaveValidationError("session_update_json_invalid") from exc
+        if (
+            not isinstance(event, dict)
+            or set(event) != {"method", "params", "timestamp"}
+            or not _is_int(event.get("timestamp"))
+            or event["timestamp"] < 0
+        ):
+            raise AdaptiveWaveValidationError("session_update_envelope_invalid")
+        params = event.get("params")
+        if (
+            not isinstance(params, dict)
+            or set(params) != {"_meta", "sessionId", "update"}
+            or params.get("sessionId") != expected_session_id
+        ):
+            raise AdaptiveWaveValidationError("session_update_session_mismatch")
+        update = params.get("update")
+        if not isinstance(update, dict) or not isinstance(update.get("sessionUpdate"), str):
+            raise AdaptiveWaveValidationError("session_update_payload_invalid")
+        kind = update["sessionUpdate"]
+        expected_method = "_x.ai/session/update" if kind in {"retry_state", "turn_completed"} else "session/update"
+        if event["method"] != expected_method:
+            raise AdaptiveWaveValidationError("session_update_method_invalid")
+        if terminal is not None:
+            raise AdaptiveWaveValidationError("session_update_after_terminal")
+        last_kind = kind
+        metadata = params.get("_meta")
+        if (
+            not isinstance(metadata, dict)
+            or not _is_text(metadata.get("eventId"), maximum=512)
+            or not metadata["eventId"].startswith(f"{expected_session_id}-")
+            or not _is_int(metadata.get("agentTimestampMs"))
+            or metadata["agentTimestampMs"] < 0
+        ):
+            raise AdaptiveWaveValidationError("session_update_metadata_invalid")
+        if isinstance(metadata, dict) and metadata.get("promptId") is not None:
+            prompt_id = metadata["promptId"]
+            if not _is_text(prompt_id, maximum=256):
+                raise AdaptiveWaveValidationError("session_prompt_id_invalid")
+            prompt_ids.add(prompt_id)
+        if kind == "retry_state":
+            attempt = update.get("attempt")
+            maximum = update.get("max_retries")
+            if (
+                set(update) != {"sessionUpdate", "type", "attempt", "max_retries", "reason"}
+                or update.get("type") != "retrying"
+                or not _is_int(attempt)
+                or not _is_int(maximum)
+                or not 1 <= attempt <= maximum <= 100
+                or not _is_text(update.get("reason"), maximum=20_000)
+                or user_events != 0
+                or started
+                or assistant_chunks
+                or (retry_attempts and attempt <= retry_attempts[-1])
+                or (retry_maximum is not None and maximum != retry_maximum)
+            ):
+                raise AdaptiveWaveValidationError("session_retry_state_invalid")
+            retry_attempts.append(attempt)
+            retry_maximum = maximum
+        elif kind == "user_message_chunk":
+            if user_events != 0 or started or assistant_chunks:
+                raise AdaptiveWaveValidationError("session_user_causality_invalid")
+            user_events += 1
+            update_metadata = update.get("_meta")
+            model_id = update_metadata.get("modelId") if isinstance(update_metadata, dict) else None
+            if model_id != expected_model_id:
+                raise AdaptiveWaveValidationError("session_effective_model_mismatch")
+            model_ids.append(model_id)
+        elif kind == "tool_call":
+            call_id = update.get("toolCallId")
+            if (
+                user_events != 1
+                or not _is_text(call_id, maximum=256)
+                or call_id in started
+                or call_id in completed
+                or call_id in auxiliary_started
+                or update.get("status") not in {None, "in_progress"}
+            ):
+                raise AdaptiveWaveValidationError("session_tool_start_invalid")
+            # Any assistant text followed by another tool call was progress,
+            # not the terminal result.  Only the contiguous assistant message
+            # after the last native-X tool is eligible for result selection.
+            terminal_assistant_chunks.clear()
+            started.add(call_id)
+        elif kind == "tool_call_update":
+            call_id = update.get("toolCallId")
+            raw_output = update.get("rawOutput")
+            auxiliary_start = "rawInput" in update
+            auxiliary_finish = isinstance(raw_output, dict) and raw_output.get("type") == "UpdateGoal"
+            if auxiliary_start:
+                raw_input = update.get("rawInput")
+                update_metadata = update.get("_meta")
+                if (
+                    set(update)
+                    != {"_meta", "kind", "locations", "rawInput", "sessionUpdate", "title", "toolCallId"}
+                    or not _is_text(call_id, maximum=256)
+                    or call_id not in started
+                    or call_id in completed
+                    or call_id in auxiliary_started
+                    or update.get("kind") != "other"
+                    or update.get("locations") != []
+                    or not _is_text(update.get("title"), maximum=20_000)
+                    or not isinstance(update_metadata, dict)
+                    or set(update_metadata) != {"x.ai/tool"}
+                    or update_metadata.get("x.ai/tool") != _AUXILIARY_GOAL_TOOL_METADATA
+                    or not isinstance(raw_input, dict)
+                    or set(raw_input) != {"blocked_reason", "completed", "message", "variant"}
+                    or raw_input.get("variant") != "UpdateGoal"
+                    or raw_input.get("blocked_reason") is not None
+                    or raw_input.get("completed") is not None
+                    or not _is_text(raw_input.get("message"), maximum=20_000)
+                ):
+                    raise AdaptiveWaveValidationError("session_auxiliary_goal_start_invalid")
+                terminal_assistant_chunks.clear()
+                started.remove(call_id)
+                auxiliary_started.add(call_id)
+            elif auxiliary_finish:
+                if (
+                    set(update) != {"rawOutput", "sessionUpdate", "status", "toolCallId"}
+                    or not isinstance(call_id, str)
+                    or call_id not in auxiliary_started
+                    or call_id in auxiliary_completed
+                    or update.get("status") != "completed"
+                    or set(raw_output) != {"success", "summary", "type"}
+                    or raw_output.get("success") is not True
+                    or not _is_text(raw_output.get("summary"), maximum=20_000)
+                ):
+                    raise AdaptiveWaveValidationError("session_auxiliary_goal_completion_invalid")
+                auxiliary_completed.add(call_id)
+            elif (
+                not isinstance(call_id, str)
+                or call_id not in started
+                or call_id in completed
+                or update.get("status") != "completed"
+                or not isinstance(raw_output, dict)
+                or set(raw_output) != {"call_id", "id", "input", "name"}
+                or raw_output.get("id") != call_id
+                or raw_output.get("name") not in NATIVE_X_TOOLS
+                or not _is_text(raw_output.get("call_id"), maximum=256)
+                or not isinstance(raw_output.get("input"), str)
+                or raw_output["call_id"] in provider_call_ids
+            ):
+                raise AdaptiveWaveValidationError("session_tool_completion_invalid")
+            if auxiliary_start or auxiliary_finish:
+                continue
+            try:
+                arguments = strict_json_loads_bounded(
+                    raw_output["input"],
+                    max_bytes=max_line_bytes,
+                    max_depth=32,
+                    max_nodes=10_000,
+                )
+            except (TypeError, UnicodeError, ValueError) as exc:
+                raise AdaptiveWaveValidationError("session_tool_arguments_invalid") from exc
+            if not isinstance(arguments, dict):
+                raise AdaptiveWaveValidationError("session_tool_arguments_invalid")
+            if not base_discovery_tool_arguments_allowed(arguments, raw_output["name"]):
+                raise AdaptiveWaveValidationError("session_tool_subject_boundary_invalid")
+            if not _session_query_phase_arguments_allowed(
+                arguments,
+                raw_output["name"],
+                session_query_policy_id=session_query_policy_id,
+                discovery_target_lab_id=discovery_target_lab_id,
+                approved_official_account_handles=approved_official_account_handles,
+            ):
+                raise AdaptiveWaveValidationError("session_query_phase_policy_invalid")
+            provider_call_ids.add(raw_output["call_id"])
+            completed.add(call_id)
+            tool_name = raw_output["name"]
+            tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+            query_sha256 = canonical_sha256({"tool_name": tool_name, "arguments": arguments})
+            query_hashes.append(query_sha256)
+            if tool_name == "x_keyword_search":
+                classified_surface = classify_single_handle_query_surface(arguments.get("query"))
+                if classified_surface is not None:
+                    handle_key, surface = classified_surface
+                    surface_attempts.add((handle_key, surface, query_sha256))
+        elif kind == "agent_message_chunk":
+            if user_events != 1 or started != completed:
+                raise AdaptiveWaveValidationError("session_assistant_causality_invalid")
+            content = update.get("content")
+            if isinstance(content, dict) and content.get("type") == "text" and isinstance(content.get("text"), str):
+                assistant_text = content["text"]
+            elif isinstance(content, str):
+                assistant_text = content
+            else:
+                raise AdaptiveWaveValidationError("session_assistant_chunk_invalid")
+            assistant_chunks.append(assistant_text)
+            terminal_assistant_chunks.append(assistant_text)
+        elif kind == "turn_completed":
+            if index != len(lines) - 1 or user_events != 1 or not assistant_chunks or started != completed:
+                raise AdaptiveWaveValidationError("session_terminal_not_final")
+            prompt_id = update.get("prompt_id")
+            if not _is_text(prompt_id, maximum=256):
+                raise AdaptiveWaveValidationError("session_prompt_id_invalid")
+            prompt_ids.add(prompt_id)
+            if update.get("stop_reason") != "end_turn":
+                raise AdaptiveWaveValidationError("session_terminal_stop_invalid")
+            usage = _usage_values(update.get("usage"), expected_model_id)
+            terminal = ("end_turn", usage)
+        elif kind != "agent_thought_chunk":
+            raise AdaptiveWaveValidationError("session_event_kind_invalid")
+    if (
+        user_events != 1
+        or model_ids != [expected_model_id]
+        or not started
+        or started != completed
+        or auxiliary_started != auxiliary_completed
+    ):
+        raise AdaptiveWaveValidationError("session_causality_invalid")
+    if len(prompt_ids) != 1 or not assistant_chunks or not terminal_assistant_chunks:
+        raise AdaptiveWaveValidationError("session_causality_invalid")
+    if headless_envelope is None:
+        if terminal is None or "".join(assistant_chunks).strip().encode() != expected_stdout.strip():
+            raise AdaptiveWaveValidationError("session_causality_invalid")
+        input_tokens, output_tokens, total_tokens, model_turns = terminal[1]
+        cache_read_input_tokens = 0
+    else:
+        expected_text = headless_envelope.inner_text.strip()
+        terminal_assistant_text = "".join(terminal_assistant_chunks).strip()
+        if not any(
+            "".join(assistant_chunks[index:]).strip() == expected_text
+            for index in range(len(assistant_chunks))
+        ) or not expected_text.endswith(terminal_assistant_text):
+            raise AdaptiveWaveValidationError("session_headless_text_mismatch")
+        if terminal is None:
+            if last_kind != "agent_message_chunk":
+                raise AdaptiveWaveValidationError("session_headless_final_event_invalid")
+        elif terminal[1] != (
+            headless_envelope.input_tokens + headless_envelope.cache_read_input_tokens,
+            headless_envelope.output_tokens,
+            headless_envelope.total_tokens,
+            headless_envelope.model_turns,
+        ):
+            raise AdaptiveWaveValidationError("session_headless_usage_mismatch")
+        input_tokens = headless_envelope.input_tokens
+        output_tokens = headless_envelope.output_tokens
+        cache_read_input_tokens = headless_envelope.cache_read_input_tokens
+        total_tokens = headless_envelope.total_tokens
+        model_turns = headless_envelope.model_turns
+    # The request currently owns one conservative input rate rather than a
+    # distinct provider cache-read rate.  Charge cache reads at that full
+    # input rate so the emergency cost ceiling cannot be understated.
+    estimated_cost = _estimated_cost_usd_micros(
+        input_tokens + cache_read_input_tokens,
+        output_tokens,
+        budget,
+    )
+    if (
+        model_turns > max_turns
+        or total_tokens > budget["max_total_tokens"]
+        or estimated_cost > budget["max_cost_usd_micros"]
+    ):
+        raise AdaptiveWaveValidationError("session_budget_exceeded")
+    return SessionProof(
+        updates_sha256=bytes_sha256(raw),
+        update_bytes=len(raw),
+        event_count=len(lines),
+        provider_prompt_id_sha256=bytes_sha256(next(iter(prompt_ids)).encode()),
+        effective_model_id=expected_model_id,
+        started_tool_calls=len(started),
+        completed_tool_calls=len(completed),
+        tool_counts=dict(sorted(tool_counts.items())),
+        query_argument_sha256s=tuple(query_hashes),
+        candidate_surface_attempts=tuple(
+            {
+                "handle_key": handle_key,
+                "surface": surface,
+                "query_argument_sha256": query_sha256,
+            }
+            for handle_key, surface, query_sha256 in sorted(surface_attempts)
+        ),
+        terminal_stop_reason="end_turn",
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        model_turns=model_turns,
+        estimated_cost_usd_micros=estimated_cost,
+        cache_read_input_tokens=cache_read_input_tokens,
+        terminal_assistant_text="".join(terminal_assistant_chunks).strip(),
+    )
+
+
+def _terminal_session_model_result(
+    session_proof: SessionProof,
+    *,
+    technical_limits: Mapping[str, Any],
+    prior_candidates: Mapping[str, PriorCandidateFacts],
+    result_normalization_policy_version: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Return only a transcript-proven terminal structured model result.
+
+    Grok CLI 0.2.101 can concatenate an interim structured assistant message
+    and the final structured assistant message in the headless envelope's
+    `text`.  We never scan that concatenation for a convenient JSON object.
+    Instead, the session state machine identifies the contiguous assistant
+    message after the last completed native-X tool, and this helper admits it
+    only when it is one complete strict result document.
+    """
+
+    terminal_text = session_proof.terminal_assistant_text
+    if not terminal_text:
+        return None, None
+    try:
+        payload = strict_json_loads_bounded(
+            terminal_text,
+            max_bytes=technical_limits["max_json_bytes"],
+            max_depth=technical_limits["max_json_depth"],
+            max_nodes=technical_limits["max_json_nodes"],
+        )
+    except (AdaptiveWaveValidationError, UnicodeError, ValueError, RecursionError):
+        return None, None
+    if result_normalization_policy_version is not None:
+        payload = _operator_normalize_mechanical_result(
+            payload,
+            policy_version=result_normalization_policy_version,
+            prior_candidates=prior_candidates,
+            live_mode=True,
+            require_operator_projection=False,
+        )
+    if not isinstance(payload, dict):
+        return None, None
+    _, transform_limit_kind = _serialize_operator_result(
+        payload,
+        technical_limits=technical_limits,
+    )
+    if transform_limit_kind is not None:
+        return None, transform_limit_kind
+    if validate_model_result(
+        payload,
+        prior_candidates=prior_candidates,
+        live_mode=True,
+        require_operator_projection=False,
+    ):
+        return None, None
+    return payload, None
+
+
+def _recover_transcript_terminal_result(
+    parsed_result: Any | None,
+    sanitized: bytes | None,
+    contract_valid: bool,
+    *,
+    headless_envelope: HeadlessEnvelope | None,
+    session_proof: SessionProof | None,
+    technical_limits: Mapping[str, Any],
+    prior_candidates: Mapping[str, PriorCandidateFacts],
+    allow_recovery: bool,
+    result_normalization_policy_version: str | None,
+) -> tuple[Any | None, bytes | None, bool, str | None]:
+    if contract_valid or not allow_recovery or headless_envelope is None or session_proof is None:
+        return parsed_result, sanitized, contract_valid, None
+    recovered, transform_limit_kind = _terminal_session_model_result(
+        session_proof,
+        technical_limits=technical_limits,
+        prior_candidates=prior_candidates,
+        result_normalization_policy_version=result_normalization_policy_version,
+    )
+    if transform_limit_kind is not None:
+        return parsed_result, None, False, transform_limit_kind
+    if recovered is None:
+        return parsed_result, sanitized, contract_valid, None
+    recovered_raw, recovered_limit_kind = _serialize_operator_result(
+        recovered,
+        technical_limits=technical_limits,
+    )
+    if recovered_limit_kind is not None:
+        return parsed_result, None, False, recovered_limit_kind
+    return recovered, recovered_raw, True, None
+
+
+def _session_proof_payload(proof: SessionProof | None, *, status: str, raw: bytes | None) -> dict[str, Any]:
+    if proof is None:
+        return {
+            "status": status,
+            "updates_sha256": bytes_sha256(raw) if raw is not None else None,
+            "update_bytes": len(raw) if raw is not None else 0,
+            "event_count": 0,
+            "provider_prompt_id_sha256": None,
+            "effective_model_id": None,
+            "started_tool_calls": 0,
+            "completed_tool_calls": 0,
+            "tool_counts": {},
+            "query_argument_sha256s": [],
+            "candidate_surface_attempts": [],
+            "terminal_stop_reason": None,
+            "input_tokens": None,
+            "output_tokens": None,
+            "total_tokens": None,
+            "model_turns": None,
+            "estimated_cost_usd_micros": None,
+        }
+    payload = {
+        "status": "verified",
+        "updates_sha256": proof.updates_sha256,
+        "update_bytes": proof.update_bytes,
+        "event_count": proof.event_count,
+        "provider_prompt_id_sha256": proof.provider_prompt_id_sha256,
+        "effective_model_id": proof.effective_model_id,
+        "started_tool_calls": proof.started_tool_calls,
+        "completed_tool_calls": proof.completed_tool_calls,
+        "tool_counts": proof.tool_counts,
+        "query_argument_sha256s": list(proof.query_argument_sha256s),
+        "candidate_surface_attempts": list(proof.candidate_surface_attempts),
+        "terminal_stop_reason": proof.terminal_stop_reason,
+        "input_tokens": proof.input_tokens,
+        "output_tokens": proof.output_tokens,
+        "total_tokens": proof.total_tokens,
+        "model_turns": proof.model_turns,
+        "estimated_cost_usd_micros": proof.estimated_cost_usd_micros,
+    }
+    if proof.cache_read_input_tokens:
+        payload["cache_read_input_tokens"] = proof.cache_read_input_tokens
+    return payload
+
+
+def _build_static_bindings(
+    *,
+    request: Mapping[str, Any],
+    prompt_raw: bytes,
+    compiled_prompt: str,
+    prior_bindings: list[dict[str, Any]],
+    prior_handles: Sequence[str],
+    prior_handle_count: int,
+    session_id: str,
+    schema_sha256: str,
+    binary_sha256: str | None,
+    command: Sequence[str],
+    effective_prompt_policy: EffectivePromptPolicyBinding | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    input_binding = {
+        "target_sha256": canonical_sha256(request["target"]),
+        "source_prompt_sha256": bytes_sha256(prompt_raw),
+        "compiled_prompt_sha256": bytes_sha256(compiled_prompt.encode()),
+        "prior_waves": prior_bindings,
+        "prior_unique_handle_count": prior_handle_count,
+        "prior_handle_set_sha256": canonical_sha256(sorted(item.casefold() for item in prior_handles)),
+    }
+    account_ref = request["transport"]["operator_account_ref"]
+    command_binding = {
+        "provider_id": request["transport"]["provider_id"],
+        "model_id": request["transport"]["model_id"],
+        "reasoning_effort": request["transport"]["reasoning_effort"],
+        "session_id": session_id,
+        "grok_binary_sha256": binary_sha256,
+        "structured_output_schema_sha256": schema_sha256,
+        "argv_sha256": canonical_sha256(list(command)),
+        "command_policy_sha256": command_policy_sha256(request),
+        "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
+        "tool_registry_sha256": tool_registry_sha256(),
+        "effective_prompt_policy_sha256": (
+            effective_prompt_policy.policy_sha256 if effective_prompt_policy is not None else None
+        ),
+        "effective_prompt_policy_entry_id": (
+            effective_prompt_policy.policy_entry_id if effective_prompt_policy is not None else None
+        ),
+        "operator_account_ref_sha256": bytes_sha256(account_ref.encode()) if account_ref is not None else None,
+        "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
+        "max_turns": request["emergency"]["max_turns"],
+    }
+    return input_binding, command_binding
+
+
+def _create_run_root(runtime_root: Path, run_id: str) -> Path:
+    _ensure_private_directory(runtime_root, create=True)
+    run_root = runtime_root / run_id
+    run_root.mkdir(mode=0o700, exist_ok=False)
+    try:
+        _fsync_directory(runtime_root)
+        _ensure_private_directory(run_root, create=False)
+    except BaseException:
+        try:
+            run_root.rmdir()
+            _fsync_directory(runtime_root)
+        except BaseException as rollback_error:
+            raise AdaptiveWaveValidationError("run_root_creation_rollback_failed") from rollback_error
+        raise
+    return run_root
+
+
+@contextmanager
+def _run_lease(run_root: Path, *, create: bool) -> Any:
+    path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["run_lock"]
+    flags = os.O_RDWR
+    if create:
+        flags |= os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("run_lease_open_failed") from exc
+    try:
+        if create:
+            token = os.urandom(32).hex().encode()
+            os.fchmod(descriptor, 0o600)
+            os.write(descriptor, token)
+            os.fsync(descriptor)
+            _fsync_directory(run_root)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size != 64
+        ):
+            raise AdaptiveWaveValidationError("run_lease_metadata_invalid")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        token = os.read(descriptor, 65)
+        if _SHA256_RE.fullmatch(token.decode(errors="ignore")) is None:
+            raise AdaptiveWaveValidationError("run_lease_token_invalid")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise AdaptiveWaveValidationError("run_active_owner_present") from exc
+        try:
+            yield bytes_sha256(token)
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
+def _read_run_lease_sha256(run_root: Path) -> str:
+    return bytes_sha256(
+        _read_regular_owned_bounded(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["run_lock"],
+            maximum_bytes=64,
+            required_mode=0o600,
+        )
+    )
+
+
+def _load_request(path: Path) -> dict[str, Any]:
+    try:
+        request = strict_json_loads(_read_regular_owned_bounded(path, maximum_bytes=4_194_304, required_mode=0o600))
+    except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+        raise AdaptiveWaveValidationError("request_json_invalid") from exc
+    errors = validate_request(request)
+    if errors:
+        raise AdaptiveWaveValidationError("request_contract_invalid")
+    return request
+
+
+def _delete_owned_directory_at(parent_descriptor: int, name: str) -> None:
+    """Recursively unlink one current-owner directory without following links.
+
+    The provider can write its isolated home and can therefore remove search
+    permission from directories before it exits.  Restore only the minimum
+    owner mode needed for deletion, bind every descent to a directory
+    descriptor, and unlink non-directories without following them.
+    """
+
+    try:
+        before = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_entry_unavailable") from exc
+    if not stat.S_ISDIR(before.st_mode) or before.st_uid != os.getuid():
+        raise AdaptiveWaveValidationError("owned_tree_directory_invalid")
+    try:
+        os.chmod(name, 0o700, dir_fd=parent_descriptor, follow_symlinks=False)
+        flags = os.O_RDONLY | os.O_DIRECTORY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_directory_open_failed") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or opened.st_uid != os.getuid()
+            or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+        ):
+            raise AdaptiveWaveValidationError("owned_tree_directory_changed")
+        os.fchmod(descriptor, 0o700)
+        with os.scandir(descriptor) as entries:
+            names = [entry.name for entry in entries]
+        for child_name in names:
+            try:
+                child = os.stat(child_name, dir_fd=descriptor, follow_symlinks=False)
+            except OSError as exc:
+                raise AdaptiveWaveValidationError("owned_tree_entry_unavailable") from exc
+            if child.st_uid != os.getuid():
+                raise AdaptiveWaveValidationError("owned_tree_entry_owner_invalid")
+            if stat.S_ISDIR(child.st_mode):
+                _delete_owned_directory_at(descriptor, child_name)
+            else:
+                try:
+                    os.unlink(child_name, dir_fd=descriptor)
+                except OSError as exc:
+                    raise AdaptiveWaveValidationError("owned_tree_entry_delete_failed") from exc
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        os.rmdir(name, dir_fd=parent_descriptor)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_directory_delete_failed") from exc
+
+
+def _delete_owned_directory_tree(path: Path) -> None:
+    """Delete an owner-controlled tree durably, including mode-000 children."""
+
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        parent_descriptor = os.open(path.parent, flags)
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("owned_tree_parent_open_failed") from exc
+    try:
+        try:
+            os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        _delete_owned_directory_at(parent_descriptor, path.name)
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _delete_ephemeral_tree(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid():
+        raise AdaptiveWaveValidationError("ephemeral_tree_invalid")
+    _delete_owned_directory_tree(path)
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return
+    else:
+        raise AdaptiveWaveValidationError("ephemeral_tree_deletion_failed")
+
+
+def _finalize_copied_auth_use(
+    copied_auth: Path,
+    ephemeral_home: Path,
+    *,
+    grant_root: Path,
+    oauth_auth_sha256: str,
+    run_id: str,
+    request_sha256: str,
+    run_lease_sha256: str,
+    grant_sha256: str,
+    wall_clock: Callable[[], datetime],
+    force_taint_reason: str | None,
+) -> None:
+    """Audit, durably delete, then release only this run's active-use claim."""
+
+    if not _auth_active_use_owned_by(
+        grant_root,
+        oauth_auth_sha256=oauth_auth_sha256,
+        run_id=run_id,
+        request_sha256=request_sha256,
+        run_lease_sha256=run_lease_sha256,
+        grant_sha256=grant_sha256,
+        reject_sibling=True,
+    ):
+        raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+    _audit_copied_auth_after_provider(
+        copied_auth,
+        expected_sha256=oauth_auth_sha256,
+        source_run_id=run_id,
+        source_request_sha256=request_sha256,
+        grant_root=grant_root,
+        wall_clock=wall_clock,
+        force_taint_reason=force_taint_reason,
+    )
+    _delete_ephemeral_tree(ephemeral_home)
+    _resolve_auth_active_use(
+        grant_root,
+        oauth_auth_sha256=oauth_auth_sha256,
+        run_id=run_id,
+        request_sha256=request_sha256,
+        run_lease_sha256=run_lease_sha256,
+        grant_sha256=grant_sha256,
+    )
+
+
+@contextmanager
+def _discard_run_root_without_intent_on_failure(run_root: Path) -> Any:
+    """Leave only crash-recoverable roots that durably published an intent."""
+
+    try:
+        yield
+    except BaseException:
+        intent_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"]
+        try:
+            intent_metadata = intent_path.lstat()
+            durable_intent_present = (
+                stat.S_ISREG(intent_metadata.st_mode)
+                and not intent_path.is_symlink()
+                and intent_metadata.st_uid == os.getuid()
+                and intent_metadata.st_nlink == 1
+                and stat.S_IMODE(intent_metadata.st_mode) == 0o600
+            )
+        except OSError:
+            durable_intent_present = False
+        if not durable_intent_present:
+            try:
+                run_metadata = run_root.lstat()
+            except FileNotFoundError:
+                run_metadata = None
+            if run_metadata is not None:
+                if (
+                    run_root.is_symlink()
+                    or not stat.S_ISDIR(run_metadata.st_mode)
+                    or run_metadata.st_uid != os.getuid()
+                ):
+                    raise AdaptiveWaveValidationError("preintent_run_root_invalid")
+                _delete_owned_directory_tree(run_root)
+            try:
+                run_root.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                raise AdaptiveWaveValidationError("preintent_run_root_deletion_failed")
+        raise
+
+
+def _publish_process_spools(
+    run_root: Path,
+    *,
+    stdout_spool: Path,
+    stderr_spool: Path,
+    max_stdout_bytes: int,
+    max_stderr_bytes: int,
+    allow_missing: bool,
+) -> tuple[bytes, bytes]:
+    """Promote process spools before credential cleanup can interrupt sealing."""
+
+    promoted: list[bytes] = []
+    removed_spool = False
+    for final_path, spool_path, ceiling in (
+        (
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["raw_stdout"],
+            stdout_spool,
+            max_stdout_bytes,
+        ),
+        (
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["stderr"],
+            stderr_spool,
+            max_stderr_bytes,
+        ),
+    ):
+        final_raw: bytes | None = None
+        spool_raw: bytes | None = None
+        if final_path.exists() or final_path.is_symlink():
+            final_raw = _read_regular_owned_bounded(
+                final_path,
+                maximum_bytes=ceiling,
+                required_mode=0o600,
+            )
+        if spool_path.exists() or spool_path.is_symlink():
+            spool_raw = _read_regular_owned_bounded(
+                spool_path,
+                maximum_bytes=ceiling,
+                required_mode=0o600,
+            )
+        if final_raw is not None and spool_raw is not None and final_raw != spool_raw:
+            raise AdaptiveWaveValidationError("process_spool_published_mismatch")
+        raw = final_raw if final_raw is not None else spool_raw
+        if raw is None:
+            if not allow_missing:
+                raise AdaptiveWaveValidationError("process_spool_missing")
+            raw = b""
+        if final_raw is None:
+            _atomic_publish(final_path, raw)
+        if spool_raw is not None:
+            spool_path.unlink()
+            removed_spool = True
+        promoted.append(raw)
+    if removed_spool:
+        _fsync_directory(run_root)
+    return promoted[0], promoted[1]
+
+
+def _run_adaptive_wave(
+    *,
+    request: Mapping[str, Any],
+    execution_mode: str,
+    runtime_root: Path,
+    approval_root: Path,
+    binary: Path,
+    auth_source: Path | None,
+    executor: Executor,
+    monotonic: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    run_id: str | None = None,
+    session_id: str | None = None,
+) -> tuple[dict[str, Any], Path]:
+    if validate_request(request):
+        raise AdaptiveWaveValidationError("request_contract_invalid")
+    if execution_mode not in {"fixture", "live"}:
+        raise AdaptiveWaveValidationError("execution_mode_invalid")
+    transport = request["transport"]
+    if execution_mode == "live" and (
+        not _is_sha(transport["grok_binary_sha256"])
+        or not isinstance(transport["operator_account_ref"], str)
+        or not _is_sha(transport["oauth_auth_sha256"])
+        or auth_source is None
+    ):
+        raise AdaptiveWaveValidationError("live_transport_binding_required")
+    request_sha = canonical_sha256(request)
+    started_clock = wall_clock().astimezone(UTC)
+    effective_prompt_policy: EffectivePromptPolicyBinding | None = None
+    grant_sha: str | None = None
+    if execution_mode == "live":
+        effective_prompt_policy = _approved_effective_prompt_binding(request)
+        _, grant_raw = _load_preissued_grant(approval_root, request=request, now=started_clock)
+        grant_sha = bytes_sha256(grant_raw)
+        assert auth_source is not None
+        # A matching digest proves only which OAuth bytes would be copied.  It
+        # does not prove that their access token covers this run.  Avoid
+        # triggering one-time refresh-token rotation inside the disposable
+        # GROK_HOME, because that refreshed state is intentionally deleted.
+        if _auth_fingerprint(auth_source) != transport["oauth_auth_sha256"]:
+            raise AdaptiveWaveValidationError("live_auth_fingerprint_mismatch")
+        _require_auth_digest_available(approval_root, transport["oauth_auth_sha256"])
+        _require_live_auth_freshness(
+            auth_source,
+            request=request,
+            now=started_clock,
+        )
+    prompt_raw = _load_bound_bytes(
+        request["prompt_source"]["path"],
+        request["prompt_source"]["sha256"],
+        require_private=True,
+        max_bytes=request["technical_limits"]["max_prompt_bytes"],
+    )
+    try:
+        base_prompt = prompt_raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise AdaptiveWaveValidationError("prompt_utf8_invalid") from exc
+    prior_handles, prior_bindings, prior_candidates = load_prior_context(request)
+    result_schema = _load_result_schema()
+    compiled_prompt = compile_prompt(base_prompt, request["target"], prior_handles, result_schema=result_schema)
+    compiled_prompt_raw = compiled_prompt.encode()
+    if len(compiled_prompt_raw) > request["technical_limits"]["max_compiled_prompt_bytes"]:
+        raise AdaptiveWaveValidationError("compiled_prompt_byte_ceiling_exceeded")
+    actual_run_id = run_id or f"grok_wave_{execution_mode}_{uuid.uuid4().hex}"
+    actual_session_id = session_id or str(uuid.uuid4())
+    if _RUN_ID_RE.fullmatch(actual_run_id) is None or _SESSION_ID_RE.fullmatch(actual_session_id) is None:
+        raise AdaptiveWaveValidationError("operator_identity_invalid")
+    run_root = _create_run_root(runtime_root, actual_run_id)
+    with _discard_run_root_without_intent_on_failure(run_root), _run_lease(run_root, create=True) as run_lease_sha:
+        workspace = run_root / "workspace"
+        workspace.mkdir(mode=0o700)
+        ephemeral_home = run_root / _RUN_ARTIFACT_NAME_REGISTRY["ephemeral_home"]
+        ephemeral_home.mkdir(mode=0o700)
+        compiled_prompt_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["compiled_prompt"]
+        stdout_spool = run_root / _RUN_ARTIFACT_NAME_REGISTRY["stdout_spool"]
+        stderr_spool = run_root / _RUN_ARTIFACT_NAME_REGISTRY["stderr_spool"]
+        retained_updates_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["session_updates"]
+        runtime_layout = _runtime_layout_from_registry()
+        _atomic_publish(compiled_prompt_path, compiled_prompt_raw)
+        isolated_environment = _isolated_environment(ephemeral_home)
+        binary_sha: str | None = None
+        command_binary = Path("fixture-grok.invalid")
+        if execution_mode == "live":
+            try:
+                staged_binary = _stage_verified_binary(binary, run_root, transport["grok_binary_sha256"])
+            except BaseException:
+                _delete_ephemeral_tree(ephemeral_home)
+                raise
+            binary_sha = staged_binary.sha256
+            command_binary = staged_binary.path
+        command = build_grok_command(
+            binary=command_binary,
+            cwd=workspace,
+            request=request,
+            prompt_file=compiled_prompt_path,
+            leader_socket=ephemeral_home / "leader.sock",
+            session_id=actual_session_id,
+            result_schema=result_schema,
+        )
+        input_binding, command_binding = _build_static_bindings(
+            request=request,
+            prompt_raw=prompt_raw,
+            compiled_prompt=compiled_prompt,
+            prior_bindings=prior_bindings,
+            prior_handles=prior_handles,
+            prior_handle_count=len(prior_handles),
+            session_id=actual_session_id,
+            schema_sha256=result_schema_sha256(),
+            binary_sha256=binary_sha,
+            command=command,
+            effective_prompt_policy=effective_prompt_policy,
+        )
+        recorded_command_policy = command_binding["command_policy_sha256"]
+        current_process_evidence_generation = (
+            _process_evidence_generation_from_bindings(input_binding, command_binding)
+            == "current"
+        )
+        result_normalization_policy_version = (
+            RESULT_NORMALIZATION_POLICY_VERSION
+            if recorded_command_policy
+            in {
+                _current_operator_result_command_policy_sha256(request),
+                _legacy_pre_process_evidence_command_policy_sha256(request),
+            }
+            else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+            if recorded_command_policy == _legacy_operator_result_v2_command_policy_sha256(request)
+            else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+            if recorded_command_policy
+            in {
+                _legacy_operator_result_v1_command_policy_sha256(request),
+                _legacy_normalization_only_result_v3_command_policy_sha256(request),
+            }
+            else None
+        )
+        started_at = _timestamp(started_clock)
+        intent_approval = _approval_binding(
+            request,
+            required=execution_mode == "live",
+            grant_sha256=grant_sha,
+            consumption_sha256=None,
+        )
+        intent = {
+            "schema_version": INTENT_SCHEMA_VERSION,
+            "run_id": actual_run_id,
+            "request_id": request["request_id"],
+            "request_sha256": request_sha,
+            "execution_mode": execution_mode,
+            "started_at": started_at,
+            "run_lease_sha256": run_lease_sha,
+            "input_binding": input_binding,
+            "command_binding": command_binding,
+            "approval": intent_approval,
+            "emergency": request["emergency"],
+            "technical_limits": request["technical_limits"],
+            "budget": request["budget"],
+            "retention": request["retention"],
+            "runtime_layout": runtime_layout,
+            "authority": AUTHORITY,
+        }
+        if current_process_evidence_generation:
+            intent["process_evidence_generation"] = PROCESS_EVIDENCE_GENERATION
+        _atomic_publish(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_request"],
+            (canonical_json(request) + "\n").encode(),
+        )
+        _atomic_publish(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"],
+            (canonical_json(intent) + "\n").encode(),
+        )
+
+        approval_consumption_sha: str | None = None
+        consumed_grant: ConsumedGrant | None = None
+        copied_auth: Path | None = None
+        process_ledger_sha: str | None = None
+        target_release_authorized = False
+        updates_source_path = _session_updates_path(ephemeral_home, workspace, actual_session_id)
+        started_monotonic = monotonic()
+        execution_deadline = started_monotonic + request["emergency"]["deadline_ms"] / 1000
+        updates_raw: bytes | None = None
+        session_capture_status = "not_applicable" if execution_mode == "fixture" else "missing"
+        measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
+        provider_phase_completed_cleanly = False
+        process_result: ProcessResult | None = None
+        defer_cleanup_to_recovery = False
+        process_result_journal_sha: str | None = None
+        stdout_raw: bytes | None = None
+        stderr_raw: bytes | None = None
+        if execution_mode == "live":
+            assert auth_source is not None
+            try:
+                if _auth_fingerprint(auth_source) != transport["oauth_auth_sha256"]:
+                    raise AdaptiveWaveValidationError("live_auth_fingerprint_mismatch")
+                copied_auth = _copy_private_auth(auth_source, ephemeral_home)
+                if _auth_fingerprint(copied_auth) != transport["oauth_auth_sha256"]:
+                    raise AdaptiveWaveValidationError("copied_auth_fingerprint_mismatch")
+                _require_live_auth_freshness(
+                    copied_auth,
+                    request=request,
+                    now=wall_clock().astimezone(UTC),
+                )
+                consumed_grant = _load_and_consume_grant(
+                    approval_root,
+                    request=request,
+                    run_id=actual_run_id,
+                    run_lease_sha256=run_lease_sha,
+                    request_sha256=request_sha,
+                    expected_grant_sha256=grant_sha,
+                    monotonic=monotonic,
+                    wall_clock=wall_clock,
+                )
+                grant_sha = consumed_grant.grant_sha256
+                approval_consumption_sha = consumed_grant.consumption_sha256
+            except BaseException:
+                owns_claim = (
+                    copied_auth is not None
+                    and grant_sha is not None
+                    and _auth_active_use_owned_by(
+                        approval_root,
+                        oauth_auth_sha256=transport["oauth_auth_sha256"],
+                        run_id=actual_run_id,
+                        request_sha256=request_sha,
+                        run_lease_sha256=run_lease_sha,
+                        grant_sha256=grant_sha,
+                        reject_sibling=False,
+                    )
+                )
+                if owns_claim:
+                    _finalize_copied_auth_use(
+                        copied_auth,
+                        ephemeral_home,
+                        grant_root=approval_root,
+                        oauth_auth_sha256=transport["oauth_auth_sha256"],
+                        run_id=actual_run_id,
+                        request_sha256=request_sha,
+                        run_lease_sha256=run_lease_sha,
+                        grant_sha256=grant_sha,
+                        wall_clock=wall_clock,
+                        force_taint_reason=None,
+                    )
+                else:
+                    _delete_ephemeral_tree(ephemeral_home)
+                raise
+
+        def persist_spawn(
+            child_pid: int,
+            process_group_id: int,
+            kernel_birth_identity: str,
+            process_identity_token: str,
+        ) -> None:
+            nonlocal defer_cleanup_to_recovery, process_ledger_sha, target_release_authorized
+            launcher_verified_clock = wall_clock().astimezone(UTC)
+            ledger = {
+                "schema_version": PROCESS_LEDGER_SCHEMA_VERSION,
+                "run_id": actual_run_id,
+                "request_id": request["request_id"],
+                "run_lease_sha256": run_lease_sha,
+                "session_id": actual_session_id,
+                "child_pid": child_pid,
+                "process_group_id": process_group_id,
+                "kernel_birth_identity": kernel_birth_identity,
+                "process_identity_token": process_identity_token,
+                "spawned_at": _timestamp(launcher_verified_clock),
+            }
+            raw_ledger = (canonical_json(ledger) + "\n").encode()
+            _atomic_publish(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_ledger"],
+                raw_ledger,
+            )
+            process_ledger_sha = bytes_sha256(raw_ledger)
+            # Durable spawn identity transfers all process/session/auth cleanup
+            # to recovery immediately.  The executor may still raise before
+            # returning a ProcessResult (including during its own fsync/close
+            # finalization), so ordinary cleanup cannot safely resume here.
+            defer_cleanup_to_recovery = True
+            # The gated launcher has not exec'd the target yet. Recheck after
+            # durable ledger publication, immediately before the executor
+            # releases the gate; no provider work occurs if this fails.
+            release_clock = wall_clock().astimezone(UTC)
+            if execution_mode == "live" and (
+                consumed_grant is None
+                or release_clock < launcher_verified_clock
+                or release_clock < consumed_grant.consumed_at
+                or release_clock >= consumed_grant.expires_at
+                or monotonic() >= consumed_grant.target_release_deadline_monotonic
+            ):
+                raise PermissionError("live_grant_expired_before_target_release")
+            target_release_authorized = True
+
+        try:
+            approval_binding = _approval_binding(
+                request,
+                required=execution_mode == "live",
+                grant_sha256=grant_sha,
+                consumption_sha256=approval_consumption_sha,
+            )
+            process_result = executor(
+                command,
+                cwd=workspace,
+                environment=isolated_environment,
+                stdout_spool=stdout_spool,
+                stderr_spool=stderr_spool,
+                deadline_at=execution_deadline,
+                term_grace_ms=request["emergency"]["term_grace_ms"],
+                kill_grace_ms=request["emergency"]["kill_grace_ms"],
+                max_stdout_bytes=request["technical_limits"]["max_stdout_bytes"],
+                max_stderr_bytes=request["technical_limits"]["max_stderr_bytes"],
+                session_tree_root=ephemeral_home,
+                session_updates_path=updates_source_path,
+                max_session_files=request["technical_limits"]["max_session_files"],
+                max_session_file_bytes=request["technical_limits"]["max_session_file_bytes"],
+                max_session_total_bytes=request["technical_limits"]["max_session_total_bytes"],
+                max_session_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                monotonic=monotonic,
+                on_spawn=persist_spawn,
+            )
+            # Executor return and durable evidence sealing are distinct
+            # phases.  From this point forward, any exception belongs to
+            # recovery: the live auth claim and ephemeral session tree must
+            # remain intact until the journal, spools and session evidence are
+            # all durably promoted.
+            defer_cleanup_to_recovery = True
+            journal_stdout = _read_regular_owned_bounded(
+                stdout_spool,
+                maximum_bytes=request["technical_limits"]["max_stdout_bytes"],
+                required_mode=0o600,
+            )
+            journal_stderr = _read_regular_owned_bounded(
+                stderr_spool,
+                maximum_bytes=request["technical_limits"]["max_stderr_bytes"],
+                required_mode=0o600,
+            )
+            process_result_journal = _process_result_journal_payload(
+                process_result,
+                run_id=actual_run_id,
+                request_id=request["request_id"],
+                run_lease_sha256=run_lease_sha,
+                session_id=actual_session_id,
+                stdout_raw=journal_stdout,
+                stderr_raw=journal_stderr,
+            )
+            if not _process_result_journal_valid(process_result_journal):
+                raise AdaptiveWaveValidationError("process_result_unrecoverable")
+            process_result_journal_raw = (canonical_json(process_result_journal) + "\n").encode()
+            _atomic_publish(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"],
+                process_result_journal_raw,
+            )
+            process_result_journal_sha = bytes_sha256(process_result_journal_raw)
+            if not process_result.process_group_cleanup_confirmed:
+                # The recorded process group may still be alive. Keep its
+                # session tree and auth active-use claim intact so the
+                # recovery owner can terminate it before auditing/deleting.
+                defer_cleanup_to_recovery = True
+                raise AdaptiveWaveValidationError("process_group_cleanup_incomplete")
+            measurement = _measure_session_tree(
+                ephemeral_home,
+                max_files=request["technical_limits"]["max_session_files"],
+                max_file_bytes=request["technical_limits"]["max_session_file_bytes"],
+                max_total_bytes=request["technical_limits"]["max_session_total_bytes"],
+                updates_path=updates_source_path,
+                max_updates_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                expected_socket_path=ephemeral_home / "leader.sock",
+                max_depth=MAX_SESSION_TREE_DEPTH,
+                deadline_at=monotonic() + FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS,
+                monotonic=monotonic,
+            )
+            if execution_mode == "live" and measurement.limit_kind is None and updates_source_path.exists():
+                try:
+                    updates_raw = _read_regular_owned_bounded(
+                        updates_source_path,
+                        maximum_bytes=request["technical_limits"]["max_session_updates_bytes"],
+                    )
+                    _atomic_publish(retained_updates_path, updates_raw)
+                    session_capture_status = "captured"
+                except (AdaptiveWaveValidationError, UnicodeError, ValueError):
+                    updates_raw = None
+                    session_capture_status = "invalid"
+            stdout_raw, stderr_raw = _publish_process_spools(
+                run_root,
+                stdout_spool=stdout_spool,
+                stderr_spool=stderr_spool,
+                max_stdout_bytes=request["technical_limits"]["max_stdout_bytes"],
+                max_stderr_bytes=request["technical_limits"]["max_stderr_bytes"],
+                allow_missing=False,
+            )
+            if stdout_raw != journal_stdout or stderr_raw != journal_stderr:
+                raise AdaptiveWaveValidationError("process_result_journal_spool_mismatch")
+            provider_phase_completed_cleanly = (
+                process_result.exit_code == 0
+                and not process_result.timed_out
+                and process_result.execution_error_code == "none"
+                and process_result.technical_limit_kind is None
+                and measurement.limit_kind is None
+            )
+            # Every post-executor evidence owner has now been durably sealed;
+            # ordinary auth audit/deletion may safely proceed.
+            defer_cleanup_to_recovery = False
+        finally:
+            if defer_cleanup_to_recovery:
+                pass
+            elif execution_mode == "live":
+                if consumed_grant is None or copied_auth is None or grant_sha is None:
+                    raise AdaptiveWaveValidationError("grok_auth_active_use_binding_invalid")
+                _finalize_copied_auth_use(
+                    copied_auth,
+                    ephemeral_home,
+                    grant_root=approval_root,
+                    oauth_auth_sha256=transport["oauth_auth_sha256"],
+                    run_id=actual_run_id,
+                    request_sha256=request_sha,
+                    run_lease_sha256=run_lease_sha,
+                    grant_sha256=grant_sha,
+                    wall_clock=wall_clock,
+                    force_taint_reason=(
+                        None
+                        if provider_phase_completed_cleanly or not target_release_authorized
+                        else "post_consumption_execution_not_clean"
+                    ),
+                )
+            else:
+                _delete_ephemeral_tree(ephemeral_home)
+        if process_result is None or stdout_raw is None or stderr_raw is None:
+            raise AdaptiveWaveValidationError("process_evidence_publication_incomplete")
+        elapsed_ms = max(0, round((monotonic() - started_monotonic) * 1000))
+        completed_clock = wall_clock().astimezone(UTC)
+        completed_at = _timestamp(completed_clock)
+        final_measurement_limit = measurement.limit_kind
+        if process_result.timed_out and final_measurement_limit == "session_tree_scan_deadline":
+            # The executor's process deadline owns this terminal transition.
+            # A separately bounded post-process diagnostic scan must not
+            # relabel an actual timeout as its own cleanup deadline.
+            final_measurement_limit = None
+        technical_limit_kind = process_result.technical_limit_kind or final_measurement_limit
+        (
+            parsed_result,
+            sanitized,
+            prefix_bytes,
+            suffix_bytes,
+            syntax_compliant,
+            contract_valid,
+            json_limit_kind,
+            headless_envelope,
+        ) = _parse_structured_stdout(
+            stdout_raw,
+            technical_limits=request["technical_limits"],
+            prior_candidates=prior_candidates,
+            live_mode=execution_mode == "live",
+            expected_session_id=actual_session_id,
+            expected_model_id=transport["model_id"],
+            max_turns=request["emergency"]["max_turns"],
+            allow_legacy_plain=execution_mode == "fixture",
+            result_normalization_policy_version=result_normalization_policy_version,
+        )
+        technical_limit_kind = technical_limit_kind or json_limit_kind
+
+        session_proof: SessionProof | None = None
+        session_proof_status = "not_applicable" if execution_mode == "fixture" else "missing"
+        if execution_mode == "live" and updates_raw is not None and session_capture_status == "captured":
+            try:
+                session_proof = _parse_session_proof(
+                    updates_raw,
+                    expected_session_id=actual_session_id,
+                    expected_model_id=transport["model_id"],
+                    expected_stdout=stdout_raw,
+                    headless_envelope=headless_envelope,
+                    max_line_bytes=request["technical_limits"]["max_session_update_line_bytes"],
+                    max_turns=request["emergency"]["max_turns"],
+                    budget=request["budget"],
+                    session_query_policy_id=(
+                        effective_prompt_policy.session_query_policy_id
+                        if effective_prompt_policy is not None
+                        else MIXED_SESSION_QUERY_POLICY_ID
+                    ),
+                    discovery_target_lab_id=request["target"]["lab_id"],
+                    approved_official_account_handles=(
+                        effective_prompt_policy.official_account_handles
+                        if effective_prompt_policy is not None
+                        else ()
+                    ),
+                )
+                session_proof_status = "verified"
+            except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError):
+                session_proof = None
+                session_proof_status = "invalid"
+        elif execution_mode == "live" and session_capture_status == "invalid":
+            session_proof_status = "invalid"
+
+        parsed_result, sanitized, contract_valid, recovery_limit_kind = _recover_transcript_terminal_result(
+            parsed_result,
+            sanitized,
+            contract_valid,
+            headless_envelope=headless_envelope,
+            session_proof=session_proof,
+            technical_limits=request["technical_limits"],
+            prior_candidates=prior_candidates,
+            allow_recovery=execution_mode == "live",
+            result_normalization_policy_version=result_normalization_policy_version,
+        )
+        technical_limit_kind = technical_limit_kind or recovery_limit_kind
+        if contract_valid and isinstance(parsed_result, dict) and (
+            execution_mode == "fixture" or session_proof is not None
+        ):
+            parsed_result = _operator_project_model_result(
+                parsed_result,
+                session_proof=session_proof,
+                fixture=execution_mode == "fixture",
+                session_query_policy_id=(
+                    effective_prompt_policy.session_query_policy_id
+                    if effective_prompt_policy is not None
+                    else MIXED_SESSION_QUERY_POLICY_ID
+                ),
+            )
+            contract_valid = not validate_model_result(
+                parsed_result,
+                prior_candidates=prior_candidates,
+                live_mode=execution_mode == "live",
+            )
+            sanitized, projection_limit_kind = _serialize_operator_result(
+                parsed_result,
+                technical_limits=request["technical_limits"],
+            )
+            if projection_limit_kind is not None:
+                contract_valid = False
+                technical_limit_kind = technical_limit_kind or projection_limit_kind
+        sanitized_sha: str | None = None
+        if sanitized is not None:
+            _atomic_publish(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["sanitized"],
+                sanitized,
+            )
+            sanitized_sha = bytes_sha256(sanitized)
+
+        if technical_limit_kind is not None:
+            status = "technical_limit_exceeded"
+        elif process_result.timed_out:
+            status = "timed_out"
+        elif process_result.execution_error_code != "none" or process_result.exit_code != 0:
+            status = "process_failed"
+        elif not syntax_compliant:
+            status = "structured_output_noncompliant"
+        elif not contract_valid:
+            status = "result_contract_invalid"
+        elif execution_mode == "live" and session_proof is None:
+            status = "provider_evidence_invalid"
+        else:
+            status = "fixture_complete" if execution_mode == "fixture" else "completed"
+        session_payload = _session_proof_payload(
+            session_proof,
+            status=session_proof_status,
+            raw=updates_raw,
+        )
+        reconciliation = _candidate_reconciliation(
+            parsed_result if isinstance(parsed_result, dict) else {},
+            prior_candidates,
+            session_proof=session_proof,
+            fixture=execution_mode == "fixture",
+        )
+        delete_after = _timestamp(started_clock + timedelta(seconds=request["retention"]["ttl_seconds"]))
+        receipt = {
+            "schema_version": RECEIPT_SCHEMA_VERSION,
+            "run_id": actual_run_id,
+            "request_id": request["request_id"],
+            "request_sha256": request_sha,
+            "execution_mode": execution_mode,
+            "status": status,
+            "run_lease_sha256": run_lease_sha,
+            "input_binding": input_binding,
+            "command_binding": command_binding,
+            "approval": approval_binding,
+            "process": {
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "elapsed_ms": elapsed_ms,
+                "exit_code": process_result.exit_code,
+                "timed_out": process_result.timed_out,
+                "term_sent": process_result.term_sent,
+                "kill_sent": process_result.kill_sent,
+                "process_spawn_attempted": process_result.process_spawn_attempted,
+                "child_pid": process_result.child_pid,
+                "process_group_id": process_result.process_group_id,
+                "process_ledger_sha256": process_ledger_sha,
+                "kernel_birth_identity_sha256": (
+                    bytes_sha256(process_result.kernel_birth_identity.encode())
+                    if process_result.kernel_birth_identity is not None
+                    else None
+                ),
+                "process_identity_token_sha256": (
+                    bytes_sha256(process_result.process_identity_token.encode())
+                    if process_result.process_identity_token is not None
+                    else None
+                ),
+                "process_group_cleanup_confirmed": process_result.process_group_cleanup_confirmed,
+                "execution_error_code": process_result.execution_error_code,
+                "deadline_ms": request["emergency"]["deadline_ms"],
+                "term_grace_ms": request["emergency"]["term_grace_ms"],
+                "kill_grace_ms": request["emergency"]["kill_grace_ms"],
+                "fallback_used": False,
+                "technical_limit_exceeded": technical_limit_kind is not None,
+                "technical_limit_kind": technical_limit_kind,
+            },
+            "artifacts": {
+                "raw_stdout_sha256": bytes_sha256(stdout_raw),
+                "stderr_sha256": bytes_sha256(stderr_raw),
+                "sanitized_output_sha256": sanitized_sha,
+                "structured_output_compliant": syntax_compliant,
+                "structured_output_contract_valid": contract_valid,
+                "non_json_prefix_bytes": prefix_bytes,
+                "non_json_suffix_bytes": suffix_bytes,
+                "compiled_prompt_sha256": bytes_sha256(compiled_prompt_raw),
+                "session_updates_sha256": bytes_sha256(updates_raw) if updates_raw is not None else None,
+                "process_result_journal_sha256": process_result_journal_sha,
+                "ephemeral_tree_deleted": True,
+                "session_tree_file_count": measurement.file_count,
+                "session_tree_entry_count": measurement.entry_count,
+                "session_tree_max_depth": measurement.max_depth,
+                "session_tree_total_bytes": measurement.total_bytes,
+                "session_tree_max_file_bytes": measurement.max_file_bytes,
+            },
+            "session_proof": session_payload,
+            "retention": {
+                "policy_id": request["retention"]["policy_id"],
+                "ttl_seconds": request["retention"]["ttl_seconds"],
+                "delete_after": delete_after,
+                "purge_state": "pending_expiry",
+                "deletion_receipt_required": True,
+            },
+            "reconciliation": reconciliation,
+            "authority": AUTHORITY,
+        }
+        if not current_process_evidence_generation:
+            receipt["artifacts"].pop("process_result_journal_sha256")
+        receipt_errors = validate_operator_receipt(receipt)
+        if receipt_errors:
+            raise AdaptiveWaveValidationError("generated_receipt_invalid:" + ",".join(receipt_errors))
+        _atomic_publish(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+            (canonical_json(receipt) + "\n").encode(),
+        )
+        return receipt, run_root
+
+
+def run_adaptive_grok_wave_fixture(
+    *,
+    request_path: Path,
+    runtime_root: Path = DEFAULT_RUNTIME_ROOT,
+) -> tuple[dict[str, Any], Path]:
+    """Run deterministic operator mechanics with zero external execution."""
+
+    request = _load_request(request_path)
+    return _run_adaptive_wave(
+        request=request,
+        execution_mode="fixture",
+        runtime_root=runtime_root,
+        approval_root=runtime_root / ".unused-approval-root",
+        binary=Path("grok-fixture.invalid"),
+        auth_source=None,
+        executor=OfflineFixtureExecutor(),
+        monotonic=time.monotonic,
+        wall_clock=_utc_now,
+    )
+
+
+def run_adaptive_grok_wave_live(
+    *,
+    execute_live: bool,
+    request_path: Path,
+) -> tuple[dict[str, Any], Path]:
+    """Production live entrypoint with module-owned transport and clocks."""
+
+    if execute_live is not True:
+        raise PermissionError("explicit_execute_live_required")
+    request = _load_request(request_path)
+    return _run_adaptive_wave(
+        request=request,
+        execution_mode="live",
+        runtime_root=DEFAULT_RUNTIME_ROOT,
+        approval_root=DEFAULT_APPROVAL_ROOT,
+        binary=DEFAULT_GROK_BINARY,
+        auth_source=DEFAULT_GROK_AUTH,
+        executor=ProcessGroupExecutor(),
+        monotonic=time.monotonic,
+        wall_clock=_utc_now,
+    )
+
+
+def _intent_valid(intent: Any) -> bool:
+    if not isinstance(intent, dict) or set(intent) not in (_INTENT_KEYS, _LEGACY_INTENT_KEYS):
+        return False
+    current_process_evidence = set(intent) == _INTENT_KEYS
+    input_binding = intent.get("input_binding")
+    command_binding = intent.get("command_binding")
+    if not _input_binding_valid(input_binding) or not _command_binding_valid(command_binding):
+        return False
+    process_evidence_generation = _process_evidence_generation_from_bindings(
+        input_binding,
+        command_binding,
+    )
+    return (
+        intent.get("schema_version") == INTENT_SCHEMA_VERSION
+        and isinstance(intent.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(intent["run_id"]) is not None
+        and intent["run_id"].startswith(f"grok_wave_{intent.get('execution_mode')}_")
+        and isinstance(intent.get("request_id"), str)
+        and _REQUEST_ID_RE.fullmatch(intent["request_id"]) is not None
+        and _is_sha(intent.get("request_sha256"))
+        and intent.get("execution_mode") in {"fixture", "live"}
+        and _timestamp_valid(intent.get("started_at"))
+        and _is_sha(intent.get("run_lease_sha256"))
+        and _approval_binding_valid(intent.get("approval"), intent.get("execution_mode"), terminal=False)
+        and _emergency_valid(intent.get("emergency"))
+        and _technical_limits_valid(intent.get("technical_limits"))
+        and _budget_valid(intent.get("budget"))
+        and _retention_valid(intent.get("retention"))
+        and _runtime_layout_valid(intent.get("runtime_layout"))
+        and (
+            (
+                process_evidence_generation == "current"
+                and current_process_evidence
+                and intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+            )
+            or (
+                process_evidence_generation == "transitional"
+                and current_process_evidence
+                and intent.get("process_evidence_generation")
+                == PROCESS_EVIDENCE_GENERATION
+            )
+            or (
+                process_evidence_generation == "legacy"
+                and not current_process_evidence
+                and "process_evidence_generation" not in intent
+            )
+        )
+        and intent.get("authority") == AUTHORITY
+    )
+
+
+def _emergency_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _EMERGENCY_KEYS
+        and _is_int(value.get("max_turns"))
+        and 1 <= value["max_turns"] <= 512
+        and _is_int(value.get("deadline_ms"))
+        and 1_000 <= value["deadline_ms"] <= 3_600_000
+        and _is_int(value.get("term_grace_ms"))
+        and 100 <= value["term_grace_ms"] <= 60_000
+        and _is_int(value.get("kill_grace_ms"))
+        and 100 <= value["kill_grace_ms"] <= 60_000
+    )
+
+
+def _input_binding_valid(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) != _INPUT_BINDING_KEYS:
+        return False
+    prior = value.get("prior_waves")
+    return (
+        _is_sha(value.get("target_sha256"))
+        and _is_sha(value.get("source_prompt_sha256"))
+        and _is_sha(value.get("compiled_prompt_sha256"))
+        and isinstance(prior, list)
+        and all(
+            isinstance(row, dict)
+            and set(row) == {"wave_id", "sha256", "candidate_count", "unique_handle_count", "handle_set_sha256"}
+            and isinstance(row["wave_id"], str)
+            and _ID_RE.fullmatch(row["wave_id"]) is not None
+            and _is_sha(row["sha256"])
+            and _validate_nonnegative_int(row["candidate_count"])
+            and _validate_nonnegative_int(row["unique_handle_count"])
+            and row["unique_handle_count"] <= row["candidate_count"]
+            and _is_sha(row["handle_set_sha256"])
+            for row in prior
+        )
+        and len({row["wave_id"] for row in prior}) == len(prior)
+        and _validate_nonnegative_int(value.get("prior_unique_handle_count"))
+        and _is_sha(value.get("prior_handle_set_sha256"))
+    )
+
+
+def _command_binding_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _COMMAND_BINDING_KEYS
+        and value.get("provider_id") == PROVIDER_ID
+        and isinstance(value.get("model_id"), str)
+        and _ID_RE.fullmatch(value["model_id"]) is not None
+        and value.get("reasoning_effort") in {"low", "medium", "high"}
+        and isinstance(value.get("session_id"), str)
+        and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
+        and (value.get("grok_binary_sha256") is None or _is_sha(value["grok_binary_sha256"]))
+        and _is_sha(value.get("structured_output_schema_sha256"))
+        and _is_sha(value.get("argv_sha256"))
+        and _is_sha(value.get("command_policy_sha256"))
+        and _is_sha(value.get("environment_policy_sha256"))
+        and _is_sha(value.get("tool_registry_sha256"))
+        and (
+            (
+                value.get("effective_prompt_policy_sha256") is None
+                and value.get("effective_prompt_policy_entry_id") is None
+            )
+            or (
+                _is_sha(value.get("effective_prompt_policy_sha256"))
+                and isinstance(value.get("effective_prompt_policy_entry_id"), str)
+                and _ID_RE.fullmatch(value["effective_prompt_policy_entry_id"]) is not None
+            )
+        )
+        and (value.get("operator_account_ref_sha256") is None or _is_sha(value["operator_account_ref_sha256"]))
+        and (value.get("oauth_auth_sha256") is None or _is_sha(value["oauth_auth_sha256"]))
+        and ((value.get("operator_account_ref_sha256") is None) is (value.get("oauth_auth_sha256") is None))
+        and _is_int(value.get("max_turns"))
+        and 1 <= value["max_turns"] <= 512
+    )
+
+
+def _approval_binding_valid(
+    value: Any,
+    execution_mode: Any,
+    *,
+    terminal: bool,
+    allow_unconsumed: bool = False,
+) -> bool:
+    if not isinstance(value, dict) or set(value) != _APPROVAL_BINDING_KEYS:
+        return False
+    required = execution_mode == "live"
+    return (
+        value.get("required") is required
+        and (value.get("grant_id_sha256") is None or _is_sha(value["grant_id_sha256"]))
+        and (value.get("grant_sha256") is None or _is_sha(value["grant_sha256"]))
+        and (value.get("consumption_sha256") is None or _is_sha(value["consumption_sha256"]))
+        and (
+            not required
+            or (
+                _is_sha(value.get("grant_id_sha256"))
+                and _is_sha(value.get("grant_sha256"))
+                and (
+                    (_is_sha(value.get("consumption_sha256")) or allow_unconsumed)
+                    if terminal
+                    else value.get("consumption_sha256") is None
+                )
+            )
+        )
+        and (required or (value.get("grant_sha256") is None and value.get("consumption_sha256") is None))
+    )
+
+
+def _runtime_layout_from_registry() -> dict[str, str]:
+    return {
+        layout_key: _RUN_ARTIFACT_NAME_REGISTRY[artifact_key]
+        for layout_key, artifact_key in _RUNTIME_LAYOUT_ARTIFACT_KEYS.items()
+    }
+
+
+def _post_consumption_artifact_names(runtime_layout: Mapping[str, Any]) -> frozenset[str]:
+    """Return every durable artifact that proves a live run crossed consumption."""
+
+    expected_runtime_layout = _runtime_layout_from_registry()
+    if dict(runtime_layout) != expected_runtime_layout:
+        raise AdaptiveWaveValidationError(
+            "recovery_post_consumption_artifact_registry_mismatch"
+        )
+    names = {
+        _RUN_ARTIFACT_NAME_REGISTRY[key]
+        for key in _POST_CONSUMPTION_ARTIFACT_KEYS
+        if key not in _RUNTIME_LAYOUT_ARTIFACT_KEYS.values()
+    }
+    names.update(
+        runtime_layout[layout_key]
+        for layout_key, artifact_key in _RUNTIME_LAYOUT_ARTIFACT_KEYS.items()
+        if artifact_key in _POST_CONSUMPTION_ARTIFACT_KEYS
+    )
+    return frozenset(names)
+
+
+def _post_consumption_artifact_presence(
+    run_root: Path,
+    runtime_layout: Mapping[str, Any],
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Classify registered pending and already-published boundary evidence."""
+
+    names = _post_consumption_artifact_names(runtime_layout)
+    pending: set[str] = set()
+    promoted: set[str] = set()
+    for path in run_root.iterdir():
+        if path.name in names:
+            # Existence under a registered post-consumption final name is
+            # conservative boundary evidence even when the entry is a symlink
+            # or otherwise malformed. Deep-bound artifacts are validated by
+            # their owner before this classifier is used.
+            promoted.add(path.name)
+        match = _PENDING_RE.fullmatch(path.name)
+        if match is not None and match.group("name") in names:
+            pending.add(match.group("name"))
+    return frozenset(pending), frozenset(promoted)
+
+
+def _runtime_layout_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _RUNTIME_LAYOUT_KEYS
+        and value == _runtime_layout_from_registry()
+    )
+
+
+def _surface_attempts_valid(value: Any, query_hashes: Any) -> bool:
+    if not isinstance(value, list) or not isinstance(query_hashes, list):
+        return False
+    normalized: list[tuple[str, str, str]] = []
+    query_hash_set = set(query_hashes)
+    for row in value:
+        if not isinstance(row, dict) or set(row) != {
+            "handle_key",
+            "surface",
+            "query_argument_sha256",
+        }:
+            return False
+        handle_key = row.get("handle_key")
+        surface = row.get("surface")
+        query_sha256 = row.get("query_argument_sha256")
+        if (
+            not _validate_handle(handle_key)
+            or handle_key != handle_key.casefold()
+            or surface not in QUERY_SURFACES
+            or not _is_sha(query_sha256)
+            or query_sha256 not in query_hash_set
+        ):
+            return False
+        normalized.append((handle_key, surface, query_sha256))
+    return normalized == sorted(set(normalized))
+
+
+def _candidate_surface_coverage_valid(value: Any) -> bool:
+    if not isinstance(value, list):
+        return False
+    order: list[str] = []
+    for row in value:
+        if not isinstance(row, dict) or set(row) != {"handle_key", "authored_post", "authored_reply"}:
+            return False
+        handle_key = row.get("handle_key")
+        if not _validate_handle(handle_key) or handle_key != handle_key.casefold():
+            return False
+        order.append(handle_key)
+        for surface in ("authored_post", "authored_reply"):
+            state = row.get(surface)
+            if not isinstance(state, dict) or set(state) != {"attempted", "query_argument_sha256s"}:
+                return False
+            attempted = state.get("attempted")
+            hashes = state.get("query_argument_sha256s")
+            if (
+                type(attempted) is not bool
+                or not isinstance(hashes, list)
+                or hashes != sorted(set(hashes))
+                or any(not _is_sha(item) for item in hashes)
+                or attempted is not bool(hashes)
+            ):
+                return False
+    return order == sorted(order)
+
+
+def _receipt_reconciliation_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _RECONCILIATION_RECEIPT_KEYS
+        and all(
+            _validate_nonnegative_int(value.get(key))
+            for key in (
+                "candidate_count",
+                "evidence_count",
+                "post_url_count",
+                "prior_overlap_count",
+                "verified_material_update_count",
+                "model_reported_tool_calls",
+                "mechanically_verified_tool_calls",
+            )
+        )
+        and value["prior_overlap_count"] <= value["candidate_count"]
+        and value["verified_material_update_count"] <= value["prior_overlap_count"]
+        and value.get("tool_fact_source")
+        in {"fixture_not_applicable", "session_transcript_verified", "session_transcript_unverified"}
+        and _candidate_surface_coverage_valid(value.get("candidate_surface_coverage"))
+    )
+
+
+def _process_ledger_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _PROCESS_LEDGER_KEYS
+        and value.get("schema_version") == PROCESS_LEDGER_SCHEMA_VERSION
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and isinstance(value.get("request_id"), str)
+        and _REQUEST_ID_RE.fullmatch(value["request_id"]) is not None
+        and _is_sha(value.get("run_lease_sha256"))
+        and isinstance(value.get("session_id"), str)
+        and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
+        and _is_int(value.get("child_pid"))
+        and value["child_pid"] > 0
+        and _is_int(value.get("process_group_id"))
+        and value["process_group_id"] > 0
+        and _is_text(value.get("kernel_birth_identity"), maximum=512)
+        and isinstance(value.get("process_identity_token"), str)
+        and _SHA256_RE.fullmatch(value["process_identity_token"]) is not None
+        and _timestamp_valid(value.get("spawned_at"))
+    )
+
+
+def _process_result_journal_valid(value: Any, *, allow_legacy: bool = False) -> bool:
+    if not isinstance(value, dict):
+        return False
+    keys = set(value)
+    current = keys == _PROCESS_RESULT_JOURNAL_KEYS
+    legacy = allow_legacy and keys == _LEGACY_PROCESS_RESULT_JOURNAL_KEYS
+    if not (current or legacy):
+        return False
+    child_values = (value.get("child_pid"), value.get("process_group_id"))
+    identity_hashes = (
+        value.get("kernel_birth_identity_sha256"),
+        value.get("process_identity_token_sha256"),
+    )
+    spawn_bindings = (*child_values, *identity_hashes)
+    process_spawn_attempted = value.get("process_spawn_attempted")
+    spawn_binding_complete = all(item is not None for item in spawn_bindings)
+    spawn_binding_empty = all(item is None for item in spawn_bindings)
+    cleanup_confirmed = value.get("process_group_cleanup_confirmed")
+    phase = value.get("phase")
+    execution_error_code = value.get("execution_error_code")
+    return (
+        value.get("schema_version")
+        == (
+            PROCESS_RESULT_JOURNAL_SCHEMA_VERSION
+            if current
+            else LEGACY_PROCESS_RESULT_JOURNAL_SCHEMA_VERSION
+        )
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and isinstance(value.get("request_id"), str)
+        and _REQUEST_ID_RE.fullmatch(value["request_id"]) is not None
+        and _is_sha(value.get("run_lease_sha256"))
+        and isinstance(value.get("session_id"), str)
+        and _SESSION_ID_RE.fullmatch(value["session_id"]) is not None
+        and phase in ({"executor_returned", "recovery_sealed"} if current else {"executor_returned"})
+        and (value.get("exit_code") is None or _is_int(value["exit_code"]))
+        and all(
+            type(value.get(key)) is bool
+            for key in (
+                "timed_out",
+                "term_sent",
+                "kill_sent",
+                "process_spawn_attempted",
+                "process_group_cleanup_confirmed",
+            )
+        )
+        and all(item is None or (_is_int(item) and item > 0) for item in child_values)
+        and all(item is None or _is_sha(item) for item in identity_hashes)
+        and (
+            (process_spawn_attempted is True and spawn_binding_complete)
+            or (process_spawn_attempted is False and spawn_binding_empty)
+        )
+        # Cleanup may never become an unbound assertion.  An executor result
+        # that cannot confirm cleanup must carry the complete ledger identity
+        # recovery needs to verify and terminate the group.
+        and (cleanup_confirmed is True or process_spawn_attempted is True)
+        and execution_error_code
+        in {
+            "none",
+            "spawn_failed",
+            "process_execution_failed",
+            "process_group_cleanup_failed",
+            "crash_recovered",
+        }
+        and value.get("technical_limit_kind") in _TECHNICAL_LIMIT_KINDS | {None}
+        and (
+            not current
+            or (
+                _is_sha(value.get("stdout_sha256"))
+                and _validate_nonnegative_int(value.get("stdout_bytes"))
+                and _is_sha(value.get("stderr_sha256"))
+                and _validate_nonnegative_int(value.get("stderr_bytes"))
+            )
+        )
+        and (
+            (
+                phase == "executor_returned"
+                and execution_error_code != "crash_recovered"
+            )
+            or (
+                phase == "recovery_sealed"
+                and process_spawn_attempted is True
+                and cleanup_confirmed is True
+                and value.get("exit_code") is None
+                and execution_error_code == "crash_recovered"
+                and value.get("technical_limit_kind") is None
+            )
+        )
+    )
+
+
+def _session_proof_valid(value: Any, execution_mode: Any) -> bool:
+    if (
+        not isinstance(value, dict)
+        or not _SESSION_PROOF_KEYS <= set(value)
+        or not set(value) <= _SESSION_PROOF_KEYS | _SESSION_PROOF_OPTIONAL_KEYS
+    ):
+        return False
+    status = value.get("status")
+    if status not in {"not_applicable", "missing", "invalid", "verified"}:
+        return False
+    if execution_mode == "fixture":
+        return (
+            "cache_read_input_tokens" not in value
+            and
+            status == "not_applicable"
+            and value.get("updates_sha256") is None
+            and value.get("update_bytes") == 0
+            and value.get("event_count") == 0
+            and value.get("provider_prompt_id_sha256") is None
+            and value.get("effective_model_id") is None
+            and value.get("started_tool_calls") == 0
+            and value.get("completed_tool_calls") == 0
+            and value.get("tool_counts") == {}
+            and value.get("query_argument_sha256s") == []
+            and value.get("candidate_surface_attempts") == []
+            and value.get("terminal_stop_reason") is None
+            and all(
+                value.get(key) is None
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "total_tokens",
+                    "model_turns",
+                    "estimated_cost_usd_micros",
+                )
+            )
+        )
+    if execution_mode != "live" or status == "not_applicable":
+        return False
+    if status != "verified":
+        return (
+            "cache_read_input_tokens" not in value
+            and (value.get("updates_sha256") is None or _is_sha(value["updates_sha256"]))
+            and _validate_nonnegative_int(value.get("update_bytes"))
+            and value.get("event_count") == 0
+            and value.get("provider_prompt_id_sha256") is None
+            and value.get("effective_model_id") is None
+            and value.get("started_tool_calls") == 0
+            and value.get("completed_tool_calls") == 0
+            and value.get("tool_counts") == {}
+            and value.get("query_argument_sha256s") == []
+            and value.get("candidate_surface_attempts") == []
+            and value.get("terminal_stop_reason") is None
+            and all(
+                value.get(key) is None
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "total_tokens",
+                    "model_turns",
+                    "estimated_cost_usd_micros",
+                )
+            )
+        )
+    tool_counts = value.get("tool_counts")
+    query_hashes = value.get("query_argument_sha256s")
+    cache_read_input_tokens = value.get("cache_read_input_tokens", 0)
+    return (
+        _is_sha(value.get("updates_sha256"))
+        and _validate_nonnegative_int(value.get("update_bytes"))
+        and value["update_bytes"] > 0
+        and _validate_nonnegative_int(value.get("event_count"))
+        and value["event_count"] > 0
+        and _is_sha(value.get("provider_prompt_id_sha256"))
+        and isinstance(value.get("effective_model_id"), str)
+        and _ID_RE.fullmatch(value["effective_model_id"]) is not None
+        and _validate_nonnegative_int(value.get("started_tool_calls"))
+        and value["started_tool_calls"] > 0
+        and value.get("completed_tool_calls") == value["started_tool_calls"]
+        and isinstance(tool_counts, dict)
+        and all(
+            key in NATIVE_X_TOOLS and _validate_nonnegative_int(count) and count > 0
+            for key, count in tool_counts.items()
+        )
+        and sum(tool_counts.values()) == value["completed_tool_calls"]
+        and isinstance(query_hashes, list)
+        and len(query_hashes) == value["completed_tool_calls"]
+        and all(_is_sha(item) for item in query_hashes)
+        and _surface_attempts_valid(value.get("candidate_surface_attempts"), query_hashes)
+        and value.get("terminal_stop_reason") == "end_turn"
+        and all(
+            _validate_nonnegative_int(value.get(key))
+            for key in (
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "model_turns",
+                "estimated_cost_usd_micros",
+            )
+        )
+        and _validate_nonnegative_int(cache_read_input_tokens)
+        and value["total_tokens"]
+        == value["input_tokens"] + value["output_tokens"] + cache_read_input_tokens
+        and value["model_turns"] > 0
+    )
+
+
+def _retention_receipt_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _RETENTION_RECEIPT_KEYS
+        and isinstance(value.get("policy_id"), str)
+        and _ID_RE.fullmatch(value["policy_id"]) is not None
+        and _is_int(value.get("ttl_seconds"))
+        and 3_600 <= value["ttl_seconds"] <= 604_800
+        and _timestamp_valid(value.get("delete_after"))
+        and value.get("purge_state") == "pending_expiry"
+        and value.get("deletion_receipt_required") is True
+    )
+
+
+def validate_operator_receipt(receipt: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(receipt, dict) or set(receipt) != _RECEIPT_KEYS:
+        return ["receipt_shape_invalid"]
+    if receipt.get("schema_version") != RECEIPT_SCHEMA_VERSION:
+        errors.append("receipt_schema_version_invalid")
+    if not isinstance(receipt.get("run_id"), str) or _RUN_ID_RE.fullmatch(receipt["run_id"]) is None:
+        errors.append("receipt_run_id_invalid")
+    if not isinstance(receipt.get("request_id"), str) or _REQUEST_ID_RE.fullmatch(receipt["request_id"]) is None:
+        errors.append("receipt_request_id_invalid")
+    if not _is_sha(receipt.get("request_sha256")):
+        errors.append("receipt_request_sha256_invalid")
+    if not _is_sha(receipt.get("run_lease_sha256")):
+        errors.append("receipt_run_lease_invalid")
+    mode = receipt.get("execution_mode")
+    status = receipt.get("status")
+    if mode not in {"fixture", "live"} or status not in _RECEIPT_STATUSES:
+        errors.append("receipt_state_invalid")
+    if (
+        isinstance(receipt.get("run_id"), str)
+        and mode in {"fixture", "live"}
+        and not receipt["run_id"].startswith(f"grok_wave_{mode}_")
+    ):
+        errors.append("receipt_run_mode_mismatch")
+    if (mode == "fixture" and status == "completed") or (mode == "live" and status == "fixture_complete"):
+        errors.append("receipt_mode_status_mismatch")
+
+    input_binding = receipt.get("input_binding")
+    command_binding = receipt.get("command_binding")
+    if not _input_binding_valid(input_binding):
+        errors.append("receipt_input_binding_invalid")
+    if not _command_binding_valid(command_binding):
+        errors.append("receipt_command_binding_invalid")
+    if not _approval_binding_valid(
+        receipt.get("approval"),
+        mode,
+        terminal=True,
+        allow_unconsumed=status == "crash_recovered",
+    ):
+        errors.append("receipt_approval_invalid")
+
+    process = receipt.get("process")
+    process_shape_valid = isinstance(process, dict) and set(process) == _PROCESS_KEYS
+    if not process_shape_valid:
+        errors.append("receipt_process_shape_invalid")
+    else:
+        timestamps_valid = all(_timestamp_valid(process.get(key)) for key in ("started_at", "completed_at"))
+        timestamps_ordered = False
+        if timestamps_valid:
+            timestamps_ordered = _parse_timestamp(process["completed_at"]) >= _parse_timestamp(process["started_at"])
+        child_values = (process.get("child_pid"), process.get("process_group_id"))
+        child_values_valid = all(value is None or (_is_int(value) and value > 0) for value in child_values)
+        ledger_hash_valid = process.get("process_ledger_sha256") is None or _is_sha(process["process_ledger_sha256"])
+        identity_hashes = (
+            process.get("kernel_birth_identity_sha256"),
+            process.get("process_identity_token_sha256"),
+        )
+        identity_hashes_valid = all(value is None or _is_sha(value) for value in identity_hashes)
+        spawn_binding_complete = all(
+            value is not None for value in (*child_values, process.get("process_ledger_sha256"), *identity_hashes)
+        )
+        technical_kind = process.get("technical_limit_kind")
+        technical_flag = process.get("technical_limit_exceeded")
+        if (
+            not timestamps_valid
+            or not timestamps_ordered
+            or (process.get("elapsed_ms") is not None and not _validate_nonnegative_int(process["elapsed_ms"]))
+            or (process.get("exit_code") is not None and not _is_int(process["exit_code"]))
+            or any(
+                type(process.get(key)) is not bool
+                for key in (
+                    "timed_out",
+                    "term_sent",
+                    "kill_sent",
+                    "process_spawn_attempted",
+                    "process_group_cleanup_confirmed",
+                    "technical_limit_exceeded",
+                )
+            )
+            or not child_values_valid
+            or not ledger_hash_valid
+            or not identity_hashes_valid
+            or process.get("process_spawn_attempted") is not spawn_binding_complete
+            or process.get("execution_error_code")
+            not in {
+                "none",
+                "spawn_failed",
+                "process_execution_failed",
+                "process_group_cleanup_failed",
+                "crash_recovered",
+            }
+            or not _is_int(process.get("deadline_ms"))
+            or not 1_000 <= process["deadline_ms"] <= 3_600_000
+            or any(
+                not _is_int(process.get(key)) or not 100 <= process[key] <= 60_000
+                for key in ("term_grace_ms", "kill_grace_ms")
+            )
+            or process.get("fallback_used") is not False
+            or technical_kind not in _TECHNICAL_LIMIT_KINDS | {None}
+            or technical_flag is not (technical_kind is not None)
+        ):
+            errors.append("receipt_process_value_invalid")
+
+    artifacts = receipt.get("artifacts")
+    artifacts_shape_valid = isinstance(artifacts, dict) and set(artifacts) in (
+        _ARTIFACT_KEYS,
+        _LEGACY_ARTIFACT_KEYS,
+    )
+    if not artifacts_shape_valid:
+        errors.append("receipt_artifacts_shape_invalid")
+    elif (
+        not _is_sha(artifacts.get("raw_stdout_sha256"))
+        or not _is_sha(artifacts.get("stderr_sha256"))
+        or (artifacts.get("sanitized_output_sha256") is not None and not _is_sha(artifacts["sanitized_output_sha256"]))
+        or type(artifacts.get("structured_output_compliant")) is not bool
+        or type(artifacts.get("structured_output_contract_valid")) is not bool
+        or (
+            artifacts.get("non_json_prefix_bytes") is not None
+            and not _validate_nonnegative_int(artifacts["non_json_prefix_bytes"])
+        )
+        or (
+            artifacts.get("non_json_suffix_bytes") is not None
+            and not _validate_nonnegative_int(artifacts["non_json_suffix_bytes"])
+        )
+        or not _is_sha(artifacts.get("compiled_prompt_sha256"))
+        or (artifacts.get("session_updates_sha256") is not None and not _is_sha(artifacts["session_updates_sha256"]))
+        or (
+            "process_result_journal_sha256" in artifacts
+            and artifacts.get("process_result_journal_sha256") is not None
+            and not _is_sha(artifacts["process_result_journal_sha256"])
+        )
+        or artifacts.get("ephemeral_tree_deleted") is not True
+        or any(
+            not _validate_nonnegative_int(artifacts.get(key))
+            for key in (
+                "session_tree_file_count",
+                "session_tree_entry_count",
+                "session_tree_max_depth",
+                "session_tree_total_bytes",
+                "session_tree_max_file_bytes",
+            )
+        )
+        or artifacts.get("session_tree_max_depth", MAX_SESSION_TREE_DEPTH + 1) > MAX_SESSION_TREE_DEPTH
+    ):
+        errors.append("receipt_artifacts_value_invalid")
+
+    session_proof = receipt.get("session_proof")
+    if not _session_proof_valid(session_proof, mode):
+        errors.append("receipt_session_proof_invalid")
+    retention = receipt.get("retention")
+    if not _retention_receipt_valid(retention):
+        errors.append("receipt_retention_invalid")
+
+    reconciliation = receipt.get("reconciliation")
+    reconciliation_valid = _receipt_reconciliation_valid(reconciliation)
+    if not reconciliation_valid:
+        errors.append("receipt_reconciliation_invalid")
+    if (
+        reconciliation_valid
+        and isinstance(reconciliation, dict)
+        and isinstance(session_proof, dict)
+        and _session_proof_valid(session_proof, mode)
+    ):
+        attempt_index: dict[tuple[str, str], set[str]] = {}
+        for attempt in session_proof["candidate_surface_attempts"]:
+            attempt_index.setdefault((attempt["handle_key"], attempt["surface"]), set()).add(
+                attempt["query_argument_sha256"]
+            )
+        for coverage in reconciliation["candidate_surface_coverage"]:
+            for surface in ("authored_post", "authored_reply"):
+                expected_hashes = sorted(attempt_index.get((coverage["handle_key"], surface), set()))
+                if coverage[surface] != {
+                    "attempted": bool(expected_hashes),
+                    "query_argument_sha256s": expected_hashes,
+                }:
+                    errors.append("receipt_candidate_surface_reconciliation_invalid")
+                    break
+        if status in {"completed", "fixture_complete"} and len(
+            reconciliation["candidate_surface_coverage"]
+        ) != reconciliation["candidate_count"]:
+            errors.append("receipt_candidate_surface_count_invalid")
+    if receipt.get("authority") != AUTHORITY:
+        errors.append("receipt_authority_invalid")
+
+    if _input_binding_valid(input_binding) and _command_binding_valid(command_binding):
+        recorded_schema_sha = command_binding["structured_output_schema_sha256"]
+        current_schema_sha = result_schema_sha256()
+        legacy_schema_sha = result_schema_sha256(legacy_v2=True)
+        current_policy = canonical_sha256(_redacted_policy_from_bindings(input_binding, command_binding))
+        legacy_pre_process_evidence_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_process_evidence=True,
+            )
+        )
+        legacy_operator_result_v1_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v1=True,
+            )
+        )
+        legacy_operator_result_v2_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_operator_result_v2=True,
+            )
+        )
+        normalization_only_result_v3_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_normalization_only_result_v3=True,
+            )
+        )
+        pre_normalization_result_v3_policy = canonical_sha256(
+            _redacted_policy_from_bindings(
+                input_binding,
+                command_binding,
+                legacy_pre_normalization_result_v3=True,
+            )
+        )
+        legacy_plain_policy = canonical_sha256(
+            _redacted_policy_from_bindings(input_binding, command_binding, legacy_plain=True)
+        )
+        legacy_result_policy = canonical_sha256(
+            _redacted_policy_from_bindings(input_binding, command_binding, legacy_result_v2=True)
+        )
+        if recorded_schema_sha not in {current_schema_sha, legacy_schema_sha}:
+            errors.append("receipt_result_schema_hash_invalid")
+        recorded_policy = command_binding["command_policy_sha256"]
+        process_evidence_generation = _process_evidence_generation_from_bindings(
+            input_binding,
+            command_binding,
+        )
+        if process_evidence_generation == "current":
+            if not (
+                isinstance(artifacts, dict)
+                and set(artifacts) == _ARTIFACT_KEYS
+                and _is_sha(artifacts.get("process_result_journal_sha256"))
+            ):
+                errors.append("receipt_process_evidence_generation_mismatch")
+        elif process_evidence_generation == "transitional":
+            # Three historical implementations shared this policy digest:
+            # keyless, v1 journal, and v2 hash-bound journal.  Absence is
+            # therefore indistinguishable from deletion.  Only the strongest
+            # v2 shape may replay; weaker same-digest objects are quarantined.
+            if not (
+                isinstance(artifacts, dict)
+                and set(artifacts) == _ARTIFACT_KEYS
+                and _is_sha(artifacts.get("process_result_journal_sha256"))
+            ):
+                errors.append("receipt_transitional_process_evidence_shape_mismatch")
+        elif process_evidence_generation == "legacy":
+            if not isinstance(artifacts, dict) or set(artifacts) != _LEGACY_ARTIFACT_KEYS:
+                errors.append("receipt_legacy_process_evidence_shape_mismatch")
+        schema_policy_pair_valid = (
+            recorded_schema_sha == current_schema_sha
+            and recorded_policy
+            in {
+                current_policy,
+                legacy_pre_process_evidence_policy,
+                legacy_operator_result_v1_policy,
+                legacy_operator_result_v2_policy,
+                normalization_only_result_v3_policy,
+                pre_normalization_result_v3_policy,
+            }
+        ) or (
+            recorded_schema_sha == legacy_schema_sha
+            and recorded_policy in {legacy_plain_policy, legacy_result_policy}
+        )
+        if not schema_policy_pair_valid:
+            errors.append("receipt_command_policy_hash_invalid")
+        if command_binding["environment_policy_sha256"] != canonical_sha256(_redacted_environment_policy()):
+            errors.append("receipt_environment_policy_hash_invalid")
+        if command_binding["tool_registry_sha256"] != tool_registry_sha256():
+            errors.append("receipt_tool_registry_hash_invalid")
+        policy_sha = command_binding.get("effective_prompt_policy_sha256")
+        policy_entry_id = command_binding.get("effective_prompt_policy_entry_id")
+        if mode == "live" and (not _is_sha(policy_sha) or not isinstance(policy_entry_id, str)):
+            errors.append("receipt_live_effective_prompt_policy_missing")
+        if mode == "fixture" and (policy_sha is not None or policy_entry_id is not None):
+            errors.append("receipt_fixture_effective_prompt_policy_invalid")
+        if mode == "live" and not _is_sha(command_binding.get("grok_binary_sha256")):
+            errors.append("receipt_live_binary_hash_missing")
+        if mode == "fixture" and command_binding.get("grok_binary_sha256") is not None:
+            errors.append("receipt_fixture_binary_hash_invalid")
+        if artifacts_shape_valid and artifacts.get("compiled_prompt_sha256") != input_binding["compiled_prompt_sha256"]:
+            errors.append("receipt_compiled_prompt_hash_mismatch")
+
+    if process_shape_valid and artifacts_shape_valid:
+        spawned = process.get("process_spawn_attempted") is True
+        if mode == "live" and spawned and receipt.get("approval", {}).get("consumption_sha256") is None:
+            errors.append("spawn_without_grant_consumption")
+        if spawned and process.get("process_group_cleanup_confirmed") is not True:
+            errors.append("spawned_process_cleanup_unconfirmed")
+        if mode == "fixture" and spawned:
+            errors.append("fixture_process_spawn_claim_invalid")
+        if status in {"completed", "fixture_complete"} and not (
+            process.get("exit_code") == 0
+            and process.get("timed_out") is False
+            and process.get("execution_error_code") == "none"
+            and process.get("technical_limit_exceeded") is False
+            and artifacts.get("structured_output_compliant") is True
+            and artifacts.get("structured_output_contract_valid") is True
+            and _is_sha(artifacts.get("sanitized_output_sha256"))
+            and (
+                session_proof.get("status") == "verified"
+                if mode == "live" and isinstance(session_proof, dict)
+                else mode == "fixture"
+            )
+        ):
+            errors.append("receipt_completion_claim_invalid")
+        if status == "completed" and not spawned:
+            errors.append("receipt_live_completion_spawn_invalid")
+        if status == "timed_out" and process.get("timed_out") is not True:
+            errors.append("receipt_timeout_claim_invalid")
+        if process.get("timed_out") is True and process.get("technical_limit_kind") == "session_tree_scan_deadline":
+            errors.append("receipt_timeout_ownership_invalid")
+        if status == "technical_limit_exceeded" and process.get("technical_limit_exceeded") is not True:
+            errors.append("receipt_technical_limit_claim_invalid")
+        if status not in {"technical_limit_exceeded", "crash_recovered"} and process.get(
+            "technical_limit_exceeded"
+        ) is True:
+            errors.append("receipt_unclaimed_technical_limit")
+        if status == "structured_output_noncompliant" and artifacts.get("structured_output_compliant") is not False:
+            errors.append("receipt_noncompliance_claim_invalid")
+        if status == "result_contract_invalid" and not (
+            artifacts.get("structured_output_compliant") is True
+            and artifacts.get("structured_output_contract_valid") is False
+        ):
+            errors.append("receipt_contract_failure_claim_invalid")
+        if status == "provider_evidence_invalid" and not (
+            mode == "live"
+            and isinstance(session_proof, dict)
+            and session_proof.get("status") in {"missing", "invalid"}
+            and process.get("exit_code") == 0
+            and process.get("timed_out") is False
+            and process.get("execution_error_code") == "none"
+            and artifacts.get("structured_output_compliant") is True
+            and artifacts.get("structured_output_contract_valid") is True
+        ):
+            errors.append("receipt_provider_evidence_failure_claim_invalid")
+        if status in {"structured_output_noncompliant", "result_contract_invalid"} and not (
+            process.get("exit_code") == 0
+            and process.get("timed_out") is False
+            and process.get("execution_error_code") == "none"
+        ):
+            errors.append("receipt_structured_failure_process_invalid")
+        if status == "process_failed" and not (
+            process.get("exit_code") not in {None, 0} or process.get("execution_error_code") != "none"
+        ):
+            errors.append("receipt_process_failure_claim_invalid")
+        if status == "crash_recovered" and not (
+            process.get("elapsed_ms") is None
+            and process.get("exit_code") is None
+            and process.get("execution_error_code") == "crash_recovered"
+        ):
+            errors.append("receipt_crash_recovery_claim_invalid")
+    return errors
+
+
+def validate_operator_bundle(
+    run_root: Path,
+    *,
+    approval_root: Path = DEFAULT_APPROVAL_ROOT,
+    receipt_override: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """Replay every durable binding without trusting the terminal receipt."""
+
+    # Durable argv bindings are emitted with absolute module-owned paths.  A
+    # caller may naturally locate the same bundle through a relative path;
+    # normalize that spelling without resolving symlinks before no-follow
+    # ownership checks and command reconstruction.
+    run_root = Path(os.path.abspath(run_root))
+    errors: list[str] = []
+    try:
+        _ensure_private_directory(run_root, create=False)
+        request = _read_private_json(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_request"]
+        )
+        intent = _read_private_json(
+            run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"]
+        )
+        receipt = (
+            dict(receipt_override)
+            if receipt_override is not None
+            else _read_private_json(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"]
+            )
+        )
+    except AdaptiveWaveValidationError as exc:
+        return [str(exc)]
+    request_contract_errors = validate_request(request)
+    if request_contract_errors:
+        errors.append("request_invalid")
+    if not _intent_valid(intent):
+        errors.append("intent_invalid")
+    errors.extend(validate_operator_receipt(receipt))
+    if not isinstance(request, dict) or not isinstance(intent, dict) or not isinstance(receipt, dict):
+        return errors + ["bundle_object_invalid"]
+    if request_contract_errors:
+        return errors
+    recorded_binding = receipt.get("command_binding")
+    recorded_schema_sha = (
+        recorded_binding.get("structured_output_schema_sha256")
+        if isinstance(recorded_binding, dict)
+        else None
+    )
+    legacy_result_schema_replay = recorded_schema_sha == result_schema_sha256(legacy_v2=True)
+    request_sha = canonical_sha256(request)
+    if request_sha != receipt.get("request_sha256") or request_sha != intent.get("request_sha256"):
+        errors.append("request_binding_hash_mismatch")
+    if request.get("request_id") != intent.get("request_id") or request.get("request_id") != receipt.get("request_id"):
+        errors.append("request_id_binding_mismatch")
+    for key in ("emergency", "technical_limits", "budget", "retention"):
+        if intent.get(key) != request.get(key):
+            errors.append(f"intent_{key}_binding_mismatch")
+    try:
+        lease_sha = _read_run_lease_sha256(run_root)
+    except AdaptiveWaveValidationError:
+        errors.append("run_lease_replay_invalid")
+        lease_sha = None
+    if lease_sha is not None and (
+        intent.get("run_lease_sha256") != lease_sha or receipt.get("run_lease_sha256") != lease_sha
+    ):
+        errors.append("run_lease_binding_mismatch")
+    if isinstance(intent, dict) and isinstance(receipt, dict):
+        for key in (
+            "run_id",
+            "request_id",
+            "request_sha256",
+            "execution_mode",
+            "run_lease_sha256",
+            "input_binding",
+            "command_binding",
+            "authority",
+        ):
+            if intent.get(key) != receipt.get(key):
+                errors.append(f"intent_receipt_binding_mismatch:{key}")
+        intent_approval = intent.get("approval")
+        receipt_approval = receipt.get("approval")
+        if isinstance(intent_approval, dict) and isinstance(receipt_approval, dict):
+            for key in ("required", "grant_id_sha256", "grant_sha256"):
+                if intent_approval.get(key) != receipt_approval.get(key):
+                    errors.append(f"intent_receipt_approval_mismatch:{key}")
+            if intent_approval.get("consumption_sha256") is not None:
+                errors.append("intent_contains_terminal_consumption")
+    prior_candidates: dict[str, PriorCandidateFacts] = {}
+    compiled_prompt_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["compiled_prompt"]
+    try:
+        compiled_actual = _read_regular_owned_bounded(
+            compiled_prompt_path,
+            maximum_bytes=request["technical_limits"]["max_compiled_prompt_bytes"],
+            required_mode=0o600,
+        )
+    except AdaptiveWaveValidationError:
+        errors.append("compiled_prompt_permissions_invalid")
+        compiled_actual = None
+    if compiled_actual is not None:
+        try:
+            prompt_raw = _load_bound_bytes(
+                request["prompt_source"]["path"],
+                request["prompt_source"]["sha256"],
+                require_private=True,
+                max_bytes=request["technical_limits"]["max_prompt_bytes"],
+            )
+            prior_handles, prior_bindings, prior_candidates = load_prior_context(request)
+            compiled_expected = compile_prompt(
+                prompt_raw.decode("utf-8"),
+                request["target"],
+                prior_handles,
+                result_schema=_load_result_schema(legacy_v2=legacy_result_schema_replay),
+            ).encode()
+            if len(compiled_expected) > request["technical_limits"]["max_compiled_prompt_bytes"]:
+                raise AdaptiveWaveValidationError("compiled_prompt_byte_ceiling_exceeded")
+        except (AdaptiveWaveValidationError, UnicodeDecodeError, KeyError):
+            errors.append("compiled_prompt_replay_failed")
+            prior_handles, prior_bindings, prior_candidates = [], [], {}
+        else:
+            if compiled_actual != compiled_expected:
+                errors.append("compiled_prompt_content_mismatch")
+            expected_input = {
+                "target_sha256": canonical_sha256(request["target"]),
+                "source_prompt_sha256": bytes_sha256(prompt_raw),
+                "compiled_prompt_sha256": bytes_sha256(compiled_expected),
+                "prior_waves": prior_bindings,
+                "prior_unique_handle_count": len(prior_handles),
+                "prior_handle_set_sha256": canonical_sha256(sorted(item.casefold() for item in prior_handles)),
+            }
+            if intent.get("input_binding") != expected_input or receipt.get("input_binding") != expected_input:
+                errors.append("input_binding_replay_mismatch")
+
+    ephemeral_home = run_root / intent.get("runtime_layout", {}).get(
+        "ephemeral_home_name",
+        _RUN_ARTIFACT_NAME_REGISTRY["ephemeral_home"],
+    )
+    if ephemeral_home.exists() or ephemeral_home.is_symlink():
+        errors.append("ephemeral_tree_not_deleted")
+
+    mode = receipt.get("execution_mode")
+    command_binding = receipt.get("command_binding", {})
+    input_binding = receipt.get("input_binding", {})
+    new_command_policy = command_policy_sha256(request)
+    legacy_pre_process_evidence_policy = _legacy_pre_process_evidence_command_policy_sha256(
+        request
+    )
+    legacy_operator_result_v1_policy = _legacy_operator_result_v1_command_policy_sha256(request)
+    legacy_operator_result_v2_policy = _legacy_operator_result_v2_command_policy_sha256(request)
+    normalization_only_result_v3_policy = _legacy_normalization_only_result_v3_command_policy_sha256(request)
+    pre_normalization_result_v3_policy = _legacy_pre_normalization_result_v3_command_policy_sha256(request)
+    legacy_command_policy = _legacy_command_policy_sha256(request)
+    legacy_result_command_policy = _legacy_structured_result_command_policy_sha256(request)
+    recorded_command_policy = (
+        command_binding.get("command_policy_sha256") if isinstance(command_binding, dict) else None
+    )
+    current_operator_result_replay = recorded_command_policy == new_command_policy
+    legacy_pre_process_evidence_replay = (
+        recorded_command_policy == legacy_pre_process_evidence_policy
+    )
+    # The independently replayed command/artifact policy owns all new process
+    # evidence.  One historical digest straddled three journal generations, so
+    # absence cannot distinguish an old keyless bundle from deletion.  That
+    # transitional digest therefore admits only the strongest v2 shape.
+    receipt_artifacts = receipt.get("artifacts")
+    intent_declares_current_process_evidence = (
+        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+    )
+    receipt_declares_current_process_evidence = (
+        isinstance(receipt_artifacts, dict)
+        and "process_result_journal_sha256" in receipt_artifacts
+    )
+    if current_operator_result_replay:
+        current_process_evidence = True
+        if not intent_declares_current_process_evidence:
+            errors.append("intent_process_evidence_generation_missing")
+        if not receipt_declares_current_process_evidence:
+            errors.append("receipt_process_evidence_generation_missing")
+    elif legacy_pre_process_evidence_replay:
+        current_process_evidence = True
+        if not (
+            intent_declares_current_process_evidence
+            and receipt_declares_current_process_evidence
+        ):
+            errors.append("transitional_process_evidence_shape_mismatch")
+    elif intent_declares_current_process_evidence or receipt_declares_current_process_evidence:
+        current_process_evidence = False
+        errors.append("legacy_process_evidence_shape_mismatch")
+    else:
+        current_process_evidence = False
+    legacy_operator_result_v1_replay = recorded_command_policy == legacy_operator_result_v1_policy
+    legacy_operator_result_v2_replay = recorded_command_policy == legacy_operator_result_v2_policy
+    normalization_only_result_v3_replay = recorded_command_policy == normalization_only_result_v3_policy
+    result_normalization_policy_version = (
+        RESULT_NORMALIZATION_POLICY_VERSION
+        if current_operator_result_replay or legacy_pre_process_evidence_replay
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+        if legacy_operator_result_v2_replay
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+        if legacy_operator_result_v1_replay or normalization_only_result_v3_replay
+        else None
+    )
+    operator_artifact_policy_replay = (
+        current_operator_result_replay
+        or legacy_pre_process_evidence_replay
+        or legacy_operator_result_v2_replay
+        or legacy_operator_result_v1_replay
+    )
+    pre_normalization_result_v3_replay = recorded_command_policy == pre_normalization_result_v3_policy
+    legacy_plain_replay = recorded_command_policy == legacy_command_policy
+    legacy_result_policy_replay = recorded_command_policy == legacy_result_command_policy
+    if recorded_command_policy not in {
+        new_command_policy,
+        legacy_pre_process_evidence_policy,
+        legacy_operator_result_v1_policy,
+        legacy_operator_result_v2_policy,
+        normalization_only_result_v3_policy,
+        pre_normalization_result_v3_policy,
+        legacy_command_policy,
+        legacy_result_command_policy,
+    }:
+        errors.append("command_policy_version_unrecognized")
+    if (
+        legacy_result_schema_replay
+        and not (legacy_plain_replay or legacy_result_policy_replay)
+    ) or (
+        not legacy_result_schema_replay
+        and not (
+            current_operator_result_replay
+            or legacy_pre_process_evidence_replay
+            or legacy_operator_result_v2_replay
+            or legacy_operator_result_v1_replay
+            or normalization_only_result_v3_replay
+            or pre_normalization_result_v3_replay
+        )
+    ):
+        errors.append("result_schema_command_policy_mismatch")
+    session_id = command_binding.get("session_id") if isinstance(command_binding, dict) else None
+    expected_binary_sha: str | None = None
+    if mode == "live":
+        staged_path = run_root / "executable/grok"
+        try:
+            expected_binary_sha = _rehash_staged_executable(staged_path)
+        except AdaptiveWaveValidationError:
+            errors.append("staged_binary_replay_invalid")
+        else:
+            if expected_binary_sha != request.get("transport", {}).get("grok_binary_sha256"):
+                errors.append("staged_binary_request_hash_mismatch")
+    elif (run_root / "executable").exists():
+        errors.append("fixture_staged_binary_unexpected")
+    if (
+        isinstance(session_id, str)
+        and _SESSION_ID_RE.fullmatch(session_id) is not None
+        and _input_binding_valid(input_binding)
+    ):
+        runtime_layout = intent.get("runtime_layout", {})
+        command_binary = staged_path if mode == "live" else Path("fixture-grok.invalid")
+        command_builder = _build_legacy_plain_grok_command if legacy_plain_replay else build_grok_command
+        actual_command = command_builder(
+            binary=command_binary,
+            cwd=run_root / "workspace",
+            request=request,
+            prompt_file=run_root
+            / runtime_layout.get(
+                "compiled_prompt_name",
+                _RUN_ARTIFACT_NAME_REGISTRY["compiled_prompt"],
+            ),
+            leader_socket=ephemeral_home / "leader.sock",
+            session_id=session_id,
+            result_schema=_load_result_schema(legacy_v2=legacy_result_schema_replay),
+        )
+        account_ref = request["transport"]["operator_account_ref"]
+        try:
+            effective_prompt_policy = _approved_effective_prompt_binding(request) if mode == "live" else None
+        except (AdaptiveWaveValidationError, PermissionError):
+            effective_prompt_policy = None
+            errors.append("effective_prompt_policy_replay_invalid")
+        expected_command_binding = {
+            "provider_id": request["transport"]["provider_id"],
+            "model_id": request["transport"]["model_id"],
+            "reasoning_effort": request["transport"]["reasoning_effort"],
+            "session_id": session_id,
+            "grok_binary_sha256": expected_binary_sha,
+            "structured_output_schema_sha256": (
+                result_schema_sha256(legacy_v2=True)
+                if legacy_result_schema_replay
+                else result_schema_sha256()
+            ),
+            "argv_sha256": canonical_sha256(actual_command),
+            "command_policy_sha256": (
+                legacy_command_policy
+                if legacy_plain_replay
+                else legacy_result_command_policy
+                if legacy_result_policy_replay
+                else pre_normalization_result_v3_policy
+                if pre_normalization_result_v3_replay
+                else normalization_only_result_v3_policy
+                if normalization_only_result_v3_replay
+                else legacy_operator_result_v2_policy
+                if legacy_operator_result_v2_replay
+                else legacy_operator_result_v1_policy
+                if legacy_operator_result_v1_replay
+                else legacy_pre_process_evidence_policy
+                if legacy_pre_process_evidence_replay
+                else new_command_policy
+            ),
+            "environment_policy_sha256": canonical_sha256(_redacted_environment_policy()),
+            "tool_registry_sha256": tool_registry_sha256(),
+            "effective_prompt_policy_sha256": (
+                effective_prompt_policy.policy_sha256 if effective_prompt_policy is not None else None
+            ),
+            "effective_prompt_policy_entry_id": (
+                effective_prompt_policy.policy_entry_id if effective_prompt_policy is not None else None
+            ),
+            "operator_account_ref_sha256": (bytes_sha256(account_ref.encode()) if account_ref is not None else None),
+            "oauth_auth_sha256": request["transport"]["oauth_auth_sha256"],
+            "max_turns": request["emergency"]["max_turns"],
+        }
+        if command_binding != expected_command_binding or intent.get("command_binding") != expected_command_binding:
+            errors.append("command_binding_request_replay_mismatch")
+    else:
+        errors.append("command_binding_request_replay_unavailable")
+    approval = receipt.get("approval", {})
+    consumed_grant_clock: datetime | None = None
+    expires_grant_clock: datetime | None = None
+    if mode == "live":
+        grant_id = request.get("approval", {}).get("grant_id")
+        if not isinstance(grant_id, str):
+            errors.append("live_grant_id_missing")
+        else:
+            grant_id_hash = bytes_sha256(grant_id.encode())
+            grant_path, consumption_path = _grant_paths(approval_root, grant_id_hash)
+            try:
+                grant = _read_private_json(grant_path)
+                grant_raw = _read_regular_owned_bounded(grant_path, maximum_bytes=1_048_576, required_mode=0o600)
+            except AdaptiveWaveValidationError:
+                errors.append("grant_ledger_unavailable")
+            else:
+                if approval.get("grant_id_sha256") != grant_id_hash:
+                    errors.append("grant_id_hash_mismatch")
+                if approval.get("grant_sha256") != bytes_sha256(grant_raw):
+                    errors.append("grant_hash_mismatch")
+                if consumption_path.exists():
+                    try:
+                        consumption = _read_private_json(consumption_path)
+                        consumption_raw = _read_regular_owned_bounded(
+                            consumption_path, maximum_bytes=1_048_576, required_mode=0o600
+                        )
+                        consumed_clock = _parse_timestamp(consumption.get("consumed_at"))
+                        expires_clock = _parse_timestamp(grant.get("expires_at"))
+                    except (AdaptiveWaveValidationError, TypeError):
+                        errors.append("grant_consumed_at_invalid")
+                    else:
+                        consumed_grant_clock = consumed_clock
+                        expires_grant_clock = expires_clock
+                        if _validate_grant(
+                            grant,
+                            request,
+                            now=consumed_clock,
+                            replay_command_policy_sha256=(
+                                legacy_command_policy
+                                if legacy_plain_replay
+                                else legacy_result_command_policy
+                                if legacy_result_policy_replay
+                                else pre_normalization_result_v3_policy
+                                if pre_normalization_result_v3_replay
+                                else normalization_only_result_v3_policy
+                                if normalization_only_result_v3_replay
+                                else legacy_operator_result_v2_policy
+                                if legacy_operator_result_v2_replay
+                                else legacy_operator_result_v1_policy
+                                if legacy_operator_result_v1_replay
+                                else legacy_pre_process_evidence_policy
+                                if legacy_pre_process_evidence_replay
+                                else new_command_policy
+                            ),
+                            replay_result_schema_sha256=(
+                                result_schema_sha256(legacy_v2=True)
+                                if legacy_result_schema_replay
+                                else result_schema_sha256()
+                            ),
+                        ):
+                            errors.append("grant_replay_invalid")
+                        expected_consumption = {
+                            "schema_version": CONSUMPTION_SCHEMA_VERSION,
+                            "grant_id_hash": grant_id_hash,
+                            "grant_sha256": bytes_sha256(grant_raw),
+                            "execution_scope_sha256": execution_scope_sha256(request),
+                            "request_sha256": request_sha,
+                            "run_id": receipt.get("run_id"),
+                            "run_lease_sha256": receipt.get("run_lease_sha256"),
+                            "consumed_at": consumption.get("consumed_at"),
+                            "state": "consumed_after_binary_auth_preflight_before_process_spawn",
+                        }
+                        if consumption != expected_consumption:
+                            errors.append("grant_consumption_replay_mismatch")
+                        if approval.get("consumption_sha256") != bytes_sha256(consumption_raw):
+                            errors.append("grant_consumption_hash_mismatch")
+                elif approval.get("consumption_sha256") is not None or receipt.get("status") != "crash_recovered":
+                    errors.append("grant_consumption_missing")
+    elif isinstance(approval, dict) and (
+        approval.get("grant_sha256") is not None or approval.get("consumption_sha256") is not None
+    ):
+        errors.append("fixture_grant_consumption_invalid")
+
+    process = receipt.get("process", {})
+    if isinstance(process, dict):
+        expected_emergency_process = {
+            "deadline_ms": request["emergency"]["deadline_ms"],
+            "term_grace_ms": request["emergency"]["term_grace_ms"],
+            "kill_grace_ms": request["emergency"]["kill_grace_ms"],
+        }
+        if any(process.get(key) != value for key, value in expected_emergency_process.items()):
+            errors.append("receipt_emergency_binding_mismatch")
+        if process.get("started_at") != intent.get("started_at"):
+            errors.append("receipt_started_at_intent_mismatch")
+    ledger_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_ledger"]
+    if isinstance(process, dict) and process.get("process_spawn_attempted") is True:
+        try:
+            ledger = _read_private_json(ledger_path)
+            ledger_raw = _read_regular_owned_bounded(ledger_path, maximum_bytes=1_048_576, required_mode=0o600)
+        except AdaptiveWaveValidationError:
+            errors.append("process_ledger_unavailable")
+        else:
+            if not _process_ledger_valid(ledger):
+                errors.append("process_ledger_invalid")
+            expected_process_facts = {
+                "run_id": receipt.get("run_id"),
+                "request_id": receipt.get("request_id"),
+                "run_lease_sha256": receipt.get("run_lease_sha256"),
+                "session_id": receipt.get("command_binding", {}).get("session_id"),
+                "child_pid": process.get("child_pid"),
+                "process_group_id": process.get("process_group_id"),
+            }
+            if any(ledger.get(key) != value for key, value in expected_process_facts.items()):
+                errors.append("process_ledger_binding_mismatch")
+            if process.get("process_ledger_sha256") != bytes_sha256(ledger_raw):
+                errors.append("process_ledger_hash_mismatch")
+            if process.get("kernel_birth_identity_sha256") != bytes_sha256(
+                ledger.get("kernel_birth_identity", "").encode()
+            ):
+                errors.append("process_birth_identity_hash_mismatch")
+            if process.get("process_identity_token_sha256") != bytes_sha256(
+                ledger.get("process_identity_token", "").encode()
+            ):
+                errors.append("process_identity_token_hash_mismatch")
+            try:
+                launcher_verified_clock = _parse_timestamp(ledger.get("spawned_at"))
+            except (AdaptiveWaveValidationError, TypeError):
+                errors.append("process_ledger_grant_time_invalid")
+            else:
+                if (
+                    mode == "live"
+                    and receipt.get("status") == "completed"
+                    and (
+                        consumed_grant_clock is None
+                        or expires_grant_clock is None
+                        or not consumed_grant_clock <= launcher_verified_clock < expires_grant_clock
+                    )
+                ):
+                    errors.append("process_release_outside_grant_window")
+    elif ledger_path.exists():
+        errors.append("unexpected_process_ledger")
+
+    process_result_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"]
+    process_result_journal: dict[str, Any] | None = None
+    process_result_journal_raw: bytes | None = None
+    if process_result_path.exists() or process_result_path.is_symlink():
+        try:
+            process_result_journal = _read_private_json(process_result_path)
+            process_result_journal_raw = _read_regular_owned_bounded(
+                process_result_path,
+                maximum_bytes=1_048_576,
+                required_mode=0o600,
+            )
+        except AdaptiveWaveValidationError:
+            errors.append("process_result_journal_unavailable")
+        else:
+            if not _process_result_journal_valid(
+                process_result_journal,
+                allow_legacy=not current_process_evidence,
+            ):
+                errors.append("process_result_journal_invalid")
+            expected_journal_binding = {
+                "run_id": receipt.get("run_id"),
+                "request_id": receipt.get("request_id"),
+                "run_lease_sha256": receipt.get("run_lease_sha256"),
+                "session_id": receipt.get("command_binding", {}).get("session_id"),
+            }
+            if any(
+                process_result_journal.get(key) != expected
+                for key, expected in expected_journal_binding.items()
+            ):
+                errors.append("process_result_journal_binding_mismatch")
+            if isinstance(process, dict):
+                expected_identity_result = {
+                    "process_spawn_attempted": process.get("process_spawn_attempted"),
+                    "child_pid": process.get("child_pid"),
+                    "process_group_id": process.get("process_group_id"),
+                    "kernel_birth_identity_sha256": process.get("kernel_birth_identity_sha256"),
+                    "process_identity_token_sha256": process.get("process_identity_token_sha256"),
+                }
+                if any(
+                    process_result_journal.get(key) != expected
+                    for key, expected in expected_identity_result.items()
+                ):
+                    errors.append("process_result_journal_receipt_identity_mismatch")
+            if isinstance(process, dict) and receipt.get("status") != "crash_recovered":
+                expected_process_result = {
+                    "exit_code": process.get("exit_code"),
+                    "timed_out": process.get("timed_out"),
+                    "term_sent": process.get("term_sent"),
+                    "kill_sent": process.get("kill_sent"),
+                    "process_spawn_attempted": process.get("process_spawn_attempted"),
+                    "child_pid": process.get("child_pid"),
+                    "process_group_id": process.get("process_group_id"),
+                    "kernel_birth_identity_sha256": process.get("kernel_birth_identity_sha256"),
+                    "process_identity_token_sha256": process.get("process_identity_token_sha256"),
+                    "process_group_cleanup_confirmed": process.get("process_group_cleanup_confirmed"),
+                    "execution_error_code": process.get("execution_error_code"),
+                }
+                if any(
+                    process_result_journal.get(key) != expected
+                    for key, expected in expected_process_result.items()
+                ) or (
+                    process_result_journal.get("technical_limit_kind") is not None
+                    and process_result_journal.get("technical_limit_kind")
+                    != process.get("technical_limit_kind")
+                ):
+                    errors.append("process_result_journal_receipt_mismatch")
+    elif current_process_evidence:
+        errors.append("process_result_journal_missing")
+
+    raw_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["raw_stdout"]
+    stderr_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["stderr"]
+    limits = request.get("technical_limits", {})
+    if not _technical_limits_valid(limits):
+        return errors + ["technical_limits_replay_invalid"]
+    try:
+        raw = _read_regular_owned_bounded(raw_path, maximum_bytes=limits["max_stdout_bytes"], required_mode=0o600)
+        stderr = _read_regular_owned_bounded(stderr_path, maximum_bytes=limits["max_stderr_bytes"], required_mode=0o600)
+    except AdaptiveWaveValidationError:
+        errors.append("required_artifact_permissions_invalid")
+        return errors
+    artifacts = receipt.get("artifacts", {}) if isinstance(receipt, dict) else {}
+    if bytes_sha256(raw) != artifacts.get("raw_stdout_sha256"):
+        errors.append("raw_stdout_hash_mismatch")
+    if bytes_sha256(stderr) != artifacts.get("stderr_sha256"):
+        errors.append("stderr_hash_mismatch")
+    if current_process_evidence:
+        if set(artifacts) != _ARTIFACT_KEYS:
+            errors.append("current_process_evidence_receipt_shape_invalid")
+        if process_result_journal_raw is None:
+            if artifacts.get("process_result_journal_sha256") is not None:
+                errors.append("process_result_journal_hash_without_artifact")
+        elif bytes_sha256(process_result_journal_raw) != artifacts.get(
+            "process_result_journal_sha256"
+        ):
+            errors.append("process_result_journal_hash_mismatch")
+        if isinstance(process_result_journal, dict) and (
+            process_result_journal.get("stdout_sha256") != bytes_sha256(raw)
+            or process_result_journal.get("stdout_bytes") != len(raw)
+            or process_result_journal.get("stderr_sha256") != bytes_sha256(stderr)
+            or process_result_journal.get("stderr_bytes") != len(stderr)
+        ):
+            errors.append("process_result_journal_spool_binding_mismatch")
+    (
+        parsed_result,
+        sanitized,
+        prefix,
+        suffix,
+        compliant,
+        contract_valid,
+        limit_kind,
+        headless_envelope,
+    ) = _parse_structured_stdout(
+        raw,
+        technical_limits=limits,
+        prior_candidates=prior_candidates,
+        live_mode=mode == "live",
+        expected_session_id=command_binding.get("session_id") if isinstance(command_binding, dict) else None,
+        expected_model_id=request.get("transport", {}).get("model_id"),
+        max_turns=request["emergency"]["max_turns"],
+        allow_legacy_plain=mode == "fixture" or legacy_plain_replay,
+        result_normalization_policy_version=result_normalization_policy_version,
+    )
+    if receipt.get("status") != "crash_recovered":
+        if artifacts.get("non_json_prefix_bytes") != prefix or artifacts.get("non_json_suffix_bytes") != suffix:
+            errors.append("structured_boundary_mismatch")
+        if artifacts.get("structured_output_compliant") is not compliant:
+            errors.append("structured_compliance_mismatch")
+    session_proof: SessionProof | None = None
+    session_raw: bytes | None = None
+    session_status = "not_applicable" if mode == "fixture" else "missing"
+    updates_path = run_root / intent.get("runtime_layout", {}).get(
+        "session_updates_name",
+        _RUN_ARTIFACT_NAME_REGISTRY["session_updates"],
+    )
+    if mode == "live" and updates_path.exists():
+        try:
+            session_raw = _read_regular_owned_bounded(
+                updates_path,
+                maximum_bytes=limits["max_session_updates_bytes"],
+                required_mode=0o600,
+            )
+            replay_headless_envelope = headless_envelope
+            if (
+                legacy_result_schema_replay
+                and not contract_valid
+                and receipt.get("status") != "completed"
+                and isinstance(receipt.get("session_proof"), dict)
+                and receipt["session_proof"].get("status") == "invalid"
+            ):
+                # A sealed rejected receipt predating terminal-message
+                # selection must replay under the parser behavior that sealed
+                # it.  Its 24-hour retention purge is the removal condition.
+                replay_headless_envelope = None
+            session_proof = _parse_session_proof(
+                session_raw,
+                expected_session_id=command_binding["session_id"],
+                expected_model_id=request["transport"]["model_id"],
+                expected_stdout=raw,
+                headless_envelope=replay_headless_envelope,
+                max_line_bytes=limits["max_session_update_line_bytes"],
+                max_turns=request["emergency"]["max_turns"],
+                budget=request["budget"],
+                session_query_policy_id=(
+                    effective_prompt_policy.session_query_policy_id
+                    if effective_prompt_policy is not None
+                    else MIXED_SESSION_QUERY_POLICY_ID
+                ),
+                discovery_target_lab_id=request["target"]["lab_id"],
+                approved_official_account_handles=(
+                    effective_prompt_policy.official_account_handles
+                    if effective_prompt_policy is not None
+                    else ()
+                ),
+            )
+            session_status = "verified"
+        except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
+            session_proof = None
+            session_status = "invalid"
+    parsed_result, sanitized, contract_valid, recovery_limit_kind = _recover_transcript_terminal_result(
+        parsed_result,
+        sanitized,
+        contract_valid,
+        headless_envelope=headless_envelope,
+        session_proof=session_proof,
+        technical_limits=limits,
+        prior_candidates=prior_candidates,
+        # Preserve replay of already-sealed rejected bundles while making the
+        # current artifact policy rederive an exact terminal technical-limit
+        # kind instead of trusting the receipt-owned label.
+        allow_recovery=mode == "live"
+        and (
+            receipt.get("status") == "completed"
+            or (
+                operator_artifact_policy_replay
+                and receipt.get("status") == "technical_limit_exceeded"
+            )
+        ),
+        result_normalization_policy_version=result_normalization_policy_version,
+    )
+    limit_kind = limit_kind or recovery_limit_kind
+    if contract_valid and isinstance(parsed_result, dict) and (mode == "fixture" or session_proof is not None):
+        parsed_result = _operator_project_model_result(
+            parsed_result,
+            session_proof=session_proof,
+            fixture=mode == "fixture",
+            session_query_policy_id=(
+                effective_prompt_policy.session_query_policy_id
+                if effective_prompt_policy is not None
+                else MIXED_SESSION_QUERY_POLICY_ID
+            ),
+        )
+        contract_valid = not validate_model_result(
+            parsed_result,
+            prior_candidates=prior_candidates,
+            live_mode=mode == "live",
+        )
+        sanitized, projection_limit_kind = _serialize_operator_result(
+            parsed_result,
+            technical_limits=limits,
+        )
+        if projection_limit_kind is not None:
+            contract_valid = False
+            limit_kind = limit_kind or projection_limit_kind
+    recorded_limit = process.get("technical_limit_kind") if isinstance(process, dict) else None
+    if receipt.get("status") == "crash_recovered":
+        if recorded_limit != limit_kind:
+            errors.append("structured_technical_limit_mismatch")
+    elif operator_artifact_policy_replay and (
+        recorded_limit in _JSON_TECHNICAL_LIMIT_KINDS
+        or limit_kind in _JSON_TECHNICAL_LIMIT_KINDS
+    ):
+        if recorded_limit != limit_kind:
+            errors.append("structured_technical_limit_mismatch")
+    elif limit_kind is not None and recorded_limit != limit_kind:
+        errors.append("structured_technical_limit_mismatch")
+    if receipt.get("status") != "crash_recovered" and (
+        artifacts.get("structured_output_contract_valid") is not contract_valid
+    ):
+        errors.append("structured_contract_mismatch")
+    expected_session_payload = _session_proof_payload(
+        session_proof,
+        status=session_status,
+        raw=session_raw,
+    )
+    if receipt.get("session_proof") != expected_session_payload:
+        errors.append("session_proof_replay_mismatch")
+    expected_updates_sha = bytes_sha256(session_raw) if session_raw is not None else None
+    if artifacts.get("session_updates_sha256") != expected_updates_sha:
+        errors.append("session_updates_hash_mismatch")
+    if mode == "fixture" and updates_path.exists():
+        errors.append("fixture_session_updates_unexpected")
+    expected_reconciliation = _candidate_reconciliation(
+        parsed_result if isinstance(parsed_result, dict) else {},
+        prior_candidates,
+        session_proof=session_proof,
+        fixture=mode == "fixture",
+    )
+    if receipt.get("reconciliation") != expected_reconciliation:
+        errors.append("receipt_reconciliation_mismatch")
+    sanitized_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["sanitized"]
+    if sanitized is None:
+        if artifacts.get("sanitized_output_sha256") is not None or sanitized_path.exists():
+            errors.append("unexpected_sanitized_artifact")
+    else:
+        try:
+            sanitized_actual = _read_regular_owned_bounded(
+                sanitized_path, maximum_bytes=limits["max_json_bytes"], required_mode=0o600
+            )
+        except AdaptiveWaveValidationError:
+            errors.append("sanitized_artifact_permissions_invalid")
+        else:
+            if sanitized_actual != sanitized or bytes_sha256(sanitized) != artifacts.get("sanitized_output_sha256"):
+                errors.append("sanitized_artifact_hash_mismatch")
+    if _command_binding_valid(command_binding) and _input_binding_valid(input_binding):
+        if command_binding["structured_output_schema_sha256"] not in {
+            result_schema_sha256(),
+            result_schema_sha256(legacy_v2=True),
+        }:
+            errors.append("structured_output_schema_hash_mismatch")
+        if command_binding["command_policy_sha256"] not in {
+            command_policy_sha256(request),
+            _legacy_pre_process_evidence_command_policy_sha256(request),
+            _legacy_operator_result_v1_command_policy_sha256(request),
+            _legacy_operator_result_v2_command_policy_sha256(request),
+            _legacy_normalization_only_result_v3_command_policy_sha256(request),
+            _legacy_pre_normalization_result_v3_command_policy_sha256(request),
+            _legacy_command_policy_sha256(request),
+            _legacy_structured_result_command_policy_sha256(request),
+        }:
+            errors.append("command_policy_hash_mismatch")
+        if command_binding["environment_policy_sha256"] != canonical_sha256(_redacted_environment_policy()):
+            errors.append("environment_policy_hash_mismatch")
+    compiled_sha = bytes_sha256(compiled_actual) if compiled_actual is not None else None
+    if compiled_sha != artifacts.get("compiled_prompt_sha256"):
+        errors.append("compiled_prompt_artifact_hash_mismatch")
+    if isinstance(artifacts, dict) and (
+        artifacts.get("session_tree_file_count", 0) > limits["max_session_files"]
+        or artifacts.get("session_tree_entry_count", 0) > limits["max_session_files"]
+        or artifacts.get("session_tree_max_depth", 0) > MAX_SESSION_TREE_DEPTH
+        or artifacts.get("session_tree_total_bytes", 0) > limits["max_session_total_bytes"]
+        or artifacts.get("session_tree_max_file_bytes", 0) > limits["max_session_file_bytes"]
+    ):
+        errors.append("session_tree_measurement_exceeds_request")
+    retention = receipt.get("retention")
+    process_started = process.get("started_at") if isinstance(process, dict) else None
+    try:
+        expected_delete_after = _timestamp(
+            _parse_timestamp(process_started) + timedelta(seconds=request["retention"]["ttl_seconds"])
+        )
+    except (AdaptiveWaveValidationError, TypeError):
+        errors.append("retention_time_replay_invalid")
+    else:
+        expected_retention = {
+            "policy_id": request["retention"]["policy_id"],
+            "ttl_seconds": request["retention"]["ttl_seconds"],
+            "delete_after": expected_delete_after,
+            "purge_state": "pending_expiry",
+            "deletion_receipt_required": True,
+        }
+        if retention != expected_retention:
+            errors.append("retention_replay_mismatch")
+    return errors
+
+
+def _process_group_members(process_group_id: int) -> list[int]:
+    proc_root = Path("/proc")
+    members: list[int] = []
+    if proc_root.is_dir():
+        for entry in proc_root.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                if os.getpgid(int(entry.name)) == process_group_id:
+                    members.append(int(entry.name))
+            except (ProcessLookupError, PermissionError):
+                continue
+        return sorted(members)
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed absolute diagnostic binary
+            ["/bin/ps", "-axo", "pid=,pgid="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    for line in completed.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0].isdigit() and fields[1].isdigit() and int(fields[1]) == process_group_id:
+            members.append(int(fields[0]))
+    return sorted(members)
+
+
+def _process_identity_token_matches(pid: int, token: str) -> bool:
+    marker = f"X_FIRST_PROCESS_IDENTITY={token}"
+    environ_path = Path(f"/proc/{pid}/environ")
+    if environ_path.is_file():
+        try:
+            return marker.encode() in environ_path.read_bytes().split(b"\x00")
+        except OSError:
+            return False
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed absolute diagnostic binary
+            ["/bin/ps", "eww", "-p", str(pid), "-o", "command="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0 and marker in completed.stdout
+
+
+def _recorded_process_group_identity_matches(ledger: Mapping[str, Any]) -> bool:
+    process_group_id = ledger.get("process_group_id")
+    child_pid = ledger.get("child_pid")
+    token = ledger.get("process_identity_token")
+    if not _is_int(process_group_id) or not _is_int(child_pid) or not isinstance(token, str):
+        return False
+    members = _process_group_members(process_group_id)
+    if not members or any(not _process_identity_token_matches(pid, token) for pid in members):
+        return False
+    if child_pid in members:
+        try:
+            if _kernel_birth_identity(child_pid) != ledger.get("kernel_birth_identity"):
+                return False
+        except AdaptiveWaveValidationError:
+            return False
+    return True
+
+
+def _terminate_existing_group(
+    process_group_id: int,
+    *,
+    term_grace_ms: int,
+    kill_grace_ms: int,
+    group_is_alive: Callable[[int], bool],
+    identity_still_matches: Callable[[], bool],
+    monotonic: Callable[[], float],
+) -> tuple[bool, bool]:
+    term_sent = False
+    kill_sent = False
+    if group_is_alive(process_group_id):
+        if not identity_still_matches():
+            raise AdaptiveWaveValidationError("recovery_process_identity_changed")
+        term_sent = True
+        try:
+            os.killpg(process_group_id, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        deadline = monotonic() + term_grace_ms / 1000
+        while group_is_alive(process_group_id) and monotonic() < deadline:
+            time.sleep(0.02)
+    if group_is_alive(process_group_id):
+        if not identity_still_matches():
+            return term_sent, kill_sent
+        kill_sent = True
+        try:
+            os.killpg(process_group_id, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        deadline = monotonic() + kill_grace_ms / 1000
+        while group_is_alive(process_group_id) and monotonic() < deadline:
+            time.sleep(0.02)
+    if group_is_alive(process_group_id):
+        if identity_still_matches():
+            raise AdaptiveWaveValidationError("recovery_process_group_cleanup_failed")
+    return term_sent, kill_sent
+
+
+def _load_bound_recovery_process_evidence(
+    run_root: Path,
+    *,
+    intent: Mapping[str, Any],
+    held_lease_sha: str,
+    current_process_evidence: bool,
+) -> tuple[dict[str, Any] | None, bytes | None, dict[str, Any] | None, str | None]:
+    """Read and bind recovery journal/ledger without mutating their directory."""
+
+    process_result_journal: dict[str, Any] | None = None
+    process_result_journal_raw: bytes | None = None
+    process_result_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"]
+    if process_result_path.exists() or process_result_path.is_symlink():
+        process_result_value = _read_private_json(process_result_path)
+        if not _process_result_journal_valid(
+            process_result_value,
+            allow_legacy=not current_process_evidence,
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_invalid")
+        process_result_journal = process_result_value
+        process_result_journal_raw = _read_regular_owned_bounded(
+            process_result_path,
+            maximum_bytes=1_048_576,
+            required_mode=0o600,
+        )
+        if (
+            process_result_journal["run_id"] != intent["run_id"]
+            or process_result_journal["request_id"] != intent["request_id"]
+            or process_result_journal["run_lease_sha256"] != held_lease_sha
+            or process_result_journal["session_id"]
+            != intent["command_binding"]["session_id"]
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_binding_invalid")
+
+    ledger: dict[str, Any] | None = None
+    process_ledger_sha: str | None = None
+    ledger_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_ledger"]
+    if ledger_path.exists() or ledger_path.is_symlink():
+        ledger_value = _read_private_json(ledger_path)
+        if not _process_ledger_valid(ledger_value):
+            raise AdaptiveWaveValidationError("process_ledger_invalid")
+        ledger = ledger_value
+        if (
+            ledger["run_id"] != intent["run_id"]
+            or ledger["request_id"] != intent["request_id"]
+            or ledger["run_lease_sha256"] != held_lease_sha
+            or ledger["session_id"] != intent["command_binding"]["session_id"]
+        ):
+            raise AdaptiveWaveValidationError("process_ledger_binding_invalid")
+        process_ledger_sha = bytes_sha256(
+            _read_regular_owned_bounded(
+                ledger_path,
+                maximum_bytes=1_048_576,
+                required_mode=0o600,
+            )
+        )
+    return (
+        process_result_journal,
+        process_result_journal_raw,
+        ledger,
+        process_ledger_sha,
+    )
+
+
+def recover_incomplete_run(
+    run_root: Path,
+    *,
+    approval_root: Path = DEFAULT_APPROVAL_ROOT,
+    terminate_orphan: bool = False,
+    process_group_is_alive: Callable[[int], bool] = ProcessGroupExecutor._group_alive,
+    process_group_identity_matches: Callable[[Mapping[str, Any]], bool] = _recorded_process_group_identity_matches,
+    terminate_process_group: Callable[..., tuple[bool, bool]] = _terminate_existing_group,
+    monotonic: Callable[[], float] = time.monotonic,
+    wall_clock: Callable[[], datetime] = _utc_now,
+) -> dict[str, Any]:
+    """Acquire the exclusive run lease before any recovery read or mutation."""
+
+    _ensure_private_directory(run_root, create=False)
+    with _run_lease(run_root, create=False) as lease_sha:
+        return _recover_incomplete_run_locked(
+            run_root,
+            held_lease_sha=lease_sha,
+            approval_root=approval_root,
+            terminate_orphan=terminate_orphan,
+            process_group_is_alive=process_group_is_alive,
+            process_group_identity_matches=process_group_identity_matches,
+            terminate_process_group=terminate_process_group,
+            monotonic=monotonic,
+            wall_clock=wall_clock,
+        )
+
+
+def _recover_incomplete_run_locked(
+    run_root: Path,
+    *,
+    held_lease_sha: str,
+    approval_root: Path,
+    terminate_orphan: bool = False,
+    process_group_is_alive: Callable[[int], bool] = ProcessGroupExecutor._group_alive,
+    process_group_identity_matches: Callable[[Mapping[str, Any]], bool] = _recorded_process_group_identity_matches,
+    terminate_process_group: Callable[..., tuple[bool, bool]] = _terminate_existing_group,
+    monotonic: Callable[[], float] = time.monotonic,
+    wall_clock: Callable[[], datetime] = _utc_now,
+) -> dict[str, Any]:
+    """Seal an interrupted run only after its recorded process group is dead."""
+
+    if (run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"]).exists():
+        raise AdaptiveWaveValidationError("run_already_terminal")
+    intent = _read_private_json(
+        run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_intent"]
+    )
+    if not _intent_valid(intent):
+        raise AdaptiveWaveValidationError("intent_invalid")
+    if intent["run_lease_sha256"] != held_lease_sha:
+        raise AdaptiveWaveValidationError("recovery_run_lease_binding_invalid")
+    request = _read_private_json(
+        run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_request"]
+    )
+    if validate_request(request) or canonical_sha256(request) != intent["request_sha256"]:
+        raise AdaptiveWaveValidationError("recovery_request_invalid")
+    recovery_recorded_command_policy = intent["command_binding"]["command_policy_sha256"]
+    current_process_evidence_policy = (
+        recovery_recorded_command_policy == command_policy_sha256(request)
+    )
+    transitional_process_evidence_policy = (
+        recovery_recorded_command_policy
+        == _legacy_pre_process_evidence_command_policy_sha256(request)
+    )
+    recognized_legacy_process_evidence_policy = recovery_recorded_command_policy in {
+        _legacy_operator_result_v1_command_policy_sha256(request),
+        _legacy_operator_result_v2_command_policy_sha256(request),
+        _legacy_normalization_only_result_v3_command_policy_sha256(request),
+        _legacy_pre_normalization_result_v3_command_policy_sha256(request),
+        _legacy_command_policy_sha256(request),
+        _legacy_structured_result_command_policy_sha256(request),
+    }
+    if not (
+        current_process_evidence_policy
+        or transitional_process_evidence_policy
+        or recognized_legacy_process_evidence_policy
+    ):
+        raise AdaptiveWaveValidationError("recovery_command_policy_unrecognized")
+    intent_declares_current_process_evidence = (
+        intent.get("process_evidence_generation") == PROCESS_EVIDENCE_GENERATION
+    )
+    if current_process_evidence_policy:
+        if intent.get("process_evidence_generation") != PROCESS_EVIDENCE_GENERATION:
+            raise AdaptiveWaveValidationError("recovery_process_evidence_generation_missing")
+        current_process_evidence = True
+    elif transitional_process_evidence_policy:
+        if not intent_declares_current_process_evidence:
+            raise AdaptiveWaveValidationError(
+                "recovery_transitional_process_evidence_untrusted"
+            )
+        current_process_evidence = True
+    elif "process_evidence_generation" in intent:
+        raise AdaptiveWaveValidationError("recovery_legacy_process_evidence_shape_mismatch")
+    else:
+        current_process_evidence = False
+
+    # Read and bind every durable process-boundary artifact before recovery is
+    # allowed to publish a replacement auth claim, inspect a process group, or
+    # mutate any retained run artifact.  In particular, a deleted consumption
+    # ledger must not be downgraded to a pre-consumption crash merely by also
+    # deleting or origin-rewriting the active-use claim.
+    process_result_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["process_result"]
+    (
+        process_result_journal,
+        process_result_journal_raw,
+        ledger,
+        process_ledger_sha,
+    ) = _load_bound_recovery_process_evidence(
+        run_root,
+        intent=intent,
+        held_lease_sha=held_lease_sha,
+        current_process_evidence=current_process_evidence,
+    )
+
+    (
+        pending_post_consumption_artifact_names,
+        promoted_post_consumption_artifact_names,
+    ) = _post_consumption_artifact_presence(
+        run_root,
+        intent["runtime_layout"],
+    )
+    registered_post_consumption_evidence_present = bool(
+        pending_post_consumption_artifact_names
+        or promoted_post_consumption_artifact_names
+    )
+    recovery_effective_prompt_policy: EffectivePromptPolicyBinding | None = None
+    recovery_auth_sha256: str | None = None
+    recovery_grant_sha256: str | None = None
+    recovery_active_auth_claim = False
+    recovery_auth_claim_origin: str | None = None
+    recovery_consumption: tuple[dict[str, Any], bytes] | None = None
+    if intent["execution_mode"] == "live":
+        recovery_effective_prompt_policy = _approved_effective_prompt_binding(request)
+        if (
+            intent["command_binding"]["effective_prompt_policy_sha256"]
+            != recovery_effective_prompt_policy.policy_sha256
+            or intent["command_binding"]["effective_prompt_policy_entry_id"]
+            != recovery_effective_prompt_policy.policy_entry_id
+        ):
+            raise AdaptiveWaveValidationError("recovery_effective_prompt_policy_invalid")
+        recovery_auth_sha256 = request["transport"]["oauth_auth_sha256"]
+        recovery_grant_sha256 = intent["approval"]["grant_sha256"]
+        if not _is_sha(recovery_auth_sha256) or not _is_sha(recovery_grant_sha256):
+            raise AdaptiveWaveValidationError("recovery_auth_binding_invalid")
+        with _auth_digest_lock(approval_root, recovery_auth_sha256):
+            grant_id = request["approval"]["grant_id"]
+            if not isinstance(grant_id, str):
+                raise AdaptiveWaveValidationError("recovery_grant_id_invalid")
+            grant_id_hash = bytes_sha256(grant_id.encode())
+            if intent["approval"]["grant_id_sha256"] != grant_id_hash:
+                raise AdaptiveWaveValidationError("recovery_grant_id_binding_invalid")
+            grant_path, _ = _grant_paths(approval_root, grant_id_hash)
+            try:
+                grant_raw = _read_regular_owned_bounded(
+                    grant_path,
+                    maximum_bytes=1_048_576,
+                    required_mode=0o600,
+                )
+                grant = strict_json_loads(grant_raw)
+            except (AdaptiveWaveValidationError, OSError, UnicodeError, ValueError) as exc:
+                raise AdaptiveWaveValidationError("recovery_grant_invalid") from exc
+            if bytes_sha256(grant_raw) != recovery_grant_sha256:
+                raise AdaptiveWaveValidationError("recovery_grant_hash_mismatch")
+            recovery_consumption = _load_bound_recovery_consumption(
+                approval_root,
+                request=request,
+                run_id=intent["run_id"],
+                run_lease_sha256=held_lease_sha,
+                request_sha256=intent["request_sha256"],
+                grant_sha256=recovery_grant_sha256,
+            )
+            try:
+                grant_validation_clock = _parse_timestamp(
+                    recovery_consumption[0]["consumed_at"]
+                    if recovery_consumption is not None
+                    else intent["started_at"]
+                )
+            except (AdaptiveWaveValidationError, KeyError, TypeError) as exc:
+                raise AdaptiveWaveValidationError("recovery_grant_clock_invalid") from exc
+            recovery_result_schema_sha256 = (
+                result_schema_sha256(legacy_v2=True)
+                if recovery_recorded_command_policy
+                == _legacy_structured_result_command_policy_sha256(request)
+                else result_schema_sha256()
+            )
+            if _validate_grant(
+                grant,
+                request,
+                now=grant_validation_clock,
+                replay_command_policy_sha256=recovery_recorded_command_policy,
+                replay_result_schema_sha256=recovery_result_schema_sha256,
+            ):
+                raise AdaptiveWaveValidationError("recovery_grant_replay_invalid")
+            active_claim = _load_auth_active_use(approval_root, recovery_auth_sha256)
+            if active_claim is not None:
+                if not _auth_active_use_matches(
+                    active_claim,
+                    run_id=intent["run_id"],
+                    request_sha256=intent["request_sha256"],
+                    run_lease_sha256=held_lease_sha,
+                    grant_sha256=recovery_grant_sha256,
+                ):
+                    raise PermissionError("grok_auth_digest_in_use")
+
+            crossed_consumption_boundary = (
+                (
+                    active_claim is not None
+                    and active_claim.get("claim_origin") == "live_consumption"
+                )
+                or (current_process_evidence and process_result_journal is not None)
+                or ledger is not None
+                or registered_post_consumption_evidence_present
+            )
+            if recovery_consumption is None and crossed_consumption_boundary:
+                # Each evidence family is independent of the mutable claim
+                # origin.  Once any current process evidence exists, deleting
+                # consumption and either deleting the claim or rewriting it to
+                # legacy_recovery must remain a typed pre-mutation failure.
+                raise AdaptiveWaveValidationError(
+                    "recovery_grant_consumption_missing"
+                )
+
+            if active_claim is None:
+                _publish_auth_active_use_unlocked(
+                    approval_root,
+                    oauth_auth_sha256=recovery_auth_sha256,
+                    run_id=intent["run_id"],
+                    request_sha256=intent["request_sha256"],
+                    run_lease_sha256=held_lease_sha,
+                    grant_sha256=recovery_grant_sha256,
+                    claimed_at=wall_clock().astimezone(UTC),
+                    claim_origin="legacy_recovery",
+                )
+                recovery_active_auth_claim = True
+                recovery_auth_claim_origin = "legacy_recovery"
+            else:
+                recovery_active_auth_claim = True
+                recovery_auth_claim_origin = active_claim["claim_origin"]
+
+    # Pending publication cleanup is mutation.  It is safe only after the
+    # missing-consumption downgrade classification above has either accepted a
+    # genuine pre-consumption state or proved exact consumption.
+    recover_pending_publications(run_root)
+    (
+        process_result_journal,
+        process_result_journal_raw,
+        ledger,
+        process_ledger_sha,
+    ) = _load_bound_recovery_process_evidence(
+        run_root,
+        intent=intent,
+        held_lease_sha=held_lease_sha,
+        current_process_evidence=current_process_evidence,
+    )
+    term_sent = bool(process_result_journal and process_result_journal["term_sent"])
+    kill_sent = bool(process_result_journal and process_result_journal["kill_sent"])
+    prior_handles, _, prior_candidates = load_prior_context(request)
+    del prior_handles
+    if ledger is not None:
+        group_id = ledger["process_group_id"]
+        if process_group_is_alive(group_id):
+            if not terminate_orphan:
+                raise AdaptiveWaveValidationError("run_process_group_still_alive")
+            if not process_group_identity_matches(ledger):
+                raise AdaptiveWaveValidationError("recovery_process_identity_mismatch")
+            recovery_term_sent, recovery_kill_sent = terminate_process_group(
+                group_id,
+                term_grace_ms=intent["emergency"]["term_grace_ms"],
+                kill_grace_ms=intent["emergency"]["kill_grace_ms"],
+                group_is_alive=process_group_is_alive,
+                identity_still_matches=lambda: process_group_identity_matches(ledger),
+                monotonic=monotonic,
+            )
+            term_sent = term_sent or recovery_term_sent
+            kill_sent = kill_sent or recovery_kill_sent
+        if process_group_is_alive(group_id):
+            raise AdaptiveWaveValidationError("run_process_group_still_alive")
+    if process_result_journal is not None:
+        if process_result_journal["process_spawn_attempted"] is not (ledger is not None):
+            raise AdaptiveWaveValidationError("process_result_journal_spawn_binding_invalid")
+        if ledger is not None and (
+            process_result_journal["child_pid"] != ledger["child_pid"]
+            or process_result_journal["process_group_id"] != ledger["process_group_id"]
+            or process_result_journal["kernel_birth_identity_sha256"]
+            != bytes_sha256(ledger["kernel_birth_identity"].encode())
+            or process_result_journal["process_identity_token_sha256"]
+            != bytes_sha256(ledger["process_identity_token"].encode())
+        ):
+            raise AdaptiveWaveValidationError("process_result_journal_ledger_mismatch")
+    elif current_process_evidence and ledger is None:
+        # A current run without either an executor-return journal or a durable
+        # spawn ledger has no process identity on which recovery can base a
+        # cleanup-confirmed claim.  Preserve the home/claim and fail closed.
+        raise AdaptiveWaveValidationError("recovery_process_identity_unavailable")
+    try:
+        raw, stderr = _publish_process_spools(
+            run_root,
+            stdout_spool=run_root / intent["runtime_layout"]["stdout_spool_name"],
+            stderr_spool=run_root / intent["runtime_layout"]["stderr_spool_name"],
+            max_stdout_bytes=intent["technical_limits"]["max_stdout_bytes"],
+            max_stderr_bytes=intent["technical_limits"]["max_stderr_bytes"],
+            # Legacy recovery intents predate the executor-return journal and
+            # may legitimately have no retained spool.  Once the journal says
+            # the executor returned, silently replacing a missing spool with
+            # empty bytes would destroy the evidence the journal was added to
+            # preserve.
+            allow_missing=not current_process_evidence and process_result_journal is None,
+        )
+    except AdaptiveWaveValidationError as exc:
+        raise AdaptiveWaveValidationError("recovery_spool_invalid") from exc
+    if current_process_evidence and process_result_journal is None:
+        assert ledger is not None
+        recovered_process_result = ProcessResult(
+            exit_code=None,
+            timed_out=False,
+            term_sent=term_sent,
+            kill_sent=kill_sent,
+            process_spawn_attempted=True,
+            child_pid=ledger["child_pid"],
+            process_group_id=ledger["process_group_id"],
+            kernel_birth_identity=ledger["kernel_birth_identity"],
+            process_identity_token=ledger["process_identity_token"],
+            process_group_cleanup_confirmed=True,
+            execution_error_code="crash_recovered",
+            technical_limit_kind=None,
+        )
+        process_result_journal = _process_result_journal_payload(
+            recovered_process_result,
+            run_id=intent["run_id"],
+            request_id=intent["request_id"],
+            run_lease_sha256=held_lease_sha,
+            session_id=intent["command_binding"]["session_id"],
+            stdout_raw=raw,
+            stderr_raw=stderr,
+            phase="recovery_sealed",
+        )
+        if not _process_result_journal_valid(process_result_journal):
+            raise AdaptiveWaveValidationError("recovery_process_result_journal_invalid")
+        process_result_journal_raw = (canonical_json(process_result_journal) + "\n").encode()
+        _atomic_publish(process_result_path, process_result_journal_raw)
+    elif current_process_evidence and isinstance(process_result_journal, dict):
+        if (
+            process_result_journal.get("stdout_sha256") != bytes_sha256(raw)
+            or process_result_journal.get("stdout_bytes") != len(raw)
+            or process_result_journal.get("stderr_sha256") != bytes_sha256(stderr)
+            or process_result_journal.get("stderr_bytes") != len(stderr)
+        ):
+            raise AdaptiveWaveValidationError("recovery_process_spool_binding_mismatch")
+    ephemeral_home = run_root / intent["runtime_layout"]["ephemeral_home_name"]
+    retained_updates_path = run_root / intent["runtime_layout"]["session_updates_name"]
+    measurement = SessionTreeMeasurement(0, 0, 0, 0, 0, None)
+    try:
+        ephemeral_home.lstat()
+        ephemeral_home_present = True
+    except FileNotFoundError:
+        ephemeral_home_present = False
+    except OSError as exc:
+        raise AdaptiveWaveValidationError("recovery_ephemeral_tree_invalid") from exc
+    if ephemeral_home_present:
+        source_updates_path = _session_updates_path(
+            ephemeral_home,
+            run_root / "workspace",
+            intent["command_binding"]["session_id"],
+        )
+        measurement = _measure_session_tree(
+            ephemeral_home,
+            max_files=intent["technical_limits"]["max_session_files"],
+            max_file_bytes=intent["technical_limits"]["max_session_file_bytes"],
+            max_total_bytes=intent["technical_limits"]["max_session_total_bytes"],
+            updates_path=source_updates_path,
+            max_updates_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+            expected_socket_path=ephemeral_home / "leader.sock",
+            max_depth=MAX_SESSION_TREE_DEPTH,
+            deadline_at=monotonic() + FINAL_SESSION_TREE_SCAN_BUDGET_SECONDS,
+            monotonic=monotonic,
+        )
+        if measurement.limit_kind is None and source_updates_path.exists():
+            updates_raw = _read_regular_owned_bounded(
+                source_updates_path,
+                maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+            )
+            if retained_updates_path.exists():
+                if (
+                    _read_regular_owned_bounded(
+                        retained_updates_path,
+                        maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+                        required_mode=0o600,
+                    )
+                    != updates_raw
+                ):
+                    raise AdaptiveWaveValidationError("recovery_session_updates_mismatch")
+            else:
+                _atomic_publish(retained_updates_path, updates_raw)
+        if intent["execution_mode"] == "live" and (
+            recovery_active_auth_claim or recovery_consumption is not None or process_ledger_sha is not None
+        ):
+            assert recovery_auth_sha256 is not None
+            _audit_copied_auth_after_provider(
+                ephemeral_home / "auth.json",
+                expected_sha256=recovery_auth_sha256,
+                source_run_id=intent["run_id"],
+                source_request_sha256=intent["request_sha256"],
+                grant_root=approval_root,
+                wall_clock=wall_clock,
+                force_taint_reason=(
+                    "post_consumption_execution_not_clean" if process_ledger_sha is not None else None
+                ),
+            )
+        _delete_ephemeral_tree(ephemeral_home)
+        if recovery_active_auth_claim:
+            assert recovery_auth_sha256 is not None and recovery_grant_sha256 is not None
+            _resolve_auth_active_use(
+                approval_root,
+                oauth_auth_sha256=recovery_auth_sha256,
+                run_id=intent["run_id"],
+                request_sha256=intent["request_sha256"],
+                run_lease_sha256=held_lease_sha,
+                grant_sha256=recovery_grant_sha256,
+            )
+            recovery_active_auth_claim = False
+    elif recovery_active_auth_claim:
+        # A D2 live-consumption claim proves audit preceded durable deletion.
+        # A synthesized legacy-recovery claim carries no such ordering proof:
+        # the old runner could delete rotated auth after provider release.
+        assert recovery_auth_sha256 is not None and recovery_grant_sha256 is not None
+        if recovery_auth_claim_origin == "legacy_recovery" and process_ledger_sha is not None:
+            try:
+                legacy_detected_at = wall_clock().astimezone(UTC)
+            except BaseException:
+                legacy_detected_at = _utc_now()
+            _publish_auth_taint(
+                approval_root,
+                oauth_auth_sha256=recovery_auth_sha256,
+                source_run_id=intent["run_id"],
+                source_request_sha256=intent["request_sha256"],
+                reason="post_consumption_execution_not_clean",
+                detected_at=legacy_detected_at,
+            )
+        _resolve_auth_active_use(
+            approval_root,
+            oauth_auth_sha256=recovery_auth_sha256,
+            run_id=intent["run_id"],
+            request_sha256=intent["request_sha256"],
+            run_lease_sha256=held_lease_sha,
+            grant_sha256=recovery_grant_sha256,
+        )
+        recovery_active_auth_claim = False
+    recovery_legacy_plain = intent["command_binding"].get("command_policy_sha256") == _legacy_command_policy_sha256(
+        request
+    )
+    recovery_recorded_policy = intent["command_binding"].get("command_policy_sha256")
+    recovery_result_normalization_policy_version = (
+        RESULT_NORMALIZATION_POLICY_VERSION
+        if recovery_recorded_policy
+        in {
+            command_policy_sha256(request),
+            _legacy_pre_process_evidence_command_policy_sha256(request),
+        }
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V2
+        if recovery_recorded_policy == _legacy_operator_result_v2_command_policy_sha256(request)
+        else LEGACY_RESULT_NORMALIZATION_POLICY_VERSION_V1
+        if recovery_recorded_policy
+        in {
+            _legacy_operator_result_v1_command_policy_sha256(request),
+            _legacy_normalization_only_result_v3_command_policy_sha256(request),
+        }
+        else None
+    )
+    (
+        parsed_result,
+        sanitized,
+        _,
+        _,
+        _,
+        contract_valid,
+        recovery_limit_kind,
+        headless_envelope,
+    ) = _parse_structured_stdout(
+        raw,
+        technical_limits=intent["technical_limits"],
+        prior_candidates=prior_candidates,
+        live_mode=intent["execution_mode"] == "live",
+        expected_session_id=intent["command_binding"]["session_id"],
+        expected_model_id=request["transport"]["model_id"],
+        max_turns=intent["emergency"]["max_turns"],
+        allow_legacy_plain=intent["execution_mode"] == "fixture" or recovery_legacy_plain,
+        result_normalization_policy_version=recovery_result_normalization_policy_version,
+    )
+    sanitized_path = run_root / _RUN_ARTIFACT_NAME_REGISTRY["sanitized"]
+    compiled_prompt_path = run_root / intent["runtime_layout"]["compiled_prompt_name"]
+    try:
+        compiled_raw = _read_regular_owned_bounded(
+            compiled_prompt_path,
+            maximum_bytes=intent["technical_limits"]["max_compiled_prompt_bytes"],
+            required_mode=0o600,
+        )
+    except AdaptiveWaveValidationError as exc:
+        raise AdaptiveWaveValidationError("recovery_compiled_prompt_invalid") from exc
+    approval = dict(intent["approval"])
+    if intent["execution_mode"] == "live" and recovery_consumption is not None:
+        approval["consumption_sha256"] = bytes_sha256(recovery_consumption[1])
+    session_raw: bytes | None = None
+    session_proof: SessionProof | None = None
+    session_status = "not_applicable" if intent["execution_mode"] == "fixture" else "missing"
+    if intent["execution_mode"] == "live" and retained_updates_path.exists():
+        try:
+            session_raw = _read_regular_owned_bounded(
+                retained_updates_path,
+                maximum_bytes=intent["technical_limits"]["max_session_updates_bytes"],
+                required_mode=0o600,
+            )
+            session_proof = _parse_session_proof(
+                session_raw,
+                expected_session_id=intent["command_binding"]["session_id"],
+                expected_model_id=intent["command_binding"]["model_id"],
+                expected_stdout=raw,
+                headless_envelope=headless_envelope,
+                max_line_bytes=intent["technical_limits"]["max_session_update_line_bytes"],
+                max_turns=intent["emergency"]["max_turns"],
+                budget=intent["budget"],
+                session_query_policy_id=(
+                    recovery_effective_prompt_policy.session_query_policy_id
+                    if recovery_effective_prompt_policy is not None
+                    else MIXED_SESSION_QUERY_POLICY_ID
+                ),
+                discovery_target_lab_id=request["target"]["lab_id"],
+                approved_official_account_handles=(
+                    recovery_effective_prompt_policy.official_account_handles
+                    if recovery_effective_prompt_policy is not None
+                    else ()
+                ),
+            )
+            session_status = "verified"
+        except (AdaptiveWaveValidationError, KeyError, UnicodeError, ValueError):
+            session_proof = None
+            session_status = "invalid"
+    if contract_valid and isinstance(parsed_result, dict) and (
+        intent["execution_mode"] == "fixture" or session_proof is not None
+    ):
+        parsed_result = _operator_project_model_result(
+            parsed_result,
+            session_proof=session_proof,
+            fixture=intent["execution_mode"] == "fixture",
+            session_query_policy_id=(
+                recovery_effective_prompt_policy.session_query_policy_id
+                if recovery_effective_prompt_policy is not None
+                else MIXED_SESSION_QUERY_POLICY_ID
+            ),
+        )
+        contract_valid = not validate_model_result(
+            parsed_result,
+            prior_candidates=prior_candidates,
+            live_mode=intent["execution_mode"] == "live",
+        )
+        sanitized, projection_limit_kind = _serialize_operator_result(
+            parsed_result,
+            technical_limits=intent["technical_limits"],
+        )
+        if projection_limit_kind is not None:
+            contract_valid = False
+            recovery_limit_kind = recovery_limit_kind or projection_limit_kind
+    if sanitized_path.exists():
+        try:
+            sanitized_actual = _read_regular_owned_bounded(
+                sanitized_path,
+                maximum_bytes=intent["technical_limits"]["max_json_bytes"],
+                required_mode=0o600,
+            )
+        except AdaptiveWaveValidationError as exc:
+            raise AdaptiveWaveValidationError("recovery_sanitized_permissions_invalid") from exc
+        if sanitized is None or sanitized_actual != sanitized:
+            raise AdaptiveWaveValidationError("recovery_sanitized_hash_mismatch")
+    elif sanitized is not None:
+        _atomic_publish(sanitized_path, sanitized)
+    sanitized_sha = bytes_sha256(sanitized) if sanitized is not None else None
+    session_payload = _session_proof_payload(session_proof, status=session_status, raw=session_raw)
+    delete_after = _timestamp(
+        _parse_timestamp(intent["started_at"]) + timedelta(seconds=intent["retention"]["ttl_seconds"])
+    )
+    receipt = {
+        "schema_version": RECEIPT_SCHEMA_VERSION,
+        "run_id": intent["run_id"],
+        "request_id": intent["request_id"],
+        "request_sha256": intent["request_sha256"],
+        "execution_mode": intent["execution_mode"],
+        "status": "crash_recovered",
+        "run_lease_sha256": held_lease_sha,
+        "input_binding": intent["input_binding"],
+        "command_binding": intent["command_binding"],
+        "approval": approval,
+        "process": {
+            "started_at": intent["started_at"],
+            "completed_at": _timestamp(wall_clock()),
+            "elapsed_ms": None,
+            "exit_code": None,
+            "timed_out": False,
+            "term_sent": term_sent,
+            "kill_sent": kill_sent,
+            "process_spawn_attempted": ledger is not None,
+            "child_pid": ledger["child_pid"] if ledger is not None else None,
+            "process_group_id": ledger["process_group_id"] if ledger is not None else None,
+            "process_ledger_sha256": process_ledger_sha,
+            "kernel_birth_identity_sha256": (
+                bytes_sha256(ledger["kernel_birth_identity"].encode()) if ledger is not None else None
+            ),
+            "process_identity_token_sha256": (
+                bytes_sha256(ledger["process_identity_token"].encode()) if ledger is not None else None
+            ),
+            "process_group_cleanup_confirmed": True,
+            "execution_error_code": "crash_recovered",
+            "deadline_ms": intent["emergency"]["deadline_ms"],
+            "term_grace_ms": intent["emergency"]["term_grace_ms"],
+            "kill_grace_ms": intent["emergency"]["kill_grace_ms"],
+            "fallback_used": False,
+            "technical_limit_exceeded": recovery_limit_kind is not None,
+            "technical_limit_kind": recovery_limit_kind,
+        },
+        "artifacts": {
+            "raw_stdout_sha256": bytes_sha256(raw),
+            "stderr_sha256": bytes_sha256(stderr),
+            "sanitized_output_sha256": sanitized_sha,
+            "structured_output_compliant": False,
+            "structured_output_contract_valid": False,
+            "non_json_prefix_bytes": None,
+            "non_json_suffix_bytes": None,
+            "compiled_prompt_sha256": bytes_sha256(compiled_raw),
+            "session_updates_sha256": bytes_sha256(session_raw) if session_raw is not None else None,
+            "process_result_journal_sha256": (
+                bytes_sha256(process_result_journal_raw)
+                if process_result_journal_raw is not None
+                else None
+            ),
+            "ephemeral_tree_deleted": not ephemeral_home.exists() and not ephemeral_home.is_symlink(),
+            "session_tree_file_count": measurement.file_count,
+            "session_tree_entry_count": measurement.entry_count,
+            "session_tree_max_depth": measurement.max_depth,
+            "session_tree_total_bytes": measurement.total_bytes,
+            "session_tree_max_file_bytes": measurement.max_file_bytes,
+        },
+        "session_proof": session_payload,
+        "retention": {
+            "policy_id": intent["retention"]["policy_id"],
+            "ttl_seconds": intent["retention"]["ttl_seconds"],
+            "delete_after": delete_after,
+            "purge_state": "pending_expiry",
+            "deletion_receipt_required": True,
+        },
+        "reconciliation": _candidate_reconciliation(
+            parsed_result if isinstance(parsed_result, dict) else {},
+            prior_candidates,
+            session_proof=session_proof,
+            fixture=intent["execution_mode"] == "fixture",
+        ),
+        "authority": AUTHORITY,
+    }
+    if not current_process_evidence:
+        receipt["artifacts"].pop("process_result_journal_sha256")
+    if validate_operator_receipt(receipt):
+        raise AdaptiveWaveValidationError("recovery_receipt_invalid")
+    replay_errors = validate_operator_bundle(
+        run_root,
+        approval_root=approval_root,
+        receipt_override=receipt,
+    )
+    if replay_errors:
+        raise AdaptiveWaveValidationError("recovery_bundle_replay_invalid:" + ",".join(replay_errors))
+    _atomic_publish(
+        run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+        (canonical_json(receipt) + "\n").encode(),
+    )
+    return receipt
+
+
+def _deletion_paths(deletion_root: Path, run_id: str) -> tuple[Path, Path]:
+    return (
+        deletion_root / f"journal-{run_id}.json",
+        deletion_root / f"receipt-{run_id}.json",
+    )
+
+
+def _deletion_journal_valid(value: Any) -> bool:
+    shape_valid = (
+        isinstance(value, dict)
+        and set(value) == _DELETION_JOURNAL_KEYS
+        and value.get("schema_version") == DELETION_JOURNAL_SCHEMA_VERSION
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and all(
+            _is_sha(value.get(key))
+            for key in (
+                "request_sha256",
+                "run_lease_sha256",
+                "operator_receipt_sha256",
+                "runtime_root_sha256",
+            )
+        )
+        and _timestamp_valid(value.get("delete_after"))
+        and _timestamp_valid(value.get("created_at"))
+        and value.get("state") == "delete_intent_durable"
+    )
+    if not shape_valid:
+        return False
+    return _parse_timestamp(value["created_at"]) >= _parse_timestamp(value["delete_after"])
+
+
+def _deletion_receipt_valid(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == _DELETION_RECEIPT_KEYS
+        and value.get("schema_version") == DELETION_RECEIPT_SCHEMA_VERSION
+        and isinstance(value.get("run_id"), str)
+        and _RUN_ID_RE.fullmatch(value["run_id"]) is not None
+        and all(
+            _is_sha(value.get(key)) for key in ("request_sha256", "operator_receipt_sha256", "deletion_journal_sha256")
+        )
+        and _timestamp_valid(value.get("deleted_at"))
+        and value.get("state") == "deleted_after_durable_intent"
+    )
+
+
+def _publish_deletion_receipt(
+    *,
+    deletion_root: Path,
+    journal: Mapping[str, Any],
+    journal_raw: bytes,
+    deleted_at: str,
+) -> dict[str, Any]:
+    receipt = {
+        "schema_version": DELETION_RECEIPT_SCHEMA_VERSION,
+        "run_id": journal["run_id"],
+        "request_sha256": journal["request_sha256"],
+        "operator_receipt_sha256": journal["operator_receipt_sha256"],
+        "deletion_journal_sha256": bytes_sha256(journal_raw),
+        "deleted_at": deleted_at,
+        "state": "deleted_after_durable_intent",
+    }
+    if not _deletion_receipt_valid(receipt):
+        raise AdaptiveWaveValidationError("generated_deletion_receipt_invalid")
+    _, receipt_path = _deletion_paths(deletion_root, journal["run_id"])
+    _atomic_publish(receipt_path, (canonical_json(receipt) + "\n").encode())
+    return receipt
+
+
+def purge_expired_adaptive_runs(
+    *,
+    runtime_root: Path = DEFAULT_RUNTIME_ROOT,
+    deletion_root: Path = DEFAULT_DELETION_ROOT,
+    approval_root: Path = DEFAULT_APPROVAL_ROOT,
+    wall_clock: Callable[[], datetime] = _utc_now,
+) -> list[dict[str, Any]]:
+    """Delete expired private bundles after a durable, replayable intent journal."""
+
+    if not runtime_root.exists():
+        return []
+    _ensure_private_directory(runtime_root, create=False)
+    _ensure_private_directory(deletion_root, create=True)
+    recover_pending_publications(deletion_root)
+    deletion_name = re.compile(r"(?:journal|receipt)-(grok_wave_(?:fixture|live)_[0-9a-f]{32})\.json")
+    for path in deletion_root.iterdir():
+        metadata = path.lstat()
+        if (
+            deletion_name.fullmatch(path.name) is None
+            or path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise AdaptiveWaveValidationError("deletion_inventory_invalid")
+        if path.name.startswith("receipt-"):
+            run_id = deletion_name.fullmatch(path.name).group(1)  # type: ignore[union-attr]
+            journal_path, _ = _deletion_paths(deletion_root, run_id)
+            if not journal_path.exists():
+                raise AdaptiveWaveValidationError("deletion_receipt_without_journal")
+    now = wall_clock().astimezone(UTC)
+    deleted_at = _timestamp(now)
+    runtime_root_sha = canonical_sha256(str(runtime_root.resolve()))
+    receipts: list[dict[str, Any]] = []
+
+    # Finish journaled deletions first.  A crash after rmtree but before the
+    # receipt is recoverable because the external journal binds the terminal
+    # operator receipt and the exact run lease.
+    for journal_path in sorted(deletion_root.glob("journal-grok_wave_*.json")):
+        journal_raw = _read_regular_owned_bounded(journal_path, maximum_bytes=1_048_576, required_mode=0o600)
+        try:
+            journal = strict_json_loads(journal_raw)
+        except (UnicodeError, ValueError) as exc:
+            raise AdaptiveWaveValidationError("deletion_journal_invalid") from exc
+        if not _deletion_journal_valid(journal) or journal["runtime_root_sha256"] != runtime_root_sha:
+            raise AdaptiveWaveValidationError("deletion_journal_invalid")
+        if _parse_timestamp(journal["delete_after"]) > now:
+            raise AdaptiveWaveValidationError("deletion_journal_not_expired")
+        run_root = runtime_root / journal["run_id"]
+        _, receipt_path = _deletion_paths(deletion_root, journal["run_id"])
+        if receipt_path.exists():
+            receipt = _read_private_json(receipt_path)
+            if (
+                not _deletion_receipt_valid(receipt)
+                or receipt["run_id"] != journal["run_id"]
+                or receipt["request_sha256"] != journal["request_sha256"]
+                or receipt["operator_receipt_sha256"] != journal["operator_receipt_sha256"]
+                or receipt["deletion_journal_sha256"] != bytes_sha256(journal_raw)
+                or _parse_timestamp(receipt["deleted_at"]) < _parse_timestamp(journal["created_at"])
+            ):
+                raise AdaptiveWaveValidationError("deletion_receipt_invalid")
+            if run_root.exists() or run_root.is_symlink():
+                raise AdaptiveWaveValidationError("deleted_run_reappeared")
+            continue
+        if run_root.exists() or run_root.is_symlink():
+            if run_root.is_symlink() or not run_root.is_dir():
+                raise AdaptiveWaveValidationError("deletion_run_path_invalid")
+            with _run_lease(run_root, create=False) as lease_sha:
+                operator_raw = _read_regular_owned_bounded(
+                    run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+                    maximum_bytes=67_108_864,
+                    required_mode=0o600,
+                )
+                operator = strict_json_loads(operator_raw)
+                if (
+                    lease_sha != journal["run_lease_sha256"]
+                    or bytes_sha256(operator_raw) != journal["operator_receipt_sha256"]
+                    or operator.get("request_sha256") != journal["request_sha256"]
+                    or operator.get("retention", {}).get("delete_after") != journal["delete_after"]
+                    or validate_operator_bundle(run_root, approval_root=approval_root)
+                ):
+                    raise AdaptiveWaveValidationError("journaled_bundle_replay_invalid")
+                shutil.rmtree(run_root)
+                _fsync_directory(runtime_root)
+                if run_root.exists() or run_root.is_symlink():
+                    raise AdaptiveWaveValidationError("run_bundle_deletion_failed")
+        receipts.append(
+            _publish_deletion_receipt(
+                deletion_root=deletion_root,
+                journal=journal,
+                journal_raw=journal_raw,
+                deleted_at=deleted_at,
+            )
+        )
+
+    for run_root in sorted(runtime_root.iterdir()):
+        if run_root.is_symlink() or not run_root.is_dir() or _RUN_ID_RE.fullmatch(run_root.name) is None:
+            raise AdaptiveWaveValidationError("runtime_inventory_invalid")
+        journal_path, receipt_path = _deletion_paths(deletion_root, run_root.name)
+        if receipt_path.exists():
+            raise AdaptiveWaveValidationError("deleted_run_reappeared")
+        if journal_path.exists():
+            continue
+        with _run_lease(run_root, create=False) as lease_sha:
+            bundle_errors = validate_operator_bundle(run_root, approval_root=approval_root)
+            if bundle_errors:
+                raise AdaptiveWaveValidationError("purge_bundle_replay_invalid:" + ",".join(bundle_errors))
+            operator_raw = _read_regular_owned_bounded(
+                run_root / _RUN_ARTIFACT_NAME_REGISTRY["operator_receipt"],
+                maximum_bytes=67_108_864,
+                required_mode=0o600,
+            )
+            operator = strict_json_loads(operator_raw)
+            delete_after = _parse_timestamp(operator["retention"]["delete_after"])
+            if delete_after > now:
+                continue
+            journal = {
+                "schema_version": DELETION_JOURNAL_SCHEMA_VERSION,
+                "run_id": run_root.name,
+                "request_sha256": operator["request_sha256"],
+                "run_lease_sha256": lease_sha,
+                "operator_receipt_sha256": bytes_sha256(operator_raw),
+                "delete_after": operator["retention"]["delete_after"],
+                "runtime_root_sha256": runtime_root_sha,
+                "created_at": deleted_at,
+                "state": "delete_intent_durable",
+            }
+            if not _deletion_journal_valid(journal):
+                raise AdaptiveWaveValidationError("generated_deletion_journal_invalid")
+            journal_raw = (canonical_json(journal) + "\n").encode()
+            _atomic_publish(journal_path, journal_raw)
+            shutil.rmtree(run_root)
+            _fsync_directory(runtime_root)
+            if run_root.exists() or run_root.is_symlink():
+                raise AdaptiveWaveValidationError("run_bundle_deletion_failed")
+        receipts.append(
+            _publish_deletion_receipt(
+                deletion_root=deletion_root,
+                journal=journal,
+                journal_raw=journal_raw,
+                deleted_at=deleted_at,
+            )
+        )
+    return receipts

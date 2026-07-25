@@ -7,8 +7,20 @@ on:
       - main
       - dev
 
+# This project is tested via curated lanes (see Makefile: ci-pre-agent-contract,
+# ci-pg-contract, *-browser-gate), NOT a wholesale `unittest discover`. The gates
+# below mirror the project's real lanes: `lint` = ruff format+check on the quality
+# targets; `contract-tests` = the PG-backed pytest contract lane. Heavier lanes
+# (testcontainers pg-contract, browser gates, scripted large-org, live) run as
+# separate opt-in jobs / locally via make. mypy gates via the shrink-only
+# ratchet (scripts/check_mypy_ratchet.py + configs/mypy_ratchet_baseline.json,
+# ZERO budgeted errors as of 2026-07-22 — the 81-error burn-down completed;
+# the ratchet now guards against ANY new typed-file error, and the old '87'
+# comment-drift incident is why counts live in the baseline, not comments). (Note: ruff F401
+# auto-fix is unsafe here — it strips re-export imports; re-exports are
+# guarded with `# noqa: F401`.)
 jobs:
-  unit-tests:
+  lint:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,17 +34,163 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Minimal Dependencies
+      - name: Install ruff
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install "ruff>=0.15,<0.16"
+
+      - name: Lint (ruff format --check + ruff check)
+        run: bash scripts/run_python_quality.sh lint
+
+  contract-tests:
+    runs-on: ubuntu-latest
+    # PG-only control plane: the contract lane needs a live Postgres. The fixtures
+    # create their own per-test schemas in this throwaway database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sourcing
+          POSTGRES_PASSWORD: sourcing
+          POSTGRES_DB: sourcing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sourcing -d sourcing"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: sourcing-ai-agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            "fastapi>=0.136,<0.137" \
+            "uvicorn>=0.49,<0.50" \
+            "psycopg[binary]>=3.2,<3.3" \
+            "psycopg-pool>=3.2,<3.4" \
+            "requests>=2.33,<2.34" \
+            "pytest>=9,<10" \
+            "mypy>=1.20,<1.21"
+
+      # Frontend toolchain for the frontend-contract lane members (R-045,
+      # 2026-07-24): ~10 lane tests (test_pre_agent_contract_review's
+      # operation-control-state contract + the frontend_* suites) compile the
+      # generated frontend_api_adapter with esbuild from
+      # frontend-demo/node_modules and run it under node. The pip-only job
+      # would MODULE_NOT_FOUND on runners; local lanes never hit it because dev
+      # checkouts have node_modules. Provision it here (dev/CI parity) rather
+      # than skipping — a skip on the toolchain would reintroduce the
+      # false-green class the 2026-07-09 skip->fail hardening removed.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Frontend Deps (esbuild adapter compilation)
+        working-directory: sourcing-ai-agent/frontend-demo
+        run: npm ci
 
       - name: Compile Python Sources
         run: |
           python -m compileall -q src tests
 
-      - name: Run Unit Tests
+      - name: Contract Test Lane (pytest, PG-backed)
         env:
-          PYTHONPATH: src
+          # src -> sourcing_agent package; . -> repo subdir so `scripts.*`/`tests.*` resolve.
+          PYTHONPATH: src:.
+          SOURCING_CONTROL_PLANE_POSTGRES_DSN: postgresql://sourcing:sourcing@localhost:5432/sourcing
+          # Skip→fail hardening (2026-07-09): PG-availability skips become failures in every
+          # invocation below. Without these, a broken PG service mass-skips the PG-backed
+          # suites and the job stays green (the Docker-daemon-down false-green class).
+          SOURCING_REQUIRE_PG_STORE_TESTS: "1"
+          SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS: "1"
+          # Asset-dependency seam (2026-07-24): the real Anthropic asset package is
+          # gitignored personal data that only exists on the developer machine, so
+          # AssetCatalog.discover() would FileNotFoundError on runners. The lane
+          # builds a fully-synthetic package (tests/synthetic_asset_package.py) and
+          # points discover() at it; production resolution order is unchanged when
+          # this env is absent. tests/test_asset_catalog.py guards the seam.
+          SOURCING_ASSET_PACKAGE_ROOT: ${{ runner.temp }}/synthetic_asset_package
         run: |
-          python -m unittest discover -s tests -q
+          # Build the synthetic asset package every lane test resolves via
+          # SOURCING_ASSET_PACKAGE_ROOT (never real candidate data on CI).
+          python -m tests.synthetic_asset_package "$SOURCING_ASSET_PACKAGE_ROOT"
+          # Offline harness gates, first so drift fails fast: docs banners/links/
+          # budgets (harness reorg R5), lane-manifest drift guard, test-provenance
+          # gate, mypy-ratchet comparator, and the 2026-07 incident regressions
+          # that previously ran in no lane (REGRESSION_INDEX routing).
+          python -m pytest -q \
+            tests/test_markdown_status.py \
+            tests/test_docs_routing.py \
+            tests/test_lane_manifest.py \
+            tests/test_provenance.py \
+            tests/test_mypy_ratchet.py \
+            tests/test_artifact_cache.py \
+            tests/test_latest_snapshot_pointer.py \
+            tests/test_live_apify_dataset_salvage.py \
+            tests/test_live_schema_write_fence.py \
+            tests/test_asset_catalog.py \
+            tests/test_strategy_contract_preflight.py \
+            tests/test_pipeline_freeze.py \
+            tests/test_serving_mesh_boundary.py \
+            tests/test_monolith_regrowth.py \
+            tests/test_backfill_shard_query_families_script.py \
+            tests/test_fetch_profile_batch_characterization.py \
+            tests/test_profile_batch_division_contract.py \
+            tests/test_profile_batch_division_model_surface.py \
+            tests/test_profile_batch_division_shadow.py \
+            tests/test_profile_batch_division_wave_identity.py \
+            tests/test_organization_promote_characterization.py \
+            tests/test_organization_promote_contract.py \
+            tests/test_organization_promote_model_surface.py \
+            tests/test_organization_promote_shadow.py \
+            tests/test_pipeline_compensation_contract.py
+          python -m pytest -q \
+            tests/test_api_auth.py \
+            tests/test_api_server_identity.py \
+            tests/test_user_private_reads.py \
+            tests/test_provider_task_specs.py \
+            tests/test_provider_budget_characterization.py \
+            tests/test_pre_agent_contract_review.py \
+            tests/test_operation_runtime.py \
+            tests/test_crm_public_web_runtime_boundary.py \
+            tests/test_legacy_public_web_retirement_audit.py \
+            tests/test_storage_surface_guardrails.py \
+            tests/test_pg_onconflict_guard.py \
+            tests/test_migration_runner.py \
+            tests/test_pg_only_dedup_reads.py \
+            tests/test_d1n_inspect_operation_result_slot_uow.py
+          SOURCING_REQUIRE_PG_DURABLE_RUNTIME_TESTS=1 python -m pytest -q \
+            tests/test_enrichment.py \
+            -k 'isolates_retry_wait or retry_wait_as_isolated_batch'
+          python -m pytest -q \
+            tests/test_dataforseo_client.py \
+            tests/test_search_provider.py \
+            tests/test_public_web_search.py \
+            tests/test_seed_discovery.py \
+            tests/test_exploratory_enrichment.py \
+            -k 'partial_task_errors or dataforseo_provider_submit_batch_retries_only_failed_query_item or dataforseo_provider_submit_batch_fails_closed_without_provider_identity or batch_provider_requires_stable_query_identity_key or provider_chain_rejects_missing_query_identity_before_fallback or dataforseo_provider_fetch_ready_batch_preserves_success_when_one_task_get_fails or batch_queue_submit_failure_is_query_level_not_whole_batch or public_web_batch_query_identity_is_candidate_query_scoped_not_order_scoped or search_seed_worker_key_uses_query_identity_not_order_ordinal or exploration_query_task_key_uses_query_identity_not_order_ordinal or model_native_search_provider_order_fails_closed_without_contract'
+          python -m pytest -q \
+            tests/test_projection_crm_api_contracts.py \
+            -k asset_backfill_http_routes_are_explicit_migration_paths
+          python -m pytest -q \
+            tests/test_scripted_smoke_signoff.py \
+            -k durable_command_owner_contract
+          python -m pytest -q \
+            tests/test_remote_provider_events.py \
+            -k terminal_marker_handoff_is_strand_safe
+
+      - name: mypy ratchet (shrink-only per-file/error-code budgets)
+        run: |
+          python scripts/check_mypy_ratchet.py

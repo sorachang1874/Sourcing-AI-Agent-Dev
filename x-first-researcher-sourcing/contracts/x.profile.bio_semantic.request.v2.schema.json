@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.request.v2.2.schema.json",
+  "title": "X profile Bio semantic review request v2.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "profile_source_mode",
+    "model_execution_mode",
+    "subject",
+    "profile_snapshot",
+    "model_policy",
+    "budgets",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio_semantic.request.v2.2"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^xbsv2r_[0-9a-f]{24}$"
+    },
+    "profile_source_mode": {
+      "const": "offline_fixture"
+    },
+    "model_execution_mode": {
+      "enum": [
+        "offline_fake",
+        "live_canary"
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provisional_person_id",
+        "platform_user_id"
+      ],
+      "properties": {
+        "provisional_person_id": {
+          "type": "string",
+          "pattern": "^pp_x_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "platform_user_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{1,24}$"
+        }
+      }
+    },
+    "profile_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "platform_user_id",
+        "profile_url",
+        "current_handle",
+        "bio_text",
+        "bio_sha256",
+        "observed_at",
+        "content_version"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^xbsv2s_[0-9a-f]{24}$"
+        },
+        "platform_user_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{1,24}$"
+        },
+        "profile_url": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 300,
+          "pattern": "^https://profiles\\.invalid/x/[a-z0-9_]{1,15}$"
+        },
+        "current_handle": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,15}$"
+        },
+        "bio_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "bio_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        },
+        "content_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "model_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model_id",
+        "reasoning_effort",
+        "prompt_version",
+        "prompt_sha256",
+        "output_schema_version",
+        "output_schema_sha256",
+        "professional_experience_proxy_policy_version",
+        "professional_experience_proxy_policy_sha256",
+        "strict_structured_output",
+        "fallback_model"
+      ],
+      "properties": {
+        "provider": {
+          "const": "openai_compatible_responses"
+        },
+        "model_id": {
+          "const": "gpt-5.6-luna"
+        },
+        "reasoning_effort": {
+          "const": "low"
+        },
+        "prompt_version": {
+          "const": "profile-bio-semantic-prompt-v2.2"
+        },
+        "prompt_sha256": {
+          "const": "7504507db5945e08b91848fa1e01ccc7a1d7bd8f48f329e7057ca9b492b9d48f"
+        },
+        "output_schema_version": {
+          "const": "x.profile.bio_semantic.model_output.v2.2"
+        },
+        "output_schema_sha256": {
+          "const": "37436cf27cb9b6dcbc74aeaad8fa915cf9da75d3738d2e78a164a90fec0c28f6"
+        },
+        "professional_experience_proxy_policy_version": {
+          "const": "profile-bio-professional-experience-proxy-policy-v1"
+        },
+        "professional_experience_proxy_policy_sha256": {
+          "const": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
+        },
+        "strict_structured_output": {
+          "const": true
+        },
+        "fallback_model": {
+          "const": null
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_external_calls",
+        "max_proposals",
+        "max_model_output_characters",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_total_tokens",
+        "timeout_ms",
+        "max_validation_depth",
+        "max_validation_nodes",
+        "max_json_string_characters",
+        "max_json_string_bytes",
+        "max_raw_response_canonical_bytes",
+        "max_request_canonical_bytes",
+        "max_reasoning_summary_items",
+        "max_reasoning_summary_characters",
+        "max_reasoning_summary_bytes"
+      ],
+      "properties": {
+        "max_external_calls": {
+          "const": 1
+        },
+        "max_proposals": {
+          "const": 12
+        },
+        "max_model_output_characters": {
+          "const": 12000
+        },
+        "max_input_tokens": {
+          "const": 4000
+        },
+        "max_output_tokens": {
+          "const": 1600
+        },
+        "max_total_tokens": {
+          "const": 5600
+        },
+        "timeout_ms": {
+          "const": 30000
+        },
+        "max_validation_depth": {
+          "const": 64
+        },
+        "max_validation_nodes": {
+          "const": 4096
+        },
+        "max_json_string_characters": {
+          "const": 12000
+        },
+        "max_json_string_bytes": {
+          "const": 48000
+        },
+        "max_raw_response_canonical_bytes": {
+          "const": 262144
+        },
+        "max_request_canonical_bytes": {
+          "const": 65536
+        },
+        "max_reasoning_summary_items": {
+          "const": 4
+        },
+        "max_reasoning_summary_characters": {
+          "const": 2000
+        },
+        "max_reasoning_summary_bytes": {
+          "const": 8000
+        }
+      }
+    },
+    "authority": {
+      "const": {
+        "external_facts_allowed": false,
+        "protected_identity_inference_allowed": false,
+        "discovery_or_ranking_allowed": false,
+        "eligibility_decision_allowed": false,
+        "canonical_employment_allowed": false,
+        "canonical_write_allowed": false,
+        "fallback_allowed": false
+      }
+    }
+  }
+}

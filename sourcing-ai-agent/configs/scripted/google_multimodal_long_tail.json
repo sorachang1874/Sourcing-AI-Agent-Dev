@@ -1,0 +1,70 @@
+{
+  "search": {
+    "default": {
+      "poll_pending_rounds": 3,
+      "pending_message": "Scripted Google search is still waiting for ready/fetch.",
+      "results": [
+        {
+          "title": "Google DeepMind Veo multimodal engineer",
+          "url": "https://www.linkedin.com/in/scripted-veo-lead/",
+          "snippet": "Google DeepMind Veo multimodal pre-train engineer."
+        },
+        {
+          "title": "Nano Banana multimodal researcher at Google",
+          "url": "https://www.linkedin.com/in/scripted-nano-banana/",
+          "snippet": "Nano Banana multimodal generation researcher at Google DeepMind."
+        }
+      ]
+    }
+  },
+  "harvest": {
+    "default": {
+      "execute_pending_rounds": 2,
+      "pending_message": "Scripted Harvest actor is still processing the Google shard.",
+      "errors": [
+        {
+          "phase": "execute",
+          "round": 1,
+          "kind": "retryable",
+          "message": "Scripted Harvest transient timeout; retrying the Google shard."
+        }
+      ],
+      "body": [
+        {
+          "linkedinUrl": "https://www.linkedin.com/in/scripted-veo-lead/",
+          "publicIdentifier": "scripted-veo-lead",
+          "headline": "Multimodal Pre-train Engineer, Veo at Google DeepMind",
+          "currentCompany": "Google",
+          "location": "United States",
+          "item": {
+            "profileUrl": "https://www.linkedin.com/in/scripted-veo-lead/",
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-veo-lead/",
+            "publicIdentifier": "scripted-veo-lead",
+            "fullName": "Scripted Veo",
+            "headline": "Multimodal Pre-train Engineer, Veo at Google DeepMind",
+            "location": "United States",
+            "currentCompany": "Google",
+            "summary": "Works on Veo, multimodal generation, video generation, and pre-train systems."
+          }
+        },
+        {
+          "linkedinUrl": "https://www.linkedin.com/in/scripted-nano-banana/",
+          "publicIdentifier": "scripted-nano-banana",
+          "headline": "Research Scientist, Nano Banana multimodal generation at Google DeepMind",
+          "currentCompany": "Google",
+          "location": "United States",
+          "item": {
+            "profileUrl": "https://www.linkedin.com/in/scripted-nano-banana/",
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-nano-banana/",
+            "publicIdentifier": "scripted-nano-banana",
+            "fullName": "Scripted Banana",
+            "headline": "Research Scientist, Nano Banana multimodal generation at Google DeepMind",
+            "location": "United States",
+            "currentCompany": "Google",
+            "summary": "Works on Nano Banana, multimodal generation, vision-language, and pre-train workflows."
+          }
+        }
+      ]
+    }
+  }
+}

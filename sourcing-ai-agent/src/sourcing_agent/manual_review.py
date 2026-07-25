@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .asset_paths import extract_company_snapshot_ref
 from .domain import Candidate, JobRequest
 from .scoring import ScoredCandidate
 
@@ -105,8 +106,5 @@ def _snapshot_id_from_path(value: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
         return ""
-    parts = [segment for segment in normalized.replace("\\", "/").split("/") if segment]
-    for index, segment in enumerate(parts):
-        if segment == "company_assets" and index + 2 < len(parts):
-            return parts[index + 2]
-    return ""
+    snapshot_ref = extract_company_snapshot_ref(normalized)
+    return str(snapshot_ref[1] if snapshot_ref is not None else "")

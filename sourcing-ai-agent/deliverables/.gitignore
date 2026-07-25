@@ -1,0 +1,2 @@
+# Payloads are people data — manifest is tracked, CSVs are not (operator decision D3).
+*.csv

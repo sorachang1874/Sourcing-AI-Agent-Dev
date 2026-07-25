@@ -1,5 +1,8 @@
 # Lead Discovery Methods
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 ## 1. Publication Lead Public-Web Verification
 
 用途：

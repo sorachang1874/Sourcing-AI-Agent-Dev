@@ -1,5 +1,8 @@
 # Query Guardrails
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档定义产品在“用户意图理解”和“可执行筛选方案”上的边界。
 
 目标不是减少能力，而是明确：

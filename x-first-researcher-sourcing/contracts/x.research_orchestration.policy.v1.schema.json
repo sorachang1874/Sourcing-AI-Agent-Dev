@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.research_orchestration.policy.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_version",
+    "channel_order",
+    "channel_registry",
+    "supported_analysis_modes",
+    "generic_relevance_states",
+    "active_followup_states",
+    "default_precision_states",
+    "quality_metric_ids",
+    "supported_scope_node_kinds",
+    "experience_verification",
+    "portability",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.research_orchestration.policy.v1"},
+    "policy_version": {"const": "research_orchestration_policy.v1"},
+    "channel_order": {
+      "const": ["candidate_authored_surface", "project_direct_credit", "official_source", "conversation_graph"]
+    },
+    "channel_registry": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["channel_id", "default_enabled", "authority", "supported_surfaces"],
+        "properties": {
+          "channel_id": {
+            "enum": ["candidate_authored_surface", "project_direct_credit", "official_source", "conversation_graph"]
+          },
+          "default_enabled": {"type": "boolean"},
+          "authority": {"type": "string", "minLength": 1, "maxLength": 120},
+          "supported_surfaces": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"enum": ["post", "reply", "quote", "thread"]}
+          }
+        }
+      }
+    },
+    "supported_analysis_modes": {"const": ["exploratory", "verification", "hybrid"]},
+    "generic_relevance_states": {
+      "const": ["target_core", "target_adjacent", "ambiguous", "out_of_scope"]
+    },
+    "active_followup_states": {"const": ["target_core", "target_adjacent", "ambiguous"]},
+    "default_precision_states": {"const": ["target_core"]},
+    "quality_metric_ids": {
+      "const": [
+        "candidate_authored_both_surface_coverage_rate",
+        "source_bound_evidence_rate",
+        "target_direction_core_rate",
+        "target_direction_active_rate",
+        "evidence_backed_temporal_state_rate",
+        "target_core_unique_account_yield_per_native_call",
+        "cross_source_handle_resolution_rate"
+      ]
+    },
+    "supported_scope_node_kinds": {
+      "const": [
+        "organization",
+        "model",
+        "product",
+        "application",
+        "research_program",
+        "capability",
+        "industry",
+        "team",
+        "initiative"
+      ]
+    },
+    "experience_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_enabled",
+        "dimension_ids",
+        "explicit_query_trigger_required",
+        "base_population_rewrite_allowed",
+        "identity_inference_allowed"
+      ],
+      "properties": {
+        "default_enabled": {"const": false},
+        "dimension_ids": {"const": ["china_asia_professional_educational_experience"]},
+        "explicit_query_trigger_required": {"const": true},
+        "base_population_rewrite_allowed": {"const": false},
+        "identity_inference_allowed": {"const": false}
+      }
+    },
+    "portability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted_seed_source_kinds",
+        "runtime_import_allowed",
+        "canonical_person_write_allowed",
+        "x_account_is_canonical_person",
+        "cross_source_link_is_reversible_proposal"
+      ],
+      "properties": {
+        "accepted_seed_source_kinds": {
+          "const": ["x_account", "linkedin_profile", "professional_profile", "name_only"]
+        },
+        "runtime_import_allowed": {"const": false},
+        "canonical_person_write_allowed": {"const": false},
+        "x_account_is_canonical_person": {"const": false},
+        "cross_source_link_is_reversible_proposal": {"const": true}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_calls_allowed",
+        "product_writes_allowed",
+        "business_candidate_cap",
+        "technical_ceilings_are_business_caps"
+      ],
+      "properties": {
+        "provider_calls_allowed": {"const": false},
+        "product_writes_allowed": {"const": false},
+        "business_candidate_cap": {"type": "null"},
+        "technical_ceilings_are_business_caps": {"const": false}
+      }
+    }
+  }
+}

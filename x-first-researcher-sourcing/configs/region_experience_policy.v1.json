@@ -1,0 +1,239 @@
+{
+  "actor_subject_relations": [
+    "same_external_account",
+    "verified_professional_record",
+    "unrelated_or_unknown"
+  ],
+  "allowed_official_hosts": [
+    "openai.com",
+    "anthropic.com",
+    "deepmind.google",
+    "x.ai",
+    "ai.meta.com",
+    "thinkingmachines.ai"
+  ],
+  "evidence_lifecycle": {
+    "adjudication_statuses": [
+      "pending",
+      "adjudicated"
+    ],
+    "eligibility_statuses": [
+      "unresolved",
+      "eligible",
+      "rejected"
+    ],
+    "extraction_statuses": [
+      "extracted"
+    ],
+    "proposal_statuses": [
+      "proposed"
+    ]
+  },
+  "experience_kinds": [
+    "based_in",
+    "lived_in",
+    "worked_in",
+    "studied_in",
+    "researched_in"
+  ],
+  "forbidden_input_fields": [
+    "ancestry",
+    "bilingual",
+    "citizenship",
+    "community",
+    "country_of_origin",
+    "current_handle",
+    "display_name",
+    "ethnicity",
+    "gender",
+    "handle",
+    "language",
+    "languages",
+    "name",
+    "nationality",
+    "race",
+    "religion",
+    "social_graph",
+    "social_graph_position"
+  ],
+  "labels": [
+    {
+      "label": "ASIA_EXPERIENCE",
+      "location_codes": [
+        "asia_unspecified",
+        "mainland_china",
+        "hong_kong",
+        "macau",
+        "taiwan",
+        "singapore",
+        "japan",
+        "south_korea",
+        "india"
+      ]
+    },
+    {
+      "label": "GREATER_CHINA_EXPERIENCE",
+      "location_codes": [
+        "mainland_china",
+        "hong_kong",
+        "macau",
+        "taiwan"
+      ]
+    },
+    {
+      "label": "MAINLAND_CHINA_EXPERIENCE",
+      "location_codes": [
+        "mainland_china"
+      ]
+    }
+  ],
+  "locations": [
+    {
+      "aliases": [
+        "Asia",
+        "亚洲",
+        "亞洲"
+      ],
+      "location_code": "asia_unspecified"
+    },
+    {
+      "aliases": [
+        "Mainland China",
+        "China Mainland",
+        "中国大陆",
+        "中國大陸",
+        "Beijing",
+        "Beijing, Mainland China",
+        "北京",
+        "Shanghai",
+        "Shanghai, Mainland China",
+        "上海",
+        "Shenzhen",
+        "Shenzhen, Mainland China",
+        "深圳",
+        "Guangzhou",
+        "Guangzhou, Mainland China",
+        "广州",
+        "廣州",
+        "Hangzhou",
+        "Hangzhou, Mainland China",
+        "杭州",
+        "Nanjing",
+        "Nanjing, Mainland China",
+        "南京",
+        "Wuhan",
+        "Wuhan, Mainland China",
+        "武汉",
+        "武漢",
+        "Chengdu",
+        "Chengdu, Mainland China",
+        "成都"
+      ],
+      "location_code": "mainland_china"
+    },
+    {
+      "aliases": [
+        "Hong Kong",
+        "Hong Kong SAR",
+        "香港",
+        "香港特别行政区",
+        "香港特別行政區"
+      ],
+      "location_code": "hong_kong"
+    },
+    {
+      "aliases": [
+        "Macau",
+        "Macao",
+        "Macau SAR",
+        "Macao SAR",
+        "澳门",
+        "澳門",
+        "澳门特别行政区",
+        "澳門特別行政區"
+      ],
+      "location_code": "macau"
+    },
+    {
+      "aliases": [
+        "Taiwan",
+        "Taipei",
+        "Taipei, Taiwan",
+        "台湾",
+        "臺灣",
+        "台北",
+        "臺北"
+      ],
+      "location_code": "taiwan"
+    },
+    {
+      "aliases": [
+        "Singapore",
+        "新加坡"
+      ],
+      "location_code": "singapore"
+    },
+    {
+      "aliases": [
+        "Japan",
+        "Tokyo",
+        "Tokyo, Japan",
+        "日本",
+        "东京",
+        "東京"
+      ],
+      "location_code": "japan"
+    },
+    {
+      "aliases": [
+        "South Korea",
+        "Seoul",
+        "Seoul, South Korea",
+        "韩国",
+        "韓國",
+        "首尔",
+        "首爾",
+        "대한민국",
+        "서울"
+      ],
+      "location_code": "south_korea"
+    },
+    {
+      "aliases": [
+        "India",
+        "Bengaluru",
+        "Bengaluru, India",
+        "Bangalore",
+        "Bangalore, India",
+        "印度",
+        "班加罗尔",
+        "班加羅爾"
+      ],
+      "location_code": "india"
+    }
+  ],
+  "policy_version": "x-region-experience-public-professional-v1",
+  "publisher_actors": [
+    "subject_self",
+    "verified_organization",
+    "third_party"
+  ],
+  "publisher_binding_statuses": [
+    "self_account_match",
+    "verified_organization_binding",
+    "unverified"
+  ],
+  "schema_version": "x.region_experience.policy.v1",
+  "source_mediums": [
+    "profile_bio",
+    "employment_record",
+    "education_record",
+    "research_record",
+    "post"
+  ],
+  "statement_scopes": [
+    "subject_explicit_experience",
+    "location_topic_only",
+    "third_party_mention"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.live_canary.deletion_journal.v2.schema.json",
+  "title": "Luna semantic live-canary crash-recovery deletion journal v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_origin",
+    "run_id",
+    "bundle_digest_sha256",
+    "result_sha256",
+    "approval_receipt_sha256",
+    "execution_receipt_sha256",
+    "artifact_inventory",
+    "delete_after",
+    "deletion_started_at",
+    "deletion_completed_at",
+    "deletion_method",
+    "state"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.profile.bio_semantic.live_canary.deletion_journal.v2"},
+    "execution_origin": {"enum": ["production_http", "offline_fixture"]},
+    "run_id": {"type": "string"},
+    "bundle_digest_sha256": {"$ref": "#/$defs/sha256"},
+    "result_sha256": {"$ref": "#/$defs/sha256"},
+    "approval_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "execution_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "artifact_inventory": {
+      "enum": [
+        ["approval-receipt.json", "catalog-receipt.json", "execution-receipt.json", "request.json", "result.json"],
+        ["approval-receipt.json", "catalog-receipt.json", "execution-receipt.json", "request.json", "result.json", "semantic-review.json"],
+        ["approval-receipt.json", "catalog-receipt.json", "execution-receipt.json", "raw-response.json", "request.json", "result.json", "semantic-review.json"]
+      ]
+    },
+    "delete_after": {"$ref": "#/$defs/timestamp"},
+    "deletion_started_at": {"$ref": "#/$defs/timestamp"},
+    "deletion_completed_at": {"const": null},
+    "deletion_method": {"const": "atomic_owner_directory_rename_then_remove"},
+    "state": {"const": "deletion_started"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "execution_origin": {"const": "production_http"},
+        "run_id": {"pattern": "^luna_canary_v2_run_[0-9a-f]{32}$"}
+      }
+    },
+    {
+      "properties": {
+        "execution_origin": {"const": "offline_fixture"},
+        "run_id": {"pattern": "^luna_canary_v2_fixture_run_[0-9a-f]{32}$"}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^(?=[0-9a-f]{64}$)(?=.*[1-9a-f])[0-9a-f]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  }
+}

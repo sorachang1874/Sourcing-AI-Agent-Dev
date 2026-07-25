@@ -1,0 +1,1169 @@
+{
+  "schema_version": 1,
+  "description": "Machine-checkable coverage contract for service-grade scripted/browser workflow incidents. Tags marked required_now must be covered by local *smoke_matrix.json cases. Tags marked required_before_ecs_sync are known historical incident shapes that must be promoted before syncing this upgrade track to ECS.",
+  "coverage_tags": [
+    {
+      "tag": "openai_reasoning_reuse_snapshot_only",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Full-local reuse should not schedule provider work or show active LinkedIn Stage 1 progress."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_active_stage1_for_full_local_reuse",
+        "require_no_serving_publication_gap"
+      ],
+      "required_positive_expectations": [
+        "max_progress_payload_bytes",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "full_local_reuse_progress_payload_budget",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Meta Agent full-reuse progress once ballooned to multi-MB payloads and rendered an empty execution timeline."
+      ],
+      "required_true_expectations": [
+        "require_no_progress_contract_violation",
+        "require_no_active_stage1_for_full_local_reuse"
+      ],
+      "required_positive_expectations": [
+        "max_progress_payload_bytes"
+      ]
+    },
+    {
+      "tag": "full_local_reuse_no_stage1_timeline",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "A reuse-only job must not display stale source-snapshot acquisition counters such as new current/former candidates."
+      ],
+      "required_true_expectations": [
+        "require_no_progress_contract_violation",
+        "require_no_active_stage1_for_full_local_reuse"
+      ],
+      "required_positive_expectations": [
+        "max_job_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "openai_agent_scoped_delta_profile_tail",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "OpenAI Agent scoped delta exposed baseline+delta streaming, long profile tails, post-terminal recovery, and provider-slot utilization risks."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_layering_visible_after_results_within_slo",
+        "require_no_placeholder_to_final_board_jump",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_post_profile_url_terminal_state_leak_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_remote_actor_slot_occupancy_ratio",
+        "min_materialize_completed_count",
+        "min_board_visible_patch_consumable_card_count",
+        "min_board_visible_consumable_card_progression_count",
+        "max_job_to_stage_1_preview_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_final_results_to_layering_visible_ms",
+        "max_job_to_board_visible_partial_ms",
+        "max_stage_1_preview_to_final_results_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "openai_chatgpt_baseline_delta_repoint",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "OpenAI ChatGPT live smoke exposed result-view repoint, repeated materialization/reconcile churn, and baseline+delta board sync risks."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_repeated_materialize_signature_count",
+        "max_same_worker_reconcile_repeat_count",
+        "max_post_profile_url_terminal_state_leak_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_remote_actor_slot_occupancy_ratio",
+        "min_materialize_completed_count",
+        "min_profile_batch_envelope_count",
+        "max_job_to_stage_1_preview_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms",
+        "max_global_next_worker_start_gap_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "baseline_delta_board_streaming",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Baseline+delta jobs must keep the candidate board coherent while delta profile/materialization work is still in flight."
+      ],
+      "required_true_expectations": [
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_placeholder_to_final_board_jump",
+        "require_no_serving_publication_gap"
+      ],
+      "required_positive_expectations": [
+        "min_board_visible_patch_consumable_card_count",
+        "min_board_visible_consumable_card_progression_count",
+        "max_job_to_board_visible_partial_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "lovable_small_company_full_roster",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Lovable full-roster runs exposed 100+ roster streaming, profile tail, canonicalization, and board visibility risks."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_layering_visible_after_results_within_slo",
+        "require_no_placeholder_to_final_board_jump",
+        "require_partial_board_visible_before_final_results",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_post_profile_url_terminal_state_leak_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_board_total_candidates",
+        "min_materialize_completed_count",
+        "min_profile_batch_envelope_count",
+        "max_job_to_stage_1_preview_ms",
+        "min_board_visible_patch_consumable_card_count",
+        "min_board_visible_consumable_card_progression_count",
+        "max_job_to_board_visible_partial_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_final_results_to_layering_visible_ms",
+        "max_global_next_worker_start_gap_ms",
+        "max_remote_provider_event_lag_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "live_roster_profile_tail",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Full-roster profile hydration must not finish terminal status while profile detail and board materialization remain unowned."
+      ],
+      "required_true_expectations": [
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_no_placeholder_to_final_board_jump",
+        "require_partial_board_visible_before_final_results"
+      ],
+      "required_positive_expectations": [
+        "min_board_total_candidates",
+        "min_materialize_completed_count",
+        "min_profile_batch_envelope_count",
+        "min_board_visible_patch_consumable_card_count",
+        "min_board_visible_consumable_card_progression_count",
+        "max_job_to_board_visible_partial_ms",
+        "max_global_next_worker_start_gap_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "provider_handoff_slo",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Provider batches carry fixed webhook/watcher/recovery overhead, so handoff gaps must be bounded instead of inferred from final completion."
+      ],
+      "required_positive_expectations": [
+        "min_profile_batch_envelope_count",
+        "max_global_next_worker_start_gap_ms",
+        "max_remote_provider_event_lag_ms",
+        "max_provider_slot_to_remote_wait_started_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "no_baseline_scoped_search",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Scoped-search without a baseline must exercise the same scheduler, post-profile, and board-runtime contracts as baseline+delta jobs while proving no baseline rows are being served."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "expect_explain_effective_acquisition_mode",
+        "expect_explain_requires_delta_acquisition",
+        "expect_latest_lifecycle_baseline_candidate_count",
+        "min_provider_invocations_by_logical_name"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_materialize_completed_count",
+        "max_job_to_stage_1_preview_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms"
+      ]
+    },
+    {
+      "tag": "scoped_live_search_without_baseline",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "A fresh scoped-live search must not silently fall back to baseline+delta semantics or reuse-only paths when the runtime has no matching baseline."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_unexpected_public_web_stage",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation"
+      ],
+      "required_present_expectations": [
+        "expect_explain_dispatch_strategy",
+        "expect_explain_effective_acquisition_mode",
+        "expect_explain_keywords_include",
+        "expect_latest_lifecycle_baseline_candidate_count",
+        "expect_latest_stage1_deduped_candidate_count",
+        "expect_latest_stage1_profile_fetch_required_count",
+        "expect_latest_stage1_profile_fetched_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count"
+      ]
+    },
+    {
+      "tag": "profile_scheduler_contract",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Profile URL scheduling must prove batch shape, retry isolation, terminal-state cleanup, and actor-slot utilization instead of relying on final board correctness."
+      ],
+      "required_true_expectations": [
+        "require_no_profile_scheduler_contract_violation",
+        "require_no_event_level_efficiency_violation",
+        "require_no_duplicate_provider_dispatch"
+      ],
+      "required_present_expectations": [
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_post_profile_url_terminal_state_leak_count"
+      ],
+      "required_positive_expectations": [
+        "min_profile_batch_envelope_count",
+        "min_remote_actor_slot_occupancy_ratio",
+        "max_local_to_next_submit_start_ms",
+        "max_next_submit_attempt_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "large_late_shard_profile_scheduler",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "A large shard that arrives after an earlier small shard must be replanned as its own ready set, not constrained by historical envelope budget and not cut into 50-url fallback batches."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_profile_scheduler_contract_violation",
+        "require_no_event_level_efficiency_violation",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_service_recovery_violation",
+        "require_no_progress_contract_violation"
+      ],
+      "required_present_expectations": [
+        "expect_latest_stage1_current_search_returned_count",
+        "expect_latest_stage1_former_search_returned_count",
+        "expect_latest_stage1_deduped_profile_url_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_profile_prefetch_underfilled_with_deferred_count",
+        "max_profile_batch_size_max"
+      ],
+      "required_positive_expectations": [
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_profile_batch_envelope_count",
+        "min_profile_prefetch_batch_plan_count",
+        "min_profile_batch_size_max",
+        "min_remote_actor_worker_count",
+        "max_local_to_next_submit_start_ms",
+        "max_next_submit_attempt_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "post_profile_visibility_slo",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Fetched profiles must become board-visible through the event-time post-profile queues within explicit SLOs, without relying on final full materialization as a compensating path."
+      ],
+      "required_true_expectations": [
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap",
+        "require_board_runtime_state_cross_endpoint_parity"
+      ],
+      "required_positive_expectations": [
+        "min_board_visible_patch_count",
+        "min_board_visible_patch_display_ready_count",
+        "min_board_visible_patch_consumable_card_count",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "out_of_order_profile_completion",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Out-of-order profile completion must be part of primary smoke coverage so callback-order tests cannot falsely represent service behavior."
+      ],
+      "required_positive_expectations": [
+        "min_out_of_order_profile_completion_count"
+      ]
+    },
+    {
+      "tag": "retryable_profile_batch_primary_path",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Retryable profile-batch delays should be covered in the primary scoped-delta path, not only dormant provider adapter fixtures."
+      ],
+      "required_true_expectations": [
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_service_recovery_violation"
+      ],
+      "required_present_expectations": [
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_batch_envelope_count",
+        "min_remote_actor_slot_occupancy_ratio",
+        "max_global_next_worker_start_gap_ms"
+      ]
+    },
+    {
+      "tag": "openai_infra_stage1_lane_skew_zero_current_former_delta",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "OpenAI Infra showed current/former lane counters and profile-fetch denominators coming from mixed sources; a true zero current lane is valid, but worker URL queue size must not pollute public Stage 1 counters."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "expect_latest_stage1_current_search_returned_count",
+        "expect_latest_stage1_former_search_returned_count",
+        "expect_latest_stage1_all_search_returned_count",
+        "expect_latest_stage1_deduped_candidate_count",
+        "expect_latest_stage1_deduped_profile_url_count",
+        "expect_latest_stage1_profile_fetch_required_count",
+        "expect_latest_stage1_profile_fetched_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_post_profile_url_terminal_state_leak_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_materialize_completed_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "openai_infra_provider_quality_scoped_live",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Provider-quality SLO coverage must work in an empty local runtime where planner correctly chooses scoped live acquisition instead of baseline+delta reuse; this separates provider I/O/anomaly observability from seeded-asset reuse expectations."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "expect_explain_dispatch_strategy",
+        "expect_explain_effective_acquisition_mode",
+        "max_provider_io_actor_run_duration_ms",
+        "max_provider_io_dataset_download_duration_ms",
+        "max_provider_anomaly_count",
+        "max_provider_zero_result_retry_count",
+        "max_provider_zero_result_retry_exhausted_count",
+        "max_provider_zero_result_accepted_count",
+        "max_provider_empty_scale_count",
+        "max_provider_probe_total_drift_count",
+        "max_provider_empty_page_range_count",
+        "max_provider_single_page_retry_count",
+        "expect_latest_stage1_current_search_returned_count",
+        "expect_latest_stage1_former_search_returned_count",
+        "expect_latest_stage1_deduped_candidate_count",
+        "expect_latest_stage1_profile_fetch_required_count",
+        "expect_latest_stage1_profile_fetched_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count",
+        "max_post_profile_url_terminal_state_leak_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_materialize_completed_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms",
+        "max_profile_file_visible_to_board_patch_visible_ms",
+        "max_all_profiles_fetched_to_all_cards_visible_ms",
+        "max_event_level_materialization_callback_elapsed_ms"
+      ]
+    },
+    {
+      "tag": "openai_health_whisper_zero_current_overlay",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "OpenAI Health/Whisper zero-current runs may legitimately return no current-lane rows while former-lane delta rows exist; terminal public APIs must serve baseline+delta rather than a raw delta-only result view."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_serving_publication_gap",
+        "require_latest_lifecycle_served_snapshot_not_baseline"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "expect_latest_stage1_current_search_returned_count",
+        "expect_latest_stage1_former_search_returned_count",
+        "expect_latest_stage1_all_search_returned_count",
+        "expect_latest_stage1_deduped_candidate_count",
+        "expect_latest_stage1_deduped_profile_url_count",
+        "expect_latest_stage1_profile_fetch_required_count",
+        "expect_latest_stage1_profile_fetched_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count"
+      ],
+      "required_positive_expectations": [
+        "min_latest_lifecycle_baseline_candidate_count",
+        "min_latest_lifecycle_served_candidate_count",
+        "min_latest_lifecycle_delta_profile_materialized_count",
+        "min_latest_lifecycle_delta_profile_board_visible_count",
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_materialize_completed_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms"
+      ]
+    },
+    {
+      "tag": "meta_agent_full_reuse_execution_timeline_browser",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Meta Agent full-reuse once exposed a large reuse-only payload, stale Stage 1 execution wording, and slow board hydration despite no provider work being required."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_active_stage1_for_full_local_reuse",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "max_provider_invocation_count",
+        "expect_explain_dispatch_strategy",
+        "expect_explain_planner_mode",
+        "expect_explain_requires_delta_acquisition",
+        "expect_explain_effective_acquisition_mode",
+        "expect_explain_keywords_include"
+      ],
+      "required_positive_expectations": [
+        "max_progress_payload_bytes",
+        "min_board_total_candidates",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "google_gemini_incomplete_shard_no_full_reuse",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Google Gemini authoritative baseline can be selected as a baseline, but incomplete or missing exact Gemini shard proof must not be widened into full local reuse."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "expect_latest_stage1_current_search_returned_count",
+        "expect_latest_stage1_former_search_returned_count",
+        "expect_latest_stage1_all_search_returned_count",
+        "expect_latest_stage1_deduped_candidate_count",
+        "expect_latest_stage1_deduped_profile_url_count",
+        "expect_latest_stage1_profile_fetch_required_count",
+        "expect_latest_stage1_profile_fetched_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_materialize_completed_count",
+        "min_profile_batch_envelope_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms"
+      ]
+    },
+    {
+      "tag": "google_gemini_provider_quality_scoped_live",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Google Gemini provider-quality fixture must exercise page-coverage anomalies that OpenAI Infra does not cover: empty scaled response, chunked fallback, empty page ranges, single-page retry, and probe total drift."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_remote_provider_event_driver_failure"
+      ],
+      "required_present_expectations": [
+        "min_provider_invocations_by_logical_name",
+        "expect_explain_dispatch_strategy",
+        "expect_explain_effective_acquisition_mode",
+        "max_remote_provider_event_lag_ms",
+        "max_provider_io_actor_run_duration_ms",
+        "max_provider_io_dataset_download_duration_ms",
+        "max_provider_anomaly_count",
+        "max_provider_empty_scale_count",
+        "max_provider_probe_total_drift_count",
+        "max_provider_empty_page_range_count",
+        "max_provider_single_page_retry_count",
+        "min_provider_anomaly_count",
+        "min_provider_zero_result_retry_count",
+        "min_provider_zero_result_retry_exhausted_count",
+        "min_provider_empty_scale_count",
+        "min_provider_probe_total_drift_count",
+        "min_provider_empty_page_range_count",
+        "min_provider_single_page_retry_count",
+        "expect_latest_stage1_current_search_returned_count",
+        "expect_latest_stage1_former_search_returned_count",
+        "expect_latest_stage1_deduped_candidate_count",
+        "expect_latest_stage1_profile_fetch_required_count",
+        "expect_latest_stage1_profile_fetched_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count"
+      ],
+      "required_positive_expectations": [
+        "min_provider_invocation_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates",
+        "min_agent_worker_count",
+        "min_remote_provider_event_count",
+        "min_remote_provider_event_received_count",
+        "min_materialize_completed_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms",
+        "max_stage_1_preview_to_final_results_ms"
+      ]
+    },
+    {
+      "tag": "google_veo_nano_authoritative_shard_reuse_browser",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Google Veo/Nano Banana exact scoped shard proof should allow reuse_snapshot_only without provider dispatch, while incomplete Gemini coverage must still use delta acquisition."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_active_stage1_for_full_local_reuse",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "max_provider_invocation_count",
+        "expect_explain_dispatch_strategy",
+        "expect_explain_planner_mode",
+        "expect_explain_requires_delta_acquisition",
+        "expect_explain_effective_acquisition_mode",
+        "expect_explain_keywords_include"
+      ],
+      "required_positive_expectations": [
+        "max_progress_payload_bytes",
+        "min_board_total_candidates",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "late_webhook_watcher_duplicate_idempotency_browser",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Unit tests covered late webhook/watcher duplicate idempotency, but the service gate must also force watcher-first recovery followed by provider-webhook-late duplicate delivery while a board is visible."
+      ],
+      "required_true_expectations": [
+        "drive_remote_provider_watcher_first_events",
+        "require_terminal_job",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_service_recovery_violation",
+        "require_no_progress_contract_violation",
+        "require_no_board_visible_projection_violation"
+      ],
+      "required_positive_expectations": [
+        "min_remote_provider_event_count",
+        "min_remote_provider_event_received_count",
+        "min_remote_provider_event_late_duplicate_count",
+        "min_remote_provider_event_source_counts",
+        "min_remote_provider_event_status_counts",
+        "max_remote_provider_event_in_flight_duplicate_count",
+        "max_remote_provider_event_lag_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "writer_contention_completed_reconcile",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Completed reconcile contention previously skipped local post-processing behind completed_workflow_reconcile_inflight, leaving public progress/result views divergent."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "max_repeated_materialize_signature_count",
+        "max_same_worker_reconcile_repeat_count",
+        "min_completed_reconcile_lease_skipped_count"
+      ],
+      "required_positive_expectations": [
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "tiny_tail_coalescing_slot_utilization",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Profile scheduler must not spend provider actors on unexplained tiny batches or leave actor slots idle while normal backlog remains. Tiny coalescing is acceptable evidence, but the canonical workflow gate is now scheduler-contract cleanliness plus handoff/slot-utilization SLOs."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_event_level_efficiency_violation",
+        "require_no_profile_scheduler_contract_violation",
+        "require_no_service_recovery_violation"
+      ],
+      "required_present_expectations": [
+        "min_profile_prefetch_batch_plan_count",
+        "max_profile_unexplained_tiny_batch_count",
+        "max_provider_slot_underuse_with_backlog_count"
+      ],
+      "required_positive_expectations": [
+        "min_profile_batch_envelope_count",
+        "min_remote_actor_slot_occupancy_ratio",
+        "max_global_next_worker_start_gap_ms"
+      ]
+    },
+    {
+      "tag": "partial_delta_board_row_streaming",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Baseline+delta jobs must expose new delta rows incrementally before final current-snapshot compaction; final-only board hydration hides provider/materialization progress from the user."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_board_visible_projection_violation",
+        "require_board_visible_projection_report",
+        "require_partial_board_visible_before_final_results",
+        "require_no_placeholder_to_final_board_jump",
+        "require_no_serving_publication_gap"
+      ],
+      "required_positive_expectations": [
+        "max_job_to_board_visible_partial_ms",
+        "min_board_visible_patch_count",
+        "min_board_visible_patch_consumable_card_count",
+        "min_board_visible_consumable_card_progression_count",
+        "min_delta_profile_board_visible_count",
+        "max_fetched_to_board_visible_lag_count",
+        "max_materialized_to_board_visible_lag_count",
+        "max_board_visible_patch_lag_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "nightly_long_latency",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Nightly provider-latency simulations must prove callback/recovery/daemon contracts hold when remote provider actors take minutes instead of seconds."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_projection_cutover_report",
+        "require_legacy_artifact_coherence_report",
+        "require_board_visible_projection_report",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_event_level_efficiency_violation",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_profile_scheduler_contract_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_present_expectations": [
+        "max_provider_io_actor_run_duration_ms",
+        "max_provider_io_dataset_download_duration_ms",
+        "max_recovery_phase_elapsed_ms",
+        "max_recovery_total_elapsed_ms",
+        "max_recovery_tick_budget_exhausted_count"
+      ],
+      "required_positive_expectations": [
+        "max_job_to_stage_1_preview_ms",
+        "max_stage_1_preview_to_final_results_ms",
+        "max_global_next_worker_start_gap_ms"
+      ]
+    },
+    {
+      "tag": "canonical_public_reader_source_contract",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Public reader/projection regressions repeatedly came from legacy overlay, result_view summary, asset artifacts, board patches, lifecycle rows, and canonical projections all being treated as serviceable sources. Nightly must prove canonical projection ownership before pressure timing is interpreted."
+      ],
+      "required_true_expectations": [
+        "require_projection_cutover_report",
+        "require_legacy_artifact_coherence_report",
+        "require_board_visible_projection_report",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_progress_contract_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_positive_expectations": [
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "durable_runtime_legacy_write_cutover",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Durable runtime migration must not leave job_materialization_items as a second normal execution path after command-owner cutover. Legacy rows may remain only as explicit migration adapter/backfill evidence."
+      ],
+      "required_true_expectations": [
+        "require_no_legacy_materialization_normal_writes",
+        "require_legacy_materialization_write_contract_report",
+        "require_no_legacy_materialization_recovery_bridge",
+        "require_workflow_causality_contract",
+        "require_no_post_profile_heuristic_slo_pairing"
+      ]
+    },
+    {
+      "tag": "bounded_recovery_tick",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Recovery ticks must expose total/phase budget gates so a long local apply, board-visible apply, or recovery aggregate cannot be hidden inside a successful final result."
+      ],
+      "required_true_expectations": [
+        "require_no_service_recovery_violation"
+      ],
+      "required_present_expectations": [
+        "max_recovery_phase_elapsed_ms",
+        "max_recovery_total_elapsed_ms",
+        "max_recovery_tick_budget_exhausted_count"
+      ]
+    },
+    {
+      "tag": "openai_agent_scoped_delta",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "OpenAI Agent baseline+delta remains the canonical high-signal profile scheduler and board-streaming workflow."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_preview_finalization_observed",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_service_recovery_violation",
+        "require_no_profile_scheduler_contract_violation"
+      ],
+      "required_present_expectations": [
+        "expect_explain_effective_acquisition_mode",
+        "min_provider_invocations_by_logical_name"
+      ],
+      "required_positive_expectations": [
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates"
+      ]
+    },
+    {
+      "tag": "openai_no_baseline_scoped_search",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "OpenAI no-baseline scoped search is the explicit fresh-run counterpart to baseline+delta and must not rely on seeded baseline assumptions."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_service_recovery_violation",
+        "require_no_profile_scheduler_contract_violation"
+      ],
+      "required_present_expectations": [
+        "expect_explain_effective_acquisition_mode",
+        "expect_latest_lifecycle_baseline_candidate_count"
+      ],
+      "required_positive_expectations": [
+        "min_profile_url_total_count",
+        "min_fetched_profile_count",
+        "min_board_total_candidates"
+      ]
+    },
+    {
+      "tag": "lovable_live_roster",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Lovable live roster is the canonical no-baseline roster path and must share the same profile scheduler, post-profile, and board-visible contracts."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_service_recovery_violation",
+        "require_no_profile_scheduler_contract_violation"
+      ],
+      "required_positive_expectations": [
+        "min_board_total_candidates",
+        "min_profile_batch_envelope_count"
+      ]
+    },
+    {
+      "tag": "live_roster_without_baseline",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Roster workflows without baselines must stream shell/profile/card state through the shared event-time contract instead of a separate live-roster-only fallback."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_progress_contract_violation",
+        "require_board_runtime_state_cross_endpoint_parity",
+        "require_no_service_recovery_violation"
+      ],
+      "required_positive_expectations": [
+        "min_board_total_candidates",
+        "max_job_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "google_large_baseline_real_asset",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Google pressure coverage must seed and reuse a real large baseline asset instead of generated placeholder profiles."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_duplicate_provider_dispatch",
+        "require_no_service_recovery_violation",
+        "require_no_profile_scheduler_contract_violation"
+      ],
+      "required_present_expectations": [
+        "expect_explain_baseline_snapshot_id"
+      ],
+      "required_positive_expectations": [
+        "min_latest_lifecycle_baseline_candidate_count",
+        "min_latest_lifecycle_served_candidate_count",
+        "min_board_total_candidates"
+      ]
+    },
+    {
+      "tag": "large_baseline_large_shard",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Large baseline plus large shard pressure must prove result finalization and board-visible counters scale without relying on full compaction before user-visible readiness."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_terminal_board_runtime_complete",
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap"
+      ],
+      "required_positive_expectations": [
+        "min_latest_lifecycle_delta_profile_materialized_count",
+        "min_latest_lifecycle_delta_profile_board_visible_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count"
+      ]
+    },
+    {
+      "tag": "large_baseline_small_former_shard",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Large baseline plus a small provider-unstable shard must prove zero-current plus small-former deltas can publish Stage 1 preview and board-visible cards without scanning or rebuilding the full board as the primary path."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_terminal_board_runtime_complete",
+        "require_no_board_visible_projection_violation",
+        "require_no_serving_publication_gap",
+        "require_no_profile_scheduler_contract_violation"
+      ],
+      "required_positive_expectations": [
+        "min_latest_lifecycle_baseline_candidate_count",
+        "min_latest_lifecycle_delta_profile_materialized_count",
+        "min_latest_lifecycle_delta_profile_board_visible_count",
+        "min_profile_url_total_count",
+        "min_fetched_profile_count"
+      ]
+    },
+    {
+      "tag": "pre_manual_pressure_scenario",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Pressure cases may use wider case-level SLOs, but they must still produce complete signoff evidence and expose optimization warnings instead of hiding them."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_post_terminal_recovery_settled",
+        "require_post_preview_finalization_observed",
+        "require_no_service_recovery_violation"
+      ],
+      "required_positive_expectations": [
+        "max_job_to_stage_1_preview_ms",
+        "max_stage_1_preview_to_final_results_ms",
+        "max_job_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "target_candidate_public_web_service_slo",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Target-candidate Public Web Search must be exercised as a real post-workflow action, not only as standalone unit metrics or stale manual batches."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_target_public_web_guardrail_violation",
+        "require_crm_public_web_storage_owner",
+        "require_crm_public_web_queue_batch_command",
+        "require_public_web_execution_backend_report"
+      ],
+      "required_present_expectations": [
+        "max_target_public_web_legacy_storage_owner_batch_count",
+        "max_target_public_web_queue_batch_command_pending_count",
+        "max_target_public_web_queue_batch_command_failed_count",
+        "max_target_public_web_queue_batch_command_invalid_owner_count",
+        "max_target_public_web_queue_batch_command_incomplete_causality_count",
+        "max_target_public_web_remote_pending_run_count",
+        "max_target_public_web_partial_failure_count",
+        "max_target_public_web_completed_without_materialized_signals_count",
+        "max_target_public_web_missing_phase_metric_count",
+        "max_target_public_web_provider_or_fetch_failure_count",
+        "max_target_public_web_local_processing_error_count"
+      ],
+      "required_positive_expectations": [
+        "max_target_public_web_duration_by_phase_ms",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    },
+    {
+      "tag": "company_public_web_collector_bundle_service_slo",
+      "status": "required_now",
+      "validation_level": "local_smoke_matrix",
+      "incident_references": [
+        "Company-level Public Web RSS/arXiv/OpenReview/crawl collectors must enter the canonical company asset run/assets contract and stay model-safe."
+      ],
+      "required_true_expectations": [
+        "require_terminal_job",
+        "require_no_progress_contract_violation",
+        "require_no_service_recovery_violation",
+        "require_no_board_visible_projection_violation",
+        "require_no_company_public_web_guardrail_violation"
+      ],
+      "required_present_expectations": [
+        "max_company_public_web_failed_run_count",
+        "max_company_public_web_raw_assets_included_count",
+        "max_company_public_web_collector_manifest_missing_count"
+      ],
+      "required_positive_expectations": [
+        "min_company_public_web_asset_count",
+        "min_company_public_web_collector_record_count",
+        "max_job_to_board_nonempty_ms",
+        "max_final_results_to_board_nonempty_ms"
+      ]
+    }
+  ]
+}

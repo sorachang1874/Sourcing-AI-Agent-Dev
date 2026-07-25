@@ -11,6 +11,7 @@
 **/api_accounts.json
 .codex
 .codex/
+.cache/
 TemporaryData/
 example_excel_data/
 sourcing-ai-agent/.vendor/
@@ -22,3 +23,10 @@ sourcing-ai-agent/configs/plan_review_tml_full_roster_approve_20260407.json
 
 # Keep the project-level example config, but never commit real provider secrets.
 !sourcing-ai-agent/configs/providers.local.example.json
+
+# Nested worktrees and the sibling playbook repo are their own git contexts.
+.worktrees/
+ai-assisted-engineering-playbook/
+
+# Dated local run logs (evidence lives in runtime/ retention governance).
+sourcing-ai-agent/logs/

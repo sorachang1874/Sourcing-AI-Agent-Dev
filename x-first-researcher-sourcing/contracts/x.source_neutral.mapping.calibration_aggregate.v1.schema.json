@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.calibration_aggregate.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "claim_status",
+    "privacy_class",
+    "source_bindings",
+    "calibration_counts",
+    "batch_canary",
+    "conclusion",
+    "candidate_fields_included",
+    "candidate_text_included",
+    "aggregate_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.calibration_aggregate.v1"},
+    "artifact_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "claim_status": {"const": "diagnostic_method_calibration_only"},
+    "privacy_class": {"const": "candidate_free_counts_and_hashes_only"},
+    "source_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["private_summary_sha256", "private_receipt_sha256", "private_source_binding_count", "private_source_binding_manifest_sha256"],
+      "properties": {
+        "private_summary_sha256": {"$ref": "#/$defs/sha"},
+        "private_receipt_sha256": {"$ref": "#/$defs/sha"},
+        "private_source_binding_count": {"const": 14},
+        "private_source_binding_manifest_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "calibration_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actual_native_x_calls", "candidate_authored_expansion_calls", "initial_frontier", "final_frontier", "marginal_unique_stable_references", "open_saturation_cells", "trailing_zero_half_windows", "official_source_anchors", "official_full_text_anchors"],
+      "properties": {
+        "actual_native_x_calls": {"const": 46},
+        "candidate_authored_expansion_calls": {"const": 31},
+        "initial_frontier": {"const": 17},
+        "final_frontier": {"const": 37},
+        "marginal_unique_stable_references": {"const": 20},
+        "open_saturation_cells": {"const": 0},
+        "trailing_zero_half_windows": {"const": 2},
+        "official_source_anchors": {"const": 4},
+        "official_full_text_anchors": {"const": 4}
+      }
+    },
+    "batch_canary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_grain", "calls_per_candidate", "attested_native_x_calls", "flat_blocks", "stable_unique_references", "marginal_unique_references", "open_saturation_cells", "elapsed_ms_per_call", "singleton_elapsed_ratio", "ledger_and_format_passed"],
+      "properties": {
+        "candidate_grain": {"const": 3},
+        "calls_per_candidate": {"const": 2},
+        "attested_native_x_calls": {"const": 6},
+        "flat_blocks": {"const": 6},
+        "stable_unique_references": {"const": 6},
+        "marginal_unique_references": {"const": 4},
+        "open_saturation_cells": {"const": 0},
+        "elapsed_ms_per_call": {"const": 7787.5},
+        "singleton_elapsed_ratio": {"const": 0.662063},
+        "ledger_and_format_passed": {"const": true}
+      }
+    },
+    "conclusion": {"const": "method_shape_calibrated_not_global_recall_plateau"},
+    "candidate_fields_included": {"const": false},
+    "candidate_text_included": {"const": false},
+    "aggregate_sha256": {"$ref": "#/$defs/sha"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

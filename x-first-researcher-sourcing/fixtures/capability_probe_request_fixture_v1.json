@@ -1,0 +1,54 @@
+{
+  "claims": {
+    "canonical_writes_authorized": false,
+    "external_execution_authorized": false,
+    "graph_expansion_authorized": false,
+    "outreach_authorized": false,
+    "provider_fallback_authorized": false,
+    "researcher_mapping_authorized": false
+  },
+  "execution_mode": "fixture_only",
+  "hard_budgets": {
+    "deadline_ms": 1000,
+    "max_cost_usd": 0,
+    "max_executions": 1,
+    "max_external_calls": 1,
+    "max_observations": 5,
+    "max_pages": 1
+  },
+  "kill_switch": {
+    "armed": true,
+    "trip_conditions": [
+      "external_execution_attempted",
+      "live_url_observed",
+      "budget_exceeded",
+      "credential_material_observed",
+      "canonical_write_attempted"
+    ]
+  },
+  "owner_decisions": {
+    "legal_privacy": "deferred",
+    "live_execution": "deferred",
+    "model_access": "deferred",
+    "retention_policy": "deferred"
+  },
+  "probe_id": "xprobe_fixture_openai_official_v1",
+  "query": {
+    "query_kind": "recent_public_technical_posts",
+    "query_template": "fixture://openai/official/recent-public-technical-posts"
+  },
+  "retention": {
+    "bounded_excerpt_max_chars": 280,
+    "class": "synthetic_fixture_only",
+    "delete_after": null,
+    "full_body_allowed": false
+  },
+  "safety_policy_version": "x-first-public-professional-v1",
+  "schema_version": "x.grok.capability_probe.request.v1",
+  "target": {
+    "account_kind": "official_lab",
+    "current_handle": "fixture_openai_official",
+    "lab_id": "openai",
+    "platform_user_id": "xuid_fixture_official_openai"
+  }
+}

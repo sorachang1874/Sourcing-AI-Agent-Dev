@@ -1,0 +1,454 @@
+{
+ "schema": "identity_alias_map.v1",
+ "company_key": "openai",
+ "generated_from": "2026-07-22 read-only dup audit (40 linkedin_url+name collisions in snapshot 20260720T104157 candidate_documents.json)",
+ "id_derivations": {
+  "canonical_id": "sha1(normalize_name_token(company)|normalize_name_token(name)|linkedin_url)[:16] (seed_discovery.build_candidates_from_seed_entries)",
+  "harvest_url_hash_16hex": "sha1(linkedin_url)[:16] (harvest connector profile-url path)",
+  "v1_seed_name_hash_12hex": "sha1(name)[:12] (v1 seed placeholder, minting script retired)"
+ },
+ "verification": "all three derivations recomputed 40/40 at generation time; re-verified by scripts/check_canonical_completeness.py",
+ "merge_policy": "canonical_id survives; alias ids are provenance-only (never deleted, never rewritten in historical snapshots/judge outputs); judge verdict conflicts resolve to the source-bound supp40 chain",
+ "entries": [
+  {
+   "canonical_id": "0774e532e3fc3f31",
+   "name": "Angel Brodin",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAAoHO8YBILXVVi19FSiadNH3xHg1kgcGDco",
+   "aliases": {
+    "harvest_url_hash_16hex": "11be818eb1b8ab1f",
+    "v1_seed_name_hash_12hex": "8b8e3ce59a5e"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "0bc6e1b2bdf70527",
+   "name": "Aleric Zhang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAFWDs8gBeHLVD8CnknDAP4id_R5MEv1fWpM",
+   "aliases": {
+    "harvest_url_hash_16hex": "5d429d681c189ae0",
+    "v1_seed_name_hash_12hex": "fc477827c08a"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "0d7c11473670806e",
+   "name": "Mingxuan Wang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAACtxiesBkNofjbwv3YgPuHAIjM9qedLKrfM",
+   "aliases": {
+    "harvest_url_hash_16hex": "e26dbfb1fb411604",
+    "v1_seed_name_hash_12hex": "cf7c9cf2dbdc"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "1cae7a6dc653a6bf",
+   "name": "Edward Yang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAEOEflUBLkfCN0JvNiCTMIVQs87PI0CAElA",
+   "aliases": {
+    "harvest_url_hash_16hex": "480edced808d97d7",
+    "v1_seed_name_hash_12hex": "a3d684f6f2cb"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "23979598abd307ba",
+   "name": "Richard Du",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABpuFXEBl2_8ZnEso08Ni3iEOmThLlolr6E",
+   "aliases": {
+    "harvest_url_hash_16hex": "72b2785736746f34",
+    "v1_seed_name_hash_12hex": "31dd634a340e"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "3041f31314c15bf3",
+   "name": "Xuandong L.",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABcLd4kBBOT1YMqfelyDam4rT-BMJ4G4obw",
+   "aliases": {
+    "harvest_url_hash_16hex": "924fa47d0f5eebfe",
+    "v1_seed_name_hash_12hex": "353017bd6dcf"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "315e45512404ea83",
+   "name": "John Pan",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAD30ZScBzIkKOWK9J37f6TZM7ohZnnZoP1g",
+   "aliases": {
+    "harvest_url_hash_16hex": "5949b97b6171e463",
+    "v1_seed_name_hash_12hex": "64b7c643b747"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "3219f47a537a40f9",
+   "name": "Elizabeth Yang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABpL1wgB7OdnJ4k1lkclqTvA80FQG0dzWCo",
+   "aliases": {
+    "harvest_url_hash_16hex": "b67491e5ecda014f",
+    "v1_seed_name_hash_12hex": "6ef897270f90"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "3a0d74d4caa1cda2",
+   "name": "Wenting Z.",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAB3aWVkB4W3dJjBjcyOTMIEaxKwMHI1jnW8",
+   "aliases": {
+    "harvest_url_hash_16hex": "51cfd1d8a8c7d3e1",
+    "v1_seed_name_hash_12hex": "4fa9375795c7"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "3bfe3a6cd9c10040",
+   "name": "Janice Wu",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAACVlDw0Bn1hzvZUZRztleXCuSKsa8UUyEm8",
+   "aliases": {
+    "harvest_url_hash_16hex": "85cbd82daf97059e",
+    "v1_seed_name_hash_12hex": "b33682020c34"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "42e9ea51f681808a",
+   "name": "Kenny Chen",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABLeV-wBMkH1wgYF5Kj_e3j43Pg4vODdVIM",
+   "aliases": {
+    "harvest_url_hash_16hex": "6a483209e19e84c1",
+    "v1_seed_name_hash_12hex": "6db3cecf6790"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "46241d45ede776da",
+   "name": "Haoming Jiang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABKWfEYBG4olsrWdsx37Qr7VdO62dM1WAzI",
+   "aliases": {
+    "harvest_url_hash_16hex": "d24994ff649362c6",
+    "v1_seed_name_hash_12hex": "4aec04df35aa"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "5773571a1a556f8f",
+   "name": "Chao Zhao",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAB00hmABoLsyXfRCPOts5FcbySigQ9WJ_nY",
+   "aliases": {
+    "harvest_url_hash_16hex": "b6ec15c565ad853f",
+    "v1_seed_name_hash_12hex": "c1736b4a01f4"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "5dbff9d72c85d678",
+   "name": "Brandon Wang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAASsobsBP-PxZfurD2K_E4T8GB5PubUjLdA",
+   "aliases": {
+    "harvest_url_hash_16hex": "3a890e63d4b994f4",
+    "v1_seed_name_hash_12hex": "6f170f256ff6"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "5edad6b441e5c702",
+   "name": "youlong C.",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAASoroUBzOCcsihdVxQeXXv6Z1sLRVO_qio",
+   "aliases": {
+    "harvest_url_hash_16hex": "116e0a711dff99b6",
+    "v1_seed_name_hash_12hex": "d351a00e1fe7"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "6000f5e3c86b65a0",
+   "name": "Kim Lin",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAB3WYHIBgW-HNm6YeuTm-XSx-cYYgJ7zB6Q",
+   "aliases": {
+    "harvest_url_hash_16hex": "ea4d7ed1e9354f00",
+    "v1_seed_name_hash_12hex": "d31ef6bcf194"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "6dc34eb015a958a7",
+   "name": "Abraham Dagobert",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADf1nfsBl4AfkL0zMFg4tbK01gaUDz8ohHc",
+   "aliases": {
+    "harvest_url_hash_16hex": "7c98e5a60bbaa858",
+    "v1_seed_name_hash_12hex": "d44274cd6bdd"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "6f0a43ba43c7c774",
+   "name": "Keren Zhou",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABLAvUMBGATk988939f8syhbQx-xWmr3rw8",
+   "aliases": {
+    "harvest_url_hash_16hex": "b13d3587b833da80",
+    "v1_seed_name_hash_12hex": "7b64453c9e8f"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "7256613695ef5d27",
+   "name": "Zihan (Gavin) Zheng",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAD0rDkcBlctj9qjw1Vw4gww6z7k-POR7sDM",
+   "aliases": {
+    "harvest_url_hash_16hex": "90ff7ec09ca9c8de",
+    "v1_seed_name_hash_12hex": "b41293582718"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "7f8d9c25b80b481e",
+   "name": "Kevin Liu",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAACUi1pcBFzWVtkXQHu1DrXrh4M1HBMz-oBo",
+   "aliases": {
+    "harvest_url_hash_16hex": "cff90394f01dc549",
+    "v1_seed_name_hash_12hex": "17f792b19bc1"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "8440e82177341dff",
+   "name": "Karen Li",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAB5g9xEBdpxi1xYx8YzChNPJvUTvCvHxI8I",
+   "aliases": {
+    "harvest_url_hash_16hex": "d227165a5c950aef",
+    "v1_seed_name_hash_12hex": "e6c8957559d6"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "none"
+  },
+  {
+   "canonical_id": "86b61dd6b5d82eaa",
+   "name": "Lisa Wang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADVb3TwB2RkEf_Op3dLNXUoqWPIvMWgYBrk",
+   "aliases": {
+    "harvest_url_hash_16hex": "27f2ba9e8a8b4de5",
+    "v1_seed_name_hash_12hex": "72e9052f2916"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "9b343a6ac989dd48",
+   "name": "John Cheng",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADZVchgBAvLeUnmbk-btEk9BAsHFSqL_HPI",
+   "aliases": {
+    "harvest_url_hash_16hex": "bb20bdfa6a1bae71",
+    "v1_seed_name_hash_12hex": "f20f9bf101a6"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "a50a0d2b0f5d6e5f",
+   "name": "Larry Xu",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAAsYbxgBFaIGdVr_MyJQXlfMOhxsLB50Djw",
+   "aliases": {
+    "harvest_url_hash_16hex": "c83715cc167b5dbe",
+    "v1_seed_name_hash_12hex": "94ad1d5e88aa"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "ab6a4cb97db016e3",
+   "name": "Jack Lee",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABh76vYBOGaa5bGEzIyrwgKXlR7GIlzSeic",
+   "aliases": {
+    "harvest_url_hash_16hex": "2a91ea4c97c63065",
+    "v1_seed_name_hash_12hex": "58870b2963c0"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "abe377a860a442de",
+   "name": "Mo Bavarian",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAB9aFj8BSRJAqUnDTIzArhf-20-LK2y858w",
+   "aliases": {
+    "harvest_url_hash_16hex": "f28177c073eb020d",
+    "v1_seed_name_hash_12hex": "ef544ec4e4b1"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "afed88be4f5a8041",
+   "name": "Kim Zhang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADw0GEIBiBMqPOcoGbESYW_gvR2LGaoJjco",
+   "aliases": {
+    "harvest_url_hash_16hex": "8d1910f564ceca96",
+    "v1_seed_name_hash_12hex": "dc53eaf4d8e9"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "b0a7c6d557566e10",
+   "name": "Paul Tang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAD5dtZgBC77bRNXJSgrV_kTxm8OG0sfUkYc",
+   "aliases": {
+    "harvest_url_hash_16hex": "65de7a5b04391119",
+    "v1_seed_name_hash_12hex": "88485565d159"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "b260e0e5db8d930a",
+   "name": "Kevin Fitzgerald",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAABLRR9kBXXYg69vkcWNi5Tf0oEFUwrZYnxU",
+   "aliases": {
+    "harvest_url_hash_16hex": "8e207ba46866d725",
+    "v1_seed_name_hash_12hex": "2b5c47281b6c"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "b6bdf28ea399b840",
+   "name": "Roy Han",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADDO71MBj3jGWlyCt0-v1u1dgkxgXkOaYew",
+   "aliases": {
+    "harvest_url_hash_16hex": "8979cbe8a3948fba",
+    "v1_seed_name_hash_12hex": "6e207593b189"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "be4d1d695b2adf1e",
+   "name": "Welton Wang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADyfB8EBEsSBzvZRsTpMgj6P-BsLE6XxVRw",
+   "aliases": {
+    "harvest_url_hash_16hex": "482a995296023bed",
+    "v1_seed_name_hash_12hex": "e3bf427735a8"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "c0bb04fce386479d",
+   "name": "Luke Xing",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAAsTEeoBIO08rvjm4YSraTW9043l3viF5MA",
+   "aliases": {
+    "harvest_url_hash_16hex": "4e6244d6cb1d1353",
+    "v1_seed_name_hash_12hex": "3b16707e437a"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "c7a2de110bd7abff",
+   "name": "Jack Li",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADdM47QB1Xiqci7pilsCkZUkv0U_o5qxzZQ",
+   "aliases": {
+    "harvest_url_hash_16hex": "535cf2f3e26b334c",
+    "v1_seed_name_hash_12hex": "7143bfac00bf"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "c9658007e2fcc8d5",
+   "name": "Honglin Chen",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAB-zETMB75NS4rRz6ffrhT-d4YhaQs5JUS4",
+   "aliases": {
+    "harvest_url_hash_16hex": "bf4cb2e1bcf696e2",
+    "v1_seed_name_hash_12hex": "fe409f3fa20b"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "d213c1d815fb00d2",
+   "name": "Avery Yang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAADSzRicBHxDjS8piFRijJy1S8kOf9z-3yno",
+   "aliases": {
+    "harvest_url_hash_16hex": "dfdd7500b130c7d3",
+    "v1_seed_name_hash_12hex": "702e872f77be"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "dc45951097476005",
+   "name": "Jean-Vincent Hong",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAAjxNYgBIL2ulWzK1gMNQC_aDfce48P4GJo",
+   "aliases": {
+    "harvest_url_hash_16hex": "eeaceed296519db0",
+    "v1_seed_name_hash_12hex": "7471f0eeb249"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "ddae6645eac3c7b5",
+   "name": "Vincent Zhao",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAAmvp1sBiV9PySwEp2pT_LQZuSImAZ5meh4",
+   "aliases": {
+    "harvest_url_hash_16hex": "0b99eb1064ecd82e",
+    "v1_seed_name_hash_12hex": "8ea09cb69f81"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "f1e3fd0b1d27afdb",
+   "name": "Tong Su",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAACZ6_csBRG8sW8aolh0qNsdEQ45aZ6xcPdk",
+   "aliases": {
+    "harvest_url_hash_16hex": "ebfffc73b4ade76c",
+    "v1_seed_name_hash_12hex": "e8a81f7b6840"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "f48aa24acced61ec",
+   "name": "Catherine Yang",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAAN_HO4BhC9BOEjuAA8kKGFZRIRhZvZCNKc",
+   "aliases": {
+    "harvest_url_hash_16hex": "025cf7db35c3c0fc",
+    "v1_seed_name_hash_12hex": "8f17bba9a64a"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  },
+  {
+   "canonical_id": "ff826cb1e028917f",
+   "name": "Peter Dyloco",
+   "linkedin_url": "https://www.linkedin.com/in/ACwAAARHJSwB7jMtNPsyNqw2Cd9lDRbdRlbQOXI",
+   "aliases": {
+    "harvest_url_hash_16hex": "3aec79d755a18c3d",
+    "v1_seed_name_hash_12hex": "038ae239f309"
+   },
+   "verdict_source": "supp40",
+   "profile_payload_side": "harvest_url_hash_16hex"
+  }
+ ]
+}

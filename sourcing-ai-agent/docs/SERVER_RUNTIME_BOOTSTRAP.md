@@ -1,5 +1,10 @@
 # Server Runtime Bootstrap
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
+> Current default: hosted bootstrap restores `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` is retired and no longer has product CLI/import/restore support.
+
 ## Goal
 
 这份文档定义当前 `Sourcing AI Agent` 在长期在线 Linux/server 环境上的最小可执行启动流程。
@@ -21,6 +26,7 @@ canonical bundle 选择请同时参考：
 - API 进程
   - 提供 `serve`
   - 暴露 `/health`、`/api/providers/health`
+  - 默认不运行 recovery/watchdog；启动前要求外置 worker daemon 状态 fresh
 - worker daemon
   - 提供 `run-worker-daemon-service`
   - 持续恢复和推进可恢复 worker
@@ -30,7 +36,7 @@ canonical bundle 选择请同时参考：
 - Git repo
 - provider secrets
 - object storage config
-- 必要的 bundle / SQLite snapshot
+- 必要的 bundle / control-plane snapshot
 
 ## Host Requirements
 
@@ -38,6 +44,7 @@ canonical bundle 选择请同时参考：
 
 - Linux，优先 Debian/Ubuntu 或兼容环境
 - Python `>=3.12`
+- 与仓库依赖锁定一致的 repo-managed venv
 - Git
 - 可写的本地 `runtime/`
 
@@ -102,6 +109,45 @@ sudo apt-get install -y libnspr4 libnss3
 2. 其次恢复 `runtime/secrets/providers.local.json`
 3. 不要把生产 secrets 写回仓库
 
+### CRM Public Web product-model deployment contract
+
+普通 CRM Public Web 的真实 AI adjudication 只允许 OpenAI-compatible transport 上精确的
+`gpt-5.6-sol`。这个约束在 provider transport 前执行；错误配置必须产生 `fallback_used=true`、
+`fallback_reason=model_configuration_mismatch` 和可审计的 `model_error`，不得发送模型请求，也不得用
+deterministic fallback 冒充 AI review。Qwen 是真实 provider，不是该产品模型的替代路径；它的 Public Web
+adjudication 同样必须在 prompt 前返回 configuration fallback。共享 `ModelClient` / Qwen 的非 CRM Public Web
+用途仍按各自配置运行。
+
+远端模型配置变更必须按下面的完整顺序发布，不能只热改 secret 后继续使用旧进程：
+
+1. 停止所有 API 和 worker daemon 实例，并确认旧 release 下没有仍可接收 CRM Public Web 工作的进程。
+2. 在实际最高优先级配置源更新模型：环境变量 `MODEL_PROVIDER_MODEL` 优先于
+   `runtime/secrets/providers.local.json`；最终解析值必须精确为 `gpt-5.6-sol`，且 API/worker 使用同一
+   secret revision。不要在日志或部署记录中输出 API key。
+3. 在仍未启动服务时，用仓内解释器只检查非敏感解析结果：
+
+   ```bash
+   PYTHONPATH=src .venv/bin/python - <<'PY'
+   from sourcing_agent.settings import load_settings
+
+   settings = load_settings(".").model_provider
+   print({"provider": settings.provider_name, "model": settings.model, "api_style": settings.api_style})
+   PY
+   ```
+
+4. 从同一 release 和 secret revision 全量重启 API 与 worker daemon；滚动期间不得让旧模型 worker 与
+   新模型 API 混跑。
+5. 重启后的第一次 `GET /api/providers/health` 必须产生新的 generation proof。确认
+   `providers.model.status=ready`、`chat_status=ready`、`requested_model=response_model=effective_model=gpt-5.6-sol`
+   且 `model_identity_provenance=provider_response`。`/models` inventory、配置回显、缓存结果或只有 requested
+   model 都不构成部署证明。这个检查会触发有界的真实模型 generation，只能在 owner 批准的 live 窗口执行。
+6. 只有在有效 Independent Review `GO` 和全部 live-cost guard 就绪后，才运行 W7g；每个可验证终态 run 的
+   `latest_run.analysis.phase_metrics` 必须重复证明同一组 exact identity 字段且
+   `model_fallback_used=false`。健康检查不能替代 run-level proof。
+
+回滚同样要求全停：停止 API/worker，恢复上一份 release 与匹配的 secret revision，再同时重启。不得只回滚
+代码或只回滚 secret，避免同一 durable queue 被两个模型合同消费。
+
 ## Object Storage Contract
 
 server 侧必须明确：
@@ -161,26 +207,31 @@ mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
 
 至少先确保：
 
-- `test-model` 可通过
+- 非敏感配置解析出的 CRM Public Web product model 精确为 `gpt-5.6-sol`
+- 在 owner 批准的 live 窗口内，`test-model` 可通过并返回 exact provider-response identity
 - object storage client 可初始化
+
+已有服务升级时，必须执行上面的“全停 -> 更新 secret -> 全量重启 -> exact identity proof”流程；不能把
+启动前的 `test-model` 结果当成新进程已加载配置的证据。
 
 ### 4. Restore durable assets
 
 默认恢复路径应是：
 
-1. 恢复 canonical `sqlite_snapshot`
+1. 恢复 canonical `control_plane_snapshot`
 2. 再恢复需要的 canonical `company_snapshot`
 
 不要把 `company_handoff` 当成默认 server bootstrap 入口，因为它更重，也更容易把历史测试态文件一起带回。
+`sqlite_snapshot` 已退役；旧包不应进入 hosted bootstrap。
 
 默认推荐直接使用统一导入命令 `import-cloud-assets`，而不是手工串联 `download-asset-bundle -> restore-* -> backfill-*`。
 
-先恢复 SQLite：
+先恢复 control plane：
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
-  --bundle-kind sqlite_snapshot \
-  --bundle-id <sqlite_bundle_id> \
+  --bundle-kind control_plane_snapshot \
+  --bundle-id <control_plane_snapshot_bundle_id> \
   --output-dir runtime/asset_imports
 ```
 
@@ -198,6 +249,9 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
 - candidate artifact repair
 - organization asset registry warmup
 - linkedin profile registry backfill
+
+注意：serve 启动时的 organization asset warmup 不是默认后台任务。需要冷启动预热时显式设置
+`STARTUP_ORGANIZATION_ASSET_WARMUP_ENABLED=true`，否则它会保持 disabled，避免每次启动都扫描全部 runtime assets 并拖慢前台 plan / workflow 请求。
 
 如果你已经手工下载好了 bundle，也可以直接给本地 manifest：
 
@@ -218,13 +272,9 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
 
 如果当前 server 不打算启用 browser lane，不要求 `google_browser` live search 可用。
 
-### 6. Start API server
+### 6. Start worker daemon
 
-```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
-```
-
-### 7. Start worker daemon
+该命令是常驻进程，应由独立终端或 systemd 运行；确认状态 fresh 后再在另一进程启动 API。
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service \
@@ -242,6 +292,37 @@ PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
   --service-name worker-recovery-daemon
 ```
 
+### 7. Start API server
+
+`serve` 默认是 API-only：它不再创建进程内 shared recovery 或 runtime watchdog。
+启动前，第 6 步的 `worker-recovery-daemon` 必须处于 fresh `running` 状态，否则
+coverage gate 在创建 HTTP server 前 fail closed。
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+```
+
+`scripts/dev_backend.sh` 默认会先启动 worker daemon，所以普通本地启动仍使用：
+
+```bash
+bash ./scripts/dev_backend.sh
+```
+
+`--no-daemon` 只表示 wrapper 不启动 daemon；它不放宽 serve 的 coverage gate，因此只能在
+已有 fresh 外置 daemon 时单独使用。仅为单进程本地调试保留一个显式兼容入口：
+
+```bash
+bash ./scripts/dev_backend.sh --no-daemon --enable-runtime-watchdog
+```
+
+该 flag 会同时启用进程内 recovery 和 watchdog，不是 production 拓扑。旧
+`--disable-runtime-watchdog` 仍可被 CLI/wrapper 接受，但只是兼容 no-op，因为外置 recovery
+已是默认。只有在 recovery 确实由其他部署面提供时，才能使用会输出显式 warning 的：
+
+```bash
+bash ./scripts/dev_backend.sh --no-daemon --allow-uncovered-recovery
+```
+
 ## Health Checks
 
 启动后至少检查：
@@ -249,6 +330,10 @@ PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
 - `GET /health`
 - `GET /api/providers/health`
 - `PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status`
+
+启用 CRM Public Web 时，`/api/providers/health` 还必须满足 Secrets Contract 中的 exact
+`requested_model` / `response_model` / `effective_model` / provenance 检查。任一字段缺失、fallback、identity
+mismatch 或旧模型值都应阻断 CRM Public Web live/product 签收。
 
 如果 server 主要是为了继续 TML 资产积累，再额外检查：
 
@@ -271,7 +356,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
 
 直接重跑相同命令即可。默认 resume 会跳过已完成对象，只补剩余缺口。
 
-### SQLite state is suspicious
+### SQLite state needs attention
 
 优先：
 

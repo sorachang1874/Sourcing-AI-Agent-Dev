@@ -1,0 +1,129 @@
+{
+  "cases": [
+    {
+      "case": "openai_whisper_zero_current_baseline_delta_overlay",
+      "scripted_scenario": "configs/scripted/openai_whisper_zero_current_overlay_streaming.json",
+      "coverage_tags": [
+        "openai_health_whisper_zero_current_overlay"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找OpenAI在Whisper组的人",
+        "top_k": 10,
+        "force_fresh_run": true,
+        "execution_preferences": {
+          "harvest_profile_actor_global_inflight": 4,
+          "harvest_profile_batch_submit_global_inflight": 4
+        }
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 24,
+        "require_post_terminal_recovery_settled": true,
+        "require_post_preview_finalization_observed": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_unexpected_public_web_stage": true,
+        "require_no_event_level_efficiency_violation": true,
+        "require_no_progress_contract_violation": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_board_visible_projection_violation": true,
+        "require_no_serving_publication_gap": true,
+        "require_latest_lifecycle_served_snapshot_not_baseline": true,
+        "max_serving_publication_gap_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_stage_1_preview_to_final_results_ms": 60000,
+        "expect_explain_dispatch_strategy": "delta_from_snapshot",
+        "expect_explain_planner_mode": "delta_from_snapshot",
+        "expect_explain_requires_delta_acquisition": true,
+        "expect_explain_effective_acquisition_mode": "baseline_reuse_with_delta",
+        "expect_explain_keywords_include": ["Whisper"],
+        "expect_latest_stage1_current_search_returned_count": 0,
+        "expect_latest_stage1_former_search_returned_count": 12,
+        "expect_latest_stage1_all_search_returned_count": 0,
+        "expect_latest_stage1_deduped_candidate_count": 12,
+        "expect_latest_stage1_deduped_profile_url_count": 12,
+        "expect_latest_stage1_profile_fetch_required_count": 12,
+        "expect_latest_stage1_profile_fetched_count": 12,
+        "min_latest_lifecycle_baseline_candidate_count": 300,
+        "min_latest_lifecycle_served_candidate_count": 301,
+        "min_latest_lifecycle_delta_profile_materialized_count": 1,
+        "min_latest_lifecycle_delta_profile_board_visible_count": 1,
+        "min_provider_invocation_count": 3,
+        "min_provider_invocations_by_logical_name": {
+          "harvest_profile_search": 2,
+          "harvest_profile_scraper_batch": 1
+        },
+        "min_profile_url_total_count": 12,
+        "min_fetched_profile_count": 12,
+        "min_board_total_candidates": 301,
+        "min_agent_worker_count": 1,
+        "min_materialize_completed_count": 1,
+        "max_profile_unexplained_tiny_batch_count": 0,
+        "max_provider_slot_underuse_with_backlog_count": 0,
+        "max_repeated_materialize_signature_count": 0,
+        "max_same_worker_reconcile_repeat_count": 0
+      }
+    },
+    {
+      "case": "openai_whisper_late_webhook_watcher_duplicate_idempotency",
+      "scripted_scenario": "configs/scripted/openai_whisper_zero_current_overlay_streaming.json",
+      "coverage_tags": [
+        "late_webhook_watcher_duplicate_idempotency_browser",
+        "writer_contention_completed_reconcile"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找OpenAI在Whisper组的人",
+        "top_k": 10,
+        "force_fresh_run": true,
+        "drive_remote_provider_watcher_first_events": true,
+        "execution_preferences": {
+          "harvest_profile_actor_global_inflight": 4,
+          "harvest_profile_batch_submit_global_inflight": 4
+        }
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 24,
+        "require_post_terminal_recovery_settled": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_progress_contract_violation": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_board_visible_projection_violation": true,
+        "require_no_serving_publication_gap": true,
+        "drive_remote_provider_watcher_first_events": true,
+        "max_remote_provider_event_lag_ms": 30000,
+        "max_serving_publication_gap_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_stage_1_preview_to_final_results_ms": 60000,
+        "min_provider_invocation_count": 3,
+        "min_provider_invocations_by_logical_name": {
+          "harvest_profile_search": 2,
+          "harvest_profile_scraper_batch": 1
+        },
+        "min_remote_provider_event_count": 2,
+        "min_remote_provider_event_received_count": 1,
+        "min_remote_provider_event_late_duplicate_count": 1,
+        "min_remote_provider_event_source_counts": {
+          "local_provider_event_watcher": 1,
+          "provider_webhook": 1
+        },
+        "min_remote_provider_event_status_counts": {
+          "received": 1,
+          "received_late": 1
+        },
+        "max_remote_provider_event_in_flight_duplicate_count": 1,
+        "min_completed_reconcile_lease_skipped_count": 1,
+        "min_profile_url_total_count": 12,
+        "min_fetched_profile_count": 12,
+        "min_board_total_candidates": 12,
+        "min_agent_worker_count": 1,
+        "min_materialize_completed_count": 1,
+        "max_repeated_materialize_signature_count": 0,
+        "max_same_worker_reconcile_repeat_count": 0
+      }
+    }
+  ]
+}

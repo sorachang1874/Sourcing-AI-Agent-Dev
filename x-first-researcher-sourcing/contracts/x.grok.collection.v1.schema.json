@@ -1,0 +1,617 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.collection.v1.schema.json",
+  "title": "X-first Grok collection artifact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run",
+    "tasks",
+    "accounts",
+    "observations",
+    "candidate_packets",
+    "identity_link_proposals",
+    "coverage_ledger",
+    "errors",
+    "assertions",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.grok.collection.v1"
+    },
+    "run": {
+      "$ref": "#/$defs/run"
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 24,
+      "items": {
+        "$ref": "#/$defs/account"
+      }
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 96,
+      "maxItems": 96,
+      "items": {
+        "$ref": "#/$defs/observation"
+      }
+    },
+    "candidate_packets": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 24,
+      "items": {
+        "$ref": "#/$defs/candidate_packet"
+      }
+    },
+    "identity_link_proposals": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "coverage_ledger": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/coverage"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "assertions": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "claims": {
+      "$ref": "#/$defs/claims"
+    }
+  },
+  "$defs": {
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "mode",
+        "lab_scope",
+        "status",
+        "provider",
+        "hard_budgets",
+        "started_at",
+        "completed_at"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^xrun_fixture_[a-z0-9_]+$"
+        },
+        "mode": {
+          "const": "fixture"
+        },
+        "lab_scope": {
+          "const": [
+            "openai"
+          ]
+        },
+        "status": {
+          "const": "completed"
+        },
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider_id",
+            "access_mode",
+            "model_id",
+            "prompt_version",
+            "external_calls",
+            "cost_usd"
+          ],
+          "properties": {
+            "provider_id": {
+              "const": "offline_fixture"
+            },
+            "access_mode": {
+              "const": "fixture"
+            },
+            "model_id": {
+              "type": "null"
+            },
+            "prompt_version": {
+              "const": "fixture-v1"
+            },
+            "external_calls": {
+              "const": 0
+            },
+            "cost_usd": {
+              "const": 0
+            }
+          }
+        },
+        "hard_budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_tasks",
+            "max_pages",
+            "max_observations",
+            "max_candidate_packets"
+          ],
+          "properties": {
+            "max_tasks": {
+              "const": 8
+            },
+            "max_pages": {
+              "const": 8
+            },
+            "max_observations": {
+              "const": 96
+            },
+            "max_candidate_packets": {
+              "const": 24
+            }
+          }
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "task_key",
+        "lab_id",
+        "query_family",
+        "window",
+        "query_template",
+        "status",
+        "stop_reason",
+        "pages",
+        "cursor",
+        "provenance",
+        "observation_ids"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "task_key": {
+          "type": "string",
+          "pattern": "^xtask_[0-9a-f]{24}$"
+        },
+        "lab_id": {
+          "const": "openai"
+        },
+        "query_family": {
+          "enum": [
+            "official_lab_output",
+            "public_bio_affiliation",
+            "first_party_technical_posts",
+            "replies_mentions",
+            "official_lab_interactions",
+            "curated_lists",
+            "paper_conference_linkage",
+            "one_hop_graph_and_conflict_checks"
+          ]
+        },
+        "window": {
+          "const": "fixture-v1"
+        },
+        "query_template": {
+          "type": "string",
+          "pattern": "^fixture://"
+        },
+        "status": {
+          "const": "succeeded"
+        },
+        "stop_reason": {
+          "const": "fixture_complete"
+        },
+        "pages": {
+          "const": 1
+        },
+        "cursor": {
+          "type": "null"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "query_registry_version",
+            "collector_contract_version"
+          ],
+          "properties": {
+            "query_registry_version": {
+              "const": "x.query-family.registry.v1"
+            },
+            "collector_contract_version": {
+              "const": "x.grok.collection.v1"
+            }
+          }
+        },
+        "observation_ids": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "handle_history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handle",
+        "observed_from",
+        "observed_to"
+      ],
+      "properties": {
+        "handle": {
+          "type": "string"
+        },
+        "observed_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "observed_to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform_user_id",
+        "current_handle",
+        "handle_history",
+        "profile_url",
+        "display_label",
+        "observed_at"
+      ],
+      "properties": {
+        "platform_user_id": {
+          "type": "string",
+          "pattern": "^xuid_fixture_[0-9]{3}$"
+        },
+        "current_handle": {
+          "type": "string"
+        },
+        "handle_history": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/handle_history"
+          }
+        },
+        "profile_url": {
+          "type": "string",
+          "pattern": "^https://profiles\\.invalid/openai/account-[0-9]{3}$"
+        },
+        "display_label": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "platform_object_id",
+        "platform_user_id",
+        "kind",
+        "canonical_url",
+        "authored_at",
+        "observed_at",
+        "excerpt",
+        "source_task_id",
+        "query_family",
+        "evidence_scope",
+        "technical_scope"
+      ],
+      "properties": {
+        "observation_id": {
+          "type": "string"
+        },
+        "platform_object_id": {
+          "type": "string"
+        },
+        "platform_user_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "official_lab_output",
+            "bio",
+            "post",
+            "reply",
+            "official_interaction",
+            "list_reference",
+            "paper_link",
+            "graph_edge"
+          ]
+        },
+        "canonical_url": {
+          "type": "string",
+          "pattern": "^https://evidence\\.invalid/openai/observation-[0-9]{3}$"
+        },
+        "authored_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "excerpt": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "source_task_id": {
+          "type": "string"
+        },
+        "query_family": {
+          "enum": [
+            "official_lab_output",
+            "public_bio_affiliation",
+            "first_party_technical_posts",
+            "replies_mentions",
+            "official_lab_interactions",
+            "curated_lists",
+            "paper_conference_linkage",
+            "one_hop_graph_and_conflict_checks"
+          ]
+        },
+        "evidence_scope": {
+          "const": "public_professional"
+        },
+        "technical_scope": {
+          "enum": [
+            "PRETRAIN_CORE",
+            "PRETRAIN_ADJACENT",
+            "OUT_OF_SCOPE",
+            "UNKNOWN"
+          ]
+        }
+      }
+    },
+    "candidate_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provisional_person_id",
+        "platform_user_id",
+        "current_affiliation_proposal",
+        "pretrain_relevance",
+        "selected_for_review",
+        "evidence_refs",
+        "review_status"
+      ],
+      "properties": {
+        "provisional_person_id": {
+          "type": "string",
+          "pattern": "^pp_x_[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "platform_user_id": {
+          "type": "string"
+        },
+        "current_affiliation_proposal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lab_id",
+            "status",
+            "evidence_refs"
+          ],
+          "properties": {
+            "lab_id": {
+              "const": "openai"
+            },
+            "status": {
+              "enum": [
+                "current_proposed",
+                "conflicted",
+                "unknown"
+              ]
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "pretrain_relevance": {
+          "enum": [
+            "PRETRAIN_CORE",
+            "PRETRAIN_ADJACENT",
+            "OUT_OF_SCOPE",
+            "UNKNOWN"
+          ]
+        },
+        "selected_for_review": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "review_status": {
+          "enum": [
+            "fixture_ready",
+            "quarantined"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pretrain_relevance": {
+                "const": "UNKNOWN"
+              }
+            },
+            "required": [
+              "pretrain_relevance"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selected_for_review": {
+                "const": false
+              },
+              "review_status": {
+                "const": "quarantined"
+              },
+              "current_affiliation_proposal": {
+                "properties": {
+                  "status": {
+                    "const": "unknown"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "selected_for_review": {
+                "const": true
+              }
+            },
+            "required": [
+              "selected_for_review"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pretrain_relevance": {
+                "enum": [
+                  "PRETRAIN_CORE",
+                  "PRETRAIN_ADJACENT"
+                ]
+              },
+              "review_status": {
+                "const": "fixture_ready"
+              },
+              "current_affiliation_proposal": {
+                "properties": {
+                  "status": {
+                    "const": "current_proposed"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lab_id",
+        "query_family",
+        "task_id",
+        "observation_count",
+        "stop_reason",
+        "exhaustive"
+      ],
+      "properties": {
+        "lab_id": {
+          "const": "openai"
+        },
+        "query_family": {
+          "enum": [
+            "official_lab_output",
+            "public_bio_affiliation",
+            "first_party_technical_posts",
+            "replies_mentions",
+            "official_lab_interactions",
+            "curated_lists",
+            "paper_conference_linkage",
+            "one_hop_graph_and_conflict_checks"
+          ]
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "observation_count": {
+          "const": 12
+        },
+        "stop_reason": {
+          "const": "fixture_complete"
+        },
+        "exhaustive": {
+          "const": false
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exhaustive",
+        "current_employment_guaranteed",
+        "outreach_permission",
+        "protected_traits_inferred"
+      ],
+      "properties": {
+        "exhaustive": {
+          "const": false
+        },
+        "current_employment_guaranteed": {
+          "const": false
+        },
+        "outreach_permission": {
+          "const": false
+        },
+        "protected_traits_inferred": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok.capability_probe.request.v2.schema.json",
+  "title": "X-first bounded live Grok/X capability-probe request v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probe_id",
+    "execution_mode",
+    "owner_decisions",
+    "target",
+    "query",
+    "hard_budgets",
+    "kill_switch",
+    "retention",
+    "safety_policy_version",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.capability_probe.request.v2"},
+    "probe_id": {"const": "xprobe_live_openai_official_v1"},
+    "execution_mode": {"const": "live_bounded"},
+    "owner_decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live_execution", "legal_privacy", "model_access", "retention_policy"],
+      "properties": {
+        "live_execution": {"const": "user_approved_2026_07_14"},
+        "legal_privacy": {"const": "public_professional_minimized"},
+        "model_access": {"const": "grok_cli_oauth_grok_4_5_x_search_required_no_fallback"},
+        "retention_policy": {"const": "private_24h_bounded_excerpt_then_delete"}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lab_id", "account_kind", "platform_user_id_policy", "current_handle"],
+      "properties": {
+        "lab_id": {"const": "openai"},
+        "account_kind": {"const": "official_lab"},
+        "platform_user_id_policy": {"const": "must_be_returned_and_consistent_for_stage2"},
+        "current_handle": {"const": "OpenAI"}
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_kind", "query_template"],
+      "properties": {
+        "query_kind": {"const": "recent_public_technical_posts"},
+        "query_template": {"const": "x-native://official-account/recent-technical-posts"}
+      }
+    },
+    "hard_budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_executions",
+        "max_x_search_calls",
+        "max_result_sets",
+        "max_observations",
+        "max_model_turns",
+        "max_reported_cost_usd",
+        "deadline_ms"
+      ],
+      "properties": {
+        "max_executions": {"const": 1},
+        "max_x_search_calls": {"const": 1},
+        "max_result_sets": {"const": 1},
+        "max_observations": {"const": 5},
+        "max_model_turns": {"const": 4},
+        "max_reported_cost_usd": {"const": 0.25},
+        "deadline_ms": {"const": 180000}
+      }
+    },
+    "kill_switch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["armed", "trip_conditions"],
+      "properties": {
+        "armed": {"const": true},
+        "trip_conditions": {
+          "const": [
+            "non_x_search_tool_observed",
+            "second_external_call_attempted",
+            "budget_exceeded",
+            "credential_material_observed",
+            "full_body_retention_attempted",
+            "researcher_mapping_attempted",
+            "canonical_write_attempted"
+          ]
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "delete_after_hours",
+        "bounded_excerpt_max_chars",
+        "full_body_allowed",
+        "session_transcript_persisted"
+      ],
+      "properties": {
+        "class": {"const": "private_live_probe_24h"},
+        "delete_after_hours": {"const": 24},
+        "bounded_excerpt_max_chars": {"const": 280},
+        "full_body_allowed": {"const": false},
+        "session_transcript_persisted": {"const": false}
+      }
+    },
+    "safety_policy_version": {"const": "x-first-public-professional-v1"},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_probe_authorized",
+        "researcher_mapping_authorized",
+        "graph_expansion_authorized",
+        "provider_fallback_authorized",
+        "canonical_writes_authorized",
+        "outreach_authorized"
+      ],
+      "properties": {
+        "capability_probe_authorized": {"const": true},
+        "researcher_mapping_authorized": {"const": false},
+        "graph_expansion_authorized": {"const": false},
+        "provider_fallback_authorized": {"const": false},
+        "canonical_writes_authorized": {"const": false},
+        "outreach_authorized": {"const": false}
+      }
+    }
+  }
+}

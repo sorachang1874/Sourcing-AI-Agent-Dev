@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.reported_profile_text.observation.v1.schema.json",
+  "title": "Model-mediated unverified reported profile-text observation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observation_id",
+    "source_kind",
+    "candidate_ref",
+    "campaign_result_sha256",
+    "candidate_row_sha256",
+    "text",
+    "text_sha256",
+    "reported_platform_user_id",
+    "reported_platform_user_id_status",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.reported_profile_text.observation.v1"},
+    "observation_id": {"type": "string", "pattern": "^xrpt_obs_[0-9a-f]{24}$"},
+    "source_kind": {"const": "grok_model_mediated_unverified_text"},
+    "candidate_ref": {"type": "string", "pattern": "^xrpt_candidate_[0-9a-f]{24}$"},
+    "campaign_result_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+    "candidate_row_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "text_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+    "reported_platform_user_id": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[1-9][0-9]{1,24}$"}
+      ]
+    },
+    "reported_platform_user_id_status": {
+      "enum": ["absent", "model_mediated_unverified"]
+    },
+    "authority": {
+      "const": {
+        "x_profile_snapshot_claimed": false,
+        "stable_platform_identity_verified": false,
+        "automatic_identity_merge_authorized": false
+      }
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "reported_platform_user_id": {"type": "null"},
+            "reported_platform_user_id_status": {"const": "absent"}
+          }
+        },
+        {
+          "properties": {
+            "reported_platform_user_id": {"type": "string", "pattern": "^[1-9][0-9]{1,24}$"},
+            "reported_platform_user_id_status": {"const": "model_mediated_unverified"}
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "nonzero_sha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    }
+  }
+}

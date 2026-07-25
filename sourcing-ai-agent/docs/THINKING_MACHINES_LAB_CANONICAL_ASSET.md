@@ -1,5 +1,8 @@
 # Thinking Machines Lab Canonical Asset
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 ## Canonical Local Asset
 
 后续本地分析统一使用下面这份资产，不再直接面向 `runtime/company_assets/thinkingmachineslab/` 下的历史实验 snapshot：

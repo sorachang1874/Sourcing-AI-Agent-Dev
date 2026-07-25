@@ -1,20 +1,19 @@
 from __future__ import annotations
 
+import json
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-import json
 from pathlib import Path
-import re
-import sqlite3
-import time
 from typing import Any
-from urllib import parse
 
-from .candidate_artifacts import load_company_snapshot_candidate_documents
+from .candidate_artifacts import CandidateArtifactError, load_authoritative_company_snapshot_candidate_documents
 from .domain import Candidate
 from .harvest_connectors import parse_harvest_profile_payload
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient, get_outreach_layer_prompt_template
-
+from .storage import ControlPlaneStore
 
 _PINYIN_SURNAMES = {
     "bai",
@@ -51,18 +50,24 @@ _PINYIN_SURNAMES = {
     "hu",
     "hua",
     "huang",
+    "hwang",
     "hsu",
+    "ip",
     "jiang",
     "jin",
     "kang",
     "ke",
+    "koh",
     "kong",
     "lan",
+    "lai",
+    "lam",
     "lei",
     "li",
     "lian",
     "liang",
     "liao",
+    "lim",
     "lin",
     "liu",
     "long",
@@ -74,6 +79,7 @@ _PINYIN_SURNAMES = {
     "mao",
     "meng",
     "mo",
+    "ng",
     "ou",
     "pan",
     "peng",
@@ -101,6 +107,7 @@ _PINYIN_SURNAMES = {
     "wei",
     "wen",
     "wu",
+    "woo",
     "xia",
     "xiao",
     "xie",
@@ -118,6 +125,7 @@ _PINYIN_SURNAMES = {
     "yuan",
     "yue",
     "yun",
+    "yip",
     "zeng",
     "zhai",
     "zhang",
@@ -128,6 +136,92 @@ _PINYIN_SURNAMES = {
     "zhuang",
     "zou",
 }
+
+_GREATER_CHINA_UNIVERSITY_TOKENS = (
+    "university of hong kong",
+    "hku",
+    "chinese university of hong kong",
+    "cuhk",
+    "hong kong university of science and technology",
+    "hkust",
+    "city university of hong kong",
+    "cityu hong kong",
+    "hong kong polytechnic university",
+    "polyu",
+    "hong kong baptist university",
+    "hkbu",
+    "lingnan university",
+    "education university of hong kong",
+    "eduhk",
+    "university of macau",
+    "macau university of science and technology",
+    "must macau",
+    "national taiwan university",
+    "national tsing hua university",
+    "nthu",
+    "national yang ming chiao tung university",
+    "nycu",
+    "national cheng kung university",
+    "ncku",
+    "national taiwan normal university",
+    "ntnu",
+    "national chengchi university",
+    "nccu",
+    "national sun yat-sen university",
+    "tamkang university",
+    "fu jen catholic university",
+    "輔仁大學",
+    "辅仁大学",
+)
+
+_SINOPHONE_UNIVERSITY_TOKENS = (
+    "peking university",
+    "北京大学",
+    "pku",
+    "tsinghua university",
+    "清华大学",
+    "tsinghua",
+    "fudan university",
+    "复旦大学",
+    "fudan",
+    "fdu",
+    "shanghai jiao tong university",
+    "上海交通大学",
+    "sjtu",
+    "zhejiang university",
+    "浙江大学",
+    "university of science and technology of china",
+    "中国科学技术大学",
+    "ustc",
+    "nanjing university",
+    "南京大学",
+    "wuhan university",
+    "武汉大学",
+    "nankai university",
+    "南开大学",
+    "sun yat-sen university",
+    "中山大学",
+    "harbin institute of technology",
+    "哈尔滨工业大学",
+    "hit harbin",
+    "tongji university",
+    "同济大学",
+    "xian jiaotong university",
+    "西安交通大学",
+    "xjtu",
+    "huazhong university of science and technology",
+    "华中科技大学",
+    "hust china",
+    "beihang university",
+    "北京航空航天大学",
+    "renmin university of china",
+    "中国人民大学",
+    "southeast university china",
+    "东南大学",
+    "fu jen catholic university",
+    "輔仁大學",
+    "辅仁大学",
+)
 
 _GREATER_CHINA_REGION_TOKENS = (
     "greater china",
@@ -160,6 +254,7 @@ _GREATER_CHINA_REGION_TOKENS = (
     "澳門",
     "singapore",
     "新加坡",
+    *_GREATER_CHINA_UNIVERSITY_TOKENS,
 )
 
 _MAINLAND_TOKENS = (
@@ -188,6 +283,7 @@ _MAINLAND_TOKENS = (
     "tsinghua",
     "fudan",
     "复旦",
+    *_SINOPHONE_UNIVERSITY_TOKENS,
 )
 
 _CHINESE_LANGUAGE_TOKENS = (
@@ -222,6 +318,7 @@ _CHINESE_LANGUAGE_TOKENS = (
     "粵語",
 )
 
+
 _NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z]+")
 _CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 
@@ -252,22 +349,42 @@ def analyze_company_outreach_layers(
     view: str = "canonical_merged",
     query: str = "",
     model_client: ModelClient | None = None,
+    store: ControlPlaneStore | None = None,
     max_ai_verifications: int = 80,
     ai_workers: int = 8,
     ai_max_retries: int = 2,
     ai_retry_backoff_seconds: float = 0.8,
     output_dir: str | Path | None = None,
+    allow_candidate_documents_source: bool = False,
 ) -> dict[str, Any]:
-    loaded = load_company_snapshot_candidate_documents(
-        runtime_dir=runtime_dir,
-        target_company=target_company,
-        snapshot_id=snapshot_id,
-        view=view,
-    )
+    allow_materialization_fallback = store is not None and not allow_candidate_documents_source
+    try:
+        loaded = load_authoritative_company_snapshot_candidate_documents(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=target_company,
+            snapshot_id=snapshot_id,
+            view=view,
+            prefer_hot_cache=False,
+            allow_materialization_fallback=allow_materialization_fallback,
+            allow_candidate_documents_fallback=allow_candidate_documents_source,
+        )
+    except CandidateArtifactError:
+        loaded = load_authoritative_company_snapshot_candidate_documents(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=target_company,
+            snapshot_id=snapshot_id,
+            view=view,
+            prefer_hot_cache=True,
+            allow_materialization_fallback=allow_materialization_fallback,
+            allow_candidate_documents_fallback=allow_candidate_documents_source,
+        )
     candidates = list(loaded.get("candidates") or [])
     registry_raw_paths = _load_registry_raw_paths_for_candidates(
         runtime_dir=runtime_dir,
         candidates=candidates,
+        store=store,
     )
     analysis = build_outreach_layer_analysis(
         candidates=candidates,
@@ -286,6 +403,7 @@ def analyze_company_outreach_layers(
             "company_key": str(loaded.get("company_key") or "").strip(),
             "snapshot_id": str(loaded.get("snapshot_id") or "").strip(),
             "asset_view": str(loaded.get("asset_view") or view).strip() or "canonical_merged",
+            "source_kind": str(loaded.get("source_kind") or "").strip(),
             "source_path": str(loaded.get("source_path") or "").strip(),
         }
     )
@@ -347,7 +465,7 @@ def build_outreach_layer_analysis(
     registry_paths = dict(registry_raw_paths or {})
     for candidate in candidates:
         candidate_url = str(candidate.linkedin_url or "").strip()
-        candidate_url_key = _normalize_linkedin_profile_url_key(candidate_url)
+        candidate_url_key = normalize_linkedin_profile_url_key(candidate_url)
         fallback_raw_path = str(registry_paths.get(candidate_url_key) or "").strip()
         source_profile = _load_source_profile_signals(
             candidate.source_path,
@@ -596,7 +714,9 @@ def _build_candidate_profile_text(candidate: Candidate, *, source_profile: dict[
         "profile_summary",
         "positions",
         "education",
+        "education_lines",
         "work_history",
+        "experience_lines",
     ]:
         if key in metadata:
             _append_text_fragments(fragments, metadata.get(key))
@@ -692,27 +812,6 @@ def _is_harvest_profile_path(path: Path) -> bool:
     return "harvest_profiles" in {part.lower() for part in path.parts}
 
 
-def _normalize_linkedin_profile_url_key(profile_url: str) -> str:
-    raw_value = str(profile_url or "").strip()
-    if not raw_value:
-        return ""
-    if "://" not in raw_value:
-        raw_value = f"https://{raw_value}"
-    parsed = parse.urlsplit(raw_value)
-    netloc = str(parsed.netloc or "").strip().lower()
-    path = str(parsed.path or "").strip()
-    if not netloc and path:
-        reparsed = parse.urlsplit(f"https://{path}")
-        netloc = str(reparsed.netloc or "").strip().lower()
-        path = str(reparsed.path or "").strip()
-    if not netloc:
-        return ""
-    normalized_path = re.sub(r"/{2,}", "/", path).rstrip("/")
-    if not normalized_path:
-        normalized_path = "/"
-    return f"https://{netloc}{normalized_path}".lower()
-
-
 def _dedupe_nonempty_strings(values: list[str]) -> list[str]:
     deduped: list[str] = []
     seen: set[str] = set()
@@ -725,68 +824,35 @@ def _dedupe_nonempty_strings(values: list[str]) -> list[str]:
     return deduped
 
 
-def _load_registry_raw_paths_for_candidates(*, runtime_dir: str | Path, candidates: list[Candidate]) -> dict[str, str]:
+def _load_registry_raw_paths_for_candidates(
+    *,
+    runtime_dir: str | Path,
+    candidates: list[Candidate],
+    store: ControlPlaneStore | None = None,
+) -> dict[str, str]:
     keys = _dedupe_nonempty_strings(
         [
-            _normalize_linkedin_profile_url_key(str(candidate.linkedin_url or "").strip())
+            normalize_linkedin_profile_url_key(str(candidate.linkedin_url or "").strip())
             for candidate in list(candidates or [])
         ]
     )
     if not keys:
         return {}
-    db_path = Path(runtime_dir) / "sourcing_agent.db"
-    if not db_path.exists():
-        return {}
-    connection: sqlite3.Connection | None = None
-    try:
-        connection = sqlite3.connect(db_path)
-        connection.row_factory = sqlite3.Row
-        placeholders = ",".join("?" for _ in keys)
-        alias_rows = connection.execute(
-            f"""
-            SELECT alias_url_key, profile_url_key
-            FROM linkedin_profile_registry_aliases
-            WHERE alias_url_key IN ({placeholders})
-            """,
-            tuple(keys),
-        ).fetchall()
-        alias_map = {
-            str(row["alias_url_key"] or "").strip(): str(row["profile_url_key"] or "").strip()
-            for row in alias_rows
-            if str(row["alias_url_key"] or "").strip() and str(row["profile_url_key"] or "").strip()
-        }
-        canonical_keys = _dedupe_nonempty_strings([str(alias_map.get(key) or key).strip() for key in keys])
-        if not canonical_keys:
-            return {}
-        canonical_placeholders = ",".join("?" for _ in canonical_keys)
-        registry_rows = connection.execute(
-            f"""
-            SELECT profile_url_key, last_raw_path
-            FROM linkedin_profile_registry
-            WHERE profile_url_key IN ({canonical_placeholders})
-            """,
-            tuple(canonical_keys),
-        ).fetchall()
-    except sqlite3.Error:
-        return {}
-    finally:
-        if connection is not None:
-            try:
-                connection.close()
-            except Exception:
-                pass
-    raw_by_canonical = {
-        str(row["profile_url_key"] or "").strip(): str(row["last_raw_path"] or "").strip()
-        for row in registry_rows
-        if str(row["profile_url_key"] or "").strip()
-    }
-    resolved: dict[str, str] = {}
-    for key in keys:
-        canonical_key = str(alias_map.get(key) or key).strip()
-        raw_path = str(raw_by_canonical.get(canonical_key) or "").strip()
-        if raw_path and Path(raw_path).exists():
-            resolved[key] = raw_path
-    return resolved
+    if store is not None:
+        try:
+            store_registry_rows = store.repos.linkedin_profile_registry.get_bulk(keys)
+        except Exception:
+            store_registry_rows = {}
+        resolved_from_store: dict[str, str] = {}
+        for key in keys:
+            raw_path = str(dict(store_registry_rows.get(key) or {}).get("last_raw_path") or "").strip()
+            if raw_path and Path(raw_path).exists():
+                resolved_from_store[key] = raw_path
+        if resolved_from_store or bool(
+            getattr(store, "control_plane_postgres_is_postgres_only", lambda: False)()
+        ) or bool(getattr(store, "sqlite_shadow_is_ephemeral", lambda: False)()):
+            return resolved_from_store
+    return {}
 
 
 def _select_matching_profile_payload(payload: Any, *, candidate_url: str) -> dict[str, Any]:

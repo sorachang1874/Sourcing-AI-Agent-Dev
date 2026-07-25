@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.reported_profile_text.semantic.batch_request.v1.schema.json",
+  "title": "Offline reported profile-text semantic batch request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "source_manifest",
+    "semantic_policy",
+    "operational_limits",
+    "observations",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.reported_profile_text.semantic.batch_request.v1"},
+    "batch_id": {"type": "string", "pattern": "^xrpt_batch_[0-9a-f]{24}$"},
+    "source_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["campaign_result_sha256", "observation_count", "observations_sha256"],
+      "properties": {
+        "campaign_result_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+        "observation_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "observations_sha256": {"$ref": "#/$defs/nonzero_sha256"}
+      }
+    },
+    "semantic_policy": {
+      "const": {
+        "execution_mode": "offline_fixture",
+        "intended_model_id": "gpt-5.6-luna",
+        "reasoning_effort": "low",
+        "semantic_vocabulary_version": "x.profile.bio_semantic.v2.2",
+        "model_output_schema_version": "x.reported_profile_text.semantic.model_output.v1",
+        "professional_experience_proxy_policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+        "professional_experience_proxy_policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72",
+        "strict_structured_output": true,
+        "fallback_model": null
+      }
+    },
+    "operational_limits": {
+      "const": {
+        "max_items": 10000,
+        "max_text_characters_per_item": 2000,
+        "max_total_text_characters": 20000000,
+        "max_batch_canonical_bytes": 32000000,
+        "max_model_output_canonical_bytes": 262144,
+        "max_validation_depth": 64,
+        "max_validation_nodes": 500000,
+        "max_proposals_per_item": 12
+      }
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/observation"}
+    },
+    "authority": {
+      "const": {
+        "provider_or_network_allowed": false,
+        "external_facts_allowed": false,
+        "protected_identity_inference_allowed": false,
+        "physical_region_inference_allowed": false,
+        "discovery_or_ranking_allowed": false,
+        "eligibility_decision_allowed": false,
+        "canonical_employment_allowed": false,
+        "canonical_write_allowed": false,
+        "outreach_allowed": false
+      }
+    }
+  },
+  "$defs": {
+    "nonzero_sha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "observation_id",
+        "source_kind",
+        "candidate_ref",
+        "campaign_result_sha256",
+        "candidate_row_sha256",
+        "text",
+        "text_sha256",
+        "reported_platform_user_id",
+        "reported_platform_user_id_status",
+        "authority"
+      ],
+      "properties": {
+        "schema_version": {"const": "x.reported_profile_text.observation.v1"},
+        "observation_id": {"type": "string", "pattern": "^xrpt_obs_[0-9a-f]{24}$"},
+        "source_kind": {"const": "grok_model_mediated_unverified_text"},
+        "candidate_ref": {"type": "string", "pattern": "^xrpt_candidate_[0-9a-f]{24}$"},
+        "campaign_result_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+        "candidate_row_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "text_sha256": {"$ref": "#/$defs/nonzero_sha256"},
+        "reported_platform_user_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[1-9][0-9]{1,24}$"}
+          ]
+        },
+        "reported_platform_user_id_status": {
+          "enum": ["absent", "model_mediated_unverified"]
+        },
+        "authority": {
+          "const": {
+            "x_profile_snapshot_claimed": false,
+            "stable_platform_identity_verified": false,
+            "automatic_identity_merge_authorized": false
+          }
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "reported_platform_user_id": {"type": "null"},
+                "reported_platform_user_id_status": {"const": "absent"}
+              }
+            },
+            {
+              "properties": {
+                "reported_platform_user_id": {"type": "string", "pattern": "^[1-9][0-9]{1,24}$"},
+                "reported_platform_user_id_status": {"const": "model_mediated_unverified"}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

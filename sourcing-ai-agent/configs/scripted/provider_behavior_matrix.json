@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "behavior_fixture": "provider_behavior_matrix",
+    "purpose": "CI fixture for retryable 429, timeout, partial result, and staged ready/fetch behavior."
+  },
+  "search": {
+    "rules": [
+      {
+        "name": "search_partial_staged_ready_fetch",
+        "match": {
+          "query_contains": ["scripted"]
+        },
+        "poll_pending_rounds": 2,
+        "estimated_total_count": 4,
+        "results": [
+          {
+            "title": "Scripted partial LinkedIn lead",
+            "url": "https://www.linkedin.com/in/scripted-partial-lead/",
+            "snippet": "Partial scripted result used to validate incremental ingest."
+          }
+        ],
+        "artifacts": [
+          {
+            "phase": "poll",
+            "label": "scripted_search_ready_poll",
+            "payload": {"ready_after_rounds": 2}
+          },
+          {
+            "phase": "fetch",
+            "label": "scripted_search_fetch_ready",
+            "payload": {"fetched": true}
+          }
+        ]
+      }
+    ]
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "harvest_retryable_429_then_timeout",
+        "match": {
+          "logical_name": "harvest_company_employees"
+        },
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "retryable",
+            "status": "429",
+            "message": "Scripted provider backpressure 429; retry with bounded budget."
+          },
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "timeout",
+            "message": "Scripted provider timed out before dataset was ready."
+          }
+        ],
+        "estimated_total_count": 3,
+        "body": [
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-provider-matrix/",
+            "publicIdentifier": "scripted-provider-matrix",
+            "headline": "Scripted Provider Matrix Candidate",
+            "currentCompany": "Scripted AI"
+          }
+        ]
+      }
+    ]
+  }
+}

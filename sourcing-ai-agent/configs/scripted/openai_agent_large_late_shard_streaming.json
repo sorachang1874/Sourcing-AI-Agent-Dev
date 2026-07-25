@@ -1,0 +1,139 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_agent_large_late_shard_streaming",
+    "driver_query": "帮我找OpenAI做Agent方向的人",
+    "purpose": "Scripted fixture for a small early scoped-search shard followed by a large late shard, forcing the profile scheduler to replan the late ready set without using historical envelope budget.",
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "stage_1_public_web_seed_fallback_allowed": false,
+      "profile_search_lanes": ["current", "former"],
+      "small_early_shard_count": 90,
+      "large_late_shard_count": 600,
+      "profile_actor_global_inflight_target": 4,
+      "large_late_profile_batch_size_expected": "durable-unit sized actor envelopes, normally about 200 urls per actor under the scripted/live cap, not 50-url fallback"
+    },
+    "synthetic_counts": {
+      "current_profile_search_total": 90,
+      "former_profile_search_total": 600,
+      "expected_unique_profile_urls_before_profile_scrape": 690
+    }
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "openai_agent_large_late_current_profile_search",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "openai", "Agent"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 1,
+        "pending_message": "Scripted OpenAI Agent current shard is completing before the late former shard.",
+        "partial_result": true,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "current",
+          "search_query": "Agent",
+          "estimated_total_count": 90,
+          "total_pages": 4,
+          "linkedin_slug_prefix": "openai-large-late-current",
+          "full_name_template": "OpenAI Agent Early Current {index}",
+          "headline_template": "Agent systems researcher at OpenAI",
+          "summary_template": "Works on Agent models, tool use, agent reliability, evaluation, and production research at OpenAI."
+        }
+      },
+      {
+        "name": "openai_agent_large_late_former_profile_search",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "openai", "Agent"]
+        },
+        "execute_pending_rounds": 3,
+        "execute_sleep_seconds": 3,
+        "pending_message": "Scripted OpenAI Agent former shard is intentionally late and large.",
+        "partial_result": true,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "OpenAI",
+          "employment_scope": "former",
+          "search_query": "Agent",
+          "estimated_total_count": 600,
+          "total_pages": 24,
+          "linkedin_slug_prefix": "openai-large-late-former",
+          "full_name_template": "OpenAI Agent Late Former {index}",
+          "headline_template": "Former Agent research engineer at OpenAI",
+          "summary_template": "Former OpenAI contributor who worked on Agent research, tool-use systems, evaluations, and applied model behavior."
+        }
+      },
+      {
+        "name": "openai_agent_large_late_profile_scraper_batches",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["openai-large-late"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 1,
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 1,
+        "pending_message": "Scripted OpenAI Agent large-late profile batch is running.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "location": "San Francisco Bay Area",
+          "full_name_template": "OpenAI Agent {slug}",
+          "title_template": "Agent Research Engineer",
+          "headline_template": "{title} at {company}",
+          "about_template": "Builds Agent models, tool-use scaffolding, evaluation harnesses, and product-facing research systems.",
+          "previous_company": "Google DeepMind",
+          "previous_title": "Research Engineer",
+          "skills": ["Agent", "Tool use", "LLM evaluation", "Distributed systems"]
+        }
+      },
+      {
+        "name": "openai_agent_large_late_profile_scraper_retryable_edge",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["large-late-scripted-retryable-edge"]
+        },
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "retryable",
+            "message": "Dormant scripted retryable edge for scenario validation; not used by the large-late happy path."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "max_profiles": 1
+        }
+      },
+      {
+        "name": "openai_agent_large_late_profile_scraper_timeout_edge",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["large-late-scripted-timeout-edge"]
+        },
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "message": "Dormant scripted timeout edge for scenario validation; not used by the large-late happy path."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "OpenAI",
+          "search_query": "Agent",
+          "max_profiles": 1
+        }
+      }
+    ]
+  }
+}

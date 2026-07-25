@@ -1,0 +1,712 @@
+{
+  "schema_version": "filter_projection_lineage_terminal_owner_decision.v1",
+  "decision_id": "track_d.d1n.s1f0c0.lineage_terminal_owner",
+  "status": "decision_locked_not_implemented",
+  "scope": {
+    "batch": "S1f0c0-lineage-decision",
+    "decision_only": true,
+    "ddl_delta": 0,
+    "runtime_write_delta": 0,
+    "provider_invocation_delta": 0,
+    "model_invocation_delta": 0,
+    "served_population_delta": 0
+  },
+  "obligation_basis": {
+    "track": "D1",
+    "d1_ob_id_set": [],
+    "applicable_plan_section_6_items": [
+      3
+    ],
+    "already_recorded_bookkeeping": [
+      "RESIDUAL_LEDGER.R-029",
+      "NEXT_TODO.Track_D.D1"
+    ],
+    "not_closed_by_this_batch": [
+      "Plan section 6 item 4",
+      "R-019",
+      "R-029"
+    ],
+    "borrowed_ob_ids": "forbidden"
+  },
+  "owners": {
+    "physical_projection_writer": "serving_projection_owner",
+    "start_authority_owner": "acquisition_start_command_acceptance",
+    "planning_manifest_owner": "cohort_provider_compiler",
+    "execution_manifest_owner": "cohort_provider_compiler",
+    "cohort_terminal_writer": "cohort_provider_runtime",
+    "projection_terminal_writer": "serving_projection_owner",
+    "projection_field_validator": "projection_search_service.filter_projection_publication_owner_v2",
+    "runtime_namespace_ref_owner": "runtime_environment.runtime_namespace_ref_registry",
+    "filter_query_owner": "projection_search_service",
+    "result_acceptance_writer": "agent_tool_result_slot_owner",
+    "product_owner_state": "ratified_for_future_s1f0d_implementation_only"
+  },
+  "operation_native_source_run": {
+    "canonical_field": "source_run_id",
+    "canonical_value": "acquisition_runs.workflow_run_id",
+    "required_join": [
+      "acquisition_runs.acquisition_run_id",
+      "acquisition_runs.operation_run_id",
+      "acquisition_runs.workflow_run_id",
+      "operation_runs.operation_run_id",
+      "operation_runs.action_id",
+      "workflow_commands.workflow_run_id",
+      "workflow_commands.operation_id"
+    ],
+    "legacy_job_shell": "forbidden",
+    "job_id_alias": "forbidden",
+    "source_run_alias": "forbidden"
+  },
+  "start_authority_join": {
+    "owner_ref_schema_version": "acquisition_start_command_acceptance_owner_result_ref.v1",
+    "owner_ref_fields": [
+      "schema_version",
+      "runtime_namespace",
+      "provider_mode",
+      "workspace_id",
+      "action_id",
+      "operation_run_id",
+      "workflow_run_id",
+      "workflow_command_id",
+      "terminal_winner_id",
+      "terminal_winner_sequence_number",
+      "command_source_event_id",
+      "command_source_event_sequence_number",
+      "command_source_event_contract_digest",
+      "confirmation_receipt_ref",
+      "parent_budget_envelope_ref",
+      "start_snapshot_digest",
+      "root_command_payload_digest",
+      "result_occurrence_ref"
+    ],
+    "root_payload_schema_version": "acquisition_root_command_payload.v2",
+    "approval_event": {
+      "event_type": "ActionApproved",
+      "sequence_number": 2,
+      "receipt_schema_version": "acquisition_confirmation_receipt.v1"
+    },
+    "command_acceptance_winner": {
+      "event_type": "OperationCommandPlanned",
+      "sequence_number": 1,
+      "result_link_policy": "workflow_command_acceptance_v1"
+    },
+    "exact_equalities": [
+      "receipt.action_id == action.action_id == operation.action_id == owner_ref.action_id",
+      "operation.operation_run_id == acquisition_run.operation_run_id == owner_ref.operation_run_id",
+      "root.workflow_run_id == acquisition_run.workflow_run_id == owner_ref.workflow_run_id",
+      "root.command_id == owner_ref.workflow_command_id",
+      "root.payload_digest == owner_ref.root_command_payload_digest",
+      "root.start_snapshot_digest == receipt.start_snapshot_digest == owner_ref.start_snapshot_digest",
+      "root.confirmation_receipt_ref == owner_ref.confirmation_receipt_ref",
+      "action.metadata.result_occurrence_ref == owner_ref.result_occurrence_ref",
+      "owner_ref.command_source_event_sequence_number == 2",
+      "owner_ref.terminal_winner_sequence_number == 1"
+    ],
+    "uniqueness_predicates": [
+      "one ActionApproved sequence 2 per action event stream",
+      "one OperationCommandPlanned sequence 1 per operation event stream",
+      "one root command for workflow_run_id plus root idempotency key",
+      "one result occurrence for result_slot_id plus slot_generation plus logical_occurrence_digest"
+    ],
+    "caller_supplied_join": "forbidden"
+  },
+  "propagation_contract": {
+    "carrier_schema_version": "acquisition_start_lineage_ref.v1",
+    "source": "acquisition_start_command_acceptance_owner_result_ref.v1",
+    "ordered_stages": [
+      {
+        "stage": "root_command",
+        "carrier_location": "workflow_commands.payload.start_lineage_ref",
+        "owner": "acquisition_run_create_owner"
+      },
+      {
+        "stage": "resolved_intent",
+        "carrier_location": "workflow_commands.payload.resolved_intent.start_lineage_ref",
+        "owner": "acquisition_intent_resolve_owner"
+      },
+      {
+        "stage": "acquisition_plan",
+        "carrier_location": "workflow_commands.payload.acquisition_plan.start_lineage_ref",
+        "owner": "acquisition_plan_build_owner"
+      },
+      {
+        "stage": "review_session",
+        "carrier_location": "plan_review_sessions.execution_bundle.start_lineage_ref",
+        "owner": "acquisition_plan_review_request_owner"
+      },
+      {
+        "stage": "plan_commit",
+        "carrier_location": "workflow_commands.payload.execution_bundle.start_lineage_ref",
+        "owner": "acquisition_plan_commit_owner"
+      },
+      {
+        "stage": "acquisition_run",
+        "carrier_location": "acquisition_runs.execution_bundle.start_lineage_ref",
+        "owner": "acquisition_plan_commit_owner"
+      }
+    ],
+    "revalidation": "exact typed reload and canonical byte equality at every stage",
+    "current_loss_point": "AcquisitionCommandOwner._build_acquisition_plan_from_resolved_intent drops resolved_intent.source_workflow_payload",
+    "mutable_latest_lookup": "forbidden",
+    "json_aliases": "forbidden"
+  },
+  "planning_execution_recompile": {
+    "planning_schema_version": "cohort_provider_manifest.v2",
+    "planning_validator": "CohortProviderCompiler.validate_planning_manifest",
+    "execution_schema_version": "cohort_provider_execution_manifest.v2",
+    "execution_recompiler_owner": "CohortProviderCompiler",
+    "required_entrypoint": "recompile_execution_manifest",
+    "permitted_differences": [
+      "schema_version",
+      "execution_ready",
+      "execution_blocker",
+      "compiler_inputs.execution_capability",
+      "manifest_digest"
+    ],
+    "exact_equal_fields": [
+      "source",
+      "provider",
+      "registry_version",
+      "registry_digest",
+      "cohort_selection_digest",
+      "role_match",
+      "compiler_inputs.cohort_selection",
+      "compiler_inputs.base_filter_hints",
+      "compiler_inputs.requested_result_limit",
+      "budget",
+      "aggregation",
+      "lanes",
+      "physical_query_digest",
+      "company_target",
+      "budget_ceiling",
+      "schema_pins"
+    ],
+    "execution_capability": {
+      "issuer": "cohort_provider_runtime",
+      "caller_authored": false,
+      "must_bind": [
+        "provider_mode",
+        "runtime_namespace_ref",
+        "max_provider_calls",
+        "max_provider_items",
+        "max_output_candidates",
+        "role_proof_verifier_id",
+        "role_proof_verifier_revision"
+      ],
+      "may_expand_planning_budget": false
+    },
+    "result_validation": {
+      "schema_version": "cohort_execution_result.v1",
+      "must_equal_execution": [
+        "provider",
+        "cohort_selection_digest",
+        "cohort_provider_manifest_digest",
+        "lane_summaries",
+        "execution_capability"
+      ],
+      "partial_lane_result": "forbidden",
+      "missing_required_lane_count": 0,
+      "exact_result_digest_required": true
+    }
+  },
+  "terminal_lineage_record": {
+    "schema_version": "cohort_projection_terminal_lineage.v1",
+    "physical_relation": "cohort_projection_terminal_lineage",
+    "implementation_state": "absent_until_S1f0c2",
+    "identity_fields": [
+      "runtime_namespace_ref.runtime_namespace_ref_id",
+      "provider_mode",
+      "workspace_id",
+      "acquisition_run_id"
+    ],
+    "record_fields": [
+      "schema_version",
+      "terminal_lineage_id",
+      "runtime_namespace_ref",
+      "provider_mode",
+      "workspace_id",
+      "requester_id",
+      "action_id",
+      "operation_run_id",
+      "workflow_run_id",
+      "root_workflow_command_id",
+      "acquisition_run_id",
+      "start_authority_ref",
+      "planning_manifest_ref",
+      "execution_manifest_ref",
+      "search_seed_snapshot_ref",
+      "result_view_ref",
+      "cohort_execution_result_ref",
+      "candidate_documents_commit_ref",
+      "candidate_set_commitment",
+      "freshness_input",
+      "readiness_input",
+      "terminal_digest"
+    ],
+    "reference_fields": {
+      "planning_manifest_ref": [
+        "schema_version",
+        "manifest_digest",
+        "physical_query_digest"
+      ],
+      "execution_manifest_ref": [
+        "schema_version",
+        "manifest_digest",
+        "planning_manifest_digest"
+      ],
+      "search_seed_snapshot_ref": [
+        "schema_version",
+        "snapshot_id",
+        "snapshot_digest",
+        "entries_digest",
+        "lane_payloads_digest"
+      ],
+      "result_view_ref": [
+        "schema_version",
+        "result_view_id",
+        "snapshot_id",
+        "result_view_digest"
+      ],
+      "cohort_execution_result_ref": [
+        "schema_version",
+        "execution_result_digest",
+        "result_digest",
+        "cohort_publication_digest"
+      ],
+      "candidate_documents_commit_ref": [
+        "schema_version",
+        "candidate_documents_digest",
+        "commit_marker_digest",
+        "cohort_publication_digest"
+      ]
+    },
+    "cas": {
+      "operation": "insert_once_or_exact_replay",
+      "lock_order": [
+        "start_authority_aggregate",
+        "acquisition_runs",
+        "cohort_projection_terminal_lineage_identity"
+      ],
+      "stored_predicates": [
+        "workspace_id",
+        "provider_mode",
+        "runtime_namespace_ref_id",
+        "action_id",
+        "operation_run_id",
+        "workflow_run_id",
+        "root_workflow_command_id",
+        "acquisition_run_id",
+        "start_authority_digest",
+        "execution_manifest_digest",
+        "execution_result_digest",
+        "candidate_documents_commit_digest",
+        "candidate_set_digest"
+      ],
+      "outcomes": [
+        "inserted",
+        "exact_replay",
+        "conflict_zero_write"
+      ],
+      "update_after_insert": "forbidden",
+      "terminal_winner_id": "terminal_lineage_id"
+    },
+    "artifact_paths": "forbidden",
+    "legacy_job_id": "forbidden",
+    "migration": {
+      "this_batch": "none",
+      "historical_backfill": "forbidden",
+      "legacy_terminal_adoption": "forbidden"
+    }
+  },
+  "candidate_set_commitment": {
+    "schema_version": "cohort_candidate_set_commitment.v1",
+    "maximum_source_candidate_count": 1000,
+    "minimum_source_candidate_count": 1,
+    "fields": [
+      "schema_version",
+      "source_candidate_count",
+      "visible_candidate_count",
+      "excluded_candidate_count",
+      "exclusion_policy",
+      "canonical_member_set_digest",
+      "candidate_documents_digest",
+      "lane_membership_set_digest"
+    ],
+    "exclusion_policy": "no_exclusions_v1",
+    "invariants": [
+      "source_candidate_count == visible_candidate_count + excluded_candidate_count",
+      "excluded_candidate_count == 0",
+      "canonical_member_set has one unique candidate_identity_key per source candidate",
+      "canonical_member_set_digest equals final projection member-set digest",
+      "candidate_documents_digest equals committed candidate-documents digest",
+      "lane_membership_set_digest binds every candidate to closed lane memberships",
+      "duplicates extras omissions and cross-run members fail closed"
+    ],
+    "canonical_member_fields": [
+      "candidate_identity_key",
+      "candidate_document_digest",
+      "cohort_lane_membership_digest",
+      "visibility_state"
+    ],
+    "canonical_order": "candidate_identity_key ascending by UTF-8 byte order",
+    "visibility_state": "visible"
+  },
+  "runtime_namespace": {
+    "private_owner_value": "canonical runtime directory resolved only by runtime_environment",
+    "agent_visible_schema_version": "runtime_namespace_ref.v1",
+    "agent_visible_fields": [
+      "schema_version",
+      "runtime_namespace_ref_id",
+      "runtime_namespace_binding_digest"
+    ],
+    "registry_owner": "runtime_environment.runtime_namespace_ref_registry",
+    "private_binding_fields": [
+      "runtime_namespace_ref_id",
+      "runtime_namespace_digest",
+      "provider_mode",
+      "workspace_id",
+      "issuer_revision",
+      "runtime_namespace_binding_digest"
+    ],
+    "path_or_url_in_agent_result": "forbidden",
+    "caller_minted_ref": "forbidden",
+    "cross_workspace_or_mode_reuse": "forbidden"
+  },
+  "freshness_readiness": {
+    "freshness": {
+      "physical_owner": "serving_projection_owner.final_publication_identity",
+      "model_safe_owner": "projection_search_service.publication_identity",
+      "allowed_statuses": [
+        "fresh",
+        "stale"
+      ],
+      "fresh_rule": "current projection terminal exact-matches terminal_lineage_id terminal_digest and membership_revision"
+    },
+    "readiness": {
+      "physical_owner": "serving_projection_owner.final_projection_readiness",
+      "model_safe_owner": "projection_search_service.readiness",
+      "allowed_statuses": [
+        "ready",
+        "not_ready"
+      ],
+      "ready_rule": "candidate-set equality lane completeness final parent-member-route UoW and product carrier all exact"
+    },
+    "reader_write_or_repair": "forbidden",
+    "latest_file_fallback": "forbidden"
+  },
+  "projection_terminal_authority": {
+    "schema_version": "filter_projection_publication_terminal.v1",
+    "implementation_state": "absent_until_S1f0d",
+    "physical_writer": "serving_projection_owner",
+    "field_validator": "projection_search_service.filter_projection_publication_owner_v2",
+    "authority": "final reviewed parent-member-route projection publication",
+    "audit_only_predecessor": "cohort_execution_result.v1",
+    "source_run_id": "acquisition_runs.workflow_run_id",
+    "target_fields": [
+      "projection_id",
+      "membership_revision",
+      "cohort_selection_registry_version",
+      "cohort_selection_registry_digest",
+      "cohort_selection_digest"
+    ],
+    "terminal_fields": [
+      "schema_version",
+      "publication_terminal_id",
+      "projection_id",
+      "membership_revision",
+      "source_run_id",
+      "terminal_lineage_id",
+      "terminal_lineage_digest",
+      "planning_manifest_digest",
+      "execution_manifest_digest",
+      "execution_result_digest",
+      "candidate_set_digest",
+      "publication_digest",
+      "runtime_namespace_ref",
+      "provider_mode",
+      "freshness",
+      "readiness"
+    ],
+    "publication_uow": "existing serving_projection parent member route UoW",
+    "new_lock_order": "forbidden",
+    "cohort_result_as_terminal_authority": "forbidden"
+  },
+  "result_slot_contract": {
+    "result_link_policy": "no_command_v1",
+    "effect_class": "read_only",
+    "common_links": {
+      "required": [
+        "action_id",
+        "operation_run_id"
+      ],
+      "empty": [
+        "workflow_command_id",
+        "activity_run_id",
+        "activity_attempt_id"
+      ],
+      "zero": [
+        "command_attempt",
+        "command_generation",
+        "control_epoch"
+      ]
+    },
+    "success": {
+      "owner_target_kind": "filter_projection_publication_v1",
+      "owner_target_id": "projection_id",
+      "owner_target_revision": 0,
+      "owner_target_generation": 0,
+      "owner_target_revision_token": "membership_revision",
+      "terminal_winner_id": "publication_terminal_id",
+      "owner_result_ref_schema_version": "filter_projection_owner_result_ref.v1",
+      "owner_result_ref_fields": [
+        "schema_version",
+        "publication_terminal_id",
+        "projection_id",
+        "membership_revision",
+        "source_run_id",
+        "terminal_lineage_id",
+        "terminal_lineage_digest",
+        "cohort_selection_registry_version",
+        "cohort_selection_registry_digest",
+        "cohort_selection_digest",
+        "planning_manifest_digest",
+        "execution_manifest_digest",
+        "execution_result_digest",
+        "candidate_set_digest",
+        "publication_digest",
+        "runtime_namespace_ref",
+        "provider_mode",
+        "freshness",
+        "readiness",
+        "result_occurrence_ref",
+        "serialized_result_digest"
+      ],
+      "owner_result_digest": "sha256 canonical owner_result_ref"
+    },
+    "deferred": {
+      "allowed_outcomes": [
+        "stale",
+        "not_ready"
+      ],
+      "owner_target_kind": "filter_projection_publication_observation_v1",
+      "owner_target_id": "projection_id",
+      "owner_target_revision_token": "observed_membership_revision",
+      "terminal_winner_id": "observed_publication_terminal_id",
+      "owner_result_ref_schema_version": "filter_projection_deferred_owner_result_ref.v1",
+      "owner_result_ref_fields": [
+        "schema_version",
+        "outcome",
+        "requested_target_ref",
+        "observed_publication_terminal_ref",
+        "freshness",
+        "readiness",
+        "result_occurrence_ref",
+        "serialized_result_digest"
+      ]
+    },
+    "masked_absence": {
+      "outcome": "projection_not_found",
+      "owner_target_kind": "filter_projection_masked_error_v1",
+      "owner_target_id": "result_slot_id",
+      "owner_target_generation": "slot_generation",
+      "terminal_winner_id": "filtererror_<owner_result_digest>",
+      "owner_result_ref_schema_version": "filter_projection_masked_error_owner_ref.v1",
+      "owner_result_ref_fields": [
+        "schema_version",
+        "lookup",
+        "occurrence",
+        "outcome",
+        "serialized_result_digest"
+      ]
+    },
+    "prepare_failure": {
+      "conditions": [
+        "malformed owner state",
+        "lineage drift",
+        "digest mismatch",
+        "prepare accept race",
+        "membership revision drift"
+      ],
+      "slot_status": "pending",
+      "result_attempt_writes": 0,
+      "result_slot_writes": 0,
+      "result_journal_writes": 0,
+      "domain_projection_provider_model_writes": 0
+    },
+    "acceptance_writes": [
+      "agent_tool_result_attempts",
+      "agent_tool_result_slots",
+      "agent_tool_result_journal"
+    ]
+  },
+  "mechanism_invariant_matrix": [
+    {
+      "mechanism": "start_authority_carrier",
+      "single_writer": "acquisition_start_command_acceptance exact-copy only",
+      "tenant_key": "workspace_id plus requester bound by start snapshot digest",
+      "generation_fence": "exact result-slot generation and immutable command-acceptance winner",
+      "lifecycle": "created once propagated by exact equality never rewritten",
+      "late_partial": "missing stage carrier blocks downstream terminal commit",
+      "cost": "exact parent budget envelope ref is retained and never expanded",
+      "physical_identity": "receipt action operation workflow root and result occurrence",
+      "provenance": "typed owner ref not caller payload",
+      "consistency": "one schema and closed field set",
+      "runtime_isolation": "provider mode and private namespace binding exact"
+    },
+    {
+      "mechanism": "planning_execution_recompile",
+      "single_writer": "CohortProviderCompiler",
+      "tenant_key": "company target and start authority remain workspace bound",
+      "generation_fence": "planning and execution digests are immutable",
+      "lifecycle": "capability-free plan to one capability-bearing execution manifest",
+      "late_partial": "partial or missing lane result cannot terminalize",
+      "cost": "execution capability cannot expand planning ceiling",
+      "physical_identity": "planning physical query and execution capability digests",
+      "provenance": "server-issued execution capability only",
+      "consistency": "all non-capability fields exact-equal",
+      "runtime_isolation": "capability binds provider mode and opaque namespace ref"
+    },
+    {
+      "mechanism": "terminal_lineage_record",
+      "single_writer": "cohort_provider_runtime",
+      "tenant_key": "workspace_id in identity and every CAS",
+      "generation_fence": "insert-once identity with exact replay only",
+      "lifecycle": "immutable terminal no update no resurrection",
+      "late_partial": "incomplete artifacts or candidate set produce conflict zero-write",
+      "cost": "records exact execution capability and result after calls",
+      "physical_identity": "acquisition run plus receipt root snapshot result and commit digests",
+      "provenance": "typed durable refs with paths excluded",
+      "consistency": "closed terminal record and canonical digest",
+      "runtime_isolation": "runtime ref provider mode workspace identity"
+    },
+    {
+      "mechanism": "runtime_namespace_ref",
+      "single_writer": "runtime_environment.runtime_namespace_ref_registry",
+      "tenant_key": "workspace_id is a private binding field",
+      "generation_fence": "immutable server-minted ref and binding digest",
+      "lifecycle": "ref never retargets and private mapping tombstones without reuse",
+      "late_partial": "missing registry row blocks terminal and result preparation",
+      "cost": "not applicable no transport authority",
+      "physical_identity": "ref id plus private namespace digest issuer and mode",
+      "provenance": "server registry not model or caller",
+      "consistency": "closed public ref and closed private binding",
+      "runtime_isolation": "cross-mode and cross-workspace reuse forbidden"
+    },
+    {
+      "mechanism": "candidate_set_commitment",
+      "single_writer": "cohort_provider_runtime commits source set serving_projection_owner exact-copies",
+      "tenant_key": "inherits terminal workspace and acquisition identity",
+      "generation_fence": "terminal lineage digest and projection membership revision",
+      "lifecycle": "complete once no partial mutation",
+      "late_partial": "duplicate extra omitted excluded or cross-run members fail closed",
+      "cost": "bounded at one thousand output candidates",
+      "physical_identity": "candidate document lane membership and set digests",
+      "provenance": "committed candidate documents only",
+      "consistency": "source count equals visible plus excluded and set digests equal",
+      "runtime_isolation": "candidate set cannot cross terminal runtime identity"
+    },
+    {
+      "mechanism": "projection_publication_terminal",
+      "single_writer": "serving_projection_owner with one in-UoW field validator",
+      "tenant_key": "workspace-bound terminal lineage is exact-loaded before publication",
+      "generation_fence": "opaque membership revision is result revision token",
+      "lifecycle": "new membership creates new publication terminal old one stays historical",
+      "late_partial": "parent member route or carrier failure rolls back",
+      "cost": "no provider or model call",
+      "physical_identity": "projection revision lineage and publication digests",
+      "provenance": "Cohort result is audit predecessor not authority",
+      "consistency": "existing atomic publication UoW and no second writer",
+      "runtime_isolation": "opaque namespace ref and provider mode exact-copy"
+    },
+    {
+      "mechanism": "result_slot_variants",
+      "single_writer": "agent_tool_result_slot_owner",
+      "tenant_key": "occurrence workspace plus exact Action Operation pair",
+      "generation_fence": "membership revision token or slot generation for masked absence",
+      "lifecycle": "pending to accepted once exact replay only",
+      "late_partial": "malformed drift or race remains pending with zero writes",
+      "cost": "read-only no provider model or domain writes",
+      "physical_identity": "publication winner or slot-bound masked winner",
+      "provenance": "closed owner refs and named serializer digest",
+      "consistency": "no-command link shape with complete refs",
+      "runtime_isolation": "success result exposes opaque ref only"
+    }
+  ],
+  "implementation_batches": [
+    {
+      "batch": "S1f0c1-start-propagation",
+      "depends_on": [
+        "S1f0c0-lineage-decision"
+      ],
+      "write_owner": "acquisition_planner",
+      "outcome": "exact start authority through acquisition_runs",
+      "promotion_requires_review": true
+    },
+    {
+      "batch": "S1f0c2-cohort-terminal",
+      "depends_on": [
+        "S1f0c1-start-propagation"
+      ],
+      "write_owner": "cohort_provider_runtime",
+      "outcome": "commit-once operation-native terminal lineage",
+      "promotion_requires_review": true
+    },
+    {
+      "batch": "S1f0d-owner-v2",
+      "depends_on": [
+        "S1f0b-foundation",
+        "S1f0c2-cohort-terminal"
+      ],
+      "write_owner": "serving_projection_owner",
+      "outcome": "product-eligible final projection publication terminal",
+      "promotion_requires_review": true
+    },
+    {
+      "batch": "S1f1-reader-result",
+      "depends_on": [
+        "S1f0d-owner-v2"
+      ],
+      "write_owner": "agent_tool_result_slot_owner",
+      "outcome": "owner-only read and commandless result acceptance",
+      "promotion_requires_review": true
+    }
+  ],
+  "release_boundary": {
+    "served_population": 0,
+    "provider_invocations": 0,
+    "model_invocations": 0,
+    "live_invocations": 0,
+    "migration_delta": 0,
+    "backfill": "forbidden",
+    "agent_reader": "blocked",
+    "local_live": "blocked",
+    "hosted": "blocked",
+    "open_residuals": [
+      "R-019",
+      "R-029"
+    ],
+    "author_evidence_only": true
+  },
+  "evidence": {
+    "foundation_manifest": "filter_projection_foundation_boundary.v1",
+    "scout_handoffs": [
+      ".coord/handoffs/s1f-lineage-characterization.md",
+      ".coord/handoffs/s1f-terminal-owner-characterization.md"
+    ],
+    "code_symbols": [
+      "acquisition_start_command_acceptance.ACQUISITION_START_COMMAND_ACCEPTANCE_OWNER_REF_FIELDS",
+      "acquisition_start_v2.AcquisitionStartV2RootCommandPayload",
+      "acquisition_command_owner.AcquisitionCommandOwner._start_v2_root_workflow_payload",
+      "acquisition_command_owner.AcquisitionCommandOwner._build_acquisition_plan_from_resolved_intent",
+      "cohort_provider_compiler.CohortProviderCompiler.compile_planning_manifest",
+      "cohort_provider_compiler.CohortProviderCompiler.validate_planning_manifest",
+      "acquisition._build_cohort_execution_result",
+      "search_seed_registry.cohort_publication_is_committed",
+      "repositories.workflow_runtime.WorkflowRuntimeRepository.upsert_acquisition_run",
+      "serving_projection_writer.ServingProjectionWriter.publish_run_scope_projection",
+      "agent_projection_query.execute_filter_projection_v2",
+      "agent_tool_result_slot.AgentToolTerminalResult"
+    ],
+    "current_missing_join": "exact start authority to operation-native committed Cohort terminal and final projection"
+  }
+}

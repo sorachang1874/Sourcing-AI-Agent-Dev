@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok_cli.candidate_hydration.task.v1.schema.json",
+  "title": "Grok CLI candidate hydration task v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_version",
+    "task_status",
+    "task_key",
+    "experiment_binding",
+    "candidate_state_binding",
+    "handle",
+    "profile_url",
+    "candidate_value_segment",
+    "reasons",
+    "requested_tools",
+    "seed_post_urls",
+    "max_tool_calls",
+    "max_posts",
+    "required_fields",
+    "execution_authorized"
+  ],
+  "properties": {
+    "task_version": {"const": "x.grok_cli.candidate_hydration.task.v1"},
+    "task_status": {"const": "planned"},
+    "task_key": {"type": "string", "pattern": "^xhydrate_[0-9a-f]{24}$"},
+    "experiment_binding": {"$ref": "#/$defs/experiment_binding"},
+    "candidate_state_binding": {"$ref": "#/$defs/candidate_state_binding"},
+    "handle": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,15}$"},
+    "profile_url": {"type": "string", "pattern": "^https://x\\.com/[A-Za-z0-9_]{1,15}$"},
+    "candidate_value_segment": {
+      "enum": [
+        "precision_current_current",
+        "recall_current_historical",
+        "recall_historical_current",
+        "recall_historical_historical",
+        "needs_evidence"
+      ]
+    },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "reported_platform_user_id_conflict",
+          "missing_platform_user_id",
+          "missing_bio",
+          "target_lab_affiliation_state_unresolved",
+          "pretraining_experience_state_unresolved",
+          "high_authority_target_lab_affiliation_state_evidence_missing",
+          "high_authority_pretraining_experience_state_evidence_missing"
+        ]
+      }
+    },
+    "requested_tools": {
+      "oneOf": [
+        {
+          "type": "array",
+          "prefixItems": [{"const": "x_user_search"}],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        {
+          "type": "array",
+          "prefixItems": [{"const": "x_user_search"}, {"const": "x_thread_fetch"}],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      ]
+    },
+    "seed_post_urls": {
+      "type": "array",
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^https://x\\.com/[A-Za-z0-9_]{1,15}/status/[1-9][0-9]{5,23}$"
+      }
+    },
+    "max_tool_calls": {"type": "integer", "minimum": 1, "maximum": 2},
+    "max_posts": {"enum": [0, 5]},
+    "required_fields": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "platform_user_id",
+          "current_handle",
+          "bio_text",
+          "bio_observed_at",
+          "canonical_post_id",
+          "canonical_post_url",
+          "post_author_handle",
+          "post_authored_at",
+          "bounded_excerpt"
+        ]
+      }
+    },
+    "execution_authorized": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "session_uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "request_uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "experiment_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lab_id",
+        "run_binding_commitment",
+        "model_id",
+        "tool_policy_version",
+        "query_policy_version",
+        "query_policy_sha256",
+        "query_commitment_scheme",
+        "query_commitment_issuance_id",
+        "query_commitment_issuance_sha256",
+        "query_commitment_key_id",
+        "query_commitment_nonce_id",
+        "legacy_full_query_policy_commitment",
+        "query_policy_registry_version",
+        "query_policy_registry_sha256",
+        "query_policy_registry_row_sha256",
+        "candidate_value_policy_version",
+        "candidate_value_policy_sha256"
+      ],
+      "properties": {
+        "lab_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"},
+        "run_binding_commitment": {"$ref": "#/$defs/sha256"},
+        "model_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
+        "tool_policy_version": {"const": "x.grok_cli.exploration.tool_receipt.v1"},
+        "query_policy_version": {"$ref": "#/$defs/version"},
+        "query_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "query_commitment_scheme": {"const": "hmac-sha256-v1"},
+        "query_commitment_issuance_id": {"type": "string", "pattern": "^qci_[0-9a-f]{24}$"},
+        "query_commitment_issuance_sha256": {"$ref": "#/$defs/sha256"},
+        "query_commitment_key_id": {"$ref": "#/$defs/sha256"},
+        "query_commitment_nonce_id": {"$ref": "#/$defs/sha256"},
+        "legacy_full_query_policy_commitment": {"$ref": "#/$defs/sha256"},
+        "query_policy_registry_version": {"$ref": "#/$defs/version"},
+        "query_policy_registry_sha256": {"$ref": "#/$defs/sha256"},
+        "query_policy_registry_row_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_value_policy_version": {"$ref": "#/$defs/version"},
+        "candidate_value_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate_state_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_sha256",
+        "target_lab_affiliation_state",
+        "pretraining_experience_state",
+        "candidate_value_segment",
+        "identity_counting_status"
+      ],
+      "properties": {
+        "candidate_sha256": {"$ref": "#/$defs/sha256"},
+        "target_lab_affiliation_state": {
+          "enum": ["current", "historical", "ambiguous", "unsupported"]
+        },
+        "pretraining_experience_state": {
+          "enum": ["current", "historical", "ambiguous", "unsupported"]
+        },
+        "candidate_value_segment": {
+          "enum": [
+            "precision_current_current",
+            "recall_current_historical",
+            "recall_historical_current",
+            "recall_historical_historical",
+            "needs_evidence"
+          ]
+        },
+        "identity_counting_status": {
+          "enum": [
+            "unique_provisional_or_reported_id",
+            "reported_platform_user_id_conflict_quarantined"
+          ]
+        }
+      }
+    }
+  }
+}

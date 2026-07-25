@@ -22,6 +22,7 @@ class QueryIntentPolicyTest(unittest.TestCase):
 
         multimodal = next(item for item in catalog if item["rewrite_id"] == "multimodal_project_focus")
         self.assertEqual(multimodal["trigger_sources"]["scope_rewrite_tags"], ["multimodal_project_focus"])
+        self.assertEqual(multimodal["request_patch"]["keywords"], ["multimodal"])
         self.assertEqual(multimodal["request_patch"]["must_have_facets"], ["multimodal"])
 
     def test_business_policy_matches_greater_china_shorthand(self) -> None:
@@ -39,6 +40,15 @@ class QueryIntentPolicyTest(unittest.TestCase):
         self.assertIn("Veo", list(multimodal.get("keywords") or []))
         self.assertIn("Veo", list(multimodal.get("matched_terms") or []))
         self.assertEqual(multimodal["request_patch"]["must_have_facets"], ["multimodal"])
+
+    def test_multimodal_policy_does_not_expand_to_sibling_direction_keywords(self) -> None:
+        rewrites = match_business_rewrite_policies("帮我找 OpenAI 做 multimodal 方向的人")
+
+        multimodal = next(item for item in rewrites if str(item.get("rewrite_id") or "") == "multimodal_project_focus")
+        request_patch_keywords = list(multimodal.get("request_patch", {}).get("keywords") or [])
+        self.assertEqual(request_patch_keywords, ["multimodal"])
+        self.assertNotIn("vision-language", request_patch_keywords)
+        self.assertNotIn("video generation", request_patch_keywords)
 
     def test_business_policy_uses_shared_role_knowledge(self) -> None:
         rewrites = match_business_rewrite_policies("给我 Applied Scientist")

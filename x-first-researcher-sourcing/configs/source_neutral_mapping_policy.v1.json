@@ -1,0 +1,144 @@
+{
+  "schema_version": "x.source_neutral.mapping.policy.v1",
+  "policy_version": "source_neutral_mapping_policy.v1",
+  "authority": {
+    "provider_calls_allowed": false,
+    "product_writes_allowed": false,
+    "business_candidate_cap": null,
+    "business_reference_cap": null,
+    "candidate_grain_is_empirical_not_business_cap": true,
+    "calls_per_candidate_is_empirical_not_business_cap": true,
+    "invalid_batch_zero_commit": true
+  },
+  "wave_p": {
+    "candidate_grain": 3,
+    "calls_per_candidate": 2,
+    "cover_manifest_exactly_once": true,
+    "invalid_batch_split_strategy": "three_to_two_plus_one_then_binary",
+    "champion_cells": [
+      {
+        "cell_id": "authored_direct_core_top",
+        "concept_alias_group_id": "direct_core",
+        "mode": "Top"
+      },
+      {
+        "cell_id": "authored_data_objective_top",
+        "concept_alias_group_id": "data_objective",
+        "mode": "Top"
+      }
+    ]
+  },
+  "search": {
+    "native_tool_name": "x_keyword_search",
+    "request_limit": 10,
+    "saturation_semantics": "count_equal_request_limit_is_lower_bound_only"
+  },
+  "concept_alias_groups": [
+    {
+      "group_id": "direct_core",
+      "aliases": [
+        "pretrain",
+        "pretraining",
+        "\"pre-training\"",
+        "tokenizer",
+        "tokenization",
+        "\"training data\"",
+        "\"data mixture\"",
+        "scaling",
+        "optimization",
+        "\"training stability\"",
+        "\"distributed training\"",
+        "accelerator",
+        "TPU",
+        "multimodal",
+        "\"base model\"",
+        "\"foundation model\"",
+        "\"model training\""
+      ]
+    },
+    {
+      "group_id": "data_objective",
+      "aliases": [
+        "dataset",
+        "corpus",
+        "objective",
+        "loss",
+        "\"training recipe\"",
+        "curriculum",
+        "deduplication",
+        "filtering"
+      ]
+    },
+    {
+      "group_id": "architecture_latest",
+      "aliases": [
+        "\"model architecture\"",
+        "\"mixture of experts\"",
+        "attention",
+        "\"latest pretraining\""
+      ]
+    },
+    {
+      "group_id": "token_data_reply",
+      "aliases": [
+        "tokenizer",
+        "tokenization",
+        "\"training data\"",
+        "\"data mixture\""
+      ]
+    }
+  ],
+  "saturation": {
+    "child_lineage": [
+      "topic",
+      "mode",
+      "time"
+    ],
+    "mode_children": [
+      "Top",
+      "Latest"
+    ],
+    "time_children": [
+      "2025-01-01..2025-06-30",
+      "2025-07-01..2025-12-31"
+    ]
+  },
+  "queues": {
+    "queue_order": [
+      "pending_wave_p_queue",
+      "retry_split_queue",
+      "saturation_queue",
+      "thread_hydration_queue",
+      "luna_input_queue",
+      "challenger_queue"
+    ],
+    "thread_hydration_requires_exact_stable_post_id": true,
+    "luna_requires_exact_source_bound_hydration": true,
+    "authored_sparse_max_references": 1,
+    "challenger_types": [
+      "official_exact_mention",
+      "project_alias",
+      "thread"
+    ],
+    "challenger_self_evidence_allowed": false
+  },
+  "stop": {
+    "all_queues_must_be_empty": true,
+    "consecutive_materially_distinct_zero_waves": 2,
+    "zero_dimensions": [
+      "new_stable_post_id_count",
+      "authorized_semantic_state_transition_count"
+    ]
+  },
+  "kpis": {
+    "denominator_registry": [
+      "execution_compliance",
+      "stable_post_id_retrieval",
+      "exact_hydration",
+      "luna_diagnostic_review_coverage"
+    ],
+    "model_call_counts_allowed": false,
+    "aggregate_must_be_candidate_free": true,
+    "aggregate_hash_binding_required": true
+  }
+}

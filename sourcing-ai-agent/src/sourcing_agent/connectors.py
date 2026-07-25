@@ -1,17 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from hashlib import sha1
 import json
-from pathlib import Path
 import re
 import time
+from dataclasses import asdict, dataclass, field
+from hashlib import sha1
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
-from .company_registry import BUILTIN_COMPANY_IDENTITIES, COMPANY_ALIASES, normalize_company_key
-from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_candidate, normalize_name_token
+from .company_registry import builtin_company_identity, normalize_company_key, resolve_company_alias_key
+from .domain import (
+    Candidate,
+    EvidenceRecord,
+    format_display_name,
+    make_evidence_id,
+    normalize_candidate,
+    normalize_name_token,
+)
+from .execution_preferences import extract_target_company_linkedin_override
+from .runtime_environment import assert_live_provider_access_allowed
 
 if TYPE_CHECKING:
     from .model_provider import ModelClient
@@ -111,6 +120,210 @@ class CompanyRosterSnapshot:
             "summary_path": str(self.summary_path),
         }
 
+
+def roster_stable_member_key(entry: dict[str, Any]) -> str:
+    """Stable person identity for cross-shard roster dedupe; "" when absent.
+
+    Only provider-stable identities qualify (LinkedIn/profile URL, provider
+    member key/id).  Displayed tuples (name/headline/location) are NOT stable
+    identity: two distinct opaque or headless members can share one, so they
+    must never collapse members ACROSS shards.
+    """
+
+    linkedin_url = str(entry.get("linkedin_url") or entry.get("profile_url") or "").strip().lower()
+    if linkedin_url:
+        return linkedin_url
+    return str(entry.get("member_key") or entry.get("member_id") or "").strip().lower()
+
+
+def roster_merge_dedupe_key(entry: dict[str, Any], *, shard_id: str = "") -> str:
+    """Dedupe key for segmented roster merges.
+
+    Stable identity keys dedupe across shards; rows without stable identity
+    fall back to a SHARD-SCOPED displayed-tuple key so the same person
+    reappearing inside one shard dedupes while two distinct lookalike members
+    from different shards are both retained (never quarantined, never lost).
+    """
+
+    stable = roster_stable_member_key(entry)
+    if stable:
+        return stable
+    scope = str(shard_id or entry.get("source_shard_id") or "").strip()
+    fallback = "|".join(
+        [
+            str(entry.get("full_name") or "").strip().lower(),
+            str(entry.get("headline") or "").strip().lower(),
+            str(entry.get("location") or "").strip().lower(),
+        ]
+    )
+    return f"shard-scope:{scope}|{fallback}"
+
+
+def annotate_roster_entry_shard_provenance(
+    entry: dict[str, Any],
+    *,
+    shard_id: str,
+    shard_title: str = "",
+    company_filters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Attach one shard's provenance to a roster entry (canonical form).
+
+    Sets the singular compatibility fields (``source_shard_id`` /
+    ``source_shard_title`` / ``source_shard_filters`` — first-shard-wins on
+    later unions), the multi-valued audit fields (``source_shard_ids`` /
+    ``source_shard_provenance``), and backfills entry-level ``function_ids``
+    from the shard's include filters when the provider row lacks them.
+    """
+
+    filters = dict(company_filters or {})
+    annotated = dict(entry)
+    if not shard_id:
+        return annotated
+    annotated["source_shard_id"] = shard_id
+    annotated["source_shard_title"] = str(shard_title or "").strip()
+    annotated["source_shard_filters"] = filters
+    function_ids = [
+        str(item).strip() for item in list(filters.get("function_ids") or []) if str(item).strip()
+    ]
+    exclude_function_ids = {
+        str(item).strip()
+        for item in list(filters.get("exclude_function_ids") or [])
+        if str(item).strip()
+    }
+    function_ids = [item for item in function_ids if item not in exclude_function_ids]
+    if function_ids and not annotated.get("function_ids"):
+        annotated["function_ids"] = list(function_ids)
+    annotated["source_shard_ids"] = [shard_id]
+    annotated["source_shard_provenance"] = [
+        {
+            "shard_id": shard_id,
+            "title": str(shard_title or "").strip(),
+            "company_filters": filters,
+        }
+    ]
+    return annotated
+
+
+def _ordered_union_strings(*value_lists: Any) -> list[str]:
+    merged: list[str] = []
+    for values in value_lists:
+        raw_items = values if isinstance(values, (list, tuple, set)) else [values]
+        for item in raw_items:
+            normalized = str(item or "").strip()
+            if normalized and normalized not in merged:
+                merged.append(normalized)
+    return merged
+
+
+def union_roster_entry_provenance(
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+) -> dict[str, Any]:
+    """Union two shard-provenance views of the SAME stable-identity member.
+
+    A member returned by several function shards keeps every shard's evidence:
+    ``function_ids`` and ``source_shard_ids`` are ordered unions and
+    ``source_shard_provenance`` accumulates one record per contributing shard.
+    The singular ``source_shard_*`` compatibility fields deliberately keep the
+    first-seen shard's values (documented first-shard-wins).
+    """
+
+    merged = dict(existing)
+    merged["function_ids"] = _ordered_union_strings(existing.get("function_ids"), incoming.get("function_ids"))
+    if not merged["function_ids"]:
+        merged.pop("function_ids", None)
+    merged["source_shard_ids"] = _ordered_union_strings(
+        existing.get("source_shard_ids") or existing.get("source_shard_id"),
+        incoming.get("source_shard_ids") or incoming.get("source_shard_id"),
+    )
+    if not merged["source_shard_ids"]:
+        merged.pop("source_shard_ids", None)
+    seen_shard_ids = set(merged.get("source_shard_ids") or [])
+    provenance: list[dict[str, Any]] = []
+    for source in (existing, incoming):
+        for item in list(source.get("source_shard_provenance") or []):
+            if not isinstance(item, dict):
+                continue
+            shard_id = str(item.get("shard_id") or "").strip()
+            if shard_id and any(str(existing_item.get("shard_id") or "").strip() == shard_id for existing_item in provenance):
+                continue
+            provenance.append(dict(item))
+    if not provenance:
+        for shard_id in sorted(seen_shard_ids):
+            provenance.append({"shard_id": shard_id, "title": "", "company_filters": {}})
+    merged["source_shard_provenance"] = provenance
+    return merged
+
+
+def resolve_manual_company_identity(
+    target_company: str,
+    execution_preferences: dict[str, Any] | None,
+    *,
+    legacy_company_ids_path: Path | None = None,
+) -> CompanyIdentity | None:
+    override = extract_target_company_linkedin_override(
+        execution_preferences,
+        target_company=target_company,
+    )
+    linkedin_slug = str(override.get("linkedin_slug") or "").strip()
+    linkedin_company_url = str(override.get("linkedin_company_url") or "").strip()
+    if not linkedin_slug:
+        return None
+
+    base_identity = resolve_company_identity(target_company or linkedin_slug, legacy_company_ids_path)
+    override_company_key, override_builtin = builtin_company_identity(linkedin_slug)
+    override_builtin_slug = str((override_builtin or {}).get("linkedin_slug") or "").strip()
+    override_builtin_matches_slug = normalize_company_key(override_builtin_slug) == normalize_company_key(linkedin_slug)
+
+    canonical_name = (
+        str((override_builtin or {}).get("canonical_name") or "").strip()
+        if override_builtin_matches_slug
+        else ""
+    )
+    if not canonical_name:
+        canonical_name = str(base_identity.canonical_name or target_company or linkedin_slug).strip()
+    company_key = (
+        str(override_company_key or "").strip()
+        if override_builtin_matches_slug and str(override_company_key or "").strip()
+        else str(base_identity.company_key or override.get("company_key_hint") or normalize_company_key(target_company or linkedin_slug)).strip()
+    )
+    aliases = _dedupe_company_aliases(
+        [
+            target_company,
+            canonical_name,
+            linkedin_slug,
+            *list(base_identity.aliases or []),
+            *list((override_builtin or {}).get("aliases") or []),
+        ]
+    )
+    metadata: dict[str, Any] = {}
+    if base_identity.linkedin_slug and normalize_company_key(base_identity.linkedin_slug) != normalize_company_key(linkedin_slug):
+        metadata["resolved_identity_before_override"] = base_identity.to_record()
+    if override_builtin_matches_slug:
+        metadata["override_identity_seed"] = {
+            "company_key": override_company_key,
+            "canonical_name": canonical_name,
+        }
+
+    return CompanyIdentity(
+        requested_name=target_company or base_identity.requested_name or canonical_name,
+        canonical_name=canonical_name,
+        company_key=company_key,
+        linkedin_slug=linkedin_slug,
+        linkedin_company_url=linkedin_company_url or _company_url(linkedin_slug),
+        domain=str((override_builtin or {}).get("domain") or base_identity.domain or "").strip(),
+        aliases=[
+            alias
+            for alias in aliases
+            if normalize_company_key(alias) not in {normalize_company_key(target_company), normalize_company_key(canonical_name)}
+        ],
+        resolver="manual_review_override",
+        confidence="high",
+        notes="LinkedIn company URL was confirmed during review and applied directly.",
+        local_asset_available=bool((override_builtin or {}).get("local_asset_available") or base_identity.local_asset_available),
+        metadata=metadata,
+    )
+
 def resolve_company_identity(
     target_company: str,
     legacy_company_ids_path: Path | None = None,
@@ -119,9 +332,8 @@ def resolve_company_identity(
     observed_companies: list[dict[str, Any]] | None = None,
 ) -> CompanyIdentity:
     requested = target_company.strip()
+    alias_key, builtin = builtin_company_identity(requested)
     company_key = normalize_company_key(requested)
-    alias_key = COMPANY_ALIASES.get(company_key, company_key)
-    builtin = BUILTIN_COMPANY_IDENTITIES.get(alias_key)
     if builtin:
         linkedin_slug = str(builtin.get("linkedin_slug", "")).strip()
         return CompanyIdentity(
@@ -429,7 +641,7 @@ def _canonical_company_key_for_identity(
     for candidate in ordered_candidates:
         if not candidate:
             continue
-        return COMPANY_ALIASES.get(candidate, candidate)
+        return resolve_company_alias_key(candidate)
     return normalize_company_key(fallback_company_key)
 
 
@@ -636,6 +848,11 @@ class LinkedInCompanyRosterConnector:
 
             base_url = account.base_url.rstrip("/")
             url = f"{base_url}/api/company/people?{parse.urlencode({'username': linkedin_slug, 'page': page, 'limit': page_limit})}"
+            assert_live_provider_access_allowed(
+                provider_name="rapidapi_linkedin",
+                operation="company_people",
+                payload={"linkedin_slug": linkedin_slug, "page": page, "limit": page_limit, "host": account.host},
+            )
             request_headers = {
                 "x-rapidapi-host": account.host,
                 "x-rapidapi-key": account.api_key,
@@ -688,6 +905,19 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
         location = str(row.get("location", "")).strip()
         linkedin_url = str(row.get("linkedin_url", "")).strip()
         team = _infer_team_from_headline(headline)
+        source_shard_filters = dict(row.get("source_shard_filters") or {})
+        public_identifier = str(row.get("public_identifier") or row.get("member_id") or "").strip()
+        include_function_ids = [
+            str(item).strip()
+            for item in list(row.get("function_ids") or [])
+            if str(item).strip()
+        ]
+        exclude_function_ids = {
+            str(item).strip()
+            for item in list(source_shard_filters.get("exclude_function_ids") or [])
+            if str(item).strip()
+        }
+        function_ids = [item for item in include_function_ids if item not in exclude_function_ids]
         notes = "LinkedIn company roster baseline."
         if location:
             notes += f" Location: {location}."
@@ -715,9 +945,15 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                 "member_id": row.get("member_id", ""),
                 "urn": row.get("urn", ""),
                 "profile_url": linkedin_url,
+                "linkedin_url": linkedin_url,
+                "public_identifier": public_identifier,
                 "location": location,
                 "page": row.get("page"),
                 "source_account_id": row.get("source_account_id", ""),
+                "source_shard_id": row.get("source_shard_id", ""),
+                "source_shard_title": row.get("source_shard_title", ""),
+                "source_shard_filters": source_shard_filters,
+                "function_ids": function_ids,
                 "snapshot_id": snapshot.snapshot_id,
             },
             )
@@ -750,6 +986,10 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                     "profile_url": linkedin_url,
                     "page": row.get("page"),
                     "source_account_id": row.get("source_account_id", ""),
+                    "source_shard_id": row.get("source_shard_id", ""),
+                    "source_shard_title": row.get("source_shard_title", ""),
+                    "source_shard_filters": source_shard_filters,
+                    "function_ids": function_ids,
                     "snapshot_id": snapshot.snapshot_id,
                 },
             )

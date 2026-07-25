@@ -1,0 +1,12086 @@
+import { mockCandidateDetails, mockDashboard, mockManualReviewItems, mockPlan, mockRunStatus } from "../data/mockData";
+import {
+  dashboardExpectedCandidateCount,
+  dashboardHasRenderableCandidates,
+  dashboardRowHydrationTargetCount,
+} from "./dashboardHydration";
+import { lifecycleEffectiveDeltaMaterializedCount } from "./resultViewLifecycle";
+import {
+  buildCohortLocationApiPayload,
+  buildLocationReviewClearPayload,
+  cloneCohortLocationSelection,
+  cloneCohortSelection,
+  createDefaultCohortLocationSelection,
+  equalCohortLocationSelection,
+  equalCohortSelection,
+  isByteExactRegistryDigest,
+  isByteExactRegistryVersion,
+  normalizeLocationList,
+  parseCohortLocationMirror,
+  parseCohortSelectionOptionsPayload,
+  parseCohortSelectionPayload,
+} from "./cohortSelection";
+import { normalizeWorkflowStatus, resolveWorkflowStatus } from "./workflowStatus";
+import {
+  OPERATION_ACTION_DECISION_APPLIED_OUTCOMES,
+  OPERATION_RUN_CONTROL_APPLIED_OUTCOMES,
+  OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
+  WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES,
+  WORKFLOW_PUBLIC_PROJECTION_LIMITS,
+  captureWorkflowPublicFinalJsonSnapshot,
+  workflowPublicJsonStringByteLength,
+  workflowPublicTransportBodyIsOverLimit,
+  workflowPublicTransportContentLengthIsOverLimit,
+  workflowPublicUtf8ByteLength,
+} from "../../../contracts/frontend_api_runtime_contract";
+import type {
+  OperationActionDecision,
+  OperationRunProvenanceSuccessStatus,
+} from "../../../contracts/frontend_api_runtime_contract";
+import type {
+  Candidate,
+  CandidateDetail,
+  CandidateConfidence,
+  CandidateEmailMetadata,
+  CandidateExternalLink,
+  CandidateFacetSummary,
+  CandidateReviewRecord,
+  CandidateReviewStatus,
+  CandidateSourceMatch,
+  BoardRuntimeState,
+  CohortLocationSelection,
+  CohortRegistryPin,
+  CohortSelection,
+  CohortSelectionOptions,
+  DashboardData,
+  DemoPlan,
+  EffectiveExecutionSemantics,
+  ExecutionPhaseContract,
+  ExcelIntakeProgress,
+  ExcelIntakeResponse,
+  LinkedinStage1Progress,
+  ManualReviewItem,
+  PlanReviewDecision,
+  PlanReviewEditableField,
+  ProviderExecutionLanePreview,
+  PlanReviewGate,
+  ProfileFetchProgress,
+  ResultViewLifecycle,
+  RunStatusData,
+  SupplementOperationResult,
+  TargetCompanyIdentityPreview,
+  TargetCandidateComposedProfile,
+  TargetCandidateFollowUpStatus,
+  TargetCandidateProfileDetail,
+  TargetCandidatePublicWebBatch,
+  TargetCandidatePublicWebActionResult,
+  TargetCandidatePublicWebDetail,
+  TargetCandidatePublicWebEvidenceLink,
+  TargetCandidatePublicWebPromotion,
+  TargetCandidatePublicWebRun,
+  TargetCandidatePublicWebSearchState,
+  TargetCandidatePublicWebSignal,
+  TargetCandidatePublicWebStartResult,
+  TargetCandidatePublicWebStatus,
+  TargetCandidateRecord,
+  WorkflowPhase,
+} from "../types";
+
+const runningLocally =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const useMock = import.meta.env.VITE_USE_MOCK === "true";
+const preferLocalAssets = import.meta.env.VITE_USE_LOCAL_ASSETS === "true";
+const DEFAULT_API_TIMEOUT_MS = 30_000;
+const PLAN_API_TIMEOUT_MS = 90_000;
+const WORKFLOW_START_TIMEOUT_MS = 60_000;
+const RESULTS_API_TIMEOUT_MS = 120_000;
+const EXPORT_POLL_INTERVAL_MS = 1_500;
+const PROFILE_COMPLETION_TIMEOUT_MS = 180_000;
+const DASHBOARD_INITIAL_CANDIDATE_CHUNK_SIZE = 96;
+const DASHBOARD_BACKGROUND_CANDIDATE_CHUNK_SIZE = 96;
+const DASHBOARD_CACHE_TTL_MS = 5 * 60_000;
+const LIST_CACHE_TTL_MS = 60_000;
+const CANDIDATE_DETAIL_CACHE_TTL_MS = 5 * 60_000;
+const API_BASE_URL_STORAGE_KEY = "sourcing-ai-agent-demo-api-base-url";
+const SAME_ORIGIN_API_BASE_URL = "same-origin";
+const DEFAULT_RECALL_LIMITS = {
+  top_k: 30,
+  slug_resolution_limit: 20,
+  profile_detail_limit: 20,
+  publication_scan_limit: 20,
+  publication_lead_limit: 30,
+  exploration_limit: 20,
+  semantic_rerank_limit: 30,
+};
+const candidateDetailBatchPromiseCache = new Map<string, Promise<Record<string, CandidateDetail | null>>>();
+const candidateDetailCache = new Map<string, { value: CandidateDetail | null; cachedAt: number }>();
+const dashboardPromiseCache = new Map<string, Promise<DashboardData>>();
+const dashboardCache = new Map<string, { value: DashboardData; cachedAt: number }>();
+const dashboardCandidatePagePromiseCache = new Map<string, Promise<DashboardCandidatePage>>();
+const projectionDashboardPromiseCache = new Map<string, Promise<DashboardData>>();
+const projectionDashboardCache = new Map<string, { value: DashboardData; cachedAt: number }>();
+const dashboardRequestGeneration = new Map<string, number>();
+const projectionDashboardRequestGeneration = new Map<string, number>();
+const projectionCandidatePagePromiseCache = new Map<string, Promise<DashboardCandidatePage>>();
+const runProjectionLinkPromiseCache = new Map<string, Promise<string>>();
+const collectionProjectionLinkPromiseCache = new Map<string, Promise<string>>();
+const collectionAssetOverviewPromiseCache = new Map<string, Promise<CollectionAssetOverview>>();
+const collectionAssetOverviewCache = new Map<string, { value: CollectionAssetOverview; cachedAt: number }>();
+const manualReviewItemsPromiseCache = new Map<string, Promise<ManualReviewItem[]>>();
+const manualReviewItemsCache = new Map<string, { value: ManualReviewItem[]; cachedAt: number }>();
+const candidateReviewRecordsPromiseCache = new Map<string, Promise<CandidateReviewRecord[]>>();
+const candidateReviewRecordsCache = new Map<string, { value: CandidateReviewRecord[]; cachedAt: number }>();
+const frontendHistoryPromiseCache = new Map<string, Promise<FrontendHistoryRecoveryEnvelope[]>>();
+const frontendHistoryCache = new Map<string, { value: FrontendHistoryRecoveryEnvelope[]; cachedAt: number }>();
+const targetCandidatesPromiseCache = new Map<string, Promise<TargetCandidateRecord[]>>();
+const targetCandidatesCache = new Map<string, { value: TargetCandidateRecord[]; cachedAt: number }>();
+const FULL_PROFILE_CAPTURE_KINDS = new Set([
+  "harvest_profile_detail",
+  "provider_profile_detail",
+  "profile_registry_detail",
+  "embedded_profile_detail",
+]);
+const PARTIAL_PROFILE_CAPTURE_KINDS = new Set([
+  "search_seed_preview",
+  "embedded_profile_preview",
+  "roster_baseline_preview",
+]);
+
+export interface DashboardCandidatePage {
+  jobId: string;
+  resultMode: DashboardData["resultMode"];
+  offset: number;
+  limit: number;
+  returnedCount: number;
+  totalCandidates: number;
+  filteredCandidateCount: number;
+  hasMore: boolean;
+  nextOffset: number | null;
+  candidates: Candidate[];
+  profileFetchProgress?: ProfileFetchProgress;
+  linkedinStage1Progress?: LinkedinStage1Progress;
+  resultViewLifecycle?: ResultViewLifecycle;
+  boardRuntimeState?: BoardRuntimeState;
+  candidateFacetSummary?: CandidateFacetSummary;
+  candidateFacetSummaryScope?: string;
+  filterSignature?: string;
+  filterContract?: {
+    source: string;
+    facetCountScope: string;
+    rowFilterScope: string;
+    backendFilteredPagingSupported: boolean;
+    filterSignature: string;
+    filterActive: boolean;
+  };
+}
+
+export interface BoardVisiblePatch {
+  patchId: string;
+  sequenceIndex: number;
+  candidateCount: number;
+  cumulativeCandidateCount: number;
+  servedCandidateCount: number;
+  displayReadyCandidateCount: number;
+  profileDetailCandidateCount: number;
+  explicitProfileCaptureCandidateCount: number;
+  previewCandidateCount: number;
+  needsProfileCompletionCandidateCount: number;
+  lowProfileRichnessCandidateCount: number;
+  qualityFieldsAvailable: boolean;
+  publishedAt: string;
+}
+
+export interface BoardVisiblePatchLog {
+  jobId: string;
+  patches: BoardVisiblePatch[];
+  returnedCount: number;
+  hasMore: boolean;
+  latestPublishedAt: string;
+  latestSequenceIndex: number;
+  boardRuntimeState?: BoardRuntimeState;
+  resultViewLifecycle?: ResultViewLifecycle;
+}
+
+export interface WorkflowCommandExecutionSummary {
+  readonly source: string;
+  readonly fallbackStatus: string;
+  readonly fallbackUsed: boolean;
+  readonly moduleStateMutated: boolean;
+  readonly activityCount: number;
+  readonly attemptCount: number;
+  readonly entityDeltaCount: number;
+  readonly activityStatusCounts: Readonly<Record<string, number>>;
+  readonly attemptStatusCounts: Readonly<Record<string, number>>;
+  readonly entityDeltaStatusCounts: Readonly<Record<string, number>>;
+  readonly entityDeltaKindCounts: Readonly<Record<string, number>>;
+  readonly latestEffectStatus: string;
+  readonly latestActivity: WorkflowPublicJsonObject;
+  readonly latestAttempt: WorkflowPublicJsonObject;
+  readonly latestEntityDelta: WorkflowPublicJsonObject;
+  readonly sampleLimit: number;
+  readonly sampleTruncated: boolean;
+}
+
+export interface WorkflowCommandControlPolicy {
+  readonly commandType: string;
+  readonly owner: string;
+  readonly genericControlContract: string;
+  readonly providerAfterStartControlContract: string;
+  readonly providerAfterStartControlStatus: string;
+  readonly providerAfterStartControlMode: string;
+  readonly providerAfterStartControlOwner: string;
+  readonly providerAfterStartControlBlockedReason: string;
+  readonly providerAfterStartControlUpgradeRequirements: WorkflowPublicFrozenArray<string>;
+  readonly moduleStateMutatedOnProviderAfterStartControl: boolean;
+  readonly runningControlCategory: string;
+  readonly runningControlCategories: WorkflowPublicFrozenArray<string>;
+  readonly runningControlMaturity: string;
+  readonly runningControlGapStatus: string;
+  readonly runningControlSurface: string;
+  readonly runningCancelBlockedReason: string;
+  readonly runningResumeBlockedReason: string;
+  readonly fallbackStatus: string;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+const WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS = [
+  "command_id",
+  "workflow_run_id",
+  "operation_id",
+  "command_type",
+  "owner",
+  "stage_id",
+  "causal_group_id",
+  "parent_command_id",
+  "source_event_id",
+  "source_event_type",
+  "input_artifact_refs",
+  "output_artifact_refs",
+  "produced_entity_counts",
+  "no_op_reason",
+  "readiness_effect",
+  "downstream_command_ids",
+  "causality_schema_version",
+  "status",
+  "idempotency_key",
+  "payload",
+  "artifact_refs",
+  "not_before_at",
+  "attempt",
+  "max_attempts",
+  "retry_policy",
+  "lease_owner",
+  "lease_expires_at",
+  "heartbeat_at",
+  "last_error",
+  "result",
+  "schema_version",
+  "created_at",
+  "updated_at",
+  "claim_generation",
+  "control_epoch",
+  "agent_exposure_gate",
+  "agent_exposure_status",
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+  "execution_summary",
+] as const;
+
+const WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS = new Set([
+  "attempt",
+  "max_attempts",
+]);
+
+const WORKFLOW_COMMAND_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS = new Set([
+  "claim_generation",
+  "control_epoch",
+]);
+
+const WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS = new Set([
+  "input_artifact_refs",
+  "output_artifact_refs",
+  "downstream_command_ids",
+  "artifact_refs",
+]);
+
+const WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS = new Set([
+  "produced_entity_counts",
+  "payload",
+  "retry_policy",
+  "result",
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+  "execution_summary",
+]);
+
+export interface WorkflowPublicFrozenArray<T> extends ReadonlyArray<T> {
+  readonly copyWithin: never;
+  readonly fill: never;
+  readonly pop: never;
+  readonly push: never;
+  readonly reverse: never;
+  readonly shift: never;
+  readonly sort: never;
+  readonly splice: never;
+  readonly unshift: never;
+}
+
+export type WorkflowPublicJsonObject = {
+  readonly [key: string]: WorkflowPublicJsonValue;
+};
+
+export interface WorkflowPublicJsonArray
+  extends WorkflowPublicFrozenArray<WorkflowPublicJsonValue> {}
+
+export type WorkflowPublicJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | WorkflowPublicJsonObject
+  | WorkflowPublicJsonArray;
+
+declare global {
+  interface ArrayConstructor {
+    isArray<
+      T extends
+        | WorkflowPublicJsonValue
+        | WorkflowPublicFrozenArray<unknown>
+        | undefined,
+    >(
+      value: T,
+    ): value is Extract<
+      T,
+      WorkflowPublicJsonArray | WorkflowPublicFrozenArray<unknown>
+    >;
+  }
+}
+
+export type WorkflowPublicDeepReadonly<T> =
+  unknown extends T
+    ? WorkflowPublicJsonValue
+    : T extends (...args: never[]) => unknown
+      ? T
+      : T extends readonly (infer TItem)[]
+        ? WorkflowPublicFrozenArray<WorkflowPublicDeepReadonly<TItem>>
+        : T extends object
+          ? { readonly [TKey in keyof T]: WorkflowPublicDeepReadonly<T[TKey]> }
+          : T;
+
+const WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_WIRE_FIELDS = [
+  "target_type",
+  "command_id",
+  "command_type",
+  "owner",
+  "command_status",
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+  "fallback_status",
+] as const;
+
+const WORKFLOW_ACTIVITY_PUBLIC_WIRE_FIELDS = [
+  "activity_run_id",
+  "workspace_id",
+  "workflow_run_id",
+  "operation_run_id",
+  "acquisition_run_id",
+  "command_id",
+  "parent_activity_run_id",
+  "activity_type",
+  "owner",
+  "status",
+  "phase",
+  "idempotency_key",
+  "provider_ref",
+  "input",
+  "output",
+  "artifact_refs",
+  "entity_counts",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "mutation_contract",
+  "module_state_mutated",
+  "control_target",
+] as const;
+
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_WIRE_FIELDS = [
+  "attempt_id",
+  "workspace_id",
+  "activity_run_id",
+  "workflow_run_id",
+  "command_id",
+  "attempt_number",
+  "activity_type",
+  "owner",
+  "status",
+  "provider",
+  "provider_request_ref",
+  "provider_run_ref",
+  "started_at",
+  "completed_at",
+  "next_retry_at",
+  "rate_limit_ref",
+  "error",
+  "input",
+  "output",
+  "artifact_refs",
+  "idempotency_key",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "mutation_contract",
+  "module_state_mutated",
+  "control_target",
+] as const;
+
+const WORKFLOW_ENTITY_DELTA_PUBLIC_WIRE_FIELDS = [
+  "delta_id",
+  "workspace_id",
+  "workflow_run_id",
+  "operation_run_id",
+  "command_id",
+  "activity_run_id",
+  "attempt_id",
+  "acquisition_run_id",
+  "activity_type",
+  "owner",
+  "entity_type",
+  "entity_key",
+  "delta_kind",
+  "status",
+  "reason",
+  "source_ref",
+  "entity_payload",
+  "projection_effect",
+  "artifact_refs",
+  "idempotency_key",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "mutation_contract",
+  "module_state_mutated",
+  "control_target",
+] as const;
+
+const WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS = new Set([
+  "display_contract",
+  "control_policy",
+  "control_state",
+  "activity_spine_policy",
+]);
+
+const WORKFLOW_ACTIVITY_PUBLIC_OBJECT_FIELDS = new Set([
+  "provider_ref",
+  "input",
+  "output",
+  "entity_counts",
+  "metadata",
+]);
+
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_OBJECT_FIELDS = new Set([
+  "rate_limit_ref",
+  "error",
+  "input",
+  "output",
+  "metadata",
+]);
+
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS = new Set([
+  "attempt_number",
+]);
+
+const WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS = new Set([
+  "source_ref",
+  "entity_payload",
+  "projection_effect",
+  "metadata",
+]);
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS = [
+  "authority_id",
+  "authority_seal",
+  "bootstrap_authority",
+  "bootstrap_authority_id",
+  "bootstrap_authority_digest",
+  "bootstrap_receipt",
+  "claim_authority",
+  "claim_authority_id",
+  "claim_authority_seal",
+  "claim_authority_spec_digest",
+  "claim_capability",
+  "claim_identity",
+  "claim_receipt",
+  "claim_secret",
+  "claim_selection_generation",
+  "claim_token",
+  "claim_token_digest",
+  "consumed_claim_authority_id",
+  "issuer_digest",
+  "issuer_revision",
+  "last_heartbeat_id",
+  "lease_identity",
+  "lease_token",
+  "scoped_review_session_bootstrap_authority",
+  "scoped_review_session_bootstrap_receipt",
+] as const;
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS: ReadonlySet<string> = new Set(WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS);
+
+const WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOT_SPECS = Array.from(
+  WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOTS,
+  (root) => ({
+    normalized: root,
+    compact: root.replace(/_/g, ""),
+  }),
+);
+
+const WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_command",
+  "latest_workflow_command",
+]);
+const WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_commands",
+]);
+const WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+const WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity",
+  "workflow_activity_run",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity_attempt",
+]);
+const WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_entity_delta",
+]);
+const WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activities",
+  "workflow_activity_runs",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_activity_attempts",
+]);
+const WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_entity_deltas",
+]);
+const WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS: ReadonlySet<string> = new Set([
+  "control_target",
+  "module_state_mutated",
+  "mutation_contract",
+]);
+const WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS: ReadonlySet<string> = new Set([
+  "activity_type",
+  "owner",
+  "control_target",
+  "module_state_mutated",
+  "mutation_contract",
+]);
+const WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS: ReadonlySet<string> = new Set([
+  "running_control_categories",
+  "generic_cancel_statuses",
+  "generic_retry_statuses",
+  "generic_resume_statuses",
+  "running_cancel_statuses",
+  "running_cancel_prerequisites",
+  "running_cancel_upgrade_requirements",
+  "running_resume_statuses",
+  "running_resume_prerequisites",
+  "running_resume_upgrade_requirements",
+  "provider_after_start_control_upgrade_requirements",
+]);
+const WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "running_cancel_supported",
+  "module_state_mutated_on_running_cancel",
+  "running_resume_supported",
+  "module_state_mutated_on_running_resume",
+  "module_state_mutated_on_provider_after_start_control",
+]);
+const WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "generic_control_contract",
+  "provider_after_start_control_contract",
+  "provider_after_start_control_status",
+  "provider_after_start_control_mode",
+  "provider_after_start_control_owner",
+  "provider_after_start_control_blocked_reason",
+  "running_control_category",
+  "running_control_maturity",
+  "running_control_gap_status",
+  "running_control_surface",
+  "running_cancel_owner",
+  "running_cancel_delegate",
+  "running_cancel_blocked_reason",
+  "running_cancel_contract",
+  "unsupported_running_cancel_reason",
+  "running_resume_owner",
+  "running_resume_delegate",
+  "running_resume_blocked_reason",
+  "running_resume_contract",
+  "unsupported_running_resume_reason",
+  "control_source_of_truth",
+  "agent_callable_surface",
+  "fallback_status",
+]);
+const WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS: ReadonlySet<string> = new Set([
+  "allowed_actions",
+  "running_cancel_prerequisites",
+  "running_resume_prerequisites",
+]);
+const WORKFLOW_COMMAND_CONTROL_STATE_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "can_cancel",
+  "can_retry",
+  "can_resume",
+  "running_cancel_supported",
+  "running_resume_supported",
+  "module_state_mutated_on_cancel",
+  "module_state_mutated_on_resume",
+]);
+const WORKFLOW_COMMAND_CONTROL_STATE_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "command_status",
+  "cancel_mode",
+  "retry_mode",
+  "resume_mode",
+  "running_cancel_delegate",
+  "running_resume_delegate",
+  "control_source_of_truth",
+  "policy_source_of_truth",
+  "fallback_status",
+]);
+const WORKFLOW_COMMAND_ACTIVITY_SPINE_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "must_write_activity_run",
+  "must_write_activity_attempt",
+  "must_write_entity_delta",
+  "downstream_activity_required",
+  "agent_callable",
+]);
+const WORKFLOW_COMMAND_ACTIVITY_SPINE_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "requirement",
+  "activity_table",
+  "attempt_table",
+  "entity_delta_table",
+  "source_of_truth",
+  "agent_callable_surface",
+  "fallback_status",
+  "migration_status",
+  "deletion_condition",
+]);
+const WORKFLOW_COMMAND_DISPLAY_CONTRACT_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "command_type",
+  "owner",
+  "display_label",
+  "display_category",
+  "description",
+  "source_of_truth",
+  "fallback_status",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "source",
+  "fallback_status",
+  "latest_effect_status",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "fallback_used",
+  "module_state_mutated",
+  "sample_truncated",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS: ReadonlySet<string> = new Set([
+  "activity_count",
+  "attempt_count",
+  "entity_delta_count",
+  "sample_limit",
+]);
+const WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS: ReadonlySet<string> = new Set([
+  "activity_status_counts",
+  "attempt_status_counts",
+  "entity_delta_status_counts",
+  "entity_delta_kind_counts",
+]);
+const OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "action_type",
+  "owner_module",
+  "operation_type",
+  "display_label",
+  "display_category",
+  "description",
+  "source_of_truth",
+  "fallback_status",
+]);
+const OPERATION_ACTION_PUBLIC_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "action_id",
+  "workspace_id",
+  "conversation_id",
+  "action_type",
+  "owner_module",
+  "operation_type",
+  "approval_status",
+  "approval_policy",
+  "status",
+  "request_schema_version",
+  "request_schema_digest",
+  "created_at",
+  "updated_at",
+]);
+const OPERATION_ACTION_PUBLIC_OBJECT_FIELDS: ReadonlySet<string> = new Set([
+  "display_contract",
+  "target_ref",
+  "input",
+  "budget",
+  "result_ref",
+  "metadata",
+]);
+const OPERATION_EVENT_PUBLIC_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "event_id",
+  "workspace_id",
+  "event_stream_id",
+  "operation_run_id",
+  "action_id",
+  "event_family",
+  "event_type",
+  "actor",
+  "source",
+  "occurred_at",
+  "recorded_at",
+]);
+const OPERATION_RUN_PUBLIC_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "operation_run_id",
+  "workspace_id",
+  "action_id",
+  "owner_module",
+  "operation_type",
+  "status",
+  "request_schema_version",
+  "request_schema_digest",
+  "started_at",
+  "completed_at",
+  "created_at",
+  "updated_at",
+]);
+const OPERATION_RUN_PUBLIC_OBJECT_FIELDS: ReadonlySet<string> = new Set([
+  "display_contract",
+  "progress",
+  "workflow_ref",
+  "cost_budget",
+  "result_ref",
+  "metadata",
+  "control_state",
+  "status_summary",
+]);
+const OPERATION_RUN_CONTROL_STATE_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "operation_status",
+  "action_status",
+  "operation_phase",
+  "control_source_of_truth",
+  "fallback_status",
+  "schema_version",
+]);
+const OPERATION_RUN_CONTROL_STATE_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "can_dispatch",
+  "can_cancel",
+  "can_retry",
+  "can_resume",
+  "module_state_mutated_on_control",
+]);
+const OPERATION_RUN_STATUS_SUMMARY_STRING_FIELDS: ReadonlySet<string> = new Set([
+  "source",
+  "fallback_status",
+  "operation_status",
+  "operation_phase",
+  "latest_event_type",
+]);
+const OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS: ReadonlySet<string> = new Set([
+  "fallback_used",
+  "module_state_mutated",
+]);
+const OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS: ReadonlySet<string> = new Set([
+  "workflow_command_count",
+  "operation_event_count",
+]);
+
+function normalizeWorkflowCommandPublicMirrorFieldName(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/[-\s]+/g, "_")
+    .replace(/(?<=[A-Z])(?=[A-Z][a-z])/g, "_")
+    .replace(/(?<=[a-z0-9])(?=[A-Z])/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+}
+
+function isPrivateWorkflowCommandPublicMirrorField(value: unknown): boolean {
+  const normalized = normalizeWorkflowCommandPublicMirrorFieldName(value);
+  if (WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_FIELDS.has(normalized)) {
+    return true;
+  }
+  const compact = normalized.replace(/_/g, "");
+  return WORKFLOW_COMMAND_PRIVATE_PUBLIC_MIRROR_ROOT_SPECS.some(
+    (root) =>
+      normalized.startsWith(`${root.normalized}_`) ||
+      compact === root.compact ||
+      compact.startsWith(root.compact),
+  );
+}
+
+function isHazardousWorkflowPublicMirrorField(value: unknown): boolean {
+  return WORKFLOW_PUBLIC_HAZARDOUS_MIRROR_FIELDS.has(String(value ?? "").trim().toLowerCase());
+}
+
+function isPlainWorkflowPublicObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  } catch {
+    return false;
+  }
+}
+
+function defineWorkflowPublicOwnField(
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function hasDemoWorkflowPublicSerializableFields(value: Record<string, unknown>): boolean {
+  return Object.values(value).some((item) => item !== undefined);
+}
+
+interface DemoWorkflowPublicProjectionTraversal {
+  visitedNodes: number;
+  visitedBytes: number;
+  readonly activeContainers: WeakSet<object>;
+  readonly defaultClosedContainers: WeakSet<object>;
+  readonly executionSummaryClosedContainers: WeakSet<object>;
+  readonly defaultMemo: WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>;
+  readonly executionSummaryMemo: WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>;
+}
+
+interface DemoWorkflowPublicProjectionMemoEntry {
+  readonly value: unknown;
+  readonly nodes: number;
+  readonly bytes: number;
+  blocked: boolean;
+}
+
+interface DemoWorkflowPublicOwnDataEntries {
+  readonly entries: readonly [string, unknown][];
+  readonly ownKeyCount: number;
+  readonly hadRejectedDataProperty: boolean;
+}
+
+function createDemoWorkflowPublicProjectionTraversal(): DemoWorkflowPublicProjectionTraversal {
+  return {
+    visitedNodes: 0,
+    visitedBytes: 0,
+    activeContainers: new WeakSet<object>(),
+    defaultClosedContainers: new WeakSet<object>(),
+    executionSummaryClosedContainers: new WeakSet<object>(),
+    defaultMemo: new WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>(),
+    executionSummaryMemo: new WeakMap<object, DemoWorkflowPublicProjectionMemoEntry>(),
+  };
+}
+
+function consumeDemoWorkflowPublicProjectionCost(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  nodes: number,
+  bytes: number,
+): boolean {
+  if (
+    traversal.visitedNodes + nodes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    traversal.visitedBytes + bytes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes
+  ) {
+    return false;
+  }
+  traversal.visitedNodes += nodes;
+  traversal.visitedBytes += bytes;
+  return true;
+}
+
+function consumeDemoWorkflowPublicProjectionNode(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  bytes = 2,
+): boolean {
+  return consumeDemoWorkflowPublicProjectionCost(traversal, 1, bytes);
+}
+
+function consumeDemoWorkflowPublicProjectionKey(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  key: string,
+): boolean {
+  return consumeDemoWorkflowPublicProjectionCost(
+    traversal,
+    0,
+    workflowPublicJsonStringByteLength(key) + 2,
+  );
+}
+
+function demoWorkflowPublicPrimitiveByteLength(value: string | number | boolean | null): number {
+  if (typeof value === "string") {
+    return workflowPublicJsonStringByteLength(value) + 1;
+  }
+  return workflowPublicUtf8ByteLength(JSON.stringify(value)) + 1;
+}
+
+function captureDemoWorkflowPublicOwnDataEntries(
+  value: Record<string, unknown>,
+): DemoWorkflowPublicOwnDataEntries | undefined {
+  let ownKeys: readonly PropertyKey[];
+  try {
+    ownKeys = Reflect.ownKeys(value);
+  } catch {
+    return undefined;
+  }
+  if (ownKeys.length > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries) {
+    return undefined;
+  }
+  const entries: [string, unknown][] = [];
+  let hadRejectedDataProperty = false;
+  for (const key of ownKeys) {
+    if (typeof key !== "string") {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    if (workflowPublicUtf8ByteLength(key) > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxKeyBytes) {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    if (
+      isPrivateWorkflowCommandPublicMirrorField(key) ||
+      isHazardousWorkflowPublicMirrorField(key)
+    ) {
+      continue;
+    }
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(value, key);
+    } catch {
+      return undefined;
+    }
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+      hadRejectedDataProperty = true;
+      continue;
+    }
+    entries.push([key, descriptor.value]);
+  }
+  return { entries, ownKeyCount: ownKeys.length, hadRejectedDataProperty };
+}
+
+function captureDemoWorkflowPublicArrayLength(value: unknown[]): number | undefined {
+  let lengthDescriptor: PropertyDescriptor | undefined;
+  try {
+    lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  } catch {
+    return undefined;
+  }
+  if (
+    !lengthDescriptor ||
+    !("value" in lengthDescriptor) ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0 ||
+    lengthDescriptor.value > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxCollectionEntries
+  ) {
+    return undefined;
+  }
+  return lengthDescriptor.value;
+}
+
+interface DemoWorkflowPublicArrayItemDescriptor {
+  readonly present: boolean;
+  readonly value?: unknown;
+}
+
+function captureDemoWorkflowPublicArrayItemDescriptor(
+  value: unknown[],
+  index: number,
+): DemoWorkflowPublicArrayItemDescriptor | undefined {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+  } catch {
+    return undefined;
+  }
+  if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) {
+    return { present: false };
+  }
+  return { present: true, value: descriptor.value };
+}
+
+function captureDemoWorkflowPublicArrayItems(value: unknown[]): readonly unknown[] | undefined {
+  const length = captureDemoWorkflowPublicArrayLength(value);
+  if (length === undefined) {
+    return undefined;
+  }
+  const items: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const item = captureDemoWorkflowPublicArrayItemDescriptor(value, index);
+    if (!item) {
+      return undefined;
+    }
+    if (item.present) {
+      items.push(item.value);
+    }
+  }
+  return items;
+}
+
+function markDemoWorkflowPublicProjectionClosed(
+  value: object,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  allowExecutionSummaryAtCurrentLevel = false,
+): void {
+  if (allowExecutionSummaryAtCurrentLevel) {
+    traversal.executionSummaryClosedContainers.add(value);
+  } else {
+    traversal.defaultClosedContainers.add(value);
+  }
+}
+
+function isDemoWorkflowPublicProjectionClosed(
+  value: object,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  allowExecutionSummaryAtCurrentLevel: boolean,
+): boolean {
+  return traversal.defaultClosedContainers.has(value) || (
+    allowExecutionSummaryAtCurrentLevel &&
+    traversal.executionSummaryClosedContainers.has(value)
+  );
+}
+
+function demoWorkflowPublicProjectionMemo(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  allowExecutionSummaryAtCurrentLevel: boolean,
+): WeakMap<object, DemoWorkflowPublicProjectionMemoEntry> {
+  return allowExecutionSummaryAtCurrentLevel
+    ? traversal.executionSummaryMemo
+    : traversal.defaultMemo;
+}
+
+function consumeDemoWorkflowPublicProjectionOccurrence(
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  entry: DemoWorkflowPublicProjectionMemoEntry,
+): boolean {
+  if (entry.blocked) {
+    return false;
+  }
+  if (!consumeDemoWorkflowPublicProjectionCost(traversal, entry.nodes, entry.bytes)) {
+    entry.blocked = true;
+    return false;
+  }
+  return true;
+}
+
+interface DemoWorkflowPublicEnvelopeSnapshot {
+  readonly source: Record<string, unknown>;
+  readonly canonical: Record<string, unknown>;
+  readonly traversal: DemoWorkflowPublicProjectionTraversal;
+  readonly depth: number;
+}
+
+function requireSanitizedDemoWorkflowPublicObject(
+  value: unknown,
+  label: string,
+  allowExecutionSummaryAtCurrentLevel: boolean,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): Record<string, unknown> {
+  const sanitized = sanitizeWorkflowCommandPublicMirrorValue(
+    value,
+    allowExecutionSummaryAtCurrentLevel,
+    traversal,
+    depth,
+  );
+  if (!isPlainWorkflowPublicObject(sanitized)) {
+    throw new Error(`${label} exceeds or violates the public projection contract`);
+  }
+  return sanitized;
+}
+
+function captureDemoWorkflowPublicEnvelope(
+  payload: unknown,
+  label: string,
+  canonicalFields: readonly string[],
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): DemoWorkflowPublicEnvelopeSnapshot {
+  if (!isPlainWorkflowPublicObject(payload)) {
+    throw new Error(`${label} must be a plain object`);
+  }
+  const captured = captureDemoWorkflowPublicOwnDataEntries(payload);
+  if (!captured) {
+    throw new Error(`${label} exceeds the public projection collection budget`);
+  }
+  const canonicalFieldSet = new Set(canonicalFields);
+  const envelopeSource: Record<string, unknown> = {};
+  const canonical: Record<string, unknown> = {};
+  for (const [key, value] of captured.entries) {
+    defineWorkflowPublicOwnField(
+      canonicalFieldSet.has(key) ? canonical : envelopeSource,
+      key,
+      value,
+    );
+  }
+  return {
+    source: requireSanitizedDemoWorkflowPublicObject(
+      envelopeSource,
+      label,
+      false,
+      traversal,
+      depth,
+    ),
+    canonical,
+    traversal,
+    depth,
+  };
+}
+
+class DemoWorkflowPublicFinalBudgetError extends Error {
+  constructor(label: string) {
+    super(`${label} exceeds or violates the final public DTO budget`);
+    this.name = "DemoWorkflowPublicFinalBudgetError";
+  }
+}
+
+function projectDemoCapturedPlainWorkflowPublicObject<T>(
+  value: unknown,
+  projector: (
+    record: Record<string, unknown>,
+    traversal: DemoWorkflowPublicProjectionTraversal,
+    depth: number,
+  ) => T,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): T | undefined {
+  if (!isPlainWorkflowPublicObject(value)) {
+    return undefined;
+  }
+  try {
+    return projector(value, traversal, depth);
+  } catch (error) {
+    if (error instanceof DemoWorkflowPublicFinalBudgetError) {
+      throw error;
+    }
+    return undefined;
+  }
+}
+
+interface DemoWorkflowPublicFinalAggregateBudget {
+  nodes: number;
+  bytes: number;
+  blocked: boolean;
+}
+
+function requireDemoWorkflowPublicFinalSnapshot<T>(
+  value: unknown,
+  label: string,
+): WorkflowPublicDeepReadonly<T> {
+  const snapshot = captureWorkflowPublicFinalJsonSnapshot(value);
+  if (!snapshot) {
+    throw new DemoWorkflowPublicFinalBudgetError(label);
+  }
+  return snapshot.value as WorkflowPublicDeepReadonly<T>;
+}
+
+function requireDemoWorkflowPublicFinalFootprint(
+  value: unknown,
+  label: string,
+): DemoWorkflowPublicFinalAggregateBudget {
+  const snapshot = captureWorkflowPublicFinalJsonSnapshot(value);
+  if (!snapshot) {
+    throw new DemoWorkflowPublicFinalBudgetError(label);
+  }
+  return {
+    nodes: snapshot.nodes,
+    bytes: snapshot.bytes,
+    blocked:
+      snapshot.nodes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+      snapshot.bytes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes,
+  };
+}
+
+function admitDemoWorkflowPublicFinalListItem<T extends object>(
+  target: T[],
+  item: T,
+  budget: DemoWorkflowPublicFinalAggregateBudget,
+): boolean {
+  if (budget.blocked) {
+    return false;
+  }
+  const snapshot = captureWorkflowPublicFinalJsonSnapshot(item);
+  if (!snapshot) {
+    budget.blocked = true;
+    return false;
+  }
+  const nextNodes = budget.nodes + snapshot.nodes;
+  const nextBytes = budget.bytes + snapshot.bytes + (target.length > 0 ? 1 : 0);
+  if (
+    nextNodes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    nextBytes > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes
+  ) {
+    budget.blocked = true;
+    return false;
+  }
+  target.push(snapshot.value as T);
+  budget.nodes = nextNodes;
+  budget.bytes = nextBytes;
+  budget.blocked =
+    nextNodes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxNodes ||
+    nextBytes >= WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxOccurrenceBytes;
+  return true;
+}
+
+function projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
+  value: unknown,
+  projector: (
+    record: Record<string, unknown>,
+    traversal: DemoWorkflowPublicProjectionTraversal,
+    depth: number,
+  ) => T,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+  target: T[],
+  finalBudget: DemoWorkflowPublicFinalAggregateBudget,
+): boolean {
+  // A failed admission is monotonic for the enclosing DTO.  In particular, do not even
+  // inspect a later source list after an earlier list has consumed the aggregate budget.
+  if (finalBudget.blocked) {
+    return true;
+  }
+  if (!Array.isArray(value)) {
+    return false;
+  }
+  if (
+    depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
+    traversal.activeContainers.has(value) ||
+    !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
+  ) {
+    return false;
+  }
+  const length = captureDemoWorkflowPublicArrayLength(value);
+  if (length === undefined) {
+    return false;
+  }
+
+  traversal.activeContainers.add(value);
+  try {
+    for (let index = 0; index < length; index += 1) {
+      // Equality closes the aggregate budget.  Check before touching the next descriptor so a
+      // hostile or expensive tail item in the same source list is outside the trusted boundary.
+      if (finalBudget.blocked) {
+        break;
+      }
+      const capturedItem = captureDemoWorkflowPublicArrayItemDescriptor(value, index);
+      if (!capturedItem) {
+        finalBudget.blocked = true;
+        break;
+      }
+      if (!capturedItem.present) {
+        continue;
+      }
+      let projected: T | undefined;
+      try {
+        projected = projectDemoCapturedPlainWorkflowPublicObject(
+          capturedItem.value,
+          projector,
+          traversal,
+          depth + 1,
+        );
+      } catch (error) {
+        if (error instanceof DemoWorkflowPublicFinalBudgetError) {
+          finalBudget.blocked = true;
+          break;
+        }
+        throw error;
+      }
+      if (
+        projected !== undefined &&
+        (!isPlainWorkflowPublicObject(projected) ||
+          (isPlainWorkflowPublicObject(projected.raw)
+            ? hasDemoWorkflowPublicSerializableFields(projected.raw)
+            : hasDemoWorkflowPublicSerializableFields(projected)))
+      ) {
+        if (!admitDemoWorkflowPublicFinalListItem(target, projected, finalBudget)) {
+          break;
+        }
+      }
+    }
+  } finally {
+    traversal.activeContainers.delete(value);
+  }
+  markDemoWorkflowPublicProjectionClosed(target as object, traversal);
+  return true;
+}
+
+function projectDemoCapturedPlainWorkflowPublicObjectArray<T extends object>(
+  value: unknown,
+  projector: (
+    record: Record<string, unknown>,
+    traversal: DemoWorkflowPublicProjectionTraversal,
+    depth: number,
+  ) => T,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): WorkflowPublicDeepReadonly<T[]> | undefined {
+  const result: T[] = [];
+  const finalBudget = requireDemoWorkflowPublicFinalFootprint(
+    result,
+    "Demo workflow public list",
+  );
+  if (!projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    value,
+    projector,
+    traversal,
+    depth,
+    result,
+    finalBudget,
+  )) {
+    return undefined;
+  }
+  return requireDemoWorkflowPublicFinalSnapshot<T[]>(result, "Demo workflow public list");
+}
+
+function projectWorkflowCommandPublicCarrier(
+  key: string,
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): { matched: boolean; value?: unknown } {
+  const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+  if (WORKFLOW_COMMAND_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    return {
+      matched: true,
+      value: isPlainWorkflowPublicObject(value)
+        ? projectWorkflowCommandGenericCarrierRecord(value, traversal, depth)
+        : undefined,
+    };
+  }
+  if (!WORKFLOW_COMMAND_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    return { matched: false };
+  }
+  if (!Array.isArray(value)) {
+    return { matched: true };
+  }
+  if (
+    depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
+    traversal.activeContainers.has(value) ||
+    !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
+  ) {
+    return { matched: true };
+  }
+  const items = captureDemoWorkflowPublicArrayItems(value);
+  if (!items) {
+    return { matched: true };
+  }
+  const projected: Record<string, unknown>[] = [];
+  traversal.activeContainers.add(value);
+  try {
+    for (const item of items) {
+      if (!isPlainWorkflowPublicObject(item)) {
+        continue;
+      }
+      try {
+        const record = projectWorkflowCommandGenericCarrierRecord(item, traversal, depth + 1);
+        if (hasDemoWorkflowPublicSerializableFields(record)) {
+          projected.push(record);
+        }
+      } catch {
+        continue;
+      }
+    }
+  } finally {
+    traversal.activeContainers.delete(value);
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return {
+    matched: true,
+    value: projected,
+  };
+}
+
+function projectWorkflowCommandGenericCarrierRecord(
+  command: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const projected = projectWorkflowCommandPublicRecord(command, traversal, depth);
+  delete projected.execution_summary;
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectWorkflowActivityPublicCarrier(
+  key: string,
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): { matched: boolean; value?: unknown } {
+  const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+  let projector:
+    | ((
+        record: Record<string, unknown>,
+        traversal: DemoWorkflowPublicProjectionTraversal,
+        depth: number,
+      ) => Record<string, unknown>)
+    | undefined;
+  let trustedDerivedFields: ReadonlySet<string> | undefined;
+  if (WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    projector = projectWorkflowActivityPublicRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    projector = projectWorkflowActivityAttemptPublicRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_FIELDS.has(normalizedKey)) {
+    projector = projectWorkflowEntityDeltaPublicRecord;
+    trustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  }
+  if (projector) {
+    let projected: Record<string, unknown> | undefined;
+    if (isPlainWorkflowPublicObject(value)) {
+      try {
+        projected = projector(value, traversal, depth);
+      } catch {
+        projected = undefined;
+      }
+    }
+    if (projected) {
+      for (const field of trustedDerivedFields ?? []) {
+        delete projected[field];
+      }
+      markDemoWorkflowPublicProjectionClosed(projected, traversal);
+    }
+    return {
+      matched: true,
+      value: projected,
+    };
+  }
+
+  let listProjector:
+    | ((
+        record: Record<string, unknown>,
+        traversal: DemoWorkflowPublicProjectionTraversal,
+        depth: number,
+      ) => Record<string, unknown>)
+    | undefined;
+  let listTrustedDerivedFields: ReadonlySet<string> | undefined;
+  if (WORKFLOW_ACTIVITY_RUN_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listProjector = projectWorkflowActivityPublicRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_RUN_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listProjector = projectWorkflowActivityAttemptPublicRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  } else if (WORKFLOW_ENTITY_DELTA_PUBLIC_CARRIER_LIST_FIELDS.has(normalizedKey)) {
+    listProjector = projectWorkflowEntityDeltaPublicRecord;
+    listTrustedDerivedFields = WORKFLOW_ACTIVITY_ATTEMPT_TRUSTED_DERIVED_FIELDS;
+  }
+  if (!listProjector) {
+    return { matched: false };
+  }
+  if (!Array.isArray(value)) {
+    return { matched: true };
+  }
+  if (
+    depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth ||
+    traversal.activeContainers.has(value) ||
+    !consumeDemoWorkflowPublicProjectionNode(traversal, 2)
+  ) {
+    return { matched: true };
+  }
+  const items = captureDemoWorkflowPublicArrayItems(value);
+  if (!items) {
+    return { matched: true };
+  }
+  const projectedItems: Record<string, unknown>[] = [];
+  traversal.activeContainers.add(value);
+  try {
+    for (const item of items) {
+      if (!isPlainWorkflowPublicObject(item)) {
+        continue;
+      }
+      let projected: Record<string, unknown>;
+      try {
+        projected = listProjector(item, traversal, depth + 1);
+      } catch {
+        continue;
+      }
+      for (const field of listTrustedDerivedFields ?? []) {
+        delete projected[field];
+      }
+      markDemoWorkflowPublicProjectionClosed(projected, traversal);
+      if (hasDemoWorkflowPublicSerializableFields(projected)) {
+        projectedItems.push(projected);
+      }
+    }
+  } finally {
+    traversal.activeContainers.delete(value);
+  }
+  markDemoWorkflowPublicProjectionClosed(projectedItems, traversal);
+  return {
+    matched: true,
+    value: projectedItems,
+  };
+}
+
+function sanitizeWorkflowCommandPublicMirrorValue(
+  value: unknown,
+  allowExecutionSummaryAtCurrentLevel = false,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): unknown {
+  if (depth > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxDepth) {
+    return undefined;
+  }
+  if (value === null) {
+    return consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(null),
+    ) ? value : undefined;
+  }
+  if (typeof value === "string") {
+    if (workflowPublicUtf8ByteLength(value) > WORKFLOW_PUBLIC_PROJECTION_LIMITS.maxStringBytes) {
+      return undefined;
+    }
+    return consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
+  }
+  if (typeof value === "boolean") {
+    return consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) && consumeDemoWorkflowPublicProjectionNode(
+      traversal,
+      demoWorkflowPublicPrimitiveByteLength(value),
+    ) ? value : undefined;
+  }
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  if (traversal.activeContainers.has(value)) {
+    return undefined;
+  }
+  if (
+    isDemoWorkflowPublicProjectionClosed(
+      value,
+      traversal,
+      allowExecutionSummaryAtCurrentLevel,
+    )
+  ) {
+    return value;
+  }
+  const memo = demoWorkflowPublicProjectionMemo(
+    traversal,
+    allowExecutionSummaryAtCurrentLevel,
+  );
+  if (memo.has(value)) {
+    const cached = memo.get(value)!;
+    return cached.value !== undefined && consumeDemoWorkflowPublicProjectionOccurrence(traversal, cached)
+      ? cached.value
+      : undefined;
+  }
+  const memoStartNodes = traversal.visitedNodes;
+  const memoStartBytes = traversal.visitedBytes;
+  if (!consumeDemoWorkflowPublicProjectionNode(traversal, 2)) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    const items = captureDemoWorkflowPublicArrayItems(value);
+    if (!items) {
+      memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
+      return undefined;
+    }
+    const result: unknown[] = [];
+    traversal.activeContainers.add(value);
+    try {
+      for (const item of items) {
+        const sanitized = sanitizeWorkflowCommandPublicMirrorValue(
+          item,
+          false,
+          traversal,
+          depth + 1,
+        );
+        if (
+          sanitized !== undefined &&
+          (!isPlainWorkflowPublicObject(sanitized) ||
+            hasDemoWorkflowPublicSerializableFields(sanitized))
+        ) {
+          result.push(sanitized);
+        }
+      }
+    } finally {
+      traversal.activeContainers.delete(value);
+    }
+    markDemoWorkflowPublicProjectionClosed(result, traversal);
+    memo.set(value, {
+      value: result,
+      nodes: traversal.visitedNodes - memoStartNodes,
+      bytes: traversal.visitedBytes - memoStartBytes,
+      blocked: false,
+    });
+    return result;
+  }
+  let prototype: object | null;
+  try {
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
+    return undefined;
+  }
+  if (prototype !== Object.prototype && prototype !== null) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
+    return undefined;
+  }
+  const captured = captureDemoWorkflowPublicOwnDataEntries(value as Record<string, unknown>);
+  if (!captured) {
+    memo.set(value, { value: undefined, nodes: 0, bytes: 0, blocked: true });
+    return undefined;
+  }
+  const result: Record<string, unknown> = {};
+  traversal.activeContainers.add(value);
+  try {
+    for (const [key, item] of captured.entries) {
+      const normalizedKey = normalizeWorkflowCommandPublicMirrorFieldName(key);
+      if (
+        isPrivateWorkflowCommandPublicMirrorField(key) ||
+        isHazardousWorkflowPublicMirrorField(key) ||
+        (normalizedKey === "execution_summary" && !allowExecutionSummaryAtCurrentLevel)
+      ) {
+        continue;
+      }
+      if (!consumeDemoWorkflowPublicProjectionKey(traversal, key)) {
+        break;
+      }
+      const commandCarrier = projectWorkflowCommandPublicCarrier(
+        key,
+        item,
+        traversal,
+        depth + 1,
+      );
+      if (commandCarrier.matched) {
+        if (commandCarrier.value !== undefined) {
+          defineWorkflowPublicOwnField(result, key, commandCarrier.value);
+        }
+        continue;
+      }
+      const carrier = projectWorkflowActivityPublicCarrier(
+        key,
+        item,
+        traversal,
+        depth + 1,
+      );
+      if (carrier.matched) {
+        if (carrier.value !== undefined) {
+          defineWorkflowPublicOwnField(result, key, carrier.value);
+        }
+        continue;
+      }
+      const sanitized = sanitizeWorkflowCommandPublicMirrorValue(
+        item,
+        false,
+        traversal,
+        depth + 1,
+      );
+      if (sanitized !== undefined) {
+        defineWorkflowPublicOwnField(result, key, sanitized);
+      }
+    }
+  } finally {
+    traversal.activeContainers.delete(value);
+  }
+  markDemoWorkflowPublicProjectionClosed(
+    result,
+    traversal,
+    allowExecutionSummaryAtCurrentLevel,
+  );
+  const publicResult = captured.hadRejectedDataProperty && Object.keys(result).length === 0
+    ? undefined
+    : result;
+  memo.set(value, {
+    value: publicResult,
+    nodes: traversal.visitedNodes - memoStartNodes,
+    bytes: traversal.visitedBytes - memoStartBytes,
+    blocked: false,
+  });
+  return publicResult;
+}
+
+function projectWorkflowCommandPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const sanitized = requireSanitizedDemoWorkflowPublicObject(
+    record,
+    "WorkflowCommandRecord",
+    true,
+    traversal,
+    depth,
+  );
+  const projected: Record<string, unknown> = {};
+  for (const field of WORKFLOW_COMMAND_PUBLIC_WIRE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
+      continue;
+    }
+    const value = sanitized[field];
+    if (WORKFLOW_COMMAND_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS.has(field)) {
+      const safeInteger = asNonnegativeSafeInteger(value);
+      if (safeInteger !== undefined) {
+        projected[field] = safeInteger;
+      }
+      continue;
+    }
+    if (WORKFLOW_COMMAND_PUBLIC_NUMBER_FIELDS.has(field)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (WORKFLOW_COMMAND_PUBLIC_STRING_ARRAY_FIELDS.has(field)) {
+      if (Array.isArray(value)) {
+        projected[field] = value.filter((item): item is string => typeof item === "string");
+      }
+      continue;
+    }
+    if (WORKFLOW_COMMAND_PUBLIC_OBJECT_FIELDS.has(field)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      projected[field] = value;
+    }
+  }
+  const nestedProjectors: Record<
+    string,
+    (
+      value: unknown,
+      traversal: DemoWorkflowPublicProjectionTraversal,
+      depth: number,
+    ) => Record<string, unknown>
+  > = {
+    display_contract: projectWorkflowCommandDisplayContractPublicRecord,
+    control_policy: projectWorkflowCommandControlPolicyPublicRecord,
+    control_state: projectWorkflowCommandControlStatePublicRecord,
+    activity_spine_policy: projectWorkflowCommandActivitySpinePublicRecord,
+    execution_summary: projectWorkflowCommandExecutionSummaryPublicRecord,
+  };
+  for (const [field, projector] of Object.entries(nestedProjectors)) {
+    if (isPlainWorkflowPublicObject(projected[field])) {
+      projected[field] = projector(projected[field], traversal, depth + 1);
+    }
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal, true);
+  return projected;
+}
+
+function projectWorkflowPublicOpenObject(
+  value: unknown,
+  stringFields: ReadonlySet<string> = new Set(),
+  stringArrayFields: ReadonlySet<string> = new Set(),
+  objectFields: ReadonlySet<string> = new Set(),
+  booleanFields: ReadonlySet<string> = new Set(),
+  numberFields: ReadonlySet<string> = new Set(),
+  numberRecordFields: ReadonlySet<string> = new Set(),
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const sanitized = requireSanitizedDemoWorkflowPublicObject(
+    value,
+    "WorkflowPublicOpenObject",
+    false,
+    traversal,
+    depth,
+  );
+  const projected = { ...sanitized };
+  for (const field of stringFields) {
+    if (Object.prototype.hasOwnProperty.call(projected, field) && typeof projected[field] !== "string") {
+      delete projected[field];
+    }
+  }
+  for (const field of stringArrayFields) {
+    if (!Object.prototype.hasOwnProperty.call(projected, field)) continue;
+    projected[field] = Array.isArray(projected[field])
+      ? projected[field].filter((item): item is string => typeof item === "string")
+      : [];
+  }
+  for (const field of objectFields) {
+    if (
+      Object.prototype.hasOwnProperty.call(projected, field) &&
+      !isPlainWorkflowPublicObject(projected[field])
+    ) {
+      delete projected[field];
+    }
+  }
+  for (const field of booleanFields) {
+    if (
+      Object.prototype.hasOwnProperty.call(projected, field) &&
+      typeof projected[field] !== "boolean"
+    ) {
+      delete projected[field];
+    }
+  }
+  for (const field of numberFields) {
+    if (!Object.prototype.hasOwnProperty.call(projected, field)) continue;
+    const value = projected[field];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      delete projected[field];
+    }
+  }
+  for (const field of numberRecordFields) {
+    if (!Object.prototype.hasOwnProperty.call(projected, field)) continue;
+    const value = projected[field];
+    if (!isPlainWorkflowPublicObject(value)) {
+      projected[field] = {};
+      continue;
+    }
+    projected[field] = Object.fromEntries(
+      Object.entries(value).filter(
+        ([, item]) => typeof item === "number" && Number.isFinite(item),
+      ),
+    );
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectWorkflowCommandDisplayContractPublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_DISPLAY_CONTRACT_STRING_FIELDS,
+    new Set(),
+    new Set(),
+    new Set(),
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowCommandExecutionSummaryPublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const projected = projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_STRING_FIELDS,
+    new Set(),
+    new Set([
+      "latest_activity",
+      "latest_attempt",
+      "latest_entity_delta",
+    ]),
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_BOOLEAN_FIELDS,
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_FIELDS,
+    WORKFLOW_COMMAND_EXECUTION_SUMMARY_NUMBER_RECORD_FIELDS,
+    traversal,
+    depth,
+  );
+  if (isPlainWorkflowPublicObject(projected.latest_activity)) {
+    projected.latest_activity = projectWorkflowActivityPublicRecord(
+      projected.latest_activity,
+      traversal,
+      depth + 1,
+    );
+  }
+  if (isPlainWorkflowPublicObject(projected.latest_attempt)) {
+    projected.latest_attempt = projectWorkflowActivityAttemptPublicRecord(
+      projected.latest_attempt,
+      traversal,
+      depth + 1,
+    );
+  }
+  if (isPlainWorkflowPublicObject(projected.latest_entity_delta)) {
+    projected.latest_entity_delta = projectWorkflowEntityDeltaPublicRecord(
+      projected.latest_entity_delta,
+      traversal,
+      depth + 1,
+    );
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectOperationActionDisplayContractPublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    OPERATION_ACTION_DISPLAY_CONTRACT_STRING_FIELDS,
+    new Set(),
+    new Set(),
+    new Set(),
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectOperationActionPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const projected = projectWorkflowPublicOpenObject(
+    record,
+    OPERATION_ACTION_PUBLIC_STRING_FIELDS,
+    new Set(),
+    OPERATION_ACTION_PUBLIC_OBJECT_FIELDS,
+    new Set(),
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+  if (isPlainWorkflowPublicObject(projected.display_contract)) {
+    projected.display_contract = projectOperationActionDisplayContractPublicRecord(
+      projected.display_contract,
+      traversal,
+      depth + 1,
+    );
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectOperationEventPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    record,
+    OPERATION_EVENT_PUBLIC_STRING_FIELDS,
+    new Set(),
+    new Set(["payload"]),
+    new Set(),
+    new Set(["sequence_number"]),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectOperationRunControlStatePublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    OPERATION_RUN_CONTROL_STATE_STRING_FIELDS,
+    new Set(["allowed_actions"]),
+    new Set(["disabled_reasons"]),
+    OPERATION_RUN_CONTROL_STATE_BOOLEAN_FIELDS,
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectOperationRunStatusSummaryPublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const { source, canonical } = captureDemoWorkflowPublicEnvelope(
+    value,
+    "OperationRunStatusSummary",
+    ["latest_event", "latest_workflow_command"],
+    traversal,
+    depth,
+  );
+  const projected = projectWorkflowPublicOpenObject(
+    source,
+    OPERATION_RUN_STATUS_SUMMARY_STRING_FIELDS,
+    new Set(),
+    new Set(["latest_event", "latest_workflow_command"]),
+    OPERATION_RUN_STATUS_SUMMARY_BOOLEAN_FIELDS,
+    OPERATION_RUN_STATUS_SUMMARY_NUMBER_FIELDS,
+    new Set(["command_status_counts"]),
+    traversal,
+    depth,
+  );
+  const latestEvent = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.latest_event,
+    projectOperationEventPublicRecord,
+    traversal,
+    depth + 1,
+  );
+  if (latestEvent) {
+    projected.latest_event = latestEvent;
+  }
+  const latestWorkflowCommand = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.latest_workflow_command,
+    projectWorkflowCommandPublicRecord,
+    traversal,
+    depth + 1,
+  );
+  if (latestWorkflowCommand) {
+    projected.latest_workflow_command = latestWorkflowCommand;
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectOperationRunPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const { source, canonical } = captureDemoWorkflowPublicEnvelope(
+    record,
+    "OperationRunRecord",
+    ["status_summary"],
+    traversal,
+    depth,
+  );
+  const projected = projectWorkflowPublicOpenObject(
+    source,
+    OPERATION_RUN_PUBLIC_STRING_FIELDS,
+    new Set(),
+    OPERATION_RUN_PUBLIC_OBJECT_FIELDS,
+    new Set(),
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+  if (isPlainWorkflowPublicObject(projected.display_contract)) {
+    projected.display_contract = projectOperationActionDisplayContractPublicRecord(
+      projected.display_contract,
+      traversal,
+      depth + 1,
+    );
+  }
+  if (isPlainWorkflowPublicObject(projected.control_state)) {
+    projected.control_state = projectOperationRunControlStatePublicRecord(
+      projected.control_state,
+      traversal,
+      depth + 1,
+    );
+  }
+  const statusSummary = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.status_summary,
+    projectOperationRunStatusSummaryPublicRecord,
+    traversal,
+    depth + 1,
+  );
+  if (statusSummary) {
+    projected.status_summary = statusSummary;
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectOperationResponsePublicEnvelope(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    new Set([
+      "status",
+      "contract",
+      "reason",
+      "command_status",
+      "operation_status",
+      "control_action",
+    ]),
+    new Set(),
+    new Set(),
+    new Set(["module_state_mutated"]),
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowCommandControlPolicyPublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_POLICY_STRING_ARRAY_FIELDS,
+    new Set(),
+    WORKFLOW_COMMAND_CONTROL_POLICY_BOOLEAN_FIELDS,
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowCommandControlStatePublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_CONTROL_STATE_STRING_FIELDS,
+    WORKFLOW_COMMAND_CONTROL_STATE_STRING_ARRAY_FIELDS,
+    new Set(["disabled_reasons"]),
+    WORKFLOW_COMMAND_CONTROL_STATE_BOOLEAN_FIELDS,
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowCommandActivitySpinePublicRecord(
+  value: unknown,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowPublicOpenObject(
+    value,
+    WORKFLOW_COMMAND_ACTIVITY_SPINE_STRING_FIELDS,
+    new Set(),
+    new Set(),
+    WORKFLOW_COMMAND_ACTIVITY_SPINE_BOOLEAN_FIELDS,
+    new Set(),
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowActivityControlTargetPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const sanitized = requireSanitizedDemoWorkflowPublicObject(
+    record,
+    "WorkflowActivityControlTarget",
+    false,
+    traversal,
+    depth,
+  );
+  const projected: Record<string, unknown> = {};
+  for (const field of WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_WIRE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
+      continue;
+    }
+    const value = sanitized[field];
+    if (WORKFLOW_ACTIVITY_CONTROL_TARGET_PUBLIC_OBJECT_FIELDS.has(field)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const projectors: Record<
+          string,
+          (
+            item: unknown,
+            traversal: DemoWorkflowPublicProjectionTraversal,
+            depth: number,
+          ) => Record<string, unknown>
+        > = {
+          display_contract: projectWorkflowCommandDisplayContractPublicRecord,
+          control_policy: projectWorkflowCommandControlPolicyPublicRecord,
+          control_state: projectWorkflowCommandControlStatePublicRecord,
+          activity_spine_policy: projectWorkflowCommandActivitySpinePublicRecord,
+        };
+        projected[field] = projectors[field](value, traversal, depth + 1);
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      projected[field] = value;
+    }
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectWorkflowActivityEvidencePublicRecord(
+  record: Record<string, unknown>,
+  wireFields: readonly string[],
+  objectFields: ReadonlySet<string>,
+  numberFields: ReadonlySet<string> = new Set(),
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  const sanitized = requireSanitizedDemoWorkflowPublicObject(
+    record,
+    "WorkflowActivityEvidence",
+    false,
+    traversal,
+    depth,
+  );
+  const projected: Record<string, unknown> = {};
+  for (const field of wireFields) {
+    if (!Object.prototype.hasOwnProperty.call(sanitized, field)) {
+      continue;
+    }
+    const value = sanitized[field];
+    if (field === "control_target") {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        projected[field] = projectWorkflowActivityControlTargetPublicRecord(
+          value as Record<string, unknown>,
+          traversal,
+          depth + 1,
+        );
+      }
+      continue;
+    }
+    if (field === "module_state_mutated") {
+      if (typeof value === "boolean") {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (numberFields.has(field)) {
+      const safeInteger = asNonnegativeSafeInteger(value);
+      if (safeInteger !== undefined) {
+        projected[field] = safeInteger;
+      }
+      continue;
+    }
+    if (field === "artifact_refs") {
+      if (Array.isArray(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (objectFields.has(field)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        projected[field] = value;
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      projected[field] = value;
+    }
+  }
+  markDemoWorkflowPublicProjectionClosed(projected, traversal);
+  return projected;
+}
+
+function projectWorkflowActivityPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowActivityEvidencePublicRecord(
+    record,
+    WORKFLOW_ACTIVITY_PUBLIC_WIRE_FIELDS,
+    WORKFLOW_ACTIVITY_PUBLIC_OBJECT_FIELDS,
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowActivityAttemptPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowActivityEvidencePublicRecord(
+    record,
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_WIRE_FIELDS,
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_OBJECT_FIELDS,
+    WORKFLOW_ACTIVITY_ATTEMPT_PUBLIC_NONNEGATIVE_SAFE_INTEGER_FIELDS,
+    traversal,
+    depth,
+  );
+}
+
+function projectWorkflowEntityDeltaPublicRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): Record<string, unknown> {
+  return projectWorkflowActivityEvidencePublicRecord(
+    record,
+    WORKFLOW_ENTITY_DELTA_PUBLIC_WIRE_FIELDS,
+    WORKFLOW_ENTITY_DELTA_PUBLIC_OBJECT_FIELDS,
+    new Set(),
+    traversal,
+    depth,
+  );
+}
+
+export interface WorkflowCommandRecord {
+  readonly commandId: string;
+  readonly workflowRunId: string;
+  readonly operationId: string;
+  readonly commandType: string;
+  readonly owner: string;
+  readonly agentExposureStatus: string;
+  readonly agentExposureGate: string;
+  readonly status: string;
+  readonly claimGeneration?: number;
+  readonly controlEpoch?: number;
+  readonly displayContract: WorkflowPublicJsonObject;
+  readonly controlPolicy: WorkflowCommandControlPolicy;
+  readonly controlState: WorkflowPublicJsonObject;
+  readonly activitySpinePolicy: WorkflowPublicJsonObject;
+  readonly executionSummary?: WorkflowCommandExecutionSummary;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface WorkflowActivityControlTarget {
+  readonly targetType: string;
+  readonly commandId: string;
+  readonly commandType: string;
+  readonly owner: string;
+  readonly commandStatus: string;
+  readonly displayContract: WorkflowPublicJsonObject;
+  readonly controlPolicy: WorkflowPublicJsonObject;
+  readonly controlState: WorkflowPublicJsonObject;
+  readonly activitySpinePolicy: WorkflowPublicJsonObject;
+  readonly fallbackStatus: string;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface WorkflowActivityRecord {
+  readonly activityRunId: string;
+  readonly workspaceId: string;
+  readonly workflowRunId: string;
+  readonly operationRunId: string;
+  readonly acquisitionRunId: string;
+  readonly commandId: string;
+  readonly parentActivityRunId: string;
+  readonly activityType: string;
+  readonly owner: string;
+  readonly status: string;
+  readonly phase: string;
+  readonly idempotencyKey: string;
+  readonly providerRef: WorkflowPublicJsonObject;
+  readonly input: WorkflowPublicJsonObject;
+  readonly output: WorkflowPublicJsonObject;
+  readonly artifactRefs: WorkflowPublicJsonArray;
+  readonly entityCounts: WorkflowPublicJsonObject;
+  readonly metadata: WorkflowPublicJsonObject;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly mutationContract: string;
+  readonly moduleStateMutated: boolean;
+  readonly controlTarget?: WorkflowActivityControlTarget;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface WorkflowActivityAttemptRecord {
+  readonly attemptId: string;
+  readonly workspaceId: string;
+  readonly activityRunId: string;
+  readonly workflowRunId: string;
+  readonly commandId: string;
+  readonly attemptNumber?: number;
+  readonly activityType: string;
+  readonly owner: string;
+  readonly status: string;
+  readonly provider: string;
+  readonly providerRequestRef: string;
+  readonly providerRunRef: string;
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly nextRetryAt: string;
+  readonly rateLimitRef: WorkflowPublicJsonObject;
+  readonly error: WorkflowPublicJsonObject;
+  readonly input: WorkflowPublicJsonObject;
+  readonly output: WorkflowPublicJsonObject;
+  readonly artifactRefs: WorkflowPublicJsonArray;
+  readonly idempotencyKey: string;
+  readonly metadata: WorkflowPublicJsonObject;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly mutationContract: string;
+  readonly moduleStateMutated: boolean;
+  readonly controlTarget?: WorkflowActivityControlTarget;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface WorkflowEntityDeltaRecord {
+  readonly deltaId: string;
+  readonly workspaceId: string;
+  readonly workflowRunId: string;
+  readonly operationRunId: string;
+  readonly commandId: string;
+  readonly activityRunId: string;
+  readonly attemptId: string;
+  readonly acquisitionRunId: string;
+  readonly activityType: string;
+  readonly owner: string;
+  readonly entityType: string;
+  readonly entityKey: string;
+  readonly deltaKind: string;
+  readonly status: string;
+  readonly reason: string;
+  readonly sourceRef: WorkflowPublicJsonObject;
+  readonly entityPayload: WorkflowPublicJsonObject;
+  readonly projectionEffect: WorkflowPublicJsonObject;
+  readonly artifactRefs: WorkflowPublicJsonArray;
+  readonly idempotencyKey: string;
+  readonly metadata: WorkflowPublicJsonObject;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly mutationContract: string;
+  readonly moduleStateMutated: boolean;
+  readonly controlTarget?: WorkflowActivityControlTarget;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface OperationRunStatusSummary {
+  readonly source: string;
+  readonly fallbackStatus: string;
+  readonly fallbackUsed: boolean;
+  readonly moduleStateMutated: boolean;
+  readonly operationStatus: string;
+  readonly operationPhase: string;
+  readonly workflowCommandCount: number;
+  readonly operationEventCount: number;
+  readonly commandStatusCounts: Readonly<Record<string, number>>;
+  readonly latestEventType: string;
+  readonly latestWorkflowCommand?: WorkflowCommandRecord;
+}
+
+export interface OperationRunControlState {
+  readonly operationStatus: string;
+  readonly actionStatus: string;
+  readonly operationPhase: string;
+  readonly canDispatch: boolean;
+  readonly canCancel: boolean;
+  readonly canRetry: boolean;
+  readonly canResume: boolean;
+  readonly allowedActions: WorkflowPublicFrozenArray<string>;
+  readonly disabledReasons: Readonly<Record<string, string>>;
+  readonly controlSourceOfTruth: string;
+  readonly fallbackStatus: string;
+  readonly moduleStateMutatedOnControl: boolean;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface OperationRunRecord {
+  readonly operationRunId: string;
+  readonly actionId: string;
+  readonly ownerModule: string;
+  readonly operationType: string;
+  readonly displayContract: WorkflowPublicJsonObject;
+  readonly status: string;
+  readonly progress: WorkflowPublicJsonObject;
+  readonly workflowRef: WorkflowPublicJsonObject;
+  readonly resultRef: WorkflowPublicJsonObject;
+  readonly requestSchemaVersion?: string;
+  readonly requestSchemaDigest?: string;
+  readonly controlState?: OperationRunControlState;
+  readonly statusSummary?: OperationRunStatusSummary;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface OperationActionRecord {
+  readonly actionId: string;
+  readonly actionType: string;
+  readonly ownerModule: string;
+  readonly operationType: string;
+  readonly displayContract: WorkflowPublicJsonObject;
+  readonly approvalStatus: string;
+  readonly approvalPolicy: string;
+  readonly status: string;
+  readonly targetRef: WorkflowPublicJsonObject;
+  readonly input: WorkflowPublicJsonObject;
+  readonly requestSchemaVersion?: string;
+  readonly requestSchemaDigest?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface OperationActionDecisionResult<
+  TDecision extends OperationActionDecision = OperationActionDecision,
+> {
+  readonly status: (typeof OPERATION_ACTION_DECISION_APPLIED_OUTCOMES)[TDecision][number];
+  readonly action: OperationActionRecord | null;
+  readonly operationRun: OperationRunRecord | null;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface OperationEventRecord {
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly sequenceNumber: number;
+  readonly actor: string;
+  readonly source: string;
+  readonly payload: WorkflowPublicJsonObject;
+  readonly recordedAt: string;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export interface OperationRunProvenance {
+  readonly status: OperationRunProvenanceSuccessStatus;
+  readonly action: OperationActionRecord | null;
+  readonly operationRun: OperationRunRecord | null;
+  readonly actionEvents: WorkflowPublicFrozenArray<OperationEventRecord>;
+  readonly operationEvents: WorkflowPublicFrozenArray<OperationEventRecord>;
+  readonly eventTimeline: WorkflowPublicFrozenArray<OperationEventRecord>;
+  readonly workflowCommands: WorkflowPublicFrozenArray<WorkflowCommandRecord>;
+  readonly raw: WorkflowPublicJsonObject;
+}
+
+export { dashboardHasRenderableCandidates } from "./dashboardHydration";
+
+function candidateDetailCacheKey(jobId: string, candidateId: string): string {
+  return `${jobId}::${candidateId}`;
+}
+
+function readFreshCacheValue<T>(
+  cache: Map<string, { value: T; cachedAt: number }>,
+  key: string,
+  ttlMs: number,
+): T | null {
+  const cached = cache.get(key);
+  if (!cached) {
+    return null;
+  }
+  if (Date.now() - cached.cachedAt > ttlMs) {
+    cache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeCacheValue<T>(
+  cache: Map<string, { value: T; cachedAt: number }>,
+  key: string,
+  value: T,
+): T {
+  cache.set(key, {
+    value,
+    cachedAt: Date.now(),
+  });
+  return value;
+}
+
+function evictPromiseCacheEntry<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  promise: Promise<T>,
+): void {
+  if (cache.get(key) === promise) {
+    cache.delete(key);
+  }
+}
+
+export interface DashboardCandidatePageFilter {
+  searchKeyword?: string;
+  recallBuckets?: string[];
+  employmentStatuses?: string[];
+  locations?: string[];
+  functionBuckets?: string[];
+  layerIncludes?: string[];
+  layerExcludes?: string[];
+  auditStatuses?: string[];
+}
+
+function normalizeCandidatePageFilterList(values?: string[]): string[] {
+  return Array.from(new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))).sort();
+}
+
+export function dashboardCandidatePageFilterSignature(filter?: DashboardCandidatePageFilter): string {
+  const normalized = {
+    searchKeyword: String(filter?.searchKeyword || "").trim(),
+    recallBuckets: normalizeCandidatePageFilterList(filter?.recallBuckets),
+    employmentStatuses: normalizeCandidatePageFilterList(filter?.employmentStatuses),
+    locations: normalizeCandidatePageFilterList(filter?.locations),
+    functionBuckets: normalizeCandidatePageFilterList(filter?.functionBuckets),
+    layerIncludes: normalizeCandidatePageFilterList(filter?.layerIncludes),
+    layerExcludes: normalizeCandidatePageFilterList(filter?.layerExcludes),
+    auditStatuses: normalizeCandidatePageFilterList(filter?.auditStatuses),
+  };
+  return JSON.stringify(normalized);
+}
+
+function candidatePageFilterQueryParams(filter?: DashboardCandidatePageFilter): Record<string, string | undefined> {
+  const normalized = JSON.parse(dashboardCandidatePageFilterSignature(filter)) as Required<DashboardCandidatePageFilter>;
+  return {
+    search: normalized.searchKeyword || undefined,
+    recall_buckets: normalized.recallBuckets.length > 0 ? normalized.recallBuckets.join(",") : undefined,
+    employment_statuses: normalized.employmentStatuses.length > 0 ? normalized.employmentStatuses.join(",") : undefined,
+    locations: normalized.locations.length > 0 ? normalized.locations.join(",") : undefined,
+    function_buckets: normalized.functionBuckets.length > 0 ? normalized.functionBuckets.join(",") : undefined,
+    layer_includes: normalized.layerIncludes.length > 0 ? normalized.layerIncludes.join(",") : undefined,
+    layer_excludes: normalized.layerExcludes.length > 0 ? normalized.layerExcludes.join(",") : undefined,
+    audit_statuses: normalized.auditStatuses.length > 0 ? normalized.auditStatuses.join(",") : undefined,
+  };
+}
+
+function dashboardCandidatePageCacheKey(
+  jobId: string,
+  offset: number,
+  limit: number,
+  lightweight: boolean,
+  filterSignature = "",
+): string {
+  return `${jobId}::${offset}::${limit}::${lightweight ? "lightweight" : "rich"}::${filterSignature}`;
+}
+
+function normalizeApiBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) {
+    return "";
+  }
+  if (
+    trimmed === "/" ||
+    ["same-origin", "same_origin", "sameorigin", "relative", "origin-relative"].includes(trimmed.toLowerCase())
+  ) {
+    return SAME_ORIGIN_API_BASE_URL;
+  }
+  if (runningLocally) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        parsed.hostname = "127.0.0.1";
+        return parsed.toString().replace(/\/+$/, "");
+      }
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
+function isSameOriginApiBaseUrl(value: string): boolean {
+  return value === SAME_ORIGIN_API_BASE_URL;
+}
+
+const ENV_API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || "");
+const HOSTED_API_BASE_URL_LOCKED = !runningLocally && Boolean(ENV_API_BASE_URL);
+const LOOPBACK_FALLBACK_ENABLED = runningLocally;
+
+// C2.4: static per-user bearer (no login UI). When VITE_SOURCING_API_BEARER_TOKEN
+// is set at build time, attach it to every authenticated API request so the
+// backend _AuthMiddleware (C2.1) accepts the call. Empty -> no header, which
+// keeps the demo working against an open-mode (no-token) backend.
+const ENV_API_BEARER_TOKEN = String(import.meta.env.VITE_SOURCING_API_BEARER_TOKEN || "").trim();
+
+function applyApiAuthHeader(requestHeaders: Headers): void {
+  if (ENV_API_BEARER_TOKEN && !requestHeaders.has("Authorization")) {
+    requestHeaders.set("Authorization", `Bearer ${ENV_API_BEARER_TOKEN}`);
+  }
+}
+
+function readApiBaseUrlFromQuery(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const searchParams = new URLSearchParams(window.location.search);
+  return normalizeApiBaseUrl(
+    searchParams.get("api_base_url") ||
+      searchParams.get("apiBaseUrl") ||
+      searchParams.get("backend") ||
+      "",
+  );
+}
+
+export function readRuntimeApiBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    return normalizeApiBaseUrl(window.localStorage.getItem(API_BASE_URL_STORAGE_KEY) || "");
+  } catch {
+    return "";
+  }
+}
+
+export function saveRuntimeApiBaseUrl(value: string): string {
+  const normalized = normalizeApiBaseUrl(value);
+  if (typeof window === "undefined") {
+    return normalized;
+  }
+  try {
+    if (normalized) {
+      window.localStorage.setItem(API_BASE_URL_STORAGE_KEY, normalized);
+    } else {
+      window.localStorage.removeItem(API_BASE_URL_STORAGE_KEY);
+    }
+  } catch {
+    return normalized;
+  }
+  return normalized;
+}
+
+export function clearRuntimeApiBaseUrl(): void {
+  saveRuntimeApiBaseUrl("");
+}
+
+export function isApiBaseUrlRuntimeConfigurable(): boolean {
+  if (HOSTED_API_BASE_URL_LOCKED) {
+    return false;
+  }
+  return runningLocally || !ENV_API_BASE_URL;
+}
+
+export function getConfiguredApiBaseUrl(): string {
+  if (HOSTED_API_BASE_URL_LOCKED) {
+    return ENV_API_BASE_URL;
+  }
+  const queryBaseUrl = readApiBaseUrlFromQuery();
+  if (queryBaseUrl) {
+    const normalizedQueryBaseUrl = normalizeApiBaseUrl(queryBaseUrl);
+    saveRuntimeApiBaseUrl(normalizedQueryBaseUrl);
+    return normalizedQueryBaseUrl;
+  }
+  const envBaseUrl = ENV_API_BASE_URL;
+  if (envBaseUrl) {
+    if (readRuntimeApiBaseUrl() !== envBaseUrl) {
+      saveRuntimeApiBaseUrl(envBaseUrl);
+    }
+    return envBaseUrl;
+  }
+  const storedBaseUrl = readRuntimeApiBaseUrl();
+  if (runningLocally && storedBaseUrl) {
+    const normalizedStoredBaseUrl = normalizeApiBaseUrl(storedBaseUrl);
+    if (normalizedStoredBaseUrl !== storedBaseUrl) {
+      saveRuntimeApiBaseUrl(normalizedStoredBaseUrl);
+    }
+    return normalizedStoredBaseUrl;
+  }
+  if (storedBaseUrl) {
+    return storedBaseUrl;
+  }
+  if (LOOPBACK_FALLBACK_ENABLED && typeof window !== "undefined") {
+    const defaultLocalApiBaseUrl = `${window.location.protocol}//127.0.0.1:8765`;
+    if (readRuntimeApiBaseUrl() !== defaultLocalApiBaseUrl) {
+      saveRuntimeApiBaseUrl(defaultLocalApiBaseUrl);
+    }
+    return defaultLocalApiBaseUrl;
+  }
+  return "";
+}
+
+function buildAlternateLocalApiBaseUrl(apiBaseUrl: string): string {
+  try {
+    const parsed = new URL(apiBaseUrl);
+    if (parsed.hostname === "localhost") {
+      parsed.hostname = "127.0.0.1";
+      return parsed.toString().replace(/\/+$/, "");
+    }
+    if (parsed.hostname === "127.0.0.1") {
+      parsed.hostname = "localhost";
+      return parsed.toString().replace(/\/+$/, "");
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function listLocalApiFallbackBaseUrls(apiBaseUrl: string): string[] {
+  if (!LOOPBACK_FALLBACK_ENABLED || typeof window === "undefined") {
+    return [];
+  }
+  if (isSameOriginApiBaseUrl(apiBaseUrl)) {
+    return [
+      `${window.location.protocol}//127.0.0.1:8765`,
+      `${window.location.protocol}//localhost:8765`,
+    ];
+  }
+  if (isLikelyLocalApiBaseUrl(apiBaseUrl)) {
+    const alternateApiBaseUrl = buildAlternateLocalApiBaseUrl(apiBaseUrl);
+    return alternateApiBaseUrl && alternateApiBaseUrl !== apiBaseUrl ? [alternateApiBaseUrl] : [];
+  }
+  return [];
+}
+
+function isLikelyLocalApiBaseUrl(apiBaseUrl: string): boolean {
+  return /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(apiBaseUrl);
+}
+
+function buildApiRequestUrl(apiBaseUrl: string, path: string): string {
+  if (isSameOriginApiBaseUrl(apiBaseUrl)) {
+    return path;
+  }
+  return `${apiBaseUrl}${path}`;
+}
+
+function resolveApiMediaUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (/^(?:https?:|data:|blob:)/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("//")) {
+    return `${typeof window !== "undefined" ? window.location.protocol : "https:"}${trimmed}`;
+  }
+  if (!trimmed.startsWith("/api/")) {
+    return trimmed;
+  }
+  const apiBaseUrl = getConfiguredApiBaseUrl();
+  if (runningLocally && isSameOriginApiBaseUrl(apiBaseUrl) && typeof window !== "undefined") {
+    return `${window.location.protocol}//127.0.0.1:8765${trimmed}`;
+  }
+  return buildApiRequestUrl(apiBaseUrl, trimmed);
+}
+
+class LocalApiFallbackSignal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LocalApiFallbackSignal";
+  }
+}
+
+function canUseLocalApiFallback(apiBaseUrl: string): boolean {
+  return LOOPBACK_FALLBACK_ENABLED && (isSameOriginApiBaseUrl(apiBaseUrl) || isLikelyLocalApiBaseUrl(apiBaseUrl));
+}
+
+function looksLikeSpaFallbackResponse(contentType: string, body: string): boolean {
+  const normalizedContentType = contentType.toLowerCase();
+  const trimmedBody = body.trimStart().slice(0, 160).toLowerCase();
+  return (
+    normalizedContentType.includes("text/html") ||
+    trimmedBody.startsWith("<!doctype html") ||
+    trimmedBody.startsWith("<html")
+  );
+}
+
+function isLocalApiRecoverableError(error: unknown): boolean {
+  return error instanceof TypeError || error instanceof LocalApiFallbackSignal;
+}
+
+function extractDownloadFilename(contentDisposition: string | null, fallback: string): string {
+  const header = (contentDisposition || "").trim();
+  if (!header) {
+    return fallback;
+  }
+  const utf8Match = header.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const quotedMatch = header.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+  const bareMatch = header.match(/filename\s*=\s*([^;]+)/i);
+  if (bareMatch?.[1]) {
+    return bareMatch[1].trim();
+  }
+  return fallback;
+}
+
+function demoWorkflowPublicResponseContentLength(response: Response): string | null {
+  try {
+    return response.headers?.get("Content-Length") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function readDemoWorkflowPublicResponseText(response: Response): Promise<string> {
+  if (
+    workflowPublicTransportContentLengthIsOverLimit(
+      demoWorkflowPublicResponseContentLength(response),
+    )
+  ) {
+    throw new Error("API response exceeds the public transport body budget");
+  }
+  const responseText = await response.text();
+  if (workflowPublicTransportBodyIsOverLimit(responseText)) {
+    throw new Error("API response exceeds the public transport body budget");
+  }
+  return responseText;
+}
+
+type DemoApiResponseBodyBudget = "unbounded" | "workflow-public";
+
+async function fetchJson<T>(
+  path: string,
+  options?: RequestInit,
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+  bodyBudget: DemoApiResponseBodyBudget = "unbounded",
+): Promise<T> {
+  const apiBaseUrl = getConfiguredApiBaseUrl();
+  if (!apiBaseUrl) {
+    throw new Error(
+      "API base URL is not configured. Please set a backend URL or enable same-origin API proxy mode before starting a search.",
+    );
+  }
+  const fetchFromApiBaseUrl = async (resolvedApiBaseUrl: string): Promise<T> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const requestHeaders = new Headers(options?.headers || {});
+    if (!requestHeaders.has("Content-Type") && !isFormDataBody(options?.body)) {
+      requestHeaders.set("Content-Type", "application/json");
+    }
+    applyApiAuthHeader(requestHeaders);
+    try {
+      const response = await fetch(buildApiRequestUrl(resolvedApiBaseUrl, path), {
+        ...options,
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
+      const responseText = bodyBudget === "workflow-public"
+        ? await readDemoWorkflowPublicResponseText(response)
+        : await response.text();
+      const responseContentType = response.headers.get("Content-Type") || "";
+      if (!response.ok) {
+        if (
+          canUseLocalApiFallback(resolvedApiBaseUrl) &&
+          looksLikeSpaFallbackResponse(responseContentType, responseText)
+        ) {
+          throw new LocalApiFallbackSignal(
+            `same-origin API request returned frontend shell for ${path}`,
+          );
+        }
+        const detail = responseText.trim();
+        throw new Error(detail ? `Request failed: ${response.status} ${detail.slice(0, 240)}` : `Request failed: ${response.status}`);
+      }
+      if (resolvedApiBaseUrl !== apiBaseUrl && !isSameOriginApiBaseUrl(resolvedApiBaseUrl)) {
+        saveRuntimeApiBaseUrl(resolvedApiBaseUrl);
+      }
+      try {
+        return JSON.parse(responseText) as T;
+      } catch (error) {
+        if (
+          canUseLocalApiFallback(resolvedApiBaseUrl) &&
+          looksLikeSpaFallbackResponse(responseContentType, responseText)
+        ) {
+          throw new LocalApiFallbackSignal(
+            `same-origin API request returned non-JSON frontend shell for ${path}`,
+          );
+        }
+        throw error;
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+  try {
+    return await fetchFromApiBaseUrl(apiBaseUrl);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    if (canUseLocalApiFallback(apiBaseUrl) && isLocalApiRecoverableError(error)) {
+      let lastFallbackError: unknown = error;
+      for (const fallbackApiBaseUrl of listLocalApiFallbackBaseUrls(apiBaseUrl)) {
+        try {
+          return await fetchFromApiBaseUrl(fallbackApiBaseUrl);
+        } catch (fallbackError) {
+          if (!isLocalApiRecoverableError(fallbackError)) {
+            throw fallbackError;
+          }
+          lastFallbackError = fallbackError;
+        }
+      }
+      if (isSameOriginApiBaseUrl(apiBaseUrl) || isLikelyLocalApiBaseUrl(apiBaseUrl)) {
+        const detail = lastFallbackError instanceof Error ? ` Last error: ${lastFallbackError.message}` : "";
+        throw new Error(
+          `Local backend is unreachable via ${apiBaseUrl}. Please make sure the local service is running on http://127.0.0.1:8765.${detail}`,
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+function isFormDataBody(body: BodyInit | null | undefined): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
+function appendOptionalFormField(form: FormData, key: string, value: string | boolean | undefined): void {
+  if (value === undefined) {
+    return;
+  }
+  form.append(key, typeof value === "boolean" ? String(value) : value);
+}
+
+async function fetchBinary(
+  path: string,
+  options?: RequestInit,
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+): Promise<{ blob: Blob; filename: string; contentType: string; headers: Headers }> {
+  const apiBaseUrl = getConfiguredApiBaseUrl();
+  if (!apiBaseUrl) {
+    throw new Error(
+      "API base URL is not configured. Please set a backend URL or enable same-origin API proxy mode before starting a search.",
+    );
+  }
+  const fetchFromApiBaseUrl = async (
+    resolvedApiBaseUrl: string,
+  ): Promise<{ blob: Blob; filename: string; contentType: string; headers: Headers }> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const requestHeaders = new Headers(options?.headers || {});
+    if (options?.body && !requestHeaders.has("Content-Type") && !isFormDataBody(options.body)) {
+      requestHeaders.set("Content-Type", "application/json");
+    }
+    applyApiAuthHeader(requestHeaders);
+    try {
+      const response = await fetch(buildApiRequestUrl(resolvedApiBaseUrl, path), {
+        ...options,
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const detail = (await response.text()).trim();
+        throw new Error(
+          detail ? `Request failed: ${response.status} ${detail.slice(0, 240)}` : `Request failed: ${response.status}`,
+        );
+      }
+      if (resolvedApiBaseUrl !== apiBaseUrl && !isSameOriginApiBaseUrl(resolvedApiBaseUrl)) {
+        saveRuntimeApiBaseUrl(resolvedApiBaseUrl);
+      }
+      const blob = await response.blob();
+      return {
+        blob,
+        filename: extractDownloadFilename(response.headers.get("Content-Disposition"), "download.bin"),
+        contentType: response.headers.get("Content-Type") || blob.type || "application/octet-stream",
+        headers: new Headers(response.headers),
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+  try {
+    return await fetchFromApiBaseUrl(apiBaseUrl);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    if (LOOPBACK_FALLBACK_ENABLED && error instanceof TypeError) {
+      for (const fallbackApiBaseUrl of listLocalApiFallbackBaseUrls(apiBaseUrl)) {
+        try {
+          return await fetchFromApiBaseUrl(fallbackApiBaseUrl);
+        } catch (fallbackError) {
+          if (!(fallbackError instanceof TypeError)) {
+            throw fallbackError;
+          }
+        }
+      }
+      if (isSameOriginApiBaseUrl(apiBaseUrl) || isLikelyLocalApiBaseUrl(apiBaseUrl)) {
+        throw new Error(
+          `Local backend is unreachable via ${apiBaseUrl}. Please make sure the local service is running on http://127.0.0.1:8765.`,
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+async function fetchWorkflowPublicJson<T>(
+  path: string,
+  options?: RequestInit,
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+): Promise<T> {
+  return fetchJson<T>(path, options, timeoutMs, "workflow-public");
+}
+
+async function fetchPublicJson<T>(path: string): Promise<T> {
+  const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Public asset request failed: ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
+async function fetchPublicJsonOptional<T>(path: string, fallback: T): Promise<T> {
+  try {
+    return await fetchPublicJson<T>(path);
+  } catch {
+    return fallback;
+  }
+}
+
+function buildApiQueryString(
+  params: Record<string, string | number | boolean | null | undefined>,
+): string {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+    const normalized = String(value).trim();
+    if (!normalized) {
+      return;
+    }
+    query.set(key, normalized);
+  });
+  const serialized = query.toString();
+  return serialized ? `?${serialized}` : "";
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asWorkflowPublicNumberRecord(value: unknown): Record<string, number> {
+  const source = asObjectRecord(value);
+  return Object.fromEntries(
+    Object.entries(source).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isFinite(entry[1]),
+    ),
+  );
+}
+
+function deriveWorkflowCommandExecutionSummary(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): WorkflowCommandExecutionSummary {
+  return {
+    source: asString(record.source),
+    fallbackStatus: asString(record.fallback_status),
+    fallbackUsed: asBoolean(record.fallback_used) === true,
+    moduleStateMutated: asBoolean(record.module_state_mutated) === true,
+    activityCount: asNumber(record.activity_count) ?? 0,
+    attemptCount: asNumber(record.attempt_count) ?? 0,
+    entityDeltaCount: asNumber(record.entity_delta_count) ?? 0,
+    activityStatusCounts: asWorkflowPublicNumberRecord(record.activity_status_counts),
+    attemptStatusCounts: asWorkflowPublicNumberRecord(record.attempt_status_counts),
+    entityDeltaStatusCounts: asWorkflowPublicNumberRecord(record.entity_delta_status_counts),
+    entityDeltaKindCounts: asWorkflowPublicNumberRecord(record.entity_delta_kind_counts),
+    latestEffectStatus: asString(record.latest_effect_status),
+    latestActivity: projectWorkflowActivityPublicRecord(
+      asObjectRecord(record.latest_activity),
+      traversal,
+      depth + 1,
+    ) as WorkflowPublicDeepReadonly<Record<string, unknown>>,
+    latestAttempt: projectWorkflowActivityAttemptPublicRecord(
+      asObjectRecord(record.latest_attempt),
+      traversal,
+      depth + 1,
+    ) as WorkflowPublicDeepReadonly<Record<string, unknown>>,
+    latestEntityDelta: projectWorkflowEntityDeltaPublicRecord(
+      asObjectRecord(record.latest_entity_delta),
+      traversal,
+      depth + 1,
+    ) as WorkflowPublicDeepReadonly<Record<string, unknown>>,
+    sampleLimit: asNumber(record.sample_limit) ?? 0,
+    sampleTruncated: asBoolean(record.sample_truncated) === true,
+  };
+}
+
+function attachDemoRaw<T extends object>(
+  value: T,
+  raw: Record<string, unknown>,
+): WorkflowPublicDeepReadonly<T & { raw: Record<string, unknown> }> {
+  Object.defineProperty(value, "raw", {
+    value: raw,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return requireDemoWorkflowPublicFinalSnapshot<T & { raw: Record<string, unknown> }>(
+    value,
+    "Demo workflow public DTO",
+  );
+}
+
+function deriveWorkflowCommandControlPolicy(record: Record<string, unknown>): WorkflowCommandControlPolicy {
+  return attachDemoRaw({
+    commandType: asString(record.command_type),
+    owner: asString(record.owner),
+    genericControlContract: asString(record.generic_control_contract),
+    providerAfterStartControlContract: asString(record.provider_after_start_control_contract),
+    providerAfterStartControlStatus: asString(record.provider_after_start_control_status),
+    providerAfterStartControlMode: asString(record.provider_after_start_control_mode),
+    providerAfterStartControlOwner: asString(record.provider_after_start_control_owner),
+    providerAfterStartControlBlockedReason: asString(
+      record.provider_after_start_control_blocked_reason,
+    ),
+    providerAfterStartControlUpgradeRequirements: asArray(
+      record.provider_after_start_control_upgrade_requirements,
+    )
+      .map((item) => asString(item))
+      .filter(Boolean),
+    moduleStateMutatedOnProviderAfterStartControl:
+      asBoolean(record.module_state_mutated_on_provider_after_start_control) === true,
+    runningControlCategory: asString(record.running_control_category),
+    runningControlCategories: asArray(record.running_control_categories).map((item) => asString(item)).filter(Boolean),
+    runningControlMaturity: asString(record.running_control_maturity),
+    runningControlGapStatus: asString(record.running_control_gap_status),
+    runningControlSurface: asString(record.running_control_surface),
+    runningCancelBlockedReason: asString(record.running_cancel_blocked_reason),
+    runningResumeBlockedReason: asString(record.running_resume_blocked_reason),
+    fallbackStatus: asString(record.fallback_status),
+  }, record);
+}
+
+export function deriveWorkflowCommandRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowCommandRecord {
+  const publicRecord = projectWorkflowCommandPublicRecord(record, traversal, depth);
+  const executionSummary = asObjectRecord(publicRecord.execution_summary);
+  const controlPolicy = asObjectRecord(publicRecord.control_policy);
+  return attachDemoRaw({
+    commandId: asString(publicRecord.command_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    operationId: asString(publicRecord.operation_id),
+    commandType: asString(publicRecord.command_type),
+    owner: asString(publicRecord.owner),
+    agentExposureStatus: asString(publicRecord.agent_exposure_status),
+    agentExposureGate: asString(publicRecord.agent_exposure_gate),
+    status: asString(publicRecord.status),
+    claimGeneration: asNonnegativeSafeInteger(publicRecord.claim_generation),
+    controlEpoch: asNonnegativeSafeInteger(publicRecord.control_epoch),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    controlPolicy: deriveWorkflowCommandControlPolicy(controlPolicy),
+    controlState: asObjectRecord(publicRecord.control_state),
+    activitySpinePolicy: asObjectRecord(publicRecord.activity_spine_policy),
+    executionSummary: Object.keys(executionSummary).length
+      ? deriveWorkflowCommandExecutionSummary(executionSummary, traversal, depth + 1)
+      : undefined,
+  }, publicRecord);
+}
+
+function deriveWorkflowActivityControlTarget(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): WorkflowActivityControlTarget {
+  const publicRecord = projectWorkflowActivityControlTargetPublicRecord(
+    record,
+    traversal,
+    depth,
+  );
+  return attachDemoRaw({
+    targetType: asString(publicRecord.target_type),
+    commandId: asString(publicRecord.command_id),
+    commandType: asString(publicRecord.command_type),
+    owner: asString(publicRecord.owner),
+    commandStatus: asString(publicRecord.command_status),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    controlPolicy: asObjectRecord(publicRecord.control_policy),
+    controlState: asObjectRecord(publicRecord.control_state),
+    activitySpinePolicy: asObjectRecord(publicRecord.activity_spine_policy),
+    fallbackStatus: asString(publicRecord.fallback_status),
+  }, publicRecord);
+}
+
+export function deriveWorkflowActivityRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowActivityRecord {
+  const publicRecord = projectWorkflowActivityPublicRecord(record, traversal, depth);
+  const controlTarget = asObjectRecord(publicRecord.control_target);
+  return attachDemoRaw({
+    activityRunId: asString(publicRecord.activity_run_id),
+    workspaceId: asString(publicRecord.workspace_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    operationRunId: asString(publicRecord.operation_run_id),
+    acquisitionRunId: asString(publicRecord.acquisition_run_id),
+    commandId: asString(publicRecord.command_id),
+    parentActivityRunId: asString(publicRecord.parent_activity_run_id),
+    activityType: asString(publicRecord.activity_type),
+    owner: asString(publicRecord.owner),
+    status: asString(publicRecord.status),
+    phase: asString(publicRecord.phase),
+    idempotencyKey: asString(publicRecord.idempotency_key),
+    providerRef: asObjectRecord(publicRecord.provider_ref),
+    input: asObjectRecord(publicRecord.input),
+    output: asObjectRecord(publicRecord.output),
+    artifactRefs: asArray(publicRecord.artifact_refs),
+    entityCounts: asObjectRecord(publicRecord.entity_counts),
+    metadata: asObjectRecord(publicRecord.metadata),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    mutationContract: asString(publicRecord.mutation_contract),
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    controlTarget: Object.keys(controlTarget).length
+      ? deriveWorkflowActivityControlTarget(controlTarget, traversal, depth + 1)
+      : undefined,
+  }, publicRecord);
+}
+
+export function deriveWorkflowActivityAttemptRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowActivityAttemptRecord {
+  const publicRecord = projectWorkflowActivityAttemptPublicRecord(record, traversal, depth);
+  const controlTarget = asObjectRecord(publicRecord.control_target);
+  return attachDemoRaw({
+    attemptId: asString(publicRecord.attempt_id),
+    workspaceId: asString(publicRecord.workspace_id),
+    activityRunId: asString(publicRecord.activity_run_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    commandId: asString(publicRecord.command_id),
+    attemptNumber: asNonnegativeSafeInteger(publicRecord.attempt_number),
+    activityType: asString(publicRecord.activity_type),
+    owner: asString(publicRecord.owner),
+    status: asString(publicRecord.status),
+    provider: asString(publicRecord.provider),
+    providerRequestRef: asString(publicRecord.provider_request_ref),
+    providerRunRef: asString(publicRecord.provider_run_ref),
+    startedAt: asString(publicRecord.started_at),
+    completedAt: asString(publicRecord.completed_at),
+    nextRetryAt: asString(publicRecord.next_retry_at),
+    rateLimitRef: asObjectRecord(publicRecord.rate_limit_ref),
+    error: asObjectRecord(publicRecord.error),
+    input: asObjectRecord(publicRecord.input),
+    output: asObjectRecord(publicRecord.output),
+    artifactRefs: asArray(publicRecord.artifact_refs),
+    idempotencyKey: asString(publicRecord.idempotency_key),
+    metadata: asObjectRecord(publicRecord.metadata),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    mutationContract: asString(publicRecord.mutation_contract),
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    controlTarget: Object.keys(controlTarget).length
+      ? deriveWorkflowActivityControlTarget(controlTarget, traversal, depth + 1)
+      : undefined,
+  }, publicRecord);
+}
+
+export function deriveWorkflowEntityDeltaRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): WorkflowEntityDeltaRecord {
+  const publicRecord = projectWorkflowEntityDeltaPublicRecord(record, traversal, depth);
+  const controlTarget = asObjectRecord(publicRecord.control_target);
+  return attachDemoRaw({
+    deltaId: asString(publicRecord.delta_id),
+    workspaceId: asString(publicRecord.workspace_id),
+    workflowRunId: asString(publicRecord.workflow_run_id),
+    operationRunId: asString(publicRecord.operation_run_id),
+    commandId: asString(publicRecord.command_id),
+    activityRunId: asString(publicRecord.activity_run_id),
+    attemptId: asString(publicRecord.attempt_id),
+    acquisitionRunId: asString(publicRecord.acquisition_run_id),
+    activityType: asString(publicRecord.activity_type),
+    owner: asString(publicRecord.owner),
+    entityType: asString(publicRecord.entity_type),
+    entityKey: asString(publicRecord.entity_key),
+    deltaKind: asString(publicRecord.delta_kind),
+    status: asString(publicRecord.status),
+    reason: asString(publicRecord.reason),
+    sourceRef: asObjectRecord(publicRecord.source_ref),
+    entityPayload: asObjectRecord(publicRecord.entity_payload),
+    projectionEffect: asObjectRecord(publicRecord.projection_effect),
+    artifactRefs: asArray(publicRecord.artifact_refs),
+    idempotencyKey: asString(publicRecord.idempotency_key),
+    metadata: asObjectRecord(publicRecord.metadata),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+    mutationContract: asString(publicRecord.mutation_contract),
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    controlTarget: Object.keys(controlTarget).length
+      ? deriveWorkflowActivityControlTarget(controlTarget, traversal, depth + 1)
+      : undefined,
+  }, publicRecord);
+}
+
+function deriveOperationRunStatusSummary(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): OperationRunStatusSummary {
+  const publicRecord = projectOperationRunStatusSummaryPublicRecord(
+    record,
+    traversal,
+    depth,
+  );
+  const latestCommand = asObjectRecord(publicRecord.latest_workflow_command);
+  return attachDemoRaw({
+    source: asString(publicRecord.source),
+    fallbackStatus: asString(publicRecord.fallback_status),
+    fallbackUsed: asBoolean(publicRecord.fallback_used) === true,
+    moduleStateMutated: asBoolean(publicRecord.module_state_mutated) === true,
+    operationStatus: asString(publicRecord.operation_status),
+    operationPhase: asString(publicRecord.operation_phase),
+    workflowCommandCount: asNumber(publicRecord.workflow_command_count) ?? 0,
+    operationEventCount: asNumber(publicRecord.operation_event_count) ?? 0,
+    commandStatusCounts: asWorkflowPublicNumberRecord(publicRecord.command_status_counts),
+    latestEventType: asString(publicRecord.latest_event_type),
+    latestWorkflowCommand: Object.keys(latestCommand).length
+      ? deriveWorkflowCommandRecord(latestCommand, traversal, depth + 1)
+      : undefined,
+  }, publicRecord);
+}
+
+function deriveOperationRunControlState(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal,
+  depth: number,
+): OperationRunControlState {
+  const publicRecord = projectOperationRunControlStatePublicRecord(record, traversal, depth);
+  const disabledReasons = asObjectRecord(publicRecord.disabled_reasons);
+  return attachDemoRaw({
+    operationStatus: asString(publicRecord.operation_status),
+    actionStatus: asString(publicRecord.action_status),
+    operationPhase: asString(publicRecord.operation_phase),
+    canDispatch: asBoolean(publicRecord.can_dispatch) === true,
+    canCancel: asBoolean(publicRecord.can_cancel) === true,
+    canRetry: asBoolean(publicRecord.can_retry) === true,
+    canResume: asBoolean(publicRecord.can_resume) === true,
+    allowedActions: asArray(publicRecord.allowed_actions)
+      .filter((item): item is string => typeof item === "string"),
+    disabledReasons: Object.fromEntries(
+      Object.entries(disabledReasons).map(([key, value]) => [key, String(value)]),
+    ),
+    controlSourceOfTruth: asString(publicRecord.control_source_of_truth),
+    fallbackStatus: asString(publicRecord.fallback_status),
+    moduleStateMutatedOnControl:
+      asBoolean(publicRecord.module_state_mutated_on_control) === true,
+  }, publicRecord);
+}
+
+export function deriveOperationRunRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationRunRecord {
+  const publicRecord = projectOperationRunPublicRecord(record, traversal, depth);
+  const statusSummary = asObjectRecord(publicRecord.status_summary);
+  const controlState = asObjectRecord(publicRecord.control_state);
+  return attachDemoRaw({
+    operationRunId: asString(publicRecord.operation_run_id),
+    actionId: asString(publicRecord.action_id),
+    ownerModule: asString(publicRecord.owner_module),
+    operationType: asString(publicRecord.operation_type),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    status: asString(publicRecord.status),
+    progress: asObjectRecord(publicRecord.progress),
+    workflowRef: asObjectRecord(publicRecord.workflow_ref),
+    resultRef: asObjectRecord(publicRecord.result_ref),
+    requestSchemaVersion: asOptionalString(publicRecord.request_schema_version),
+    requestSchemaDigest: asOptionalString(publicRecord.request_schema_digest),
+    controlState: Object.keys(controlState).length
+      ? deriveOperationRunControlState(controlState, traversal, depth + 1)
+      : undefined,
+    statusSummary: Object.keys(statusSummary).length
+      ? deriveOperationRunStatusSummary(statusSummary, traversal, depth + 1)
+      : undefined,
+  }, publicRecord);
+}
+
+export function deriveOperationActionRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationActionRecord {
+  const publicRecord = projectOperationActionPublicRecord(record, traversal, depth);
+  return attachDemoRaw({
+    actionId: asString(publicRecord.action_id),
+    actionType: asString(publicRecord.action_type),
+    ownerModule: asString(publicRecord.owner_module),
+    operationType: asString(publicRecord.operation_type),
+    displayContract: asObjectRecord(publicRecord.display_contract),
+    approvalStatus: asString(publicRecord.approval_status),
+    approvalPolicy: asString(publicRecord.approval_policy),
+    status: asString(publicRecord.status),
+    targetRef: asObjectRecord(publicRecord.target_ref),
+    input: asObjectRecord(publicRecord.input),
+    requestSchemaVersion: asOptionalString(publicRecord.request_schema_version),
+    requestSchemaDigest: asOptionalString(publicRecord.request_schema_digest),
+    createdAt: asString(publicRecord.created_at),
+    updatedAt: asString(publicRecord.updated_at),
+  }, publicRecord);
+}
+
+export function deriveOperationEventRecord(
+  record: Record<string, unknown>,
+  traversal: DemoWorkflowPublicProjectionTraversal = createDemoWorkflowPublicProjectionTraversal(),
+  depth = 0,
+): OperationEventRecord {
+  const publicRecord = projectOperationEventPublicRecord(record, traversal, depth);
+  return attachDemoRaw({
+    eventId: asString(publicRecord.event_id),
+    eventType: asString(publicRecord.event_type),
+    sequenceNumber: asNumber(publicRecord.sequence_number) ?? 0,
+    actor: asString(publicRecord.actor),
+    source: asString(publicRecord.source),
+    payload: asObjectRecord(publicRecord.payload),
+    recordedAt: asString(publicRecord.recorded_at),
+  }, publicRecord);
+}
+
+export async function listOperationRuns(options?: {
+  status?: string;
+  ownerModule?: string;
+  actionId?: string;
+  limit?: number;
+  includeStatusSummary?: boolean;
+}): Promise<WorkflowPublicFrozenArray<OperationRunRecord>> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/operations/runs${buildApiQueryString({
+      status: options?.status,
+      owner_module: options?.ownerModule,
+      action_id: options?.actionId,
+      limit: options?.limit ?? 50,
+      include_status_summary: options?.includeStatusSummary !== false,
+    })}`,
+  );
+  const { canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "OperationRunListResponse",
+    ["operation_runs"],
+  );
+  const runs = (projectDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.operation_runs,
+    deriveOperationRunRecord,
+    traversal,
+    depth + 1,
+  ) ?? []).filter((item) => item.operationRunId);
+  return requireDemoWorkflowPublicFinalSnapshot<OperationRunRecord[]>(
+    runs,
+    "Operation run list",
+  );
+}
+
+export async function listOperationActions(options?: {
+  status?: string;
+  actionType?: string;
+  ownerModule?: string;
+  conversationId?: string;
+  limit?: number;
+}): Promise<WorkflowPublicFrozenArray<OperationActionRecord>> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/operations/actions${buildApiQueryString({
+      status: options?.status,
+      action_type: options?.actionType,
+      owner_module: options?.ownerModule,
+      conversation_id: options?.conversationId,
+      limit: options?.limit ?? 50,
+    })}`,
+  );
+  const { canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "OperationActionListResponse",
+    ["actions"],
+  );
+  const actions = (projectDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.actions,
+    deriveOperationActionRecord,
+    traversal,
+    depth + 1,
+  ) ?? []).filter((item) => item.actionId);
+  return requireDemoWorkflowPublicFinalSnapshot<OperationActionRecord[]>(
+    actions,
+    "Operation action list",
+  );
+}
+
+async function postOperationActionDecision<TDecision extends OperationActionDecision>(
+  actionId: string,
+  decision: TDecision,
+  payload?: Record<string, unknown>,
+): Promise<OperationActionDecisionResult<TDecision>> {
+  const response = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/operations/actions/${encodeURIComponent(actionId)}/${decision}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        actor: "frontend-demo",
+        source: "operation_queue",
+        ...(payload || {}),
+      }),
+    },
+  );
+  const { source, canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    response,
+    "OperationActionDecisionResponse",
+    ["action", "operation_run", "events"],
+  );
+  const status = requirePublicResponseOutcome(
+    source.status,
+    OPERATION_ACTION_DECISION_APPLIED_OUTCOMES[decision],
+    `Operation action ${decision}`,
+  );
+  const derivedAction = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.action,
+    deriveOperationActionRecord,
+    traversal,
+    depth + 1,
+  ) ?? null;
+  const derivedOperationRun = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.operation_run,
+    deriveOperationRunRecord,
+    traversal,
+    depth + 1,
+  ) ?? null;
+  const events = projectDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.events,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
+  ) ?? [];
+  const publicResponse = projectOperationResponsePublicEnvelope(
+    source,
+    traversal,
+    depth,
+  );
+  publicResponse.status = status;
+  if (derivedAction) {
+    publicResponse.action = derivedAction.raw;
+  } else {
+    delete publicResponse.action;
+  }
+  if (derivedOperationRun) {
+    publicResponse.operation_run = derivedOperationRun.raw;
+  } else {
+    delete publicResponse.operation_run;
+  }
+  publicResponse.events = events.map((event) => event.raw);
+  return attachDemoRaw({
+    status,
+    action: derivedAction,
+    operationRun: derivedOperationRun,
+  }, publicResponse) as OperationActionDecisionResult<TDecision>;
+}
+
+export function approveOperationAction(
+  actionId: string,
+): Promise<OperationActionDecisionResult<"approve">> {
+  return postOperationActionDecision(actionId, "approve");
+}
+
+export function rejectOperationAction(
+  actionId: string,
+  reason = "rejected_from_operation_queue",
+): Promise<OperationActionDecisionResult<"reject">> {
+  return postOperationActionDecision(actionId, "reject", { reason });
+}
+
+export async function getOperationRunProvenance(operationRunId: string): Promise<OperationRunProvenance> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/operations/runs/${encodeURIComponent(operationRunId)}/provenance`,
+  );
+  const { source, canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "OperationRunProvenanceResponse",
+    [
+      "action",
+      "operation_run",
+      "action_events",
+      "operation_events",
+      "event_timeline",
+      "workflow_commands",
+    ],
+  );
+  const status = requirePublicResponseOutcome(
+    source.status,
+    OPERATION_RUN_PROVENANCE_SUCCESS_STATUSES,
+    "Operation provenance",
+  );
+  const action = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.action,
+    deriveOperationActionRecord,
+    traversal,
+    depth + 1,
+  ) ?? null;
+  const operationRun = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.operation_run,
+    deriveOperationRunRecord,
+    traversal,
+    depth + 1,
+  ) ?? null;
+  const actionEvents: OperationEventRecord[] = [];
+  const operationEvents: OperationEventRecord[] = [];
+  const eventTimeline: OperationEventRecord[] = [];
+  const workflowCommands: WorkflowCommandRecord[] = [];
+  const provenanceValue = {
+    status,
+    action,
+    operationRun,
+    actionEvents,
+    operationEvents,
+    eventTimeline,
+    workflowCommands,
+  };
+  const finalBudget = requireDemoWorkflowPublicFinalFootprint(
+    provenanceValue,
+    "Operation run provenance",
+  );
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.action_events,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
+    actionEvents,
+    finalBudget,
+  );
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.operation_events,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
+    operationEvents,
+    finalBudget,
+  );
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.event_timeline,
+    deriveOperationEventRecord,
+    traversal,
+    depth + 1,
+    eventTimeline,
+    finalBudget,
+  );
+  projectAndAdmitDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.workflow_commands,
+    deriveWorkflowCommandRecord,
+    traversal,
+    depth + 1,
+    workflowCommands,
+    finalBudget,
+  );
+
+  const publicPayload = projectOperationResponsePublicEnvelope(source, traversal, depth);
+  publicPayload.status = status;
+  if (action) publicPayload.action = action.raw;
+  else delete publicPayload.action;
+  if (operationRun) publicPayload.operation_run = operationRun.raw;
+  else delete publicPayload.operation_run;
+  publicPayload.action_events = provenanceValue.actionEvents.map((event) => event.raw);
+  publicPayload.operation_events = provenanceValue.operationEvents.map((event) => event.raw);
+  publicPayload.event_timeline = provenanceValue.eventTimeline.map((event) => event.raw);
+  publicPayload.workflow_commands = provenanceValue.workflowCommands.map((command) => command.raw);
+  return attachDemoRaw(provenanceValue, publicPayload);
+}
+
+async function postOperationRunControl(operationRunId: string, action: "cancel" | "retry" | "resume" | "dispatch"): Promise<OperationRunRecord | null> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/operations/runs/${encodeURIComponent(operationRunId)}/${action}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ actor: "frontend-demo", source: "operation_queue" }),
+    },
+  );
+  const { source, canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "OperationRunControlResponse",
+    ["operation_run"],
+  );
+  const status = requirePublicResponseOutcome(
+    source.status,
+    OPERATION_RUN_CONTROL_APPLIED_OUTCOMES[action],
+    `Operation ${action}`,
+  );
+  const operationRun = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.operation_run,
+    deriveOperationRunRecord,
+    traversal,
+    depth + 1,
+  );
+  if (!operationRun) {
+    const reason = asString(source.reason) || status || "missing operation_run";
+    throw new Error(`Operation ${action} failed: ${reason}`);
+  }
+  return operationRun;
+}
+
+export function cancelOperationRun(operationRunId: string): Promise<OperationRunRecord | null> {
+  return postOperationRunControl(operationRunId, "cancel");
+}
+
+export function retryOperationRun(operationRunId: string): Promise<OperationRunRecord | null> {
+  return postOperationRunControl(operationRunId, "retry");
+}
+
+export function resumeOperationRun(operationRunId: string): Promise<OperationRunRecord | null> {
+  return postOperationRunControl(operationRunId, "resume");
+}
+
+export function dispatchOperationRun(operationRunId: string): Promise<OperationRunRecord | null> {
+  return postOperationRunControl(operationRunId, "dispatch");
+}
+
+function extractCandidateArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.candidates)) {
+      return record.candidates;
+    }
+  }
+  return [];
+}
+
+async function postWorkflowCommandControl(
+  commandId: string,
+  action: "cancel" | "retry" | "resume",
+): Promise<WorkflowCommandRecord | null> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/workflow/commands/${encodeURIComponent(commandId)}/${action}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ actor: "frontend-demo", source: "operation_queue" }),
+    },
+  );
+  const { source, canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "WorkflowCommandControlResponse",
+    ["workflow_command"],
+  );
+  const status = requirePublicResponseOutcome(
+    source.status,
+    WORKFLOW_COMMAND_CONTROL_APPLIED_OUTCOMES[action],
+    `Workflow command ${action}`,
+  );
+  const workflowCommand = projectDemoCapturedPlainWorkflowPublicObject(
+    canonical.workflow_command,
+    projectWorkflowCommandGenericCarrierRecord,
+    traversal,
+    depth + 1,
+  );
+  if (!workflowCommand || !Object.keys(workflowCommand).length) {
+    const reason = asString(source.reason) || asString(source.command_status) || status || "missing workflow_command";
+    throw new Error(`Workflow command ${action} failed: ${reason}`);
+  }
+  for (const field of ["control_state", "display_contract", "control_policy", "activity_spine_policy"]) {
+    if (!Object.keys(asObjectRecord(workflowCommand[field])).length) {
+      throw new Error(`Workflow command ${action} failed: missing ${field}`);
+    }
+  }
+  return deriveWorkflowCommandRecord(workflowCommand, traversal, depth + 1);
+}
+
+export function cancelWorkflowCommand(commandId: string): Promise<WorkflowCommandRecord | null> {
+  return postWorkflowCommandControl(commandId, "cancel");
+}
+
+export function retryWorkflowCommand(commandId: string): Promise<WorkflowCommandRecord | null> {
+  return postWorkflowCommandControl(commandId, "retry");
+}
+
+export function resumeWorkflowCommand(commandId: string): Promise<WorkflowCommandRecord | null> {
+  return postWorkflowCommandControl(commandId, "resume");
+}
+
+export async function listWorkflowActivities(filters: {
+  commandId?: string;
+  operationRunId?: string;
+  workflowRunId?: string;
+  limit?: number;
+}): Promise<WorkflowPublicFrozenArray<WorkflowActivityRecord>> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/workflow/activities${buildApiQueryString({
+      command_id: filters.commandId,
+      operation_run_id: filters.operationRunId,
+      workflow_run_id: filters.workflowRunId,
+      limit: filters.limit,
+    })}`,
+  );
+  const { canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "WorkflowActivityListResponse",
+    ["workflow_activities"],
+  );
+  const activities = (projectDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.workflow_activities,
+    deriveWorkflowActivityRecord,
+    traversal,
+    depth + 1,
+  ) ?? []).filter((item) => item.activityRunId);
+  return requireDemoWorkflowPublicFinalSnapshot<WorkflowActivityRecord[]>(
+    activities,
+    "Workflow activity list",
+  );
+}
+
+export async function listWorkflowActivityAttempts(filters: {
+  commandId?: string;
+  activityRunId?: string;
+  workflowRunId?: string;
+  limit?: number;
+}): Promise<WorkflowPublicFrozenArray<WorkflowActivityAttemptRecord>> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/workflow/activity-attempts${buildApiQueryString({
+      command_id: filters.commandId,
+      activity_run_id: filters.activityRunId,
+      workflow_run_id: filters.workflowRunId,
+      limit: filters.limit,
+    })}`,
+  );
+  const { canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "WorkflowActivityAttemptListResponse",
+    ["workflow_activity_attempts"],
+  );
+  const attempts = (projectDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.workflow_activity_attempts,
+    deriveWorkflowActivityAttemptRecord,
+    traversal,
+    depth + 1,
+  ) ?? []).filter((item) => item.attemptId);
+  return requireDemoWorkflowPublicFinalSnapshot<WorkflowActivityAttemptRecord[]>(
+    attempts,
+    "Workflow activity attempt list",
+  );
+}
+
+export async function listWorkflowEntityDeltas(filters: {
+  commandId?: string;
+  activityRunId?: string;
+  attemptId?: string;
+  operationRunId?: string;
+  workflowRunId?: string;
+  limit?: number;
+}): Promise<WorkflowPublicFrozenArray<WorkflowEntityDeltaRecord>> {
+  const payload = await fetchWorkflowPublicJson<Record<string, unknown>>(
+    `/api/workflow/entity-deltas${buildApiQueryString({
+      command_id: filters.commandId,
+      activity_run_id: filters.activityRunId,
+      attempt_id: filters.attemptId,
+      operation_run_id: filters.operationRunId,
+      workflow_run_id: filters.workflowRunId,
+      limit: filters.limit,
+    })}`,
+  );
+  const { canonical, traversal, depth } = captureDemoWorkflowPublicEnvelope(
+    payload,
+    "WorkflowEntityDeltaListResponse",
+    ["workflow_entity_deltas"],
+  );
+  const deltas = (projectDemoCapturedPlainWorkflowPublicObjectArray(
+    canonical.workflow_entity_deltas,
+    deriveWorkflowEntityDeltaRecord,
+    traversal,
+    depth + 1,
+  ) ?? []).filter((item) => item.deltaId);
+  return requireDemoWorkflowPublicFinalSnapshot<WorkflowEntityDeltaRecord[]>(
+    deltas,
+    "Workflow entity delta list",
+  );
+}
+
+function stripMarkdown(value: string): string {
+  return value
+    .replace(/[*_`>#-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitStructuredText(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => asString(item)).filter(Boolean);
+  }
+  const text = asString(value);
+  if (!text) {
+    return [];
+  }
+  const segments = text
+    .split(/\n+|[•；;]+|\s\|\s|,(?=\s*[A-Za-z\u4e00-\u9fff])/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return segments.length > 1 ? segments : [text];
+}
+
+function mapSearchBundlesToLabels(payload: any): string[] {
+  return asArray(payload?.plan?.search_strategy?.query_bundles)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .map((item) =>
+      firstNonEmptyString([
+        pickFirstString(item, ["objective"]),
+        pickFirstString(item, ["source_family"]),
+        pickFirstString(item, ["execution_mode"]),
+        pickFirstString(item, ["bundle_id"]),
+      ]),
+    )
+    .filter(Boolean);
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return values.filter((value, index) => value && values.indexOf(value) === index);
+}
+
+function normalizeDisplayKeywordKey(value: string): string {
+  return normalizeKeywordToken(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalizeDisplayKeyword(value: string): string {
+  const normalized = normalizeDisplayKeywordKey(value);
+  const canonicalMap: Record<string, string> = {
+    coding: "Coding",
+    "coding agent": "Coding",
+    "coding agents": "Coding",
+    programming: "Coding",
+    math: "Math",
+    mathematics: "Math",
+    mathematical: "Math",
+    text: "Text",
+    language: "Text",
+    nlp: "Text",
+    audio: "Audio",
+    speech: "Audio",
+    voice: "Audio",
+    vision: "Vision",
+    visual: "Vision",
+    multimodal: "Multimodal",
+    multimodality: "Multimodal",
+    reasoning: "Reasoning",
+    reasoner: "Reasoning",
+    rl: "RL",
+    "reinforcement learning": "RL",
+    eval: "Eval",
+    evals: "Eval",
+    evaluation: "Eval",
+    "model evaluation": "Eval",
+    "alignment evaluation": "Eval",
+    "pre train": "Pre-train",
+    pretraining: "Pre-train",
+    "pre training": "Pre-train",
+    "post train": "Post-train",
+    posttraining: "Post-train",
+    "post training": "Post-train",
+    "world model": "World model",
+    "world models": "World model",
+    "world modeling": "World model",
+    alignment: "Alignment",
+    safety: "Safety",
+    infra: "Infra",
+    infrastructure: "Infra",
+    veo: "Veo",
+    "nano banana": "Nano Banana",
+    nanobanana: "Nano Banana",
+    gemini: "Gemini",
+    chatgpt: "ChatGPT",
+    claude: "Claude",
+    o1: "o1",
+  };
+  if (canonicalMap[normalized]) {
+    return canonicalMap[normalized];
+  }
+  if (!normalized) {
+    return "";
+  }
+  if (/^[a-z0-9 ]+$/.test(normalized)) {
+    return normalized
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => (part.length <= 2 && /\d/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+      .join(" ");
+  }
+  return value.trim();
+}
+
+function canonicalizeDisplayKeywords(values: string[]): string[] {
+  const results: string[] = [];
+  const seen: Set<string> = new Set();
+  for (const value of values) {
+    const canonical = canonicalizeDisplayKeyword(value);
+    const key = normalizeDisplayKeywordKey(canonical);
+    if (!canonical || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    results.push(canonical);
+  }
+  return results;
+}
+
+function containsPattern(value: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(value));
+}
+
+function extractScopeLabels(queryText: string): string[] {
+  const labels = Array.from(queryText.matchAll(/([A-Za-z0-9\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff +/&._-]{1,40}?)\s*(?:组|团队|team)\b/gi))
+    .map((match) => asString(match[1]))
+    .map((value) => value.replace(/[、,，/]+$/g, "").trim())
+    .filter(Boolean);
+  return dedupeStrings(labels).map((label) => (/(组|团队)$/u.test(label) ? label : `${label} 组`));
+}
+
+function detectFocusLabels(queryText: string, payload: any): string[] {
+  const corpus = [
+    queryText,
+    pickFirstString((payload.request as Record<string, unknown>) || {}, ["query", "raw_user_request"]),
+    pickFirstString((payload.plan as Record<string, unknown>) || {}, ["criteria_summary", "intent_summary"]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const rules = [
+    { label: "多模态", patterns: [/multimodal/i, /多模态/u] },
+    { label: "视频生成", patterns: [/video generation/i, /视频生成/u, /\bveo\b/i] },
+    { label: "模型优化", patterns: [/model optimization/i, /模型优化/u] },
+    { label: "Agent", patterns: [/\bagent\b/i, /智能体/u] },
+    { label: "Applied AI", patterns: [/applied ai/i, /应用型?\s*AI/ui] },
+    { label: "研究工程", patterns: [/research engineer/i, /研究工程/u] },
+  ];
+  return rules.filter((rule) => containsPattern(corpus, rule.patterns)).map((rule) => rule.label);
+}
+
+function extractPopulationCategories(payload: any): string[] {
+  const categorySources = [
+    asArray(payload.request_preview?.categories),
+    asArray(payload.request?.categories),
+  ];
+  return dedupeStrings(
+    categorySources
+      .flat()
+      .map((value) => asString(value).trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function hasTechnicalPopulationIntent(queryText: string, payload: any): boolean {
+  const requestPreview = (payload.request_preview as Record<string, unknown>) || {};
+  const thematicValues = [
+    ...asArray(requestPreview.keywords),
+    ...asArray(requestPreview.must_have_keywords),
+    ...asArray(requestPreview.must_have_facets),
+    ...asArray(requestPreview.must_have_primary_role_buckets),
+  ]
+    .map((value) => asString(value))
+    .filter(Boolean);
+  if (thematicValues.length > 0) {
+    return true;
+  }
+  const corpus = [
+    queryText,
+    pickFirstString((payload.request as Record<string, unknown>) || {}, ["query", "raw_user_request"]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return containsPattern(corpus, [/方向/u, /focus/i, /topic/i, /working on/i]);
+}
+
+function inferPopulationLabel(queryText: string, payload: any): string {
+  const corpus = [
+    queryText,
+    pickFirstString((payload.request as Record<string, unknown>) || {}, ["query", "raw_user_request"]),
+    pickFirstString((payload.plan as Record<string, unknown>) || {}, ["target_population", "intent_summary"]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const categories = new Set(extractPopulationCategories(payload));
+  const technicalPopulationIntent = hasTechnicalPopulationIntent(queryText, payload);
+  const backgroundLabel = containsPattern(corpus, [/华人/u, /\bChinese\b/i, /中文/u]) ? "华人" : "";
+  let roleLabel = "";
+  if (categories.has("investor")) {
+    roleLabel = "投资人";
+  } else if (
+    categories.has("researcher")
+    && categories.has("engineer")
+  ) {
+    roleLabel = "研究员/工程师";
+  } else if (categories.has("researcher")) {
+    roleLabel = "研究员";
+  } else if (categories.has("engineer")) {
+    roleLabel = "工程师";
+  } else if (technicalPopulationIntent) {
+    roleLabel = "研究员/工程师";
+  } else if (categories.has("employee") || categories.has("former_employee")) {
+    roleLabel = "员工/前员工";
+  } else if (containsPattern(corpus, [/research engineer/i, /研究工程/u])) {
+    roleLabel = "研究工程师";
+  } else if (containsPattern(corpus, [/研究员/u, /researcher/i]) && containsPattern(corpus, [/工程师/u, /engineer/i])) {
+    roleLabel = "研究员/工程师";
+  } else if (containsPattern(corpus, [/工程师/u, /engineer/i])) {
+    roleLabel = "工程师";
+  } else if (containsPattern(corpus, [/研究员/u, /researcher/i])) {
+    roleLabel = "研究员";
+  } else {
+    roleLabel = "研究员/工程师";
+  }
+  return `${backgroundLabel}${roleLabel}` || "目标候选人";
+}
+
+function inferProjectScopeLabel(queryText: string, payload: any): string {
+  const scopeLabels = extractScopeLabels(queryText);
+  if (scopeLabels.length > 0) {
+    return scopeLabels.join("、");
+  }
+  const acquisitionStrategy = (payload.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const effectiveExecutionSemantics = (payload.effective_execution_semantics as Record<string, unknown>) || {};
+  const strategyType = pickFirstString(acquisitionStrategy, ["strategy_type"]);
+  const targetScope =
+    pickFirstString((payload.plan as Record<string, unknown>) || {}, ["target_scope"]) ||
+    pickFirstString((payload.request_preview as Record<string, unknown>) || {}, ["target_scope"]);
+  const effectiveAcquisitionMode = pickFirstString(effectiveExecutionSemantics, ["effective_acquisition_mode"]);
+  const defaultResultsMode = pickFirstString(effectiveExecutionSemantics, ["default_results_mode"]);
+  if (effectiveAcquisitionMode === "baseline_reuse_with_delta") {
+    return "Baseline 全量 + 定向增量范围";
+  }
+  if (effectiveAcquisitionMode === "scoped_live_search") {
+    return "目标公司定向搜索范围";
+  }
+  if (
+    targetScope === "full_company_asset" ||
+    effectiveAcquisitionMode === "full_local_asset_reuse" ||
+    effectiveAcquisitionMode === "full_live_roster" ||
+    defaultResultsMode === "asset_population"
+  ) {
+    return "目标公司全量范围";
+  }
+  if (strategyType === "full_company_roster" || targetScope === "full_company_asset") {
+    return "目标公司全量范围";
+  }
+  if (strategyType === "scoped_search_roster") {
+    return "目标公司定向搜索范围";
+  }
+  if (containsPattern(queryText, [/在职/u, /current/i])) {
+    return "在职员工优先范围";
+  }
+  return "目标团队定向范围";
+}
+
+function inferKeywordLabels(queryText: string, payload: any): string[] {
+  const corpus = [
+    queryText,
+    pickFirstString((payload.request as Record<string, unknown>) || {}, ["query", "raw_user_request"]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const keywords: string[] = [];
+  if (containsPattern(corpus, [/multimodal/i, /多模态/u])) {
+    keywords.push(/multimodal/i.test(corpus) ? "multimodal" : "多模态");
+  }
+  if (containsPattern(corpus, [/video generation/i, /视频生成/u, /\bveo\b/i])) {
+    keywords.push(/video generation/i.test(corpus) ? "video generation" : "视频生成");
+  }
+  if (containsPattern(corpus, [/model optimization/i, /模型优化/u])) {
+    keywords.push(/model optimization/i.test(corpus) ? "model optimization" : "模型优化");
+  }
+  if (containsPattern(corpus, [/\bcoding\b/i, /编程/u])) {
+    keywords.push(/\bcoding\b/i.test(corpus) ? "Coding" : "编程");
+  }
+  if (containsPattern(corpus, [/\binfra\b/i, /infrastructure/i, /基础设施/u])) {
+    keywords.push(/\binfra\b/i.test(corpus) ? "Infra" : "基础设施");
+  }
+  if (containsPattern(corpus, [/\bpre[\s-]?train/i, /预训练/u])) {
+    keywords.push(/pre/i.test(corpus) ? "Pre-train" : "预训练");
+  }
+  if (containsPattern(corpus, [/\bpost[\s-]?train/i, /后训练/u])) {
+    keywords.push(/post/i.test(corpus) ? "Post-train" : "后训练");
+  }
+  if (containsPattern(corpus, [/\breasoning\b/i, /推理/u])) {
+    keywords.push(/\breasoning\b/i.test(corpus) ? "Reasoning" : "推理");
+  }
+  if (containsPattern(corpus, [/\bworld model/i, /\bworld models/i, /世界模型/u])) {
+    keywords.push(/world/i.test(corpus) ? "World model" : "世界模型");
+  }
+  if (containsPattern(corpus, [/\balignment\b/i, /对齐/u])) {
+    keywords.push(/\balignment\b/i.test(corpus) ? "Alignment" : "对齐");
+  }
+  if (containsPattern(corpus, [/\bsafety\b/i, /安全/u])) {
+    keywords.push(/\bsafety\b/i.test(corpus) ? "Safety" : "安全");
+  }
+  if (containsPattern(corpus, [/\bagent\b/i, /智能体/u])) {
+    keywords.push(/\bagent\b/i.test(corpus) ? "agent" : "智能体");
+  }
+  if (containsPattern(corpus, [/华人/u, /\bChinese\b/i])) {
+    keywords.push("华人");
+  }
+  if (containsPattern(corpus, [/中文/u, /bilingual/i])) {
+    keywords.push("中文");
+  }
+  const fallbackKeywords = asArray(payload.plan?.keywords)
+    .map((value) => asString(value))
+    .map((value) => {
+      if (value === "Greater China experience") {
+        return "华人";
+      }
+      if (value === "Chinese bilingual outreach") {
+        return "中文";
+      }
+      return value;
+    })
+    .filter(Boolean);
+  return canonicalizeDisplayKeywords(dedupeStrings([...keywords, ...fallbackKeywords])).slice(0, 6);
+}
+
+function normalizeKeywordToken(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+const GENERIC_RECALL_KEYWORD_TOKENS = new Set([
+  "research",
+  "researcher",
+  "researchers",
+  "engineer",
+  "engineers",
+  "engineering",
+  "employee",
+  "employees",
+  "people",
+  "member",
+  "members",
+  "team",
+  "teams",
+  "研究",
+  "研究员",
+  "工程师",
+  "员工",
+  "成员",
+  "团队",
+  "linkedin employee",
+  "linkedin employees",
+  "linkedin people",
+  "linkedin member",
+  "linkedin members",
+]);
+
+const ROLE_BUCKET_DISPLAY_KEYWORD_TOKENS = new Set([
+  "infra_systems",
+  "infra systems",
+  "product_management",
+  "product management",
+  "engineering",
+  "research",
+  "founding",
+  "recruiting",
+  "ops",
+]);
+
+function filterDisplayIntentKeywords(values: string[]): string[] {
+  const deduped = dedupeStrings(values);
+  return deduped.filter((value) => {
+    const token = normalizeDisplayKeywordKey(value);
+    if (GENERIC_RECALL_KEYWORD_TOKENS.has(token) || ROLE_BUCKET_DISPLAY_KEYWORD_TOKENS.has(token)) {
+      return false;
+    }
+    const parts = token.split(" ").filter(Boolean);
+    const suffixes = parts.map((_, index) => parts.slice(index).join(" "));
+    if (parts.length > 1 && suffixes.slice(1).some((suffix) => GENERIC_RECALL_KEYWORD_TOKENS.has(suffix))) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function distinctMatchedKeywords(items: unknown[]): string[] {
+  return canonicalizeDisplayKeywords(
+    dedupeStrings(
+      items
+        .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+        .map((item) => firstNonEmptyString([pickFirstString(item, ["keyword"]), pickFirstString(item, ["matched_on"])]))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeSourceMatches(...sources: unknown[]): CandidateSourceMatch[] {
+  const matches: CandidateSourceMatch[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    for (const item of asArray(source)) {
+      const record = ((item && typeof item === "object" ? item : {}) as Record<string, unknown>);
+      const matchedOn = pickFirstString(record, ["matched_on", "keyword"]);
+      const field = pickFirstString(record, ["field"]);
+      const sourceType = pickFirstString(record, ["source_type"]);
+      const sourceQuery = pickFirstString(record, ["source_query", "query"]);
+      const matchedKeywords = splitStructuredText(record.matched_keywords);
+      if (!matchedOn && matchedKeywords.length === 0) {
+        continue;
+      }
+      const key = [matchedOn, field, sourceType, sourceQuery].join("|").toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      matches.push({
+        ...record,
+        ...(field ? { field } : {}),
+        matched_on: matchedOn || matchedKeywords[0],
+        ...(sourceType ? { source_type: sourceType } : {}),
+        ...(sourceQuery ? { source_query: sourceQuery } : {}),
+        ...(matchedKeywords.length > 0 ? { matched_keywords: matchedKeywords } : {}),
+      });
+    }
+  }
+  return matches;
+}
+
+function sourceMatchKeywords(sourceMatches: CandidateSourceMatch[]): string[] {
+  return sourceMatches.flatMap((source) => [
+    asString(source.matched_on),
+    ...splitStructuredText(source.matched_keywords),
+  ]).filter(Boolean);
+}
+
+function buildLayeredSegmentationOptions(candidates: Candidate[]): DashboardData["layers"] {
+  const hasLayerMetadata = candidates.some((candidate) => typeof candidate.outreachLayer === "number");
+  return [0, 1, 2, 3].map((layer) => ({
+    id: `layer_${layer}`,
+    label: `Layer ${layer}`,
+    count: hasLayerMetadata ? candidates.filter((candidate) => candidate.outreachLayer === layer).length : 0,
+  }));
+}
+
+function mapCandidateFacetOptions(source: unknown): DashboardData["layers"] {
+  return asArray(source)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .map((item) => ({
+      id: pickFirstString(item, ["id"]),
+      label: pickFirstString(item, ["label"]),
+      // Strict wire counts (rerun6 finding 4): a string/fractional/negative
+      // count is invalid evidence (0), never coerced into agreement.
+      count: strictNonNegativeInteger(item.count) ?? 0,
+    }))
+    .filter((item) => item.id && item.label);
+}
+
+function mapCandidateFacetSummary(source: unknown): CandidateFacetSummary | undefined {
+  const record = source && typeof source === "object" ? (source as Record<string, unknown>) : {};
+  if (!record || Object.keys(record).length === 0) {
+    return undefined;
+  }
+  return {
+    schemaVersion: Number(record.schema_version || record.schemaVersion || 0) || undefined,
+    // Strict wire count (rerun6 finding 4): a string/fractional/negative
+    // candidate_count makes the whole summary invalid evidence.
+    candidateCount:
+      strictNonNegativeInteger(record.candidate_count ?? record.candidateCount) ?? undefined,
+    layers: mapCandidateFacetOptions(record.layers),
+    recall: mapCandidateFacetOptions(record.recall),
+    employment: mapCandidateFacetOptions(record.employment),
+    locations: mapCandidateFacetOptions(record.locations),
+    functions: mapCandidateFacetOptions(record.functions),
+  };
+}
+
+/**
+ * Facet-SUMMARY scope is a backend-owned contract (FT2 fixed-forward r4,
+ * rerun3 review finding 2; r5 hardening per rerun4 review finding 2; r6
+ * hardening per rerun5 review findings 5 and 7): the only legitimate
+ * evidence is the explicit summary-scope keys (`facet_summary_scope` at
+ * payload top level and `facet_summary.count_scope` inside the summary
+ * record). The frontend NEVER synthesizes the scope (no `exact_projection`
+ * default) and never borrows it from the SEPARATE filter contract
+ * (`facet_count_scope`) or from undocumented keys — AGENTS.md forbids
+ * deriving one contract field from another.
+ *
+ * ONE strict adapter for every endpoint:
+ * - EXACT STRING BYTES, no trimming/repair — a padded or undocumented value
+ *   is INVALID evidence (not a near-match), and any invalid mirror fails
+ *   the whole scope closed;
+ * - CLOSED allowed values — the documented backend vocabulary
+ *   (`docs/CANONICAL_SERVING_PROJECTION_CONTRACT.md` §facet_summary_scope):
+ *   `global_full_population`, `exact_projection`, `current_served_partial`,
+ *   `raw_profile_partial`, `unavailable`. The two `*_partial` values and
+ *   `unavailable` are admitted as EXPLICIT states but never enable global
+ *   facet consumption (`isCanonicalFacetSummaryScope` stays the gate);
+ * - REQUIRED mirrors per endpoint: an ABSENT key (missing) fails a required
+ *   mirror, while a PRESENT-but-invalid value (null, empty, wrong type,
+ *   padded, undocumented) fails any mirror — a missing or null required
+ *   mirror can never let the remaining mirror promote itself;
+ * - AGREEMENT across every admitted mirror — byte-for-byte, or the scope is
+ *   "" and facet consumption stays disabled.
+ */
+const FACET_SUMMARY_SCOPE_ALLOWED_VALUES: ReadonlySet<string> = new Set([
+  "global_full_population",
+  "exact_projection",
+  "current_served_partial",
+  "raw_profile_partial",
+  "unavailable",
+]);
+
+type FacetSummaryScopeMirror = "absent" | "invalid" | string;
+
+interface FacetSummaryScopeEvidence {
+  /** Whether the key exists at all (hasOwnProperty semantics). */
+  present: boolean;
+  value: unknown;
+  /** A required mirror fails closed when its key is absent. */
+  required: boolean;
+}
+
+function readFacetSummaryScopeMirror(evidence: FacetSummaryScopeEvidence): FacetSummaryScopeMirror {
+  if (!evidence.present) {
+    return evidence.required ? "invalid" : "absent";
+  }
+  const value = evidence.value;
+  if (typeof value !== "string") {
+    return "invalid";
+  }
+  return FACET_SUMMARY_SCOPE_ALLOWED_VALUES.has(value) ? value : "invalid";
+}
+
+function facetSummaryScopeEvidence(
+  record: unknown,
+  key: string,
+  required: boolean,
+): FacetSummaryScopeEvidence {
+  const source =
+    record && typeof record === "object" && !Array.isArray(record)
+      ? (record as Record<string, unknown>)
+      : {};
+  return {
+    present: Object.prototype.hasOwnProperty.call(source, key),
+    value: source[key],
+    required,
+  };
+}
+
+function mapCandidateFacetSummaryScope(...evidence: FacetSummaryScopeEvidence[]): string {
+  const mirrors = evidence.map(readFacetSummaryScopeMirror);
+  if (mirrors.some((mirror) => mirror === "invalid")) {
+    return "";
+  }
+  const present = mirrors.filter(
+    (mirror): mirror is string => mirror !== "absent" && mirror !== "invalid",
+  );
+  if (present.length === 0) {
+    return "";
+  }
+  const first = present[0];
+  return present.every((value) => value === first) ? first : "";
+}
+
+/**
+ * Agreement over the COMPLETE set of applicable summary-scope mirrors
+ * (rerun4 review finding 2; rerun5 finding 5): every applicable mirror must
+ * carry a valid closed-vocabulary value and all must agree byte-exactly. A
+ * missing, null, padded, or disagreeing mirror yields "" (consumption
+ * disabled) instead of letting one remaining mirror become authoritative.
+ */
+export function agreeCanonicalFacetSummaryScope(mirrors: unknown[]): string {
+  const read = mirrors.map((value) =>
+    readFacetSummaryScopeMirror({
+      present: value !== undefined && value !== null,
+      value,
+      required: true,
+    }),
+  );
+  if (read.some((mirror) => mirror === "invalid" || mirror === "absent")) {
+    return "";
+  }
+  const values = read as string[];
+  const first = values[0];
+  return values.every((value) => value === first) ? first : "";
+}
+
+function isCanonicalFacetSummaryScope(scope: string | undefined): boolean {
+  const normalized = asString(scope);
+  return normalized === "global_full_population" || normalized === "exact_projection";
+}
+
+function candidateFacetSummaryCompletenessScore(summary: CandidateFacetSummary | undefined): number {
+  if (!summary) {
+    return 0;
+  }
+  const candidateCount = Math.max(0, Number(summary.candidateCount || 0) || 0);
+  const sectionScore = [
+    summary.layers,
+    summary.recall,
+    summary.employment,
+    summary.locations,
+    summary.functions,
+  ].reduce((score, options) => {
+    if (!options || options.length === 0) {
+      return score;
+    }
+    const countTotal = options.reduce((sum, option) => sum + Math.max(0, Number(option.count || 0) || 0), 0);
+    return score + 1_000 + Math.min(countTotal, Math.max(candidateCount, countTotal));
+  }, 0);
+  return candidateCount * 100_000 + sectionScore;
+}
+
+function candidateFacetLayerZeroCount(summary: CandidateFacetSummary | undefined): number {
+  const layerZero = (summary?.layers || []).find((option) => option.id === "layer_0");
+  return Math.max(0, Number(layerZero?.count || 0) || 0);
+}
+
+function candidateFacetSummaryMatchesCanonicalBoard(
+  summary: CandidateFacetSummary | undefined,
+  scope: string | undefined,
+  boardRuntimeState: BoardRuntimeState | undefined,
+): boolean {
+  const normalizedScope = asString(scope);
+  if (!summary || !isCanonicalFacetSummaryScope(normalizedScope)) {
+    return false;
+  }
+  // Type-strict exact equality to the canonical membership N (rerun5
+  // finding 4 + rerun6 finding 4): counts are compared only after strict
+  // non-negative-integer parsing — coerced strings, fractions, or negatives
+  // disable the summary instead of normalizing into agreement.
+  const expectedCount = Math.max(0, Number(boardRuntimeState?.expectedCandidateCount || 0) || 0);
+  const summaryCount = strictNonNegativeInteger(summary.candidateCount);
+  if (expectedCount <= 0) {
+    return summaryCount !== null && summaryCount > 0;
+  }
+  if (summaryCount === null || summaryCount !== expectedCount) {
+    return false;
+  }
+  if (
+    normalizedScope === "global_full_population" &&
+    (summary.layers || []).length > 0 &&
+    candidateFacetLayerZeroCount(summary) !== expectedCount
+  ) {
+    return false;
+  }
+  if (boardRuntimeState) {
+    const boardFacetCount = strictNonNegativeInteger(boardRuntimeState.facetSummaryCandidateCount);
+    if (
+      boardRuntimeState.facetSummaryStatus === "complete" &&
+      isCanonicalFacetSummaryScope(boardRuntimeState.facetSummaryScope) &&
+      boardFacetCount !== null &&
+      boardFacetCount > 0 &&
+      boardFacetCount !== expectedCount
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function pickCanonicalCandidateFacetSummary(
+  incoming: CandidateFacetSummary | undefined,
+  current: CandidateFacetSummary | undefined,
+): CandidateFacetSummary | undefined {
+  if (!incoming) {
+    return current;
+  }
+  if (!current) {
+    return incoming;
+  }
+  return candidateFacetSummaryCompletenessScore(incoming) >= candidateFacetSummaryCompletenessScore(current)
+    ? incoming
+    : current;
+}
+
+function parseOutreachLayer(...values: unknown[]): number | null {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.trunc(parsed);
+    }
+  }
+  return null;
+}
+
+function extractDashboardIntentKeywords(payload: any, candidates: Candidate[], targetCompany: string): string[] {
+  const requestPreview = (payload.request_preview as Record<string, unknown>) || {};
+  const rawRequest = firstNonEmptyString([
+    pickFirstString(payload?.job?.request || {}, ["raw_user_request", "query"]),
+    pickFirstString(requestPreview, ["raw_user_request"]),
+  ]);
+  const normalizedRawRequest = normalizeKeywordToken(rawRequest).replace(/[^\p{L}\p{N}\s]+/gu, " ");
+  const previewKeywordValues = asArray(requestPreview.keywords).map((value) => asString(value)).filter(Boolean);
+  const previewKeywords = dedupeStrings(
+    [
+      ...previewKeywordValues,
+      ...asArray(requestPreview.organization_keywords)
+        .map((value) => asString(value))
+        .filter((value) => {
+          if (!value) {
+            return false;
+          }
+          const normalizedValue = normalizeKeywordToken(value);
+          if (previewKeywordValues.some((keyword) => normalizeKeywordToken(keyword) === normalizedValue)) {
+            return true;
+          }
+          return normalizedRawRequest.includes(normalizedValue);
+        }),
+    ],
+  );
+  const inferredKeywords = inferKeywordLabels(rawRequest, payload);
+  const blocked = new Set(
+    [targetCompany, targetCompany.replace(/\s+/g, ""), pickFirstString(payload?.job?.request || {}, ["target_company"])]
+      .filter(Boolean)
+      .map((value) => normalizeDisplayKeywordKey(value)),
+  );
+  return canonicalizeDisplayKeywords(
+    filterDisplayIntentKeywords(
+      dedupeStrings([...previewKeywords, ...inferredKeywords])
+        .filter((value) => !blocked.has(normalizeDisplayKeywordKey(value))),
+    ),
+  )
+    .slice(0, 8);
+}
+
+function translateSearchChannelLabel(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const mappings: Record<string, string> = {
+    general_web_search_relation_check: "公开网页关系验证",
+    targeted_linkedin_web_search: "LinkedIn 定向搜索",
+    provider_people_search_api: "人员搜索 API",
+    profile_detail_api: "Profile 详情抓取",
+    relationship_web: "公开网页关系验证",
+    publication_surface: "论文 / 作者线索检索",
+    targeted_people_search: "定向人物搜索",
+  };
+  return mappings[normalized] || value;
+}
+
+function translateAcquisitionModeLabel(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const mappings: Record<string, string> = {
+    full_company_roster: "全量 live roster",
+    hybrid: "Baseline 复用 + 增量采集",
+    scoped_search_roster: "定向搜索 roster",
+    former_employee_search: "前员工定向搜索",
+  };
+  return mappings[normalized] || value || "待定";
+}
+
+function translateEffectiveAcquisitionModeLabel(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const mappings: Record<string, string> = {
+    full_local_asset_reuse: "全量本地资产复用",
+    baseline_reuse_with_delta: "Baseline 复用 + 缺口增量",
+    baseline_reuse_ranked_retrieval: "Baseline 复用 + 排名检索",
+    scoped_live_search: "定向 live search",
+    full_live_roster: "全量 live roster",
+    hybrid_live_acquisition: "Hybrid live acquisition",
+  };
+  return mappings[normalized] || "";
+}
+
+function translateLaneBehaviorLabel(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const mappings: Record<string, string> = {
+    reuse_baseline: "复用本地 baseline",
+    delta_acquisition: "只补缺口增量",
+    live_acquisition: "直接实时采集",
+    not_requested: "本次不请求",
+  };
+  return mappings[normalized] || value || "待定";
+}
+
+function translateDispatchStrategyLabel(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const mappings: Record<string, string> = {
+    reuse_snapshot: "直接复用 snapshot",
+    delta_from_snapshot: "基于 snapshot 补 delta",
+    join_inflight: "复用进行中的 workflow",
+    reuse_completed: "复用历史完成结果",
+    new_job: "新建 workflow",
+  };
+  return mappings[normalized] || value || "待定";
+}
+
+function resolvePlanAcquisitionStrategyLabel(options: {
+  effectiveExecutionSemantics?: Record<string, unknown>;
+  assetReusePlan?: Record<string, unknown>;
+  organizationExecutionProfile?: Record<string, unknown>;
+  dispatchPreview?: Record<string, unknown>;
+  queryText?: string;
+  payload?: any;
+}): string {
+  const effectiveExecutionSemantics = options.effectiveExecutionSemantics || {};
+  const assetReusePlan = options.assetReusePlan || {};
+  const organizationExecutionProfile = options.organizationExecutionProfile || {};
+  const dispatchPreview = options.dispatchPreview || {};
+  const backendExecutionStrategyLabel = pickFirstString(effectiveExecutionSemantics, [
+    "execution_strategy_label",
+    "strategy_label",
+  ]);
+  if (backendExecutionStrategyLabel) {
+    return backendExecutionStrategyLabel;
+  }
+  const effectiveAcquisitionMode = pickFirstString(effectiveExecutionSemantics, ["effective_acquisition_mode"]);
+  const dispatchStrategy = pickFirstString(dispatchPreview, ["strategy"]);
+  const plannerMode = pickFirstString(assetReusePlan, ["planner_mode"]);
+  const baselinePopulationDefaultReuse = Boolean(assetReusePlan.baseline_population_default_reuse_sufficient);
+  const fullLocalReuseResolved =
+    effectiveAcquisitionMode === "full_local_asset_reuse" ||
+    ((dispatchStrategy === "reuse_snapshot" ||
+      dispatchStrategy === "reuse_completed" ||
+      plannerMode === "reuse_snapshot_only")
+      && Boolean(assetReusePlan.baseline_reuse_available)
+      && !Boolean(assetReusePlan.requires_delta_acquisition)
+      && (
+        baselinePopulationDefaultReuse ||
+        Boolean(assetReusePlan.baseline_full_company_coverage_proven) ||
+        pickFirstString(organizationExecutionProfile, ["current_lane_default"]) === "reuse_baseline"
+      ));
+  if (fullLocalReuseResolved) {
+    return "全量本地资产复用";
+  }
+  if (effectiveAcquisitionMode) {
+    return (
+      translateEffectiveAcquisitionModeLabel(effectiveAcquisitionMode) ||
+      translateAcquisitionModeLabel(pickFirstString(organizationExecutionProfile, ["default_acquisition_mode"]))
+    );
+  }
+  const acquisitionMode = pickFirstString(organizationExecutionProfile, ["default_acquisition_mode"]);
+  return acquisitionMode
+    ? translateAcquisitionModeLabel(acquisitionMode)
+    : inferStrategyLabel(options.queryText || "", options.payload || {});
+}
+
+export function __testResolvePlanAcquisitionStrategyLabel(payload: any, queryText = ""): string {
+  return resolvePlanAcquisitionStrategyLabel({
+    effectiveExecutionSemantics: (payload?.effective_execution_semantics as Record<string, unknown>) || {},
+    assetReusePlan: (payload?.asset_reuse_plan as Record<string, unknown>) || {},
+    organizationExecutionProfile: (payload?.organization_execution_profile as Record<string, unknown>) || {},
+    dispatchPreview: (payload?.dispatch_preview as Record<string, unknown>) || {},
+    queryText,
+    payload,
+  });
+}
+
+export function __testMapPlanPayloadToDemoPlan(payload: any, queryText = ""): DemoPlan {
+  return mapPlanPayloadToDemoPlan(payload, queryText, payload);
+}
+
+function translateOrganizationScaleBand(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  const mappings: Record<string, string> = {
+    small: "小型组织",
+    medium: "中型组织",
+    large: "大型组织",
+  };
+  return mappings[normalized] || value || "未识别";
+}
+
+function explainKeywords(payload: any): string[] {
+  const requestPreview = (payload?.request_preview as Record<string, unknown>) || {};
+  const keywords = asArray(requestPreview.keywords).map((value) => asString(value)).filter(Boolean);
+  const organizationKeywords = asArray(requestPreview.organization_keywords).map((value) => asString(value)).filter(Boolean);
+  return canonicalizeDisplayKeywords(dedupeStrings([...keywords, ...organizationKeywords])).slice(0, 8);
+}
+
+function extractSearchQueryBundleKeywords(values: unknown): string[] {
+  const keywords: string[] = [];
+  for (const item of asArray(values)) {
+    if (typeof item === "string") {
+      keywords.push(asString(item));
+      continue;
+    }
+    const record = item && typeof item === "object" && !Array.isArray(item)
+      ? (item as Record<string, unknown>)
+      : {};
+    keywords.push(
+      pickFirstString(record, [
+        "search_query",
+        "query",
+        "query_text",
+        "keyword",
+        "scope_keyword",
+        "focus",
+      ]),
+    );
+    keywords.push(...asArray(record.keywords).map((value) => asString(value)));
+    const matchingRequest = (record.matching_family_request as Record<string, unknown>) || {};
+    keywords.push(...asArray(matchingRequest.keywords).map((value) => asString(value)));
+  }
+  return keywords.filter(Boolean);
+}
+
+function mapProviderExecutionLanes(payload: any): ProviderExecutionLanePreview[] {
+  const plan = (payload?.plan as Record<string, unknown>) || {};
+  const acquisitionStrategy = (plan.acquisition_strategy as Record<string, unknown>) || {};
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const manifest =
+    (acquisitionStrategy.provider_execution_manifest as Record<string, unknown>) ||
+    (plan.provider_execution_manifest as Record<string, unknown>) ||
+    (payload?.provider_execution_manifest as Record<string, unknown>) ||
+    (metadata.provider_execution_manifest as Record<string, unknown>) ||
+    {};
+  return asArray(manifest.lanes)
+    .map((value) => {
+      const record = value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+      const companyFilters: Record<string, string[]> = {};
+      const rawFilters = record.company_filters && typeof record.company_filters === "object" && !Array.isArray(record.company_filters)
+        ? (record.company_filters as Record<string, unknown>)
+        : {};
+      for (const [key, values] of Object.entries(rawFilters)) {
+        const normalizedValues = asArray(values).map((item) => asString(item)).filter(Boolean);
+        if (normalizedValues.length > 0) {
+          companyFilters[key] = normalizedValues;
+        }
+      }
+      const lane: ProviderExecutionLanePreview = {
+        laneId: pickFirstString(record, ["lane_id"]),
+        employmentStatus: pickFirstString(record, ["employment_status"]),
+        provider: pickFirstString(record, ["provider"]),
+        operation: pickFirstString(record, ["operation"]),
+        queryTexts: asArray(record.query_texts).map((item) => asString(item)).filter(Boolean),
+        companyFilters,
+        providerFacingQuery: Boolean(record.provider_facing_query),
+        displayLabel: pickFirstString(record, ["display_label"]),
+        reason: pickFirstString(record, ["reason"]),
+      };
+      return lane.provider || lane.operation || lane.queryTexts.length > 0 || Object.keys(lane.companyFilters).length > 0
+        ? lane
+        : null;
+    })
+    .filter((value): value is ProviderExecutionLanePreview => Boolean(value));
+}
+
+function extractProviderExecutionQueryKeywords(lanes: ProviderExecutionLanePreview[]): string[] {
+  return canonicalizeDisplayKeywords(
+    filterDisplayIntentKeywords(
+      dedupeStrings(
+        lanes
+          .filter((lane) => lane.providerFacingQuery)
+          .flatMap((lane) => lane.queryTexts),
+      ),
+    ),
+  ).slice(0, 8);
+}
+
+function extractPlanKeywordLabels(
+  payload: any,
+  requestPreview: Record<string, unknown>,
+  queryText: string,
+  providerExecutionLanes: ProviderExecutionLanePreview[] = [],
+): string[] {
+  const plan = (payload?.plan as Record<string, unknown>) || {};
+  const request = (payload?.request as Record<string, unknown>) || {};
+  const acquisitionStrategy = (plan.acquisition_strategy as Record<string, unknown>) || {};
+  const filterHints = (acquisitionStrategy.filter_hints as Record<string, unknown>) || {};
+  const searchStrategy = (plan.search_strategy as Record<string, unknown>) || {};
+
+  const manifestKeywords = extractProviderExecutionQueryKeywords(providerExecutionLanes);
+  if (manifestKeywords.length > 0) {
+    return manifestKeywords;
+  }
+
+  const providerQueryKeywords = canonicalizeDisplayKeywords(
+    filterDisplayIntentKeywords(
+      dedupeStrings([
+        ...asArray(acquisitionStrategy.search_seed_queries).map((value) => asString(value)),
+        ...asArray(acquisitionStrategy.search_queries).map((value) => asString(value)),
+        ...extractSearchQueryBundleKeywords(acquisitionStrategy.search_query_bundles),
+        ...extractSearchQueryBundleKeywords(searchStrategy.query_bundles),
+      ]),
+    ),
+  );
+  if (providerQueryKeywords.length > 0) {
+    return providerQueryKeywords.slice(0, 8);
+  }
+
+  const requestKeywords = canonicalizeDisplayKeywords(
+    filterDisplayIntentKeywords(
+      dedupeStrings([
+        ...asArray(requestPreview.keywords).map((value) => asString(value)),
+        ...asArray(request.keywords).map((value) => asString(value)),
+        ...asArray(filterHints.keywords).map((value) => asString(value)),
+        ...asArray(requestPreview.must_have_keywords).map((value) => asString(value)),
+        ...asArray(request.must_have_keywords).map((value) => asString(value)),
+      ]),
+    ),
+  );
+  if (requestKeywords.length > 0) {
+    return requestKeywords.slice(0, 8);
+  }
+
+  const previewKeywords = explainKeywords({ ...payload, request_preview: requestPreview });
+  return previewKeywords.length > 0 ? previewKeywords : inferKeywordLabels(queryText, payload);
+}
+
+function buildExecutionNotes(explainPayload: any): string[] {
+  const notes: string[] = [];
+  const organizationExecutionProfile = (explainPayload?.organization_execution_profile as Record<string, unknown>) || {};
+  const assetReusePlan = (explainPayload?.asset_reuse_plan as Record<string, unknown>) || {};
+  const effectiveExecutionSemantics = (explainPayload?.effective_execution_semantics as Record<string, unknown>) || {};
+  const lanePreview = (explainPayload?.lane_preview as Record<string, unknown>) || {};
+  const currentLane = ((lanePreview.current as Record<string, unknown>) || {});
+  const formerLane = ((lanePreview.former as Record<string, unknown>) || {});
+  const currentBehavior = translateLaneBehaviorLabel(pickFirstString(currentLane, ["planned_behavior"]));
+  const formerBehavior = translateLaneBehaviorLabel(pickFirstString(formerLane, ["planned_behavior"]));
+  if (currentBehavior) {
+    notes.push(`Current lane: ${currentBehavior}`);
+  }
+  if (formerBehavior && pickFirstString(formerLane, ["planned_behavior"]) !== "not_requested") {
+    notes.push(`Former lane: ${formerBehavior}`);
+  }
+  const baselineSnapshotId = pickFirstString(assetReusePlan, ["baseline_snapshot_id"]);
+  if (baselineSnapshotId) {
+    notes.push(`Baseline snapshot: ${baselineSnapshotId}`);
+  }
+  const plannerMode = pickFirstString(assetReusePlan, ["planner_mode"]);
+  if (plannerMode) {
+    notes.push(`Planner mode: ${plannerMode}`);
+  }
+  const effectiveAcquisitionMode = translateEffectiveAcquisitionModeLabel(
+    pickFirstString(effectiveExecutionSemantics, ["effective_acquisition_mode"]),
+  );
+  if (effectiveAcquisitionMode) {
+    notes.push(`本次执行: ${effectiveAcquisitionMode}`);
+  }
+  const orgScaleBand = pickFirstString(organizationExecutionProfile, ["org_scale_band"]);
+  if (orgScaleBand) {
+    notes.push(`组织规模: ${translateOrganizationScaleBand(orgScaleBand)}`);
+  }
+  return notes.slice(0, 4);
+}
+
+function describeExecutionModeHints(payload: any): string[] {
+  const hints = (payload?.plan_review_gate?.execution_mode_hints as Record<string, unknown>) || {};
+  const summaries: string[] = [];
+  const shardCount = Number(hints.segmented_company_employee_shard_count || 0);
+  if (shardCount > 0) {
+    summaries.push(`当前 live roster 会拆成 ${shardCount} 个 shard。`);
+  }
+  if (hints.incremental_rerun_recommended) {
+    summaries.push("推荐优先复用已有 baseline，只补最小增量。");
+  }
+  if (hints.adaptive_probe_required_before_live_roster) {
+    summaries.push("如需 fresh roster，会先做 probe 再自动分片。");
+  }
+  return summaries.slice(0, 3);
+}
+
+function collectScopeHints(payload: any, requestPreview: Record<string, unknown>): string[] {
+  const gateScope = ((payload?.plan_review_gate?.scope_disambiguation as Record<string, unknown>) || {});
+  const requestScope = ((requestPreview.scope_disambiguation as Record<string, unknown>) || {});
+  return dedupeStrings([
+    ...asArray(gateScope.hints).map((value) => asString(value)).filter(Boolean),
+    ...asArray(gateScope.sub_org_candidates).map((value) => asString(value)).filter(Boolean),
+    ...asArray(requestScope.sub_org_candidates).map((value) => asString(value)).filter(Boolean),
+    ...asArray(requestPreview.organization_keywords).map((value) => asString(value)).filter(Boolean),
+  ]).slice(0, 6);
+}
+
+function asOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function mapTargetCompanyIdentity(payload: unknown): TargetCompanyIdentityPreview | undefined {
+  const identity = (payload as Record<string, unknown>) || {};
+  const linkedinCompanyUrl = pickFirstString(identity, ["linkedin_company_url"]);
+  const linkedinSlug = pickFirstString(identity, ["linkedin_slug"]);
+  const canonicalName = pickFirstString(identity, ["canonical_name"]);
+  const requestedName = pickFirstString(identity, ["requested_name"]);
+  const companyKey = pickFirstString(identity, ["company_key"]);
+  if (!linkedinCompanyUrl && !linkedinSlug && !canonicalName && !requestedName && !companyKey) {
+    return undefined;
+  }
+  return {
+    requestedName,
+    canonicalName,
+    companyKey,
+    linkedinSlug,
+    linkedinCompanyUrl,
+    domain: pickFirstString(identity, ["domain"]),
+    resolver: pickFirstString(identity, ["resolver"]),
+    confidence: pickFirstString(identity, ["confidence"]),
+    localAssetAvailable: Boolean(identity.local_asset_available),
+  };
+}
+
+function mapPlanReviewGate(payload: any, requestPreview: Record<string, unknown>): PlanReviewGate {
+  const gate = (payload?.plan_review_gate as Record<string, unknown>) || {};
+  return {
+    status: pickFirstString(gate, ["status"]) || "ready",
+    requiredBeforeExecution: Boolean(gate.required_before_execution),
+    riskLevel: pickFirstString(gate, ["risk_level"]) || "low",
+    reasons: asArray(gate.reasons).map((value) => asString(value)).filter(Boolean),
+    confirmationItems: asArray(gate.confirmation_items).map((value) => asString(value)).filter(Boolean),
+    editableFields: asArray(gate.editable_fields)
+      .map((value) => asString(value))
+      .filter(Boolean) as PlanReviewEditableField[],
+    suggestedActions: asArray(gate.suggested_actions).map((value) => asString(value)).filter(Boolean),
+    scopeHints: collectScopeHints(payload, requestPreview),
+    executionModeHints: describeExecutionModeHints(payload),
+  };
+}
+
+/**
+ * Cohort selection is REQUEST-OWNED (FT2 fixed-forward r5, rerun4 review
+ * finding 1): `payload.request.cohort_selection` is the SOLE canonical
+ * owner. Every other documented record — ALL request_preview variants (the
+ * first-truthy display ladder must not hide a conflicting preview), every
+ * intent_view, and the stored request mirrors — is a comparison-only
+ * mirror that must agree byte-exactly and can never BECOME the owner:
+ * - a mirror carrying Cohort data while the canonical request is missing,
+ *   non-object, or lacks the field fails closed (a borrowed preview or
+ *   metadata mirror would otherwise manufacture an explicit-Cohort plan —
+ *   and a valid-looking registry pin — that the plan-review submission path
+ *   could then upgrade into the backend's legacy request);
+ * - only when NO record carries `cohort_selection` anywhere is the plan a
+ *   legacy non-Cohort plan (`undefined`).
+ */
+function extractPlanCohortSelection(
+  payload: any,
+  explainPayload: any,
+  requestPreview: Record<string, unknown>,
+): CohortSelection | undefined {
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const canonicalRequest = isRecord(payload?.request) ? payload.request : null;
+  const mirrorRecords = [
+    explainPayload?.request,
+    requestPreview,
+    payload?.request_preview,
+    explainPayload?.request_preview,
+    metadata.request_preview,
+    payload?.intent_view,
+    explainPayload?.intent_view,
+    payload?.plan?.intent_view,
+    metadata.request,
+  ].filter(isRecord);
+  const mirrorsWithCohort = mirrorRecords.filter((record) =>
+    Object.prototype.hasOwnProperty.call(record, "cohort_selection"),
+  );
+  const canonicalHasCohort = Boolean(
+    canonicalRequest && Object.prototype.hasOwnProperty.call(canonicalRequest, "cohort_selection"),
+  );
+  if (!canonicalHasCohort) {
+    if (mirrorsWithCohort.length > 0) {
+      throw new Error(
+        canonicalRequest
+          ? "Plan response has cohort_selection mirrors without the canonical request owner."
+          : "Plan response is missing the canonical request owner for cohort_selection.",
+      );
+    }
+    return undefined;
+  }
+  const canonical = parseCohortSelectionPayload(canonicalRequest.cohort_selection);
+  for (const record of mirrorsWithCohort) {
+    if (!equalCohortSelection(canonical, parseCohortSelectionPayload(record.cohort_selection))) {
+      throw new Error("Plan response contains conflicting cohort_selection mirrors.");
+    }
+  }
+  return cloneCohortSelection(canonical);
+}
+
+/**
+ * Location fields are siblings of cohort_selection at request top level
+ * (FT0 §7.2). They NEVER enter the cohort object.
+ *
+ * Reconciliation is presence-intact against the CANONICAL REQUEST OWNER
+ * (FT2 fixed-forward r3, review finding 1; r4 hardening per rerun3 finding
+ * 1). `payload.request` is the single canonical request-location owner and
+ * is REQUIRED for explicit-Cohort plans — when it is missing or not an
+ * object the mapping fails closed instead of borrowing another mirror as
+ * the owner.
+ *
+ * Mirror classification is projection-aware:
+ * - Documented COMPLETE request mirrors (`explainPayload.request`,
+ *   `metadata.request`) are full request records: per axis, `absent`
+ *   (server default), an explicit `[]` opt-out, and present values are
+ *   three DISTINCT states, compared presence-intact against the owner.
+ * - Partial projections (every `request_preview` variant and every
+ *   `intent_view`) are compared ONLY on the location keys they actually
+ *   project: the pinned backend `build_request_preview_payload()` does not
+ *   project either location field, so a missing key in a preview is NOT an
+ *   authoritative absent state and must never conflict with the canonical
+ *   owner. A preview that DOES project a location key must agree with the
+ *   owner byte-exactly (including the absent/`[]`/values tri-state).
+ */
+function extractPlanCohortLocations(
+  payload: any,
+  explainPayload: any,
+  explicitCohort: boolean,
+): CohortLocationSelection | undefined {
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const isRequestRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const canonicalRequest = isRequestRecord(payload?.request) ? payload.request : null;
+  const completeMirrors = [explainPayload?.request, metadata.request].filter(isRequestRecord);
+  const partialRecords = [
+    payload?.request_preview,
+    explainPayload?.request_preview,
+    metadata.request_preview,
+    payload?.intent_view,
+    explainPayload?.intent_view,
+    payload?.plan?.intent_view,
+  ].filter(isRequestRecord);
+  if (explicitCohort && !canonicalRequest) {
+    // The canonical request is the sole location owner for explicit-Cohort
+    // plans. Missing canonical ownership fails closed — it must never be
+    // substituted by a partial preview or a stored metadata mirror.
+    throw new Error(
+      "Plan response is missing the canonical request owner for cohort location fields.",
+    );
+  }
+  const ownerRecord = canonicalRequest || completeMirrors[0] || partialRecords[0] || null;
+  if (!ownerRecord) {
+    return undefined;
+  }
+  // Presence-intact per-axis state: a record with neither key yields the
+  // all-absent state and is NOT filtered out, so absence can conflict with
+  // a stale present mirror. A present null/invalid shape still fails closed
+  // inside normalizeLocationList.
+  const parsePresenceIntact = (record: Record<string, unknown>): CohortLocationSelection =>
+    parseCohortLocationMirror(record) ?? createDefaultCohortLocationSelection();
+  const canonical = parsePresenceIntact(ownerRecord);
+  for (const record of completeMirrors) {
+    if (record === ownerRecord) {
+      continue;
+    }
+    if (!equalCohortLocationSelection(canonical, parsePresenceIntact(record))) {
+      throw new Error("Plan response contains conflicting target_locations mirrors.");
+    }
+  }
+  // Partial projections compare only the keys they actually project.
+  const compareProjectedAxis = (
+    record: Record<string, unknown>,
+    field: "target_locations" | "exclude_target_locations",
+    canonicalValue: string[] | undefined,
+  ): void => {
+    if (!Object.prototype.hasOwnProperty.call(record, field)) {
+      return;
+    }
+    const projected = normalizeLocationList(record[field], field);
+    if (JSON.stringify(projected ?? null) !== JSON.stringify(canonicalValue ?? null)) {
+      throw new Error("Plan response contains conflicting target_locations mirrors.");
+    }
+  };
+  for (const record of partialRecords) {
+    if (record === ownerRecord) {
+      continue;
+    }
+    compareProjectedAxis(record, "target_locations", canonical.targetLocations);
+    compareProjectedAxis(record, "exclude_target_locations", canonical.excludeTargetLocations);
+  }
+  if (canonical.targetLocations === undefined && canonical.excludeTargetLocations === undefined) {
+    return undefined;
+  }
+  return cloneCohortLocationSelection(canonical);
+}
+
+/**
+ * Server-owned cohort registry pin of the plan (FT2 fixed-forward r2, review
+ * finding 3; r3 + r4 hardening). The backend CohortProviderCompiler embeds
+ * `{registry_version, registry_digest}` into the provider execution manifest
+ * (`cohort_provider_compiler.py`); the plan response and the
+ * frontend-history recovery metadata may mirror that same manifest.
+ *
+ * Pin ownership is bound to the CANONICAL PLAN MANIFEST (r4, rerun3 review
+ * finding 5): the manifest embedded in the plan record itself
+ * (`plan.acquisition_strategy.provider_execution_manifest`, falling back to
+ * `plan.provider_execution_manifest` — the same order as the backend reader
+ * `_provider_execution_manifest_from_plan_payload`). Every other manifest
+ * record (explain payload, response top level, metadata) is a
+ * comparison-only mirror that can never BECOME the canonical record:
+ * - for an explicit-Cohort plan a missing or non-object canonical plan
+ *   manifest is invalid plan evidence and fails closed — a metadata mirror
+ *   must never be promoted into the canonical slot (no borrowed identity);
+ * - a manifest carrying neither pin field is UNPINNED;
+ * - a manifest carrying exactly one field, empty values, wrong types, or
+ *   padded/mis-shaped pin bytes (no trim repair — the dedicated byte-exact
+ *   validators) is INVALID pin evidence and fails closed;
+ * - an unpinned canonical manifest yields NO pin (unconfirmable) — it never
+ *   inherits a stale/other mirror's pin, and a mirror that nonetheless
+ *   carries pin evidence contradicts the canonical manifest (fail closed);
+ * - a pinned canonical manifest requires every present mirror to carry both
+ *   exact pin fields with byte-exact equality (conflict fails closed).
+ * Non-Cohort plans own no registry pin at all: the pin only gates
+ * explicit-Cohort confirmation, so extraction short-circuits to `undefined`
+ * instead of manufacturing identity for a plan that cannot use it.
+ */
+function extractPlanCohortRegistryPin(
+  payload: any,
+  explainPayload: any,
+  explicitCohort: boolean,
+): CohortRegistryPin | undefined {
+  if (!explicitCohort) {
+    return undefined;
+  }
+  const metadata = (payload?.metadata as Record<string, unknown>) || {};
+  const payloadStrategy =
+    (payload?.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const explainStrategy =
+    (explainPayload?.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const isManifestRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const firstCanonical = payloadStrategy.provider_execution_manifest;
+  const secondCanonical = payload?.plan?.provider_execution_manifest;
+  const canonicalValue = firstCanonical !== undefined ? firstCanonical : secondCanonical;
+  if (canonicalValue === undefined) {
+    throw new Error("Plan response is missing the canonical provider execution manifest.");
+  }
+  if (!isManifestRecord(canonicalValue)) {
+    throw new Error("Plan response has an invalid canonical provider execution manifest.");
+  }
+  const mirrorManifests = [
+    ...(firstCanonical !== undefined && secondCanonical !== undefined ? [secondCanonical] : []),
+    explainStrategy.provider_execution_manifest,
+    explainPayload?.plan?.provider_execution_manifest,
+    payload?.provider_execution_manifest,
+    explainPayload?.provider_execution_manifest,
+    metadata.provider_execution_manifest,
+  ].filter((value) => value !== undefined && value !== null);
+  for (const mirror of mirrorManifests) {
+    if (!isManifestRecord(mirror)) {
+      throw new Error("Plan response has an invalid provider execution manifest mirror.");
+    }
+  }
+  // Read the pin fields of ONE manifest: `null` when it carries neither pin
+  // field (unpinned), the pin when both fields carry exact non-empty
+  // strings; anything in between is invalid pin evidence and fails closed.
+  // Pin bytes are validated with the dedicated byte-exact validators — no
+  // trimming, no repair of padded/mis-shaped values into a match.
+  const readManifestPin = (manifest: Record<string, unknown>): CohortRegistryPin | null => {
+    const hasVersion = Object.prototype.hasOwnProperty.call(manifest, "registry_version");
+    const hasDigest = Object.prototype.hasOwnProperty.call(manifest, "registry_digest");
+    if (!hasVersion && !hasDigest) {
+      return null;
+    }
+    const version = manifest.registry_version;
+    const digest = manifest.registry_digest;
+    if (!isByteExactRegistryVersion(version) || !isByteExactRegistryDigest(digest)) {
+      throw new Error("Plan response has an invalid cohort registry pin.");
+    }
+    return { registryVersion: version, registryDigest: digest };
+  };
+  const canonicalPin = readManifestPin(canonicalValue);
+  const mirrorPins = (mirrorManifests as Record<string, unknown>[]).map((manifest) =>
+    readManifestPin(manifest),
+  );
+  if (!canonicalPin) {
+    // The canonical plan manifest is unpinned: the plan owns NO pin and must
+    // never borrow one from a stale/other mirror. A mirror carrying pin
+    // evidence alongside the unpinned canonical manifest is contradictory
+    // evidence — fail closed instead of producing a valid-looking pin.
+    if (mirrorPins.some((pin) => pin !== null)) {
+      throw new Error("Plan response contains conflicting cohort registry pins.");
+    }
+    return undefined;
+  }
+  for (const mirrorPin of mirrorPins) {
+    if (
+      !mirrorPin ||
+      mirrorPin.registryVersion !== canonicalPin.registryVersion ||
+      mirrorPin.registryDigest !== canonicalPin.registryDigest
+    ) {
+      throw new Error("Plan response contains conflicting cohort registry pins.");
+    }
+  }
+  return canonicalPin;
+}
+
+function mapPlanReviewDecisionDefaults(
+  payload: any,
+  requestPreview: Record<string, unknown>,
+  reviewGate: PlanReviewGate,
+  cohortSelection?: CohortSelection,
+  cohortLocations?: CohortLocationSelection,
+): PlanReviewDecision {
+  const intentAxes = ((requestPreview.intent_axes as Record<string, unknown>) || {});
+  const scopeBoundary = ((intentAxes.scope_boundary as Record<string, unknown>) || {});
+  const acquisitionLanePolicy = ((intentAxes.acquisition_lane_policy as Record<string, unknown>) || {});
+  const fallbackPolicy = ((intentAxes.fallback_policy as Record<string, unknown>) || {});
+  const executionHints = ((payload?.plan_review_gate?.execution_mode_hints as Record<string, unknown>) || {});
+  const recommendedPatch = ((executionHints.recommended_decision_patch as Record<string, unknown>) || {});
+  const defaultScope = asArray(scopeBoundary.confirmed_company_scope).map((value) => asString(value)).filter(Boolean);
+  const targetCompanyIdentity = mapTargetCompanyIdentity(requestPreview.target_company_identity);
+  const persistedManualCompanyLinkedinUrl =
+    targetCompanyIdentity?.resolver === "manual_review_override"
+      ? targetCompanyIdentity.linkedinCompanyUrl || ""
+      : "";
+
+  return {
+    confirmedCompanyScope: defaultScope,
+    targetCompanyLinkedinUrl: persistedManualCompanyLinkedinUrl,
+    extraSourceFamilies: [],
+    precisionRecallBias: pickFirstString(fallbackPolicy, ["precision_recall_bias"]),
+    acquisitionStrategyOverride:
+      pickFirstString(acquisitionLanePolicy, ["acquisition_strategy_override"]) ||
+      pickFirstString(recommendedPatch, ["acquisition_strategy_override"]),
+    useCompanyEmployeesLane:
+      asOptionalBoolean(acquisitionLanePolicy.use_company_employees_lane) ??
+      asOptionalBoolean(recommendedPatch.use_company_employees_lane),
+    keywordPriorityOnly:
+      asOptionalBoolean(acquisitionLanePolicy.keyword_priority_only) ??
+      asOptionalBoolean(recommendedPatch.keyword_priority_only),
+    formerKeywordQueriesOnly:
+      asOptionalBoolean(acquisitionLanePolicy.former_keyword_queries_only) ??
+      asOptionalBoolean(recommendedPatch.former_keyword_queries_only),
+    providerPeopleSearchQueryStrategy:
+      pickFirstString(fallbackPolicy, ["provider_people_search_query_strategy"]) || "all_queries_union",
+    providerPeopleSearchMaxQueries:
+      typeof fallbackPolicy.provider_people_search_max_queries === "number"
+        ? Number(fallbackPolicy.provider_people_search_max_queries)
+        : null,
+    largeOrgKeywordProbeMode:
+      asOptionalBoolean(acquisitionLanePolicy.large_org_keyword_probe_mode) ??
+      asOptionalBoolean(recommendedPatch.large_org_keyword_probe_mode),
+    forceFreshRun: asOptionalBoolean(fallbackPolicy.force_fresh_run),
+    reuseExistingRoster:
+      asOptionalBoolean(fallbackPolicy.reuse_existing_roster) ??
+      asOptionalBoolean(recommendedPatch.reuse_existing_roster),
+    runFormerSearchSeed:
+      asOptionalBoolean(fallbackPolicy.run_former_search_seed) ??
+      asOptionalBoolean(recommendedPatch.run_former_search_seed),
+    cohortSelection: cohortSelection ? cloneCohortSelection(cohortSelection) : undefined,
+    targetLocations: cohortLocations?.targetLocations
+      ? [...cohortLocations.targetLocations]
+      : undefined,
+    excludeTargetLocations: cohortLocations?.excludeTargetLocations
+      ? [...cohortLocations.excludeTargetLocations]
+      : undefined,
+  };
+}
+
+export function planReviewDecisionToApiPayload(
+  decision: PlanReviewDecision,
+  editableFields: PlanReviewEditableField[],
+): Record<string, unknown> {
+  const allowed = new Set(editableFields);
+  const payload: Record<string, unknown> = {};
+  if (allowed.has("company_scope") && decision.confirmedCompanyScope.length > 0) {
+    payload.confirmed_company_scope = decision.confirmedCompanyScope;
+  }
+  if (allowed.has("target_company_linkedin_url") && decision.targetCompanyLinkedinUrl?.trim()) {
+    payload.target_company_linkedin_url = decision.targetCompanyLinkedinUrl.trim();
+  }
+  if (allowed.has("extra_source_families") && decision.extraSourceFamilies.length > 0) {
+    payload.extra_source_families = decision.extraSourceFamilies;
+  }
+  if (allowed.has("precision_recall_bias") && decision.precisionRecallBias) {
+    payload.precision_recall_bias = decision.precisionRecallBias;
+  }
+  if (allowed.has("acquisition_strategy_override") && decision.acquisitionStrategyOverride) {
+    payload.acquisition_strategy_override = decision.acquisitionStrategyOverride;
+  }
+  if (allowed.has("use_company_employees_lane") && decision.useCompanyEmployeesLane !== undefined) {
+    payload.use_company_employees_lane = decision.useCompanyEmployeesLane;
+  }
+  if (allowed.has("keyword_priority_only") && decision.keywordPriorityOnly !== undefined) {
+    payload.keyword_priority_only = decision.keywordPriorityOnly;
+  }
+  if (allowed.has("former_keyword_queries_only") && decision.formerKeywordQueriesOnly !== undefined) {
+    payload.former_keyword_queries_only = decision.formerKeywordQueriesOnly;
+  }
+  if (
+    allowed.has("provider_people_search_query_strategy")
+    && decision.providerPeopleSearchQueryStrategy
+  ) {
+    payload.provider_people_search_query_strategy = decision.providerPeopleSearchQueryStrategy;
+  }
+  if (
+    allowed.has("provider_people_search_max_queries")
+    && typeof decision.providerPeopleSearchMaxQueries === "number"
+    && Number.isFinite(decision.providerPeopleSearchMaxQueries)
+  ) {
+    payload.provider_people_search_max_queries = decision.providerPeopleSearchMaxQueries;
+  }
+  if (allowed.has("large_org_keyword_probe_mode") && decision.largeOrgKeywordProbeMode !== undefined) {
+    payload.large_org_keyword_probe_mode = decision.largeOrgKeywordProbeMode;
+  }
+  if (allowed.has("force_fresh_run") && decision.forceFreshRun !== undefined) {
+    payload.force_fresh_run = decision.forceFreshRun;
+  }
+  if (allowed.has("reuse_existing_roster") && decision.reuseExistingRoster !== undefined) {
+    payload.reuse_existing_roster = decision.reuseExistingRoster;
+  }
+  if (allowed.has("run_former_search_seed") && decision.runFormerSearchSeed !== undefined) {
+    payload.run_former_search_seed = decision.runFormerSearchSeed;
+  }
+  if (decision.cohortSelection) {
+    payload.cohort_selection = cloneCohortSelection(decision.cohortSelection);
+  }
+  // Location fields ride alongside (never inside) the cohort object. They are
+  // serialized ONLY through the authorized editable-field channel: when the
+  // backend review gate does not list a location field as editable, the
+  // review decision must not silently record a value the backend has no
+  // authorized application path for (FT2 fixed-forward, review finding 2).
+  // Presence is preserved: an explicit `[]` (opt-out) serializes as `[]`,
+  // present values serialize normalized, and a present null/invalid shape
+  // fails closed via normalizeLocationList. A RESTORED ABSENT state on an
+  // initialized, gate-authorized axis serializes as the tagged clear
+  // operation (FT2 fixed-forward r4, rerun3 review finding 6): omitting the
+  // key would give a future backend application owner no way to distinguish
+  // "restore the server-default absence" from "field not part of this
+  // decision".
+  if (allowed.has("target_locations")) {
+    if (decision.targetLocations !== undefined) {
+      payload.target_locations = normalizeLocationList(decision.targetLocations, "target_locations");
+    } else if (decision.targetLocationsInitialized === true) {
+      payload.target_locations = buildLocationReviewClearPayload();
+    }
+  }
+  if (allowed.has("exclude_target_locations")) {
+    if (decision.excludeTargetLocations !== undefined) {
+      payload.exclude_target_locations = normalizeLocationList(
+        decision.excludeTargetLocations,
+        "exclude_target_locations",
+      );
+    } else if (decision.excludeTargetLocationsInitialized === true) {
+      payload.exclude_target_locations = buildLocationReviewClearPayload();
+    }
+  }
+  return payload;
+}
+
+function inferStrategyLabel(queryText: string, payload: any): string {
+  const acquisitionStrategy = (payload.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const strategyType = pickFirstString(acquisitionStrategy, ["strategy_type"]);
+  if (strategyType === "full_company_roster" || Boolean(payload.plan_review_gate?.required_before_execution)) {
+    return "全公司扫描 + 定向检索";
+  }
+  if (containsPattern(queryText, [/publication/i, /论文/u, /scholar/i])) {
+    return "定向检索 + 论文证据补强";
+  }
+  return "定向检索 + 多源证据补强";
+}
+
+function mapPlanPayloadToDemoPlan(payload: any, queryText: string, explainPayload?: any): DemoPlan {
+  const explain = explainPayload || {};
+  const metadata = (payload.metadata as Record<string, unknown>) || {};
+  const acquisitionStrategy = (payload.plan?.acquisition_strategy as Record<string, unknown>) || {};
+  const searchStrategyLabels = mapSearchBundlesToLabels(payload);
+  const fallbackSearchChannels = asArray(acquisitionStrategy.search_channel_order)
+    .map((value) => asString(value))
+    .filter(Boolean);
+  const lanePreview =
+    (explain.lane_preview as Record<string, unknown>) ||
+    (payload.lane_preview as Record<string, unknown>) ||
+    (metadata.lane_preview as Record<string, unknown>) ||
+    {};
+  const currentLane = ((lanePreview.current as Record<string, unknown>) || {});
+  const formerLane = ((lanePreview.former as Record<string, unknown>) || {});
+  const explainSearchChannels = [
+    translateLaneBehaviorLabel(pickFirstString(currentLane, ["planned_behavior"])),
+    translateLaneBehaviorLabel(pickFirstString(formerLane, ["planned_behavior"])),
+  ].filter((value) => value && value !== "本次不请求");
+  const configuredSearchStrategy =
+    explainSearchChannels.length > 0
+      ? explainSearchChannels
+      : searchStrategyLabels.length > 0
+      ? searchStrategyLabels
+      : fallbackSearchChannels.length > 0
+        ? fallbackSearchChannels
+        : asArray(payload.plan?.intent_brief?.default_execution_strategy).map((value) => asString(value)).filter(Boolean);
+  const requestPreview = (
+    (explain.request_preview as Record<string, unknown>) ||
+    (payload.request_preview as Record<string, unknown>) ||
+    (metadata.request_preview as Record<string, unknown>) ||
+    {}
+  );
+  const cohortSelection = extractPlanCohortSelection(payload, explain, requestPreview);
+  const explicitCohortPlan = cohortSelection !== undefined;
+  const cohortLocations = extractPlanCohortLocations(payload, explain, explicitCohortPlan);
+  const cohortRegistryPin = extractPlanCohortRegistryPin(payload, explain, explicitCohortPlan);
+  const organizationExecutionProfile =
+    (explain.organization_execution_profile as Record<string, unknown>) ||
+    (payload.organization_execution_profile as Record<string, unknown>) ||
+    (metadata.organization_execution_profile as Record<string, unknown>) ||
+    (payload.plan?.organization_execution_profile as Record<string, unknown>) ||
+    (acquisitionStrategy.organization_execution_profile as Record<string, unknown>) ||
+    {};
+  const assetReusePlan =
+    (explain.asset_reuse_plan as Record<string, unknown>) ||
+    (payload.asset_reuse_plan as Record<string, unknown>) ||
+    (metadata.asset_reuse_plan as Record<string, unknown>) ||
+    (payload.plan?.asset_reuse_plan as Record<string, unknown>) ||
+    {};
+  const effectiveExecutionSemantics =
+    (explain.effective_execution_semantics as Record<string, unknown>) ||
+    (payload.effective_execution_semantics as Record<string, unknown>) ||
+    (metadata.effective_execution_semantics as Record<string, unknown>) ||
+    {};
+  const dispatchPreview =
+    (explain.dispatch_preview as Record<string, unknown>) ||
+    (payload.dispatch_preview as Record<string, unknown>) ||
+    (metadata.dispatch_preview as Record<string, unknown>) ||
+    {};
+  const planTargetCompany =
+    pickFirstString(payload.plan || {}, ["target_company"]) ||
+    pickFirstString(requestPreview, ["target_company"]) ||
+    pickFirstString(payload.request || {}, ["target_company"]) ||
+    "待确认公司";
+  const providerExecutionLanes = mapProviderExecutionLanes({ ...payload, ...explain });
+  const planKeywords = extractPlanKeywordLabels(
+    { ...payload, ...explain, request_preview: requestPreview },
+    requestPreview,
+    queryText,
+    providerExecutionLanes,
+  );
+  const acquisitionMode = pickFirstString(organizationExecutionProfile, ["default_acquisition_mode"]);
+  const dispatchStrategy = pickFirstString(dispatchPreview, ["strategy"]);
+  const currentLaneBehavior = pickFirstString(currentLane, ["planned_behavior"]);
+  const formerLaneBehavior = pickFirstString(formerLane, ["planned_behavior"]);
+  const reviewGate = mapPlanReviewGate(payload, requestPreview);
+  const targetCompanyIdentity = mapTargetCompanyIdentity(requestPreview.target_company_identity);
+  const plannerMode = pickFirstString(assetReusePlan, ["planner_mode"]);
+  const resolvedAcquisitionStrategy = resolvePlanAcquisitionStrategyLabel({
+    effectiveExecutionSemantics,
+    assetReusePlan,
+    organizationExecutionProfile,
+    dispatchPreview,
+    queryText,
+    payload,
+  });
+  return {
+    planId: String(payload.plan_review_session?.review_id || crypto.randomUUID()),
+    rawUserRequest: payload.request?.raw_user_request || queryText,
+    targetCompany: planTargetCompany,
+    targetPopulation: inferPopulationLabel(queryText, { ...payload, request_preview: requestPreview }),
+    projectScope: inferProjectScopeLabel(queryText, { ...payload, request_preview: requestPreview }),
+    keywords: canonicalizeDisplayKeywords(planKeywords.length > 0 ? planKeywords : inferKeywordLabels(queryText, payload)),
+    acquisitionStrategy: resolvedAcquisitionStrategy,
+    searchStrategy: configuredSearchStrategy.map((value) => translateSearchChannelLabel(value)),
+    estimatedCostLevel: payload.plan_review_gate?.required_before_execution
+      ? "high"
+      : (
+        Boolean(assetReusePlan.requires_delta_acquisition)
+        || dispatchStrategy === "delta_from_snapshot"
+          ? "medium"
+          : "low"
+      ),
+    reviewRequired: Boolean(payload.plan_review_gate?.required_before_execution),
+    status: payload.plan_review_session?.status === "pending" ? "pending_review" : "draft",
+    organizationScaleBand: translateOrganizationScaleBand(pickFirstString(organizationExecutionProfile, ["org_scale_band"])),
+    defaultAcquisitionMode: acquisitionMode,
+    plannerMode: pickFirstString(assetReusePlan, ["planner_mode"]),
+    dispatchStrategy: translateDispatchStrategyLabel(dispatchStrategy),
+    currentLaneBehavior: translateLaneBehaviorLabel(currentLaneBehavior),
+    formerLaneBehavior: translateLaneBehaviorLabel(formerLaneBehavior),
+    baselineSnapshotId: pickFirstString(assetReusePlan, ["baseline_snapshot_id"]),
+    requiresDeltaAcquisition: Boolean(assetReusePlan.requires_delta_acquisition),
+    executionNotes: buildExecutionNotes(explain),
+    targetCompanyIdentity,
+    providerExecutionLanes,
+    reviewGate,
+    reviewDecisionDefaults: mapPlanReviewDecisionDefaults(
+      payload,
+      requestPreview,
+      reviewGate,
+      cohortSelection,
+      cohortLocations,
+    ),
+    cohortSelection,
+    targetLocations: cohortLocations?.targetLocations
+      ? [...cohortLocations.targetLocations]
+      : undefined,
+    excludeTargetLocations: cohortLocations?.excludeTargetLocations
+      ? [...cohortLocations.excludeTargetLocations]
+      : undefined,
+    cohortRegistryPin,
+  };
+}
+
+/**
+ * Resolve the location payload fragment for a plan submit/revision/explain
+ * request (FT2 fixed-forward r2, review finding 1).
+ *
+ * Location state is REQUEST-OWNED: the caller passes the presence-aware
+ * selection explicitly (SearchPage for initial submit, the review
+ * decision/plan mirror for revision). There is no ambient or module-global
+ * location state to consult — an absent argument serializes as an absent
+ * field (server default applies), an explicit `[]` as opt-out, and a present
+ * null/invalid shape fails closed via the payload builder. Location fields
+ * are only ever passed alongside a cohort selection by the callers.
+ */
+function resolveRequestLocationPayload(
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Record<string, unknown> {
+  return buildCohortLocationApiPayload(targetLocations, excludeTargetLocations);
+}
+
+export async function getWorkflowExplain(
+  queryText: string,
+  cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Promise<any> {
+  return fetchJson<any>("/api/workflows/explain", {
+    method: "POST",
+    body: JSON.stringify({
+      raw_user_request: queryText,
+      planning_mode: "model_assisted",
+      ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
+      ...resolveRequestLocationPayload(targetLocations, excludeTargetLocations),
+      ...DEFAULT_RECALL_LIMITS,
+    }),
+  }, PLAN_API_TIMEOUT_MS);
+}
+
+export async function getCohortSelectionOptions(): Promise<CohortSelectionOptions> {
+  const payload = await fetchJson<unknown>("/api/cohort-selection/options");
+  return parseCohortSelectionOptionsPayload(payload);
+}
+
+export interface FrontendHistoryRecoveryEnvelope {
+  historyId: string;
+  queryText: string;
+  reviewId: string;
+  jobId: string;
+  phase: WorkflowPhase;
+  plan: DemoPlan | null;
+  errorMessage?: string;
+  targetCompany?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  metadata?: Record<string, unknown>;
+  raw: any;
+}
+
+function normalizeRecoveredPhase(value: string): WorkflowPhase {
+  if (value === "plan" || value === "running" || value === "results") {
+    return value;
+  }
+  return "idle";
+}
+
+function mapFrontendHistoryRecoveryPayload(
+  recovery: Record<string, unknown>,
+  rawPayload: unknown,
+): FrontendHistoryRecoveryEnvelope {
+  const recoveryRequest = (recovery.request as Record<string, unknown>) || {};
+  const recoveryJob = (recovery.job as Record<string, unknown>) || {};
+  const metadata =
+    recovery.metadata && typeof recovery.metadata === "object" && !Array.isArray(recovery.metadata)
+      ? (recovery.metadata as Record<string, unknown>)
+      : {};
+  const queryText =
+    pickFirstString(recovery, ["query_text"]) ||
+    pickFirstString(recoveryRequest, ["raw_user_request"]);
+  const reviewId =
+    String(recovery.review_id || (recovery.plan_review_session as Record<string, unknown> | undefined)?.review_id || "");
+  const jobId =
+    pickFirstString(recovery, ["job_id"]) ||
+    pickFirstString(recoveryJob, ["job_id"]);
+  const mappedPlanPayload = {
+    request: recoveryRequest,
+    request_preview:
+      (recovery.request_preview as Record<string, unknown>) ||
+      (metadata.request_preview as Record<string, unknown>) ||
+      {},
+    plan: (recovery.plan as Record<string, unknown>) || {},
+    plan_review_gate: (recovery.plan_review_gate as Record<string, unknown>) || {},
+    plan_review_session: (recovery.plan_review_session as Record<string, unknown>) || {},
+    dispatch_preview: (metadata.dispatch_preview as Record<string, unknown>) || {},
+    organization_execution_profile: (metadata.organization_execution_profile as Record<string, unknown>) || {},
+    asset_reuse_plan: (metadata.asset_reuse_plan as Record<string, unknown>) || {},
+    lane_preview: (metadata.lane_preview as Record<string, unknown>) || {},
+    effective_execution_semantics: (metadata.effective_execution_semantics as Record<string, unknown>) || {},
+    metadata,
+  };
+  const hasPlan = Object.keys(mappedPlanPayload.plan).length > 0;
+  return {
+    historyId: pickFirstString(recovery, ["history_id"]),
+    queryText,
+    reviewId,
+    jobId,
+    phase: normalizeRecoveredPhase(pickFirstString(recovery, ["phase"])),
+    plan: hasPlan ? mapPlanPayloadToDemoPlan(mappedPlanPayload, queryText) : null,
+    errorMessage: pickFirstString(recovery, ["error_message"]),
+    targetCompany: pickFirstString(recovery, ["target_company"]),
+    createdAt: pickFirstString(recovery, ["created_at"]),
+    updatedAt: pickFirstString(recovery, ["updated_at"]),
+    metadata,
+    raw: rawPayload,
+  };
+}
+
+function buildPlanSubmitPayload(
+  queryText: string,
+  historyId = "",
+  cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Record<string, unknown> {
+  const normalizedHistoryId = historyId.trim();
+  return {
+    raw_user_request: queryText,
+    ...(normalizedHistoryId ? { history_id: normalizedHistoryId } : {}),
+    ...(cohortSelection ? { cohort_selection: cloneCohortSelection(cohortSelection) } : {}),
+    ...resolveRequestLocationPayload(targetLocations, excludeTargetLocations),
+    planning_mode: "model_assisted",
+    ...DEFAULT_RECALL_LIMITS,
+  };
+}
+
+function resolvePlanSubmitHistoryId(requestedHistoryId: string, responseHistoryId: unknown): string {
+  const requested = requestedHistoryId.trim();
+  if (typeof responseHistoryId !== "string") {
+    throw new Error("Plan submit response has a non-string server-owned history id.");
+  }
+  const resolved = responseHistoryId.trim();
+  if (!resolved) {
+    throw new Error("Plan submit response is missing the server-owned history id.");
+  }
+  if (requested && requested !== resolved) {
+    throw new Error("Plan revision response changed the existing history id.");
+  }
+  return resolved;
+}
+
+export async function submitPlanEnvelope(
+  queryText: string,
+  historyId = "",
+  cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Promise<{ plan: DemoPlan | null; reviewId: string; historyId: string; status: string; raw: any; explain: any }> {
+  const requestPayload = buildPlanSubmitPayload(
+    queryText,
+    historyId,
+    cohortSelection,
+    targetLocations,
+    excludeTargetLocations,
+  );
+  const payload = await fetchJson<any>("/api/plan/submit", {
+    method: "POST",
+    body: JSON.stringify(requestPayload),
+  }, DEFAULT_API_TIMEOUT_MS);
+  const hasPlan =
+    payload?.plan &&
+    typeof payload.plan === "object" &&
+    !Array.isArray(payload.plan) &&
+    Object.keys(payload.plan).length > 0;
+  const resolvedHistoryId = resolvePlanSubmitHistoryId(historyId, payload.history_id);
+  return {
+    plan: hasPlan ? mapPlanPayloadToDemoPlan(payload, queryText, payload) : null,
+    reviewId: String(payload.plan_review_session?.review_id || ""),
+    historyId: resolvedHistoryId,
+    status: String(payload.status || ""),
+    raw: payload,
+    explain: payload,
+  };
+}
+
+export function __testBuildPlanSubmitPayload(
+  queryText: string,
+  historyId = "",
+  cohortSelection?: CohortSelection,
+  targetLocations?: string[],
+  excludeTargetLocations?: string[],
+): Record<string, unknown> {
+  return buildPlanSubmitPayload(
+    queryText,
+    historyId,
+    cohortSelection,
+    targetLocations,
+    excludeTargetLocations,
+  );
+}
+
+export function __testResolvePlanSubmitHistoryId(
+  requestedHistoryId: string,
+  responseHistoryId: unknown,
+): string {
+  return resolvePlanSubmitHistoryId(requestedHistoryId, responseHistoryId);
+}
+
+export async function approvePlanReview(reviewId: string, decision?: PlanReviewDecision, editableFields: PlanReviewEditableField[] = []): Promise<any> {
+  return fetchJson<any>("/api/plan/review", {
+    method: "POST",
+    body: JSON.stringify({
+      review_id: Number(reviewId),
+      action: "approved",
+      reviewer: "frontend-demo",
+      decision: decision ? planReviewDecisionToApiPayload(decision, editableFields) : {},
+    }),
+  });
+}
+
+export async function startWorkflowRun(reviewId: string, historyId = ""): Promise<{ jobId: string; raw: any }> {
+  const payload = await fetchJson<any>("/api/workflows", {
+    method: "POST",
+    body: JSON.stringify({
+      plan_review_id: Number(reviewId),
+      history_id: historyId || undefined,
+    }),
+  }, WORKFLOW_START_TIMEOUT_MS);
+  return {
+    jobId: String(payload.job_id || ""),
+    raw: payload,
+  };
+}
+
+export async function getFrontendHistoryRecovery(historyId: string): Promise<FrontendHistoryRecoveryEnvelope> {
+  const payload = await fetchJson<any>(`/api/frontend-history/${encodeURIComponent(historyId)}`);
+  const recovery = (payload?.recovery as Record<string, unknown>) || {};
+  const envelope = mapFrontendHistoryRecoveryPayload(recovery, payload);
+  return {
+    ...envelope,
+    historyId: envelope.historyId || historyId,
+  };
+}
+
+export async function listFrontendHistory(limit = 24): Promise<FrontendHistoryRecoveryEnvelope[]> {
+  const cacheKey = String(Math.max(1, limit || 24));
+  const cached = readFreshCacheValue(frontendHistoryCache, cacheKey, LIST_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = frontendHistoryPromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(`/api/frontend-history${buildApiQueryString({ limit: cacheKey })}`)
+      .then((payload) => {
+        const rows = Array.isArray(payload.history) ? payload.history : [];
+        return writeCacheValue(
+          frontendHistoryCache,
+          cacheKey,
+          rows
+            .map((item: unknown) =>
+              mapFrontendHistoryRecoveryPayload(
+                (item && typeof item === "object" ? item : {}) as Record<string, unknown>,
+                payload,
+              ),
+            )
+            .filter((item: FrontendHistoryRecoveryEnvelope) => item.historyId),
+        );
+      })
+      .finally(() => {
+        frontendHistoryPromiseCache.delete(cacheKey);
+      });
+    frontendHistoryPromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export async function deleteFrontendHistory(historyId: string): Promise<{ status: string; historyId: string }> {
+  const payload = await fetchJson<any>(`/api/frontend-history/${encodeURIComponent(historyId)}`, {
+    method: "DELETE",
+  });
+  frontendHistoryCache.clear();
+  frontendHistoryPromiseCache.clear();
+  return {
+    status: String(payload.status || ""),
+    historyId: String(payload.history_id || historyId),
+  };
+}
+
+export async function continueWorkflowStage2(jobId: string): Promise<any> {
+  return fetchJson<any>(`/api/workflows/${encodeURIComponent(jobId)}/continue-stage2`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  }, WORKFLOW_START_TIMEOUT_MS);
+}
+
+type NaiveTimestampSemantics = "utc" | "china_local";
+
+function parseTimestampMs(value: string, semantics: NaiveTimestampSemantics = "utc"): number | null {
+  const normalized = String(value || "").trim().replace("T", " ");
+  if (!normalized) {
+    return null;
+  }
+  const naiveMatch = normalized.match(
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/,
+  );
+  if (naiveMatch) {
+    const [, year, month, day, hour, minute, second] = naiveMatch;
+    const utcMs = Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    );
+    return semantics === "china_local" ? utcMs - CHINA_TIME_OFFSET_MS : utcMs;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
+const NAIVE_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+function formatTimestampMs(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return "";
+  }
+  return new Date(value).toISOString().replace(".000Z", "Z");
+}
+
+function normalizeStageSummaryTimestamp(value: string): string {
+  const normalized = String(value || "").trim().replace("T", " ");
+  if (!normalized) {
+    return "";
+  }
+  const parsed = parseTimestampMs(value, "china_local");
+  return parsed === null ? normalized : formatTimestampMs(parsed);
+}
+
+function normalizeBackendProgressTimestamp(value: string): string {
+  const normalized = String(value || "").trim().replace("T", " ");
+  if (!normalized) {
+    return "";
+  }
+  const parsed = parseTimestampMs(value, "utc");
+  if (parsed === null) {
+    return normalized;
+  }
+  return formatTimestampMs(parsed);
+}
+
+function mapProgressPayloadToRunStatus(payload: any): RunStatusData {
+  const milestones = asArray(payload.progress?.milestones);
+  const progressEvents = asArray(payload.progress?.events);
+  const workerSummary = (payload.progress?.worker_summary as Record<string, unknown>) || {};
+  const laneSummaries = asArray(workerSummary.by_lane).map((item) => (item as Record<string, unknown>) || {});
+  const rawOverallStatus = pickFirstString(payload, ["status"]);
+  const statusContract = resolveWorkflowStatus(rawOverallStatus);
+  const workerStatusCounts = (workerSummary.by_status as Record<string, number>) || {};
+  const activeBackgroundWorkerCount = [
+    "running",
+    "queued",
+    "waiting_remote_search",
+    "waiting_remote_harvest",
+    "blocked",
+  ].reduce((sum, status) => sum + Number(workerStatusCounts[status] || 0), 0);
+  const hasPostCompletionWork = statusContract.status === "completed" && activeBackgroundWorkerCount > 0;
+  const overallStatus: RunStatusData["status"] =
+    hasPostCompletionWork ? "running" : statusContract.status;
+  const effectiveStatusContract = resolveWorkflowStatus(overallStatus);
+  const postCompletionMessage = "结果已可浏览，后台仍在补全 LinkedIn profile 与候选人详情。";
+  const completedAtFallback = normalizeBackendProgressTimestamp(pickFirstString(payload, ["updated_at"]));
+
+  const normalizeEventStatus = (
+    status: string,
+    stage: string,
+  ): RunStatusData["timeline"][number]["status"] => {
+    const sourceStatus = String(status || "").trim().toLowerCase();
+    const normalizedStatus =
+      overallStatus === "completed" && sourceStatus === "running" && stage !== "completed"
+        ? "completed"
+        : sourceStatus;
+    if (
+      effectiveStatusContract.terminal &&
+      (normalizedStatus === "pending" ||
+        normalizedStatus === "queued" ||
+        normalizedStatus === "running" ||
+        normalizedStatus === "blocked")
+    ) {
+      return statusContract.status;
+    }
+    if (normalizedStatus === "pending") {
+      return "pending";
+    }
+    if (normalizedStatus === "succeeded") {
+      return "completed";
+    }
+    const eventStatusContract = resolveWorkflowStatus(normalizedStatus);
+    if (eventStatusContract.reason !== "unknown_domain_status" && eventStatusContract.reason !== "missing_domain_status") {
+      return eventStatusContract.status;
+    }
+    return effectiveStatusContract.terminal ? effectiveStatusContract.status : "failed";
+  };
+
+  const normalizeCompletedAt = (status: string, completedAt: string): string => {
+    if (completedAt) {
+      return completedAt;
+    }
+    if (overallStatus === "completed" && status === "completed") {
+      return completedAtFallback;
+    }
+    return "";
+  };
+
+  const stageSummaryRoot = (payload.workflow_stage_summaries as Record<string, unknown>) || {};
+  const stageSummaryMap = ((stageSummaryRoot.summaries as Record<string, unknown>) || {}) as Record<string, Record<string, unknown>>;
+  const executionPhaseContract = mapExecutionPhaseContract(
+    ((payload.execution_phase_contract as Record<string, unknown>) ||
+      (payload.progress?.execution_phase_contract as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const excelIntakeProgress = mapExcelIntakeProgress(
+    ((payload.excel_intake_progress as Record<string, unknown>) ||
+      (payload.progress?.excel_intake_progress as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const stageTitleOverride = (stageId: string): string =>
+    executionPhaseContract?.stageTitleOverrides?.[stageId] || "";
+  const stageDetailOverride = (stageId: string): string =>
+    executionPhaseContract?.stageDetailOverrides?.[stageId] || "";
+  const canonicalWorkflowStages = [
+    {
+      id: "linkedin_stage_1",
+      title: stageTitleOverride("linkedin_stage_1") || pickFirstString(stageSummaryMap.linkedin_stage_1 || {}, ["title"]) || "LinkedIn Stage 1",
+    },
+    {
+      id: "stage_1_preview",
+      title: stageTitleOverride("stage_1_preview") || pickFirstString(stageSummaryMap.stage_1_preview || {}, ["title"]) || "Stage 1 Preview",
+    },
+    {
+      id: "public_web_stage_2",
+      title: stageTitleOverride("public_web_stage_2") || pickFirstString(stageSummaryMap.public_web_stage_2 || {}, ["title"]) || "Public Web Stage 2",
+    },
+    {
+      id: "stage_2_final",
+      title: stageTitleOverride("stage_2_final") || pickFirstString(stageSummaryMap.stage_2_final || {}, ["title"]) || "Final Results",
+    },
+  ];
+  const milestoneMap = milestones.reduce<Record<string, Record<string, unknown>>>((accumulator, item) => {
+    const record = (item as Record<string, unknown>) || {};
+    const stage = pickFirstString(record, ["stage"]);
+    if (stage) {
+      accumulator[stage] = record;
+    }
+    return accumulator;
+  }, {});
+  const acquiringMilestone = milestoneMap.acquiring || {};
+  const retrievingMilestone = milestoneMap.retrieving || {};
+  const acquiringLatestPayload =
+    ((acquiringMilestone.latest_payload as Record<string, unknown>) || {}) as Record<string, unknown>;
+  const retrievingLatestPayload =
+    ((retrievingMilestone.latest_payload as Record<string, unknown>) || {}) as Record<string, unknown>;
+  const stage1PreviewSummary = stageSummaryMap.stage_1_preview || {};
+  const stage2FinalSummary = stageSummaryMap.stage_2_final || {};
+  const stage1PreviewCandidateSource =
+    ((stage1PreviewSummary.candidate_source as Record<string, unknown>) || {}) as Record<string, unknown>;
+  const stage2FinalCandidateSource =
+    ((stage2FinalSummary.candidate_source as Record<string, unknown>) || {}) as Record<string, unknown>;
+  const retrievingCandidateSource =
+    ((retrievingLatestPayload.candidate_source as Record<string, unknown>) || {}) as Record<string, unknown>;
+  const acquiringSync =
+    ((acquiringLatestPayload.sync as Record<string, unknown>) || {}) as Record<string, unknown>;
+  const linkedinStage1Progress = mapLinkedinStage1Progress(
+    ((payload.linkedin_stage_1_progress as Record<string, unknown>) ||
+      (payload.progress?.linkedin_stage_1_progress as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const resultViewLifecycle = mapResultViewLifecycle(
+    ((payload.result_view_lifecycle as Record<string, unknown>) ||
+      (payload.progress?.result_view_lifecycle as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const boardRuntimeState = mapBoardRuntimeState(
+    ((payload.board_runtime_state as Record<string, unknown>) ||
+      (payload.progress?.board_runtime_state as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const lifecycleExpectedCount = resultViewLifecycle?.expectedCandidateCount || 0;
+  const lifecycleServedCount = resultViewLifecycle?.servedCandidateCount || 0;
+  const boardExpectedCount = boardRuntimeState?.expectedCandidateCount || 0;
+  const stage1RequiredCount = linkedinStage1Progress?.profileFetchRequiredCount || 0;
+  const baselineCount = resultViewLifecycle?.baselineCandidateCount || 0;
+  const stage1ExpectedCount = baselineCount > 0 && stage1RequiredCount > 0 ? baselineCount + stage1RequiredCount : 0;
+  const candidateCountMetric = boardRuntimeState
+    ? Math.max(0, boardExpectedCount)
+    : Math.max(
+        0,
+        lifecycleExpectedCount,
+        lifecycleServedCount,
+        stage1ExpectedCount,
+        asNumber(payload.progress?.counters?.candidate_count) ?? 0,
+        asNumber(payload.progress?.counters?.results_count) ?? 0,
+        asNumber(stage2FinalCandidateSource.candidate_count) ?? 0,
+        asNumber(stage1PreviewCandidateSource.candidate_count) ?? 0,
+        asNumber(retrievingCandidateSource.candidate_count) ?? 0,
+        asNumber(acquiringSync.candidate_count) ?? 0,
+        linkedinStage1Progress?.dedupedCandidateCount || 0,
+        stage1RequiredCount,
+        linkedinStage1Progress?.profileFetchedCount || 0,
+      );
+  const manualReviewCountMetric =
+    asNumber(payload.manual_review_count) ??
+    asNumber(payload.progress?.counters?.manual_review_count) ??
+    0;
+  const linkedinProfileFetchRequiredCount = linkedinStage1Progress?.profileFetchRequiredCount || 0;
+  const linkedinProfileFetchedCount = linkedinStage1Progress?.profileFetchedCount || 0;
+  const linkedinStage1ProviderWorkVisible = Boolean(
+    linkedinStage1Progress &&
+      Math.max(
+        linkedinStage1Progress.currentSearchReturnedCount,
+        linkedinStage1Progress.formerSearchReturnedCount,
+        linkedinStage1Progress.allSearchReturnedCount,
+        linkedinStage1Progress.dedupedCandidateCount,
+        linkedinProfileFetchRequiredCount,
+        linkedinProfileFetchedCount,
+      ) > 0,
+  );
+  const exposeManualReviewMetric = Boolean(
+    manualReviewCountMetric > 0 &&
+      !boardRuntimeState &&
+      !linkedinStage1ProviderWorkVisible,
+  );
+  const publicManualReviewCountMetric = exposeManualReviewMetric ? manualReviewCountMetric : 0;
+  const acquisitionMetrics: RunStatusData["metrics"] = linkedinStage1ProviderWorkVisible && linkedinStage1Progress
+    ? [
+        { label: "新发现在职候选人", value: String(linkedinStage1Progress.currentSearchReturnedCount) },
+        { label: "新发现离职候选人", value: String(linkedinStage1Progress.formerSearchReturnedCount) },
+        { label: "经去重得到", value: String(linkedinStage1Progress.dedupedCandidateCount) },
+        {
+          label: "需补取 LinkedIn Profile",
+          value: String(linkedinStage1Progress.profileFetchRequiredCount),
+        },
+        { label: "已取回 LinkedIn Profile", value: String(linkedinStage1Progress.profileFetchedCount) },
+      ]
+    : [];
+  const linkedinProfileWorkPending =
+    linkedinStage1ProviderWorkVisible &&
+    linkedinProfileFetchRequiredCount > 0 &&
+    linkedinProfileFetchedCount < linkedinProfileFetchRequiredCount;
+
+  const summaryTime = (stageId: string, ...fieldNames: string[]): string =>
+    normalizeStageSummaryTimestamp(pickFirstString(stageSummaryMap[stageId] || {}, fieldNames));
+  const backendTime = (value: string): string => normalizeBackendProgressTimestamp(value);
+
+  const currentCanonicalStageId = (): string => {
+    const contractStageId = executionPhaseContract?.activeStageId || "";
+    if (contractStageId && canonicalWorkflowStages.some((stage) => stage.id === contractStageId)) {
+      return contractStageId;
+    }
+    if (rawOverallStatus === "completed") {
+      return "stage_2_final";
+    }
+    if (overallStatus === "failed" || overallStatus === "cancelled") {
+      const latestStartedStage = [...canonicalWorkflowStages].reverse().find((stage) => {
+        const summary = stageSummaryMap[stage.id] || {};
+        return Boolean(
+          pickFirstString(summary, ["status"]) ||
+            pickFirstString(summary, ["started_at"]) ||
+            pickFirstString(summary, ["completed_at"]) ||
+            pickFirstString(summary, ["saved_at"]),
+        );
+      });
+      if (latestStartedStage) {
+        return latestStartedStage.id;
+      }
+    }
+    if (pickFirstString(payload, ["awaiting_user_action"]) === "continue_stage2") {
+      return "stage_1_preview";
+    }
+    if (linkedinProfileWorkPending) {
+      return "linkedin_stage_1";
+    }
+    const currentStage = pickFirstString(payload, ["stage"]) || pickFirstString(payload.progress, ["current_stage"]);
+    if (currentStage === "acquiring") {
+      if (pickFirstString(stageSummaryMap.public_web_stage_2 || {}, ["status"]) === "completed") {
+        return "stage_2_final";
+      }
+      if (pickFirstString(stageSummaryMap.stage_1_preview || {}, ["status"]) === "completed") {
+        return "public_web_stage_2";
+      }
+      return "linkedin_stage_1";
+    }
+    if (currentStage === "retrieving") {
+      if (pickFirstString(stageSummaryMap.public_web_stage_2 || {}, ["status"]) === "completed") {
+        return "stage_2_final";
+      }
+      if (pickFirstString(stageSummaryMap.stage_1_preview || {}, ["status"]) === "completed") {
+        return "public_web_stage_2";
+      }
+      return "stage_1_preview";
+    }
+    return "linkedin_stage_1";
+  };
+
+  const currentCanonicalStage = currentCanonicalStageId();
+  const currentCanonicalStageIndex = canonicalWorkflowStages.findIndex((stage) => stage.id === currentCanonicalStage);
+  const linkedinStageCompletedAt =
+    summaryTime("linkedin_stage_1", "completed_at") ||
+    backendTime(pickFirstString(acquiringMilestone, ["completed_at"]));
+  const stage1PreviewCompletedAt =
+    summaryTime("stage_1_preview", "completed_at") ||
+    backendTime(pickFirstString(acquiringMilestone, ["completed_at"]));
+  const publicWebStageCompletedAt =
+    summaryTime("public_web_stage_2", "completed_at") ||
+    backendTime(pickFirstString(retrievingMilestone, ["started_at"]));
+  const stage2FinalCompletedAt =
+    summaryTime("stage_2_final", "completed_at") ||
+    backendTime(pickFirstString(retrievingMilestone, ["completed_at"])) ||
+    backendTime(pickFirstString(payload, ["updated_at"]));
+  const canonicalStageTimingMap: Record<string, { startedAt: string; completedAt: string }> = {
+    linkedin_stage_1: {
+      startedAt:
+        summaryTime("linkedin_stage_1", "started_at") ||
+        backendTime(pickFirstString(payload, ["started_at"]) || pickFirstString(acquiringMilestone, ["started_at"])),
+      completedAt: linkedinStageCompletedAt,
+    },
+    stage_1_preview: {
+      startedAt:
+        summaryTime("stage_1_preview", "started_at") ||
+        linkedinStageCompletedAt ||
+        backendTime(pickFirstString(acquiringMilestone, ["completed_at"])),
+      completedAt: stage1PreviewCompletedAt,
+    },
+    public_web_stage_2: {
+      startedAt:
+        summaryTime("public_web_stage_2", "started_at") ||
+        stage1PreviewCompletedAt ||
+        backendTime(pickFirstString(retrievingMilestone, ["started_at"])),
+      completedAt: publicWebStageCompletedAt,
+    },
+    stage_2_final: {
+      startedAt:
+        summaryTime("stage_2_final", "started_at") ||
+        publicWebStageCompletedAt ||
+        stage1PreviewCompletedAt ||
+        backendTime(pickFirstString(retrievingMilestone, ["started_at"])),
+      completedAt: stage2FinalCompletedAt,
+    },
+  };
+  let previousCompletedAtMs: number | null = null;
+  for (const stage of canonicalWorkflowStages) {
+    const timing = canonicalStageTimingMap[stage.id];
+    if (!timing) {
+      continue;
+    }
+    let startedAtMs = parseTimestampMs(timing.startedAt, "utc");
+    let completedAtMs = parseTimestampMs(timing.completedAt, "utc");
+    if (previousCompletedAtMs !== null) {
+      if (startedAtMs === null || startedAtMs < previousCompletedAtMs) {
+        startedAtMs = previousCompletedAtMs;
+      }
+      if (completedAtMs !== null && completedAtMs < startedAtMs) {
+        completedAtMs = startedAtMs;
+      }
+    } else if (startedAtMs !== null && completedAtMs !== null && completedAtMs < startedAtMs) {
+      completedAtMs = startedAtMs;
+    }
+    timing.startedAt = formatTimestampMs(startedAtMs) || timing.startedAt;
+    timing.completedAt = formatTimestampMs(completedAtMs) || timing.completedAt;
+    if (completedAtMs !== null) {
+      previousCompletedAtMs = completedAtMs;
+    }
+  }
+
+  const stageSummaryDetail = (stageId: string, summary: Record<string, unknown>): string => {
+    const overrideDetail = stageDetailOverride(stageId);
+    if (overrideDetail) {
+      return overrideDetail;
+    }
+    if (stageId === "linkedin_stage_1") {
+      if (executionPhaseContract?.activeStageId === "linkedin_stage_1" && executionPhaseContract.activePhaseDetail) {
+        return executionPhaseContract.activePhaseDetail;
+      }
+      if (linkedinProfileWorkPending) {
+        return `正在取回 LinkedIn Profile ${linkedinProfileFetchedCount}/${linkedinProfileFetchRequiredCount}。`;
+      }
+      const explicitText = pickFirstString(summary, ["text"]);
+      if (explicitText) {
+        return explicitText;
+      }
+      if (pickFirstString(summary, ["status"]) === "completed") {
+        return "LinkedIn Stage 1 completed.";
+      }
+      return "正在获取 LinkedIn roster 与 profile 数据。";
+    }
+    if (stageId === "stage_1_preview") {
+      const returnedMatches = Number(summary.returned_matches || 0);
+      const manualReviewCount = publicManualReviewCountMetric;
+      if (returnedMatches > 0) {
+        return `Stage 1 preview 已生成，当前返回 ${returnedMatches} 位候选人，待审核 ${manualReviewCount} 条。`;
+      }
+      return pickFirstString(summary, ["text"]) || "正在根据 LinkedIn Stage 1 数据生成 preview。";
+    }
+    if (stageId === "public_web_stage_2") {
+      return pickFirstString(summary, ["text"]) || "正在补充公开网页、论文与外部证据。";
+    }
+    if (stageId === "stage_2_final") {
+      if (hasPostCompletionWork) {
+        return postCompletionMessage;
+      }
+      const explicitText = pickFirstString(summary, ["text"]);
+      if (explicitText && (pickFirstString(summary, ["status"]) === "completed" || overallStatus === "completed")) {
+        return explicitText;
+      }
+      if (pickFirstString(summary, ["status"]) === "completed" || overallStatus === "completed") {
+        return "Workflow completed.";
+      }
+      const inFlightDetail =
+        pickFirstString(payload, ["current_message"]) ||
+        pickFirstString(payload.progress?.latest_event || {}, ["detail"]);
+      if (inFlightDetail) {
+        return inFlightDetail;
+      }
+      if (explicitText) {
+        return explicitText;
+      }
+      return "正在整理最终结果与候选人看板。";
+    }
+    return pickFirstString(summary, ["text"]) || "Workflow in progress.";
+  };
+
+  const summarizedTimeline =
+    Object.keys(stageSummaryMap).length > 0 || pickFirstString(payload, ["stage"]) || pickFirstString(payload.progress, ["current_stage"])
+      ? canonicalWorkflowStages.map((stage, index) => {
+          const summary = stageSummaryMap[stage.id] || {};
+          const explicitStatus = pickFirstString(summary, ["status"]);
+          let status = "";
+          if (overallStatus === "running" && linkedinProfileWorkPending && stage.id === "linkedin_stage_1") {
+            status = "running";
+          } else if (overallStatus === "running" && linkedinProfileWorkPending && stage.id !== "linkedin_stage_1") {
+            status = "pending";
+          } else if (hasPostCompletionWork && stage.id === "stage_2_final") {
+            status = "running";
+          } else if (explicitStatus) {
+            status = normalizeEventStatus(explicitStatus, stage.id);
+          } else if (overallStatus === "completed" && stage.id === "stage_2_final") {
+            status = "completed";
+          } else if (index < currentCanonicalStageIndex) {
+            status = "completed";
+          } else if (index === currentCanonicalStageIndex) {
+            status =
+              overallStatus === "queued"
+                ? "queued"
+                : overallStatus === "failed" || overallStatus === "cancelled"
+                  ? overallStatus
+                  : "running";
+          } else {
+            status = "pending";
+          }
+          return {
+            id: stage.id,
+            stage: stage.id,
+            title: stage.title,
+            detail: stageSummaryDetail(stage.id, summary),
+            status,
+            startedAt:
+              status === "pending" || status === "queued"
+                ? ""
+                : canonicalStageTimingMap[stage.id]?.startedAt || "",
+            completedAt:
+              status === "pending" || status === "queued" || status === "running"
+                ? ""
+                : normalizeCompletedAt(status, canonicalStageTimingMap[stage.id]?.completedAt || ""),
+            sourceTags: [],
+          };
+        })
+      : [];
+
+  return {
+    jobId: String(payload.job_id || ""),
+    status: overallStatus,
+    currentStage:
+      executionPhaseContract?.activePhaseLabel ||
+      canonicalWorkflowStages.find((stage) => stage.id === currentCanonicalStage)?.title ||
+      payload.stage ||
+      payload.progress?.current_stage ||
+      "Workflow",
+    startedAt: backendTime(payload.started_at || payload.updated_at || "") || "unknown",
+    currentMessage:
+      executionPhaseContract?.activePhaseDetail ||
+      (hasPostCompletionWork ? postCompletionMessage : pickFirstString(payload, ["current_message"])),
+    awaitingUserAction: pickFirstString(payload, ["awaiting_user_action"]),
+    metrics: [
+      ...acquisitionMetrics,
+      { label: "总候选人数量", value: String(candidateCountMetric) },
+      ...(exposeManualReviewMetric
+        ? [{ label: "需人工审核候选人", value: String(publicManualReviewCountMetric) }]
+        : []),
+    ],
+    linkedinStage1Progress,
+    resultViewLifecycle,
+    boardRuntimeState,
+    executionPhaseContract,
+    excelIntakeProgress,
+    timeline:
+      summarizedTimeline.length > 0
+        ? summarizedTimeline
+        : progressEvents.length > 0
+        ? progressEvents.map((item, index) => {
+            const event = item as Record<string, unknown>;
+            const stage = pickFirstString(event, ["stage"]) || `Stage ${index + 1}`;
+            const status = normalizeEventStatus(pickFirstString(event, ["status"]), stage);
+            return {
+              id: pickFirstString(event, ["id"]) || String(index + 1),
+              stage,
+              title: pickFirstString(event, ["title"]) || stage,
+              detail: pickFirstString(event, ["detail"]) || pickFirstString(payload, ["current_message"]) || "Workflow in progress.",
+              status,
+              startedAt: backendTime(pickFirstString(event, ["started_at"]) || ""),
+              completedAt: normalizeCompletedAt(status, backendTime(pickFirstString(event, ["completed_at"]) || "")),
+              sourceTags: asArray(event.source_tags).map((tag) => {
+                const record = (tag as Record<string, unknown>) || {};
+                return {
+                  label: pickFirstString(record, ["label"]) || "source",
+                  count: typeof record.count === "number" ? Number(record.count) : undefined,
+                };
+              }),
+            };
+          })
+        : milestones.map((item, index) => {
+            const milestone = item as Record<string, unknown>;
+            const stage = pickFirstString(milestone, ["stage"]) || `Stage ${index + 1}`;
+            const status = normalizeEventStatus(pickFirstString(milestone, ["status"]), stage);
+            return {
+              id: String(index + 1),
+              stage,
+              title: stage,
+              detail: pickFirstString(milestone, ["latest_detail"]) || pickFirstString(payload, ["current_message"]) || "Workflow in progress.",
+              status,
+              startedAt: backendTime(pickFirstString(milestone, ["started_at"]) || ""),
+              completedAt: normalizeCompletedAt(status, backendTime(pickFirstString(milestone, ["completed_at"]) || "")),
+              sourceTags: [],
+            };
+          }),
+    workers: laneSummaries.map((item, index) => ({
+      id: String(index + 1),
+      lane: pickFirstString(item, ["lane_id"]) || `lane_${index + 1}`,
+      status: Object.entries((item.by_status as Record<string, number>) || {}).find(([, value]) => Number(value) > 0)?.[0] || "idle",
+      budget: `${pickFirstString(item, ["worker_count"]) || String(item.worker_count || 0)} workers`,
+    })),
+  };
+}
+
+export function __testMapProgressPayloadToRunStatus(payload: any): RunStatusData {
+  return mapProgressPayloadToRunStatus(payload);
+}
+
+export async function getRunStatus(jobId?: string): Promise<RunStatusData> {
+  if (!jobId) {
+    throw new Error("Missing job_id. Real-time workflow progress requires a valid backend job.");
+  }
+  try {
+    const payload = await fetchJson<any>(`/api/jobs/${jobId}/progress`);
+    return mapProgressPayloadToRunStatus(payload);
+  } catch {
+    const fallbackPayload = await fetchJson<any>(`/api/jobs/${jobId}`);
+      return {
+        jobId: fallbackPayload.job_id || jobId,
+        status: normalizeWorkflowStatus(fallbackPayload.status),
+        currentStage: fallbackPayload.stage || "Workflow",
+        startedAt: fallbackPayload.created_at || fallbackPayload.updated_at || "unknown",
+        currentMessage: fallbackPayload.summary?.message || "",
+        awaitingUserAction: fallbackPayload.summary?.awaiting_user_action || "",
+      metrics: [
+        { label: "总候选人数量", value: String(fallbackPayload.summary?.candidate_count || 0) },
+        { label: "需人工审核候选人", value: String(fallbackPayload.summary?.manual_review_queue_count || 0) },
+      ],
+        timeline: [],
+        workers: [],
+      };
+    }
+  }
+
+function mapJobResultsToDashboard(payload: any): DashboardData {
+  const rankedResultRecords = asArray(payload.results)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .filter((item) => Object.keys(item).length > 0);
+  const assetPopulationPayload = (payload.asset_population as Record<string, unknown>) || {};
+  const assetPopulationRecords = asArray(assetPopulationPayload.candidates)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .filter((item) => Object.keys(item).length > 0);
+  const rawEffectiveExecutionSemantics = (payload.effective_execution_semantics as Record<string, unknown>) || {};
+  const rankedResultCount =
+    typeof payload.ranked_result_count === "number"
+      ? Number(payload.ranked_result_count || 0)
+      : rankedResultRecords.length;
+  const assetPopulationCount =
+    Number(assetPopulationPayload.candidate_count || 0) || assetPopulationRecords.length;
+  const preferredResultsMode = pickFirstString(rawEffectiveExecutionSemantics, ["default_results_mode"]);
+  const requestTargetScope =
+    pickFirstString(payload.request_preview || {}, ["target_scope"]) ||
+    pickFirstString(payload.job?.request || {}, ["target_scope"]);
+  const assetPopulationAvailable = Boolean(assetPopulationPayload.available) && (
+    assetPopulationCount > 0 ||
+    preferredResultsMode === "asset_population" ||
+    requestTargetScope === "full_company_asset"
+  );
+  const useAssetPopulation =
+    assetPopulationAvailable &&
+    (
+      preferredResultsMode !== "ranked_results" ||
+      Boolean(assetPopulationPayload.default_selected) ||
+      rankedResultCount === 0 ||
+      requestTargetScope === "full_company_asset"
+    );
+  const activeRecords = useAssetPopulation ? assetPopulationRecords : rankedResultRecords;
+  const candidates = activeRecords.map((record) => deriveCandidate(record));
+  const groups = Array.from(new Set(["All", ...candidates.map((candidate) => candidate.team || "Unknown")]));
+  const targetCompany = firstNonEmptyString([
+    pickFirstString(payload.request_preview || {}, ["target_company"]),
+    pickFirstString(payload.job?.request || {}, ["target_company"]),
+    candidates[0]?.currentCompany || "",
+  ]);
+  const intentKeywords = extractDashboardIntentKeywords(payload, candidates, targetCompany);
+  const rawManualReviewCount =
+    typeof payload.manual_review_count === "number"
+      ? Number(payload.manual_review_count || 0)
+      : asArray(payload.manual_review_items).length;
+  const profileFetchProgress = mapProfileFetchProgress(
+    (assetPopulationPayload.profile_fetch_progress as Record<string, unknown>) ||
+      (payload.profile_fetch_progress as Record<string, unknown>) ||
+      {},
+  );
+  const linkedinStage1Progress = mapLinkedinStage1Progress(
+    ((payload.linkedin_stage_1_progress as Record<string, unknown>) ||
+      (assetPopulationPayload.linkedin_stage_1_progress as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const resultViewLifecycle = mapResultViewLifecycle(
+    ((payload.result_view_lifecycle as Record<string, unknown>) ||
+      (assetPopulationPayload.result_view_lifecycle as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const projectionId = firstNonEmptyString([
+    pickFirstString(payload, ["projection_id", "serving_projection_id"]),
+    pickFirstString(assetPopulationPayload, ["projection_id", "serving_projection_id"]),
+    resultViewLifecycle?.servingProjectionId || "",
+  ]);
+  const boardRuntimeState = mapBoardRuntimeState(
+    ((payload.board_runtime_state as Record<string, unknown>) ||
+      (assetPopulationPayload.board_runtime_state as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const linkedinProfileRequiredCount = linkedinStage1Progress?.profileFetchRequiredCount || 0;
+  const linkedinProfileFetchedCount = linkedinStage1Progress?.profileFetchedCount || 0;
+  const linkedinStage1ProviderWorkVisible = Boolean(
+    linkedinStage1Progress &&
+      Math.max(
+        linkedinStage1Progress.currentSearchReturnedCount,
+        linkedinStage1Progress.formerSearchReturnedCount,
+        linkedinStage1Progress.allSearchReturnedCount,
+        linkedinStage1Progress.dedupedCandidateCount,
+        linkedinProfileRequiredCount,
+        linkedinProfileFetchedCount,
+      ) > 0,
+  );
+  const manualReviewCount =
+    rawManualReviewCount > 0 && !boardRuntimeState && !linkedinStage1ProviderWorkVisible
+      ? rawManualReviewCount
+      : 0;
+  const executionPhaseContract = mapExecutionPhaseContract(
+    ((payload.execution_phase_contract as Record<string, unknown>) ||
+      (assetPopulationPayload.execution_phase_contract as Record<string, unknown>) ||
+      {}) as Record<string, unknown>,
+  );
+  const effectiveExecutionSemantics = mapEffectiveExecutionSemantics(
+    (payload.effective_execution_semantics as Record<string, unknown>) || {},
+  );
+  const rawCandidateFacetSummary = mapCandidateFacetSummary(assetPopulationPayload.facet_summary);
+  // Required mirrors per endpoint (rerun5 finding 5): the job dashboard
+  // owns its scope at the asset_population top level; the summary's inner
+  // count_scope and the job top-level key are agree-if-present mirrors.
+  const rawCandidateFacetSummaryScope = mapCandidateFacetSummaryScope(
+    facetSummaryScopeEvidence(assetPopulationPayload, "facet_summary_scope", true),
+    facetSummaryScopeEvidence(assetPopulationPayload.facet_summary, "count_scope", false),
+    facetSummaryScopeEvidence(payload, "facet_summary_scope", false),
+  );
+  const canonicalBoardExpectedCount = boardRuntimeState?.expectedCandidateCount || 0;
+  const canonicalAssetPopulationCount = boardRuntimeState ? canonicalBoardExpectedCount : assetPopulationCount;
+  const boardFacetContractActive = Boolean(boardRuntimeState);
+  const candidateFacetSummary =
+    !boardFacetContractActive ||
+    candidateFacetSummaryMatchesCanonicalBoard(rawCandidateFacetSummary, rawCandidateFacetSummaryScope, boardRuntimeState)
+      ? rawCandidateFacetSummary
+      : undefined;
+  const candidateFacetSummaryScope = candidateFacetSummary ? rawCandidateFacetSummaryScope : "";
+  const canonicalTotalCandidates = useAssetPopulation
+    ? canonicalAssetPopulationCount
+    : rankedResultCount;
+  return {
+    projectionId,
+    title: payload.job?.request?.raw_user_request || payload.job?.request?.query || "Sourcing results",
+    snapshotId:
+      pickFirstString(assetPopulationPayload, ["snapshot_id"]) ||
+      payload.job?.summary?.snapshot_id ||
+      payload.job?.job_id ||
+      "live",
+    queryLabel: payload.job?.request?.raw_user_request || payload.job?.request?.query || "Query",
+    targetCompany,
+    intentKeywords,
+    resultMode: useAssetPopulation ? "asset_population" : "ranked_results",
+    resultModeLabel: useAssetPopulation ? "公司级资产视图" : "检索排序结果",
+    rankedCandidateCount: rankedResultCount,
+    assetPopulationCount: canonicalAssetPopulationCount,
+    totalCandidates: canonicalTotalCandidates,
+    totalEvidence: activeRecords.reduce((sum, record) => sum + asArray(record.evidence).length, 0),
+    manualReviewCount,
+    layers: candidateFacetSummary?.layers?.length
+      ? candidateFacetSummary.layers
+      : buildLayeredSegmentationOptions(candidates),
+    groups,
+    candidates,
+    profileFetchProgress,
+    linkedinStage1Progress,
+    resultViewLifecycle,
+    boardRuntimeState,
+    executionPhaseContract,
+    effectiveExecutionSemantics,
+    candidateFacetSummary,
+    candidateFacetSummaryScope,
+  };
+}
+
+function mapProfileFetchProgress(source: Record<string, unknown>): ProfileFetchProgress | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  const statusCountsSource = (source.status_counts as Record<string, unknown>) || {};
+  const statusCounts = Object.fromEntries(
+    Object.entries(statusCountsSource).map(([key, value]) => [key, Number(value || 0) || 0]),
+  );
+  return {
+    totalUrlCount: Number(source.total_url_count || 0) || 0,
+    fetchedUrlCount: Number(source.fetched_url_count || 0) || 0,
+    queuedUrlCount: Number(source.queued_url_count || 0) || 0,
+    failedRetryableUrlCount: Number(source.failed_retryable_url_count || 0) || 0,
+    unrecoverableUrlCount: Number(source.unrecoverable_url_count || 0) || 0,
+    missingRegistryUrlCount: Number(source.missing_registry_url_count || 0) || 0,
+    deferredUrlCount: Number(source.deferred_url_count || 0) || 0,
+    pendingUrlCount: Number(source.pending_url_count || 0) || 0,
+    statusCounts,
+  };
+}
+
+function mapLinkedinStage1Progress(source: Record<string, unknown>): LinkedinStage1Progress | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  const statusCountsSource = (source.status_counts as Record<string, unknown>) || {};
+  const statusCounts = Object.fromEntries(
+    Object.entries(statusCountsSource).map(([key, value]) => [key, Number(value || 0) || 0]),
+  );
+  return {
+    currentSearchReturnedCount: Number(source.current_search_returned_count || 0) || 0,
+    formerSearchReturnedCount: Number(source.former_search_returned_count || 0) || 0,
+    allSearchReturnedCount: Number(source.all_search_returned_count || 0) || 0,
+    dedupedCandidateCount: Number(source.deduped_candidate_count || 0) || 0,
+    dedupedProfileUrlCount: Number(source.deduped_profile_url_count || 0) || 0,
+    profileFetchRequiredCount: Number(source.profile_fetch_required_count || 0) || 0,
+    profileFetchedCount: Number(source.profile_fetched_count || source.fetched_profile_count || 0) || 0,
+    profileQueuedCount: Number(source.profile_queued_count || 0) || 0,
+    profileFailedRetryableCount: Number(source.profile_failed_retryable_count || 0) || 0,
+    profileUnrecoverableCount: Number(source.profile_unrecoverable_count || 0) || 0,
+    profilePendingCount: Number(source.profile_pending_count || 0) || 0,
+    statusCounts,
+  };
+}
+
+function mapResultViewLifecycle(source: Record<string, unknown>): ResultViewLifecycle | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  return {
+    state: pickFirstString(source, ["state"]),
+    baselineSnapshotId: pickFirstString(source, ["baseline_snapshot_id"]),
+    currentSnapshotId: pickFirstString(source, ["current_snapshot_id"]),
+    servedSnapshotId: pickFirstString(source, ["served_snapshot_id"]),
+    baselineCandidateCount: Number(source.baseline_candidate_count || 0) || 0,
+    servedCandidateCount: Number(source.served_candidate_count || 0) || 0,
+    expectedCandidateCount: Number(source.expected_candidate_count || 0) || 0,
+    deltaProfileProgressApplicable: source.delta_profile_progress_applicable !== false,
+    deltaProfileProgressReason: pickFirstString(source, ["delta_profile_progress_reason"]),
+    deltaProfileRequiredCount: Number(source.delta_profile_required_count || 0) || 0,
+    deltaProfileFetchedCount: Number(source.delta_profile_fetched_count || 0) || 0,
+    deltaProfileMaterializedCount: asNumber(source.delta_profile_materialized_count) ?? undefined,
+    deltaProfileBoardVisibleCount: asNumber(source.delta_profile_board_visible_count) ?? undefined,
+    deltaProfilePendingCount: Number(source.delta_profile_pending_count || 0) || 0,
+    deltaProfileQueuedCount: Number(source.delta_profile_queued_count || 0) || 0,
+    deltaProfileRetryableCount: Number(source.delta_profile_retryable_count || 0) || 0,
+    servingProjectionId: pickFirstString(source, ["serving_projection_id"]),
+    servingProjectionPhase: pickFirstString(source, ["serving_projection_phase"]),
+    backgroundSnapshotMaterializationStatus: pickFirstString(source, ["background_snapshot_materialization_status"]),
+    outreachLayeringStatus: pickFirstString(source, ["outreach_layering_status"]),
+  };
+}
+
+function mapBoardRuntimeState(source: Record<string, unknown>): BoardRuntimeState | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  const filterContractSource = (source.filter_contract as Record<string, unknown>) || {};
+  const resultMode = pickFirstString(source, ["result_mode"]) === "asset_population" ? "asset_population" : "ranked_results";
+  const syncNoteLines = asArray(source.sync_note_lines)
+    .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : {}))
+    .map((item) => ({
+      id: pickFirstString(item, ["id"]),
+      text: pickFirstString(item, ["text"]),
+    }))
+    .filter((item) => item.id && item.text);
+  return {
+    schemaVersion: Number(source.schema_version || 1) || 1,
+    jobId: pickFirstString(source, ["job_id"]),
+    resultMode,
+    phase: pickFirstString(source, ["phase"]),
+    publicationStatus: pickFirstString(source, ["publication_status"]),
+    // Canonical membership + facet counts are strict wire integers (rerun6
+    // finding 4): strings, fractions, and negatives map to the -1 poison
+    // (never equal to a valid count), never coerced into agreement. A
+    // missing key keeps the legacy 0 downstream (positiveInteger clamps -1
+    // to 0, same as the old coercion).
+    expectedCandidateCount: strictNonNegativeInteger(source.expected_candidate_count) ?? -1,
+    servedCandidateCount: Number(source.served_candidate_count || 0) || 0,
+    publishedCandidateCount: Number(source.published_candidate_count || 0) || 0,
+    displayReadyCandidateCount: Number(source.display_ready_candidate_count || 0) || 0,
+    previewCandidateCount: Number(source.preview_candidate_count || 0) || 0,
+    profileDetailCandidateCount: Number(source.profile_detail_candidate_count || 0) || 0,
+    explicitProfileCaptureCandidateCount: nonNegativeInteger(source.explicit_profile_capture_candidate_count),
+    needsProfileCompletionCandidateCount: nonNegativeInteger(source.needs_profile_completion_candidate_count),
+    lowProfileRichnessCandidateCount: nonNegativeInteger(source.low_profile_richness_candidate_count),
+    cardMaterializationQualityFieldsAvailable: Boolean(source.card_materialization_quality_fields_available),
+    rowHydrationTargetCount: Number(source.row_hydration_target_count || 0) || 0,
+    candidateDiscoveryCount: Number(source.candidate_discovery_count || 0) || 0,
+    profileFetchRequiredCount: Number(source.profile_fetch_required_count || 0) || 0,
+    profileFetchedCount: Number(source.profile_fetched_count || 0) || 0,
+    baselineCandidateCount: Number(source.baseline_candidate_count || 0) || 0,
+    deltaProfileRequiredCount: Number(source.delta_profile_required_count || 0) || 0,
+    deltaProfileFetchedCount: Number(source.delta_profile_fetched_count || 0) || 0,
+    deltaProfileMaterializedCount: Number(source.delta_profile_materialized_count || 0) || 0,
+    deltaProfileBoardVisibleCount: Number(source.delta_profile_board_visible_count || 0) || 0,
+    deltaProfileDenominatorPromoted: Boolean(source.delta_profile_denominator_promoted),
+    rowPublicationSequence: Number(source.row_publication_sequence || 0) || 0,
+    rowPublicationTier: pickFirstString(source, ["row_publication_tier"]),
+    rowPublicationRevision: pickFirstString(source, ["row_publication_revision"]),
+    rowPublicationWatermark: pickFirstString(source, ["row_publication_watermark"]),
+    rowPublicationUpdatedAt: pickFirstString(source, ["row_publication_updated_at"]),
+    facetSummaryStatus: pickFirstString(source, ["facet_summary_status"]),
+    facetSummaryScope: pickFirstString(source, ["facet_summary_scope"]),
+    facetSummaryCandidateCount: strictNonNegativeInteger(source.facet_summary_candidate_count) ?? -1,
+    layeringStatus: pickFirstString(source, ["layering_status"]),
+    filterContract: Object.keys(filterContractSource).length
+      ? {
+          source: pickFirstString(filterContractSource, ["source"]),
+          facetCountScope: pickFirstString(filterContractSource, ["facet_count_scope"]),
+          rowFilterScope: pickFirstString(filterContractSource, ["row_filter_scope"]),
+          backendFilteredPagingSupported: Boolean(filterContractSource.backend_filtered_paging_supported),
+        }
+      : undefined,
+    syncStatusText: pickFirstString(source, ["sync_status_text"]),
+    syncNoteLines,
+    candidateDiscoveryStatusText: pickFirstString(source, ["candidate_discovery_status_text"]),
+    profileFetchStatusText: pickFirstString(source, ["profile_fetch_status_text"]),
+    cardMaterializationStatusText: pickFirstString(source, ["card_materialization_status_text"]),
+    noteText: pickFirstString(source, ["note_text"]),
+  };
+}
+
+function mapCandidatePageFilterContract(source: unknown): DashboardCandidatePage["filterContract"] | undefined {
+  const record = source && typeof source === "object" ? (source as Record<string, unknown>) : {};
+  if (Object.keys(record).length === 0) {
+    return undefined;
+  }
+  return {
+    source: pickFirstString(record, ["source"]),
+    facetCountScope: pickFirstString(record, ["facet_count_scope"]),
+    rowFilterScope: pickFirstString(record, ["row_filter_scope"]),
+    backendFilteredPagingSupported: Boolean(record.backend_filtered_paging_supported),
+    filterSignature: pickFirstString(record, ["filter_signature"]),
+    filterActive: Boolean(record.filter_active),
+  };
+}
+
+function mapStringRecord(source: unknown): Record<string, string> {
+  const record = source && typeof source === "object" ? (source as Record<string, unknown>) : {};
+  return Object.fromEntries(
+    Object.entries(record)
+      .map(([key, value]) => [key, asString(value).trim()])
+      .filter(([, value]) => value.length > 0),
+  );
+}
+
+function mapExecutionPhaseContract(source: Record<string, unknown>): ExecutionPhaseContract | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  return {
+    activePhaseId: pickFirstString(source, ["active_phase_id"]),
+    activeStageId: pickFirstString(source, ["active_stage_id"]),
+    activePhaseLabel: pickFirstString(source, ["active_phase_label"]),
+    activePhaseDetail: pickFirstString(source, ["active_phase_detail"]),
+    publicWebStageApplicable: Boolean(source.public_web_stage_applicable),
+    localAssetMaterializationApplicable: Boolean(source.local_asset_materialization_applicable),
+    profileWorkPending: Boolean(source.profile_work_pending),
+    stageTitleOverrides: mapStringRecord(source.stage_title_overrides),
+    stageDetailOverrides: mapStringRecord(source.stage_detail_overrides),
+  };
+}
+
+function mapExcelIntakeProgress(source: Record<string, unknown>): ExcelIntakeProgress | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  const statusCountsSource = (source.status_counts as Record<string, unknown>) || {};
+  const statusCounts = Object.fromEntries(
+    Object.entries(statusCountsSource).map(([key, value]) => [key, Number(value || 0) || 0]),
+  );
+  return {
+    workflowKind: pickFirstString(source, ["workflow_kind"]),
+    targetCompany: pickFirstString(source, ["target_company"]),
+    inputFilename: pickFirstString(source, ["input_filename"]),
+    totalRowCount: Number(source.total_row_count || 0) || 0,
+    matchedRowCount: Number(source.matched_row_count || 0) || 0,
+    targetCandidateCount: Number(source.target_candidate_count || 0) || 0,
+    manualReviewRowCount: Number(source.manual_review_row_count || 0) || 0,
+    unresolvedRowCount: Number(source.unresolved_row_count || 0) || 0,
+    invalidRowCount: Number(source.invalid_row_count || 0) || 0,
+    reviewRowCount: Number(source.review_row_count || 0) || 0,
+    statusCounts,
+    rowManifestAvailable: Boolean(source.row_manifest_available),
+    rowManifestTruncated: Boolean(source.row_manifest_truncated),
+  };
+}
+
+function mapEffectiveExecutionSemantics(source: Record<string, unknown>): EffectiveExecutionSemantics | undefined {
+  if (!source || Object.keys(source).length === 0) {
+    return undefined;
+  }
+  return {
+    effectiveAcquisitionMode: pickFirstString(source, ["effective_acquisition_mode"]),
+    defaultResultsMode: pickFirstString(source, ["default_results_mode"]),
+    executionStrategyLabel: pickFirstString(source, ["execution_strategy_label", "strategy_label"]),
+    fullLocalAssetReuse: Boolean(source.full_local_asset_reuse),
+    requiresDeltaAcquisition: Boolean(source.requires_delta_acquisition),
+    assetPopulationSupported: Boolean(source.asset_population_supported),
+  };
+}
+
+function mergeUniqueCandidates(existing: Candidate[], incoming: Candidate[]): Candidate[] {
+  if (incoming.length === 0) {
+    return existing;
+  }
+  const merged = new Map<string, Candidate>();
+  existing.forEach((candidate) => {
+    merged.set(candidate.id, candidate);
+  });
+  incoming.forEach((candidate) => {
+    merged.set(candidate.id, candidate);
+  });
+  return Array.from(merged.values());
+}
+
+function mergeDashboardCandidatesInPageOrder(
+  existing: Candidate[],
+  incoming: Candidate[],
+  options?: {
+    offset?: number;
+  },
+): Candidate[] {
+  if (incoming.length === 0) {
+    return existing;
+  }
+  const normalizedOffset = Math.max(Number(options?.offset || 0), 0);
+  const incomingIds = new Set(incoming.map((candidate) => candidate.id));
+  if (normalizedOffset === 0) {
+    return [
+      ...incoming,
+      ...existing.filter((candidate) => !incomingIds.has(candidate.id)),
+    ];
+  }
+  if (normalizedOffset >= existing.length) {
+    return mergeUniqueCandidates(existing, incoming);
+  }
+  const prefix = existing
+    .slice(0, normalizedOffset)
+    .filter((candidate) => !incomingIds.has(candidate.id));
+  const suffix = existing
+    .slice(normalizedOffset)
+    .filter((candidate) => !incomingIds.has(candidate.id));
+  return [...prefix, ...incoming, ...suffix];
+}
+
+export function storeDashboardCache(jobId: string, dashboard: DashboardData): DashboardData {
+  return writeCacheValue(dashboardCache, jobId, dashboard);
+}
+
+export function mergeDashboardRuntimeProgress(dashboard: DashboardData, runStatus: RunStatusData): DashboardData {
+  const linkedinStage1Progress = pickFresherLinkedinProgress(
+    runStatus.linkedinStage1Progress,
+    dashboard.linkedinStage1Progress,
+  );
+  const resultViewLifecycle = pickFresherResultViewLifecycle(
+    runStatus.resultViewLifecycle,
+    dashboard.resultViewLifecycle,
+  );
+  const boardRuntimeState = pickFresherBoardRuntimeState(
+    runStatus.boardRuntimeState,
+    dashboard.boardRuntimeState,
+  );
+  const nextTotalCandidates = boardRuntimeState
+    ? Math.max(0, boardRuntimeState.expectedCandidateCount || 0)
+    : Math.max(
+        dashboard.totalCandidates || 0,
+        resultViewLifecycle?.expectedCandidateCount || 0,
+        resultViewLifecycle?.servedCandidateCount || 0,
+        dashboard.candidates.length,
+      );
+  const keepExistingFacetSummary =
+    !boardRuntimeState ||
+    candidateFacetSummaryMatchesCanonicalBoard(
+      dashboard.candidateFacetSummary,
+      dashboard.candidateFacetSummaryScope,
+      boardRuntimeState,
+    );
+  if (
+    linkedinStage1Progress === dashboard.linkedinStage1Progress &&
+    resultViewLifecycle === dashboard.resultViewLifecycle &&
+    boardRuntimeState === dashboard.boardRuntimeState &&
+    nextTotalCandidates === dashboard.totalCandidates &&
+    runStatus.executionPhaseContract === dashboard.executionPhaseContract &&
+    keepExistingFacetSummary
+  ) {
+    return dashboard;
+  }
+  return {
+    ...dashboard,
+    totalCandidates: nextTotalCandidates,
+    linkedinStage1Progress,
+    resultViewLifecycle,
+    boardRuntimeState,
+    executionPhaseContract: runStatus.executionPhaseContract || dashboard.executionPhaseContract,
+    candidateFacetSummary: keepExistingFacetSummary ? dashboard.candidateFacetSummary : undefined,
+    candidateFacetSummaryScope: keepExistingFacetSummary ? dashboard.candidateFacetSummaryScope : "",
+  };
+}
+
+export function mergeDashboardBoardPatchRuntime(
+  dashboard: DashboardData,
+  patchLog: Pick<BoardVisiblePatchLog, "boardRuntimeState" | "resultViewLifecycle">,
+): DashboardData {
+  if (!patchLog.boardRuntimeState && !patchLog.resultViewLifecycle) {
+    return dashboard;
+  }
+  return mergeDashboardRuntimeProgress(dashboard, {
+    boardRuntimeState: patchLog.boardRuntimeState,
+    resultViewLifecycle: patchLog.resultViewLifecycle,
+  } as RunStatusData);
+}
+
+function linkedinProgressFreshnessScore(progress: LinkedinStage1Progress | undefined): number {
+  if (!progress) {
+    return 0;
+  }
+  return (
+    Math.max(0, progress.profileFetchRequiredCount || 0) * 1_000_000 +
+    Math.max(0, progress.profileFetchedCount || 0) * 10_000 +
+    Math.max(0, progress.dedupedCandidateCount || 0) * 100 +
+    Math.max(0, progress.currentSearchReturnedCount || 0) +
+    Math.max(0, progress.formerSearchReturnedCount || 0) +
+    Math.max(0, progress.allSearchReturnedCount || 0)
+  );
+}
+
+function resultViewLifecycleFreshnessScore(lifecycle: ResultViewLifecycle | undefined): number {
+  if (!lifecycle) {
+    return 0;
+  }
+  const stateRank: Record<string, number> = {
+    unavailable: 0,
+    baseline_serving: 1,
+    delta_applying: 2,
+    current_snapshot_materializing: 3,
+    post_result_layering: 4,
+    current_snapshot_serving: 5,
+  };
+  return (
+    (stateRank[lifecycle.state] || 0) * 1_000_000_000 +
+    Math.max(0, lifecycle.expectedCandidateCount || 0) * 1_000_000 +
+    Math.max(0, lifecycle.servedCandidateCount || 0) * 10_000 +
+    Math.max(0, lifecycle.deltaProfileFetchedCount || 0) * 100 +
+    Math.max(0, lifecycleEffectiveDeltaMaterializedCount(lifecycle)) * 10 +
+    Math.max(0, lifecycle.deltaProfileMaterializedCount || 0)
+  );
+}
+
+function pickFresherLinkedinProgress(
+  incoming: LinkedinStage1Progress | undefined,
+  current: LinkedinStage1Progress | undefined,
+): LinkedinStage1Progress | undefined {
+  if (!incoming) {
+    return current;
+  }
+  if (!current) {
+    return incoming;
+  }
+  return linkedinProgressFreshnessScore(incoming) >= linkedinProgressFreshnessScore(current) ? incoming : current;
+}
+
+function pickFresherResultViewLifecycle(
+  incoming: ResultViewLifecycle | undefined,
+  current: ResultViewLifecycle | undefined,
+): ResultViewLifecycle | undefined {
+  if (!incoming) {
+    return current;
+  }
+  if (!current) {
+    return incoming;
+  }
+  return resultViewLifecycleFreshnessScore(incoming) >= resultViewLifecycleFreshnessScore(current) ? incoming : current;
+}
+
+function boardRuntimeStateFreshnessScore(state: BoardRuntimeState | undefined): number {
+  if (!state) {
+    return 0;
+  }
+  const phaseRank: Record<string, number> = {
+    unavailable: 0,
+    awaiting_publication: 1,
+    partial_serving: 2,
+    post_result_layering: 3,
+    current_snapshot_serving: 4,
+    canonical_projection_serving: 5,
+  };
+  const expectedCount = Math.max(0, state.expectedCandidateCount || 0);
+  const completeFacetContract = Boolean(
+    state.facetSummaryStatus === "complete" &&
+      ["global_full_population", "exact_projection"].includes(state.facetSummaryScope) &&
+      (expectedCount <= 0 || Math.max(0, state.facetSummaryCandidateCount || 0) >= expectedCount),
+  );
+  const completeLayeringContract = state.layeringStatus === "completed";
+  return (
+    (phaseRank[state.phase] || 0) * 1_000_000_000 +
+    (completeFacetContract ? 100_000_000 : 0) +
+    (completeLayeringContract ? 10_000_000 : 0) +
+    expectedCount * 1_000_000 +
+    Math.max(0, state.rowHydrationTargetCount || 0) * 10_000 +
+    Math.max(0, state.displayReadyCandidateCount || 0) * 1_000 +
+    Math.max(0, state.profileDetailCandidateCount || 0) * 100 +
+    Math.max(0, state.rowPublicationSequence || 0) * 100
+  );
+}
+
+function canonicalProjectionRevision(state: BoardRuntimeState | undefined): string {
+  if (String(state?.rowPublicationTier || "").trim() !== "serving_projection_members") {
+    return "";
+  }
+  return String(state?.rowPublicationRevision || "").trim();
+}
+
+function boardRuntimeStatePublicationTierRank(state: BoardRuntimeState | undefined): number {
+  if (!state) {
+    return 0;
+  }
+  const tier = String(state.rowPublicationTier || "").trim();
+  if (tier === "serving_projection_members" && canonicalProjectionRevision(state)) {
+    return 4;
+  }
+  if (tier === "current_snapshot_serving") {
+    return 3;
+  }
+  if (
+    ["current_snapshot_serving", "canonical_projection_serving"].includes(state.phase) &&
+    state.publicationStatus === "complete" &&
+    Math.max(0, state.expectedCandidateCount || 0) > 0 &&
+    Math.max(0, state.servedCandidateCount || 0) >= Math.max(0, state.expectedCandidateCount || 0)
+  ) {
+    return 3;
+  }
+  if (tier === "partial_patch") {
+    return 2;
+  }
+  if (tier === "lifecycle") {
+    return 1;
+  }
+  return Math.max(0, state.rowPublicationSequence || 0) > 0 ? 2 : 1;
+}
+
+function pickFresherBoardRuntimeState(
+  incoming: BoardRuntimeState | undefined,
+  current: BoardRuntimeState | undefined,
+): BoardRuntimeState | undefined {
+  if (!incoming) {
+    return current;
+  }
+  if (!current) {
+    return incoming;
+  }
+  const incomingTier = boardRuntimeStatePublicationTierRank(incoming);
+  const currentTier = boardRuntimeStatePublicationTierRank(current);
+  if (incomingTier !== currentTier) {
+    return incomingTier > currentTier ? incoming : current;
+  }
+  if (incomingTier === 4) {
+    const incomingEqualityRevision = canonicalProjectionRevision(incoming);
+    const currentEqualityRevision = canonicalProjectionRevision(current);
+    if (!incomingEqualityRevision) {
+      return current;
+    }
+    if (!currentEqualityRevision) {
+      return incoming;
+    }
+    if (incomingEqualityRevision !== currentEqualityRevision) {
+      // The storage-owned revision is an equality token, not an ordered
+      // sequence. Conflicting snapshots require an authoritative dashboard
+      // refresh; timestamp and arrival order are not freshness proofs.
+      return current;
+    }
+    // Equal revisions describe the same semantic member input, but they do not
+    // order independently built facet/index metadata. Preserve the fresher
+    // complete state instead of allowing a later-arriving pending snapshot to
+    // regress the UI.
+    return boardRuntimeStateFreshnessScore(incoming) >= boardRuntimeStateFreshnessScore(current)
+      ? incoming
+      : current;
+  }
+  const incomingSequence = Math.max(0, incoming.rowPublicationSequence || 0);
+  const currentSequence = Math.max(0, current.rowPublicationSequence || 0);
+  if (incomingSequence !== currentSequence) {
+    return incomingSequence > currentSequence ? incoming : current;
+  }
+  return boardRuntimeStateFreshnessScore(incoming) >= boardRuntimeStateFreshnessScore(current) ? incoming : current;
+}
+
+export function dashboardCandidatePageRevisionMatches(
+  dashboard: DashboardData,
+  page: DashboardCandidatePage,
+): boolean {
+  const currentProjectionRevision = canonicalProjectionRevision(dashboard.boardRuntimeState);
+  const pageProjectionRevision = canonicalProjectionRevision(page.boardRuntimeState);
+  if (!currentProjectionRevision && !pageProjectionRevision) {
+    return true;
+  }
+  const currentCount = Math.max(0, dashboard.boardRuntimeState?.expectedCandidateCount || 0);
+  const pageCount = Math.max(0, page.boardRuntimeState?.expectedCandidateCount || 0);
+  return Boolean(
+    currentProjectionRevision &&
+    pageProjectionRevision &&
+    currentProjectionRevision === pageProjectionRevision &&
+    currentCount === pageCount
+  );
+}
+
+export function mergeDashboardCandidatePage(
+  dashboard: DashboardData,
+  page: DashboardCandidatePage,
+): DashboardData {
+  if (!dashboardCandidatePageRevisionMatches(dashboard, page)) {
+    // Candidate identity membership cannot be reconciled by retaining or
+    // truncating an older row window. A fresh dashboard owns replacement.
+    return dashboard;
+  }
+  const mergedCandidates = mergeDashboardCandidatesInPageOrder(dashboard.candidates, page.candidates, {
+    offset: page.offset,
+  });
+  const mergedBoardRuntimeState = pickFresherBoardRuntimeState(page.boardRuntimeState, dashboard.boardRuntimeState);
+  const totalCandidates = mergedBoardRuntimeState
+    ? Math.max(0, mergedBoardRuntimeState.expectedCandidateCount || 0)
+    : Math.max(
+        page.totalCandidates,
+        mergedCandidates.length,
+        dashboardExpectedCandidateCount(dashboard),
+      );
+  const pageFacetSummary = candidateFacetSummaryMatchesCanonicalBoard(
+    page.candidateFacetSummary,
+    page.candidateFacetSummaryScope,
+    mergedBoardRuntimeState,
+  )
+    ? page.candidateFacetSummary
+    : undefined;
+  const currentFacetSummary = candidateFacetSummaryMatchesCanonicalBoard(
+    dashboard.candidateFacetSummary,
+    dashboard.candidateFacetSummaryScope,
+    mergedBoardRuntimeState,
+  )
+    ? dashboard.candidateFacetSummary
+    : undefined;
+  const candidateFacetSummary = pickCanonicalCandidateFacetSummary(pageFacetSummary, currentFacetSummary);
+  const candidateFacetSummaryScope =
+    !candidateFacetSummary
+      ? ""
+      : candidateFacetSummary === pageFacetSummary
+      ? page.candidateFacetSummaryScope || ""
+      : candidateFacetSummary === currentFacetSummary
+        ? dashboard.candidateFacetSummaryScope || ""
+        : "";
+  return {
+    ...dashboard,
+    resultMode: page.resultMode,
+    resultModeLabel: page.resultMode === "asset_population" ? "公司级资产视图" : "检索排序结果",
+    rankedCandidateCount:
+      page.resultMode === "ranked_results"
+        ? Math.max(totalCandidates, dashboard.rankedCandidateCount)
+        : dashboard.rankedCandidateCount,
+    assetPopulationCount:
+      page.resultMode === "asset_population"
+        ? totalCandidates
+        : dashboard.assetPopulationCount,
+    totalCandidates,
+    layers: candidateFacetSummary?.layers?.length
+      ? candidateFacetSummary.layers
+      : buildLayeredSegmentationOptions(mergedCandidates),
+    groups: Array.from(new Set(["All", ...mergedCandidates.map((candidate) => candidate.team || "Unknown")])),
+    candidates: mergedCandidates,
+    profileFetchProgress: page.profileFetchProgress || dashboard.profileFetchProgress,
+    linkedinStage1Progress: pickFresherLinkedinProgress(page.linkedinStage1Progress, dashboard.linkedinStage1Progress),
+    resultViewLifecycle: pickFresherResultViewLifecycle(page.resultViewLifecycle, dashboard.resultViewLifecycle),
+    boardRuntimeState: mergedBoardRuntimeState,
+    executionPhaseContract: dashboard.executionPhaseContract,
+    effectiveExecutionSemantics: dashboard.effectiveExecutionSemantics,
+    candidateFacetSummary,
+    candidateFacetSummaryScope,
+  };
+}
+
+export async function getDashboard(
+  jobId?: string,
+  options?: {
+    forceRefresh?: boolean;
+  },
+): Promise<DashboardData> {
+  if (!jobId) {
+    throw new Error("Missing job_id. Real search results require a completed backend job.");
+  }
+  const cacheKey = jobId;
+  const forceRefresh = options?.forceRefresh === true;
+  if (forceRefresh) {
+    dashboardCache.delete(cacheKey);
+  }
+  const cached = forceRefresh ? null : readFreshCacheValue(dashboardCache, cacheKey, DASHBOARD_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = forceRefresh ? undefined : dashboardPromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    const requestGeneration = (dashboardRequestGeneration.get(cacheKey) || 0) + 1;
+    dashboardRequestGeneration.set(cacheKey, requestGeneration);
+    fetchPromise = fetchJson<any>(`/api/jobs/${jobId}/dashboard?include_candidates=0`, undefined, RESULTS_API_TIMEOUT_MS)
+      .catch(async (error) => {
+        const message = error instanceof Error ? error.message : "";
+        if (message.includes("Request failed: 410")) {
+          const projectionId = await getRunProjectionId(jobId);
+          return getProjectionDashboard(projectionId, {
+            forceRefresh: true,
+            runId: jobId,
+          });
+        }
+        if (message.includes("Request failed: 404")) {
+          return fetchJson<any>(`/api/jobs/${jobId}/results`, undefined, RESULTS_API_TIMEOUT_MS);
+        }
+        throw error;
+      })
+      .then(async (payload) => {
+        const summaryDashboard = mapJobResultsToDashboard(payload);
+        const jobStatus = asString(payload?.job?.status).toLowerCase();
+        const terminalJobStatus = resolveWorkflowStatus(jobStatus).terminal;
+        const shouldCacheDashboard = (dashboard: DashboardData) =>
+          terminalJobStatus && dashboardHasRenderableCandidates(dashboard);
+        const initialHydrationTarget = summaryDashboard.boardRuntimeState
+          ? dashboardRowHydrationTargetCount(summaryDashboard)
+          : dashboardExpectedCandidateCount(summaryDashboard);
+        const initialChunkTarget = Math.min(
+          initialHydrationTarget,
+          DASHBOARD_INITIAL_CANDIDATE_CHUNK_SIZE,
+        );
+        const shouldBackfillFirstPage =
+          initialHydrationTarget > 0
+          && summaryDashboard.candidates.length < initialChunkTarget;
+        if (shouldBackfillFirstPage) {
+          const firstPage = await getDashboardCandidatePage(jobId, {
+            offset: 0,
+            limit: DASHBOARD_INITIAL_CANDIDATE_CHUNK_SIZE,
+            forceRefresh,
+          }).catch(() => null);
+          if (firstPage) {
+            const mergedDashboard = mergeDashboardCandidatePage(summaryDashboard, firstPage);
+            return shouldCacheDashboard(mergedDashboard) && dashboardRequestGeneration.get(cacheKey) === requestGeneration
+              ? storeDashboardCache(cacheKey, mergedDashboard)
+              : mergedDashboard;
+          }
+        }
+        if (!shouldCacheDashboard(summaryDashboard)) {
+          return summaryDashboard;
+        }
+        return dashboardRequestGeneration.get(cacheKey) === requestGeneration
+          ? storeDashboardCache(cacheKey, summaryDashboard)
+          : summaryDashboard;
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(dashboardPromiseCache, cacheKey, fetchPromise as Promise<DashboardData>);
+      });
+    dashboardPromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export function peekDashboardCache(jobId?: string): DashboardData | null {
+  if (!jobId) {
+    return null;
+  }
+  return readFreshCacheValue(dashboardCache, jobId, DASHBOARD_CACHE_TTL_MS);
+}
+
+export function peekProjectionDashboardCache(projectionId?: string): DashboardData | null {
+  if (!projectionId) {
+    return null;
+  }
+  return readFreshCacheValue(projectionDashboardCache, projectionId, DASHBOARD_CACHE_TTL_MS);
+}
+
+export async function getRunProjectionId(runId: string): Promise<string> {
+  if (!runId) {
+    throw new Error("Missing run_id. Projection result pages require a linked acquisition run.");
+  }
+  let fetchPromise = runProjectionLinkPromiseCache.get(runId);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(`/api/runs/${encodeURIComponent(runId)}/projection-link`, undefined, RESULTS_API_TIMEOUT_MS)
+      .then((payload) => {
+        const projectionId = pickFirstString(payload, ["projection_id"]);
+        if (!projectionId) {
+          throw new Error("Run projection link is missing projection_id.");
+        }
+        return projectionId;
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(runProjectionLinkPromiseCache, runId, fetchPromise as Promise<string>);
+      });
+    runProjectionLinkPromiseCache.set(runId, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export async function getCollectionAuthoritativeProjectionId(collectionId: string): Promise<string> {
+  const normalizedCollectionId = collectionId.trim();
+  if (!normalizedCollectionId) {
+    throw new Error("Missing collection_id. Local asset pages require a collection authoritative projection.");
+  }
+  let fetchPromise = collectionProjectionLinkPromiseCache.get(normalizedCollectionId);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/collections/${encodeURIComponent(normalizedCollectionId)}/authoritative-projection`,
+      undefined,
+      RESULTS_API_TIMEOUT_MS,
+    )
+      .then((payload) => {
+        const projectionId = pickFirstString(payload, ["projection_id"]);
+        if (!projectionId) {
+          throw new Error("Collection authoritative pointer is missing projection_id.");
+        }
+        return projectionId;
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(
+          collectionProjectionLinkPromiseCache,
+          normalizedCollectionId,
+          fetchPromise as Promise<string>,
+        );
+      });
+    collectionProjectionLinkPromiseCache.set(normalizedCollectionId, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export interface CollectionCompanyMedia {
+  logoStatus: string;
+  logoUrl: string;
+  logoAssetId: string;
+  logoAlt: string;
+  placeholderKind: string;
+  placeholderText: string;
+  fallbackUsed: boolean;
+  fallbackReason: string;
+  raw: any;
+}
+
+export interface CollectionAssetEntry {
+  status: string;
+  collectionId: string;
+  displayName: string;
+  companyMedia: CollectionCompanyMedia;
+  projectionId: string;
+  activeCollectionVersion: string;
+  candidateCount: number;
+  profileFetchRequiredCount: number;
+  profileFetchedCount: number;
+  cardMaterializedCount: number;
+  countScope: string;
+  coverageStatus: string;
+  coverageKind: string;
+  rawProfileIndexWatermark: string;
+  evidenceIndexWatermark: string;
+  acquisitionHandoffAvailable: boolean;
+  acquisitionHandoffReason: string;
+  updatedAt: string;
+  raw: any;
+}
+
+export interface CollectionAssetOverviewItem {
+  collectionId: string;
+  displayName: string;
+  companyMedia: CollectionCompanyMedia;
+  status: string;
+  reason: string;
+  activeProjectionId: string;
+  activeCollectionVersion: string;
+  candidateCount: number;
+  profileFetchRequiredCount: number;
+  profileFetchedCount: number;
+  cardMaterializedCount: number;
+  coverageStatus: string;
+  coverageKind: string;
+  rawProfileIndexWatermark: string;
+  evidenceIndexWatermark: string;
+  updatedAt: string;
+  publishedAt: string;
+  projectionUrl: string;
+  raw: any;
+}
+
+export interface CollectionAssetOverview {
+  status: string;
+  collectionCount: number;
+  collections: CollectionAssetOverviewItem[];
+  raw: any;
+}
+
+export interface CompanyAssetRecord {
+  assetId: string;
+  companyKey: string;
+  targetCompany: string;
+  assetType: string;
+  sourceKind: string;
+  contentRef: string;
+  sourceUrl: string;
+  visibilityScope: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  raw: Record<string, unknown>;
+}
+
+export interface CompanyEvidenceRecord {
+  evidenceId: string;
+  companyKey: string;
+  targetCompany: string;
+  assetId: string;
+  evidenceType: string;
+  value: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  raw: Record<string, unknown>;
+}
+
+export interface CompanyAssertionRecord {
+  assertionId: string;
+  companyKey: string;
+  targetCompany: string;
+  assertionType: string;
+  value: string;
+  authority: string;
+  verificationStatus: string;
+  sourceEvidenceId: string;
+  metadata: Record<string, unknown>;
+  raw: Record<string, unknown>;
+}
+
+export interface CompanyAssetFacts {
+  status: string;
+  fallbackUsed: boolean;
+  assets: CompanyAssetRecord[];
+  evidence: CompanyEvidenceRecord[];
+  assertions: CompanyAssertionRecord[];
+}
+
+function mapCollectionCompanyMedia(source: unknown, displayName: string): CollectionCompanyMedia {
+  const item = source && typeof source === "object" && !Array.isArray(source) ? (source as Record<string, unknown>) : {};
+  const placeholder =
+    item.placeholder && typeof item.placeholder === "object" && !Array.isArray(item.placeholder)
+      ? (item.placeholder as Record<string, unknown>)
+      : {};
+  const mediaContract =
+    item.media_contract && typeof item.media_contract === "object" && !Array.isArray(item.media_contract)
+      ? (item.media_contract as Record<string, unknown>)
+      : {};
+  const fallbackUsed = asBoolean(mediaContract.fallback_used) ?? true;
+  return {
+    logoStatus: pickFirstString(item, ["logo_status"]) || "company_media_missing",
+    logoUrl: resolveApiMediaUrl(pickFirstString(item, ["logo_url"])),
+    logoAssetId: pickFirstString(item, ["logo_asset_id"]),
+    logoAlt: pickFirstString(item, ["logo_alt"]) || displayName,
+    placeholderKind: pickFirstString(placeholder, ["kind"]) || "unavailable",
+    placeholderText: pickFirstString(placeholder, ["text"]) || "??",
+    fallbackUsed,
+    fallbackReason: pickFirstString(mediaContract, ["reason"]) || (fallbackUsed ? "company_media_contract_missing" : ""),
+    raw: item,
+  };
+}
+
+function mapCollectionAssetOverviewItem(item: Record<string, unknown>): CollectionAssetOverviewItem {
+  const displayName = pickFirstString(item, ["display_name"]) || pickFirstString(item, ["collection_id"]);
+  return {
+    collectionId: pickFirstString(item, ["collection_id"]),
+    displayName,
+    companyMedia: mapCollectionCompanyMedia(item.company_media, displayName),
+    status: pickFirstString(item, ["status"]),
+    reason: pickFirstString(item, ["reason"]),
+    activeProjectionId: pickFirstString(item, ["active_projection_id"]),
+    activeCollectionVersion: pickFirstString(item, ["active_collection_version"]),
+    candidateCount: asNumber(item.candidate_count) ?? 0,
+    profileFetchRequiredCount: asNumber(item.profile_fetch_required_count) ?? 0,
+    profileFetchedCount: asNumber(item.profile_fetched_count) ?? 0,
+    cardMaterializedCount: asNumber(item.card_materialized_count) ?? 0,
+    coverageStatus: pickFirstString(item, ["coverage_status"]),
+    coverageKind: pickFirstString(item, ["coverage_kind"]),
+    rawProfileIndexWatermark: pickFirstString(item, ["raw_profile_index_watermark"]),
+    evidenceIndexWatermark: pickFirstString(item, ["evidence_index_watermark"]),
+    updatedAt: pickFirstString(item, ["updated_at"]),
+    publishedAt: pickFirstString(item, ["published_at"]),
+    projectionUrl: pickFirstString(item, ["projection_url"]),
+    raw: item,
+  };
+}
+
+export async function getCollectionAssetOverview(limit = 250): Promise<CollectionAssetOverview> {
+  const cacheKey = String(limit || 250);
+  const cached = readFreshCacheValue(collectionAssetOverviewCache, cacheKey, LIST_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = collectionAssetOverviewPromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/collections${buildApiQueryString({ limit })}`,
+      undefined,
+      RESULTS_API_TIMEOUT_MS,
+    )
+      .then((payload) => {
+        const overview = {
+          status: asString(payload.status),
+          collectionCount: asNumber(payload.collection_count) ?? 0,
+          collections: asArray(payload.collections)
+            .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+            .map(mapCollectionAssetOverviewItem),
+          raw: payload,
+        };
+        collectionAssetOverviewCache.set(cacheKey, { value: overview, cachedAt: Date.now() });
+        return overview;
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(collectionAssetOverviewPromiseCache, cacheKey, fetchPromise as Promise<CollectionAssetOverview>);
+      });
+    collectionAssetOverviewPromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export async function getCollectionAssetEntry(collectionId: string): Promise<CollectionAssetEntry> {
+  const normalizedCollectionId = collectionId.trim();
+  if (!normalizedCollectionId) {
+    throw new Error("Missing collection_id. Local asset pages require a collection authoritative projection.");
+  }
+  const payload = await fetchJson<any>(
+    `/api/collections/${encodeURIComponent(normalizedCollectionId)}/asset-entry`,
+    undefined,
+    RESULTS_API_TIMEOUT_MS,
+  );
+  const assetEntry = (payload.asset_entry as Record<string, unknown>) || {};
+  const pointer = (payload.pointer as Record<string, unknown>) || {};
+  const projection = (payload.projection as Record<string, unknown>) || {};
+  const coverage = (assetEntry.coverage as Record<string, unknown>) || {};
+  const acquisitionHandoff = (assetEntry.acquisition_handoff as Record<string, unknown>) || {};
+  const displayName =
+    pickFirstString(assetEntry, ["display_name"]) ||
+    pickFirstString(payload, ["display_name"]) ||
+    normalizedCollectionId.replace(/^company:/i, "");
+  return {
+    status: asString(payload.status),
+    collectionId: pickFirstString(payload, ["collection_id"]) || normalizedCollectionId,
+    displayName,
+    companyMedia: mapCollectionCompanyMedia(assetEntry.company_media, displayName),
+    projectionId: pickFirstString(payload, ["projection_id"]) || pickFirstString(assetEntry, ["active_projection_id"]),
+    activeCollectionVersion:
+      pickFirstString(assetEntry, ["active_collection_version"]) ||
+      pickFirstString(pointer, ["active_collection_version"]),
+    candidateCount: asNumber(assetEntry.candidate_count) ?? 0,
+    profileFetchRequiredCount: asNumber(assetEntry.profile_fetch_required_count) ?? 0,
+    profileFetchedCount: asNumber(assetEntry.profile_fetched_count) ?? 0,
+    cardMaterializedCount: asNumber(assetEntry.card_materialized_count) ?? 0,
+    countScope: pickFirstString(assetEntry, ["count_scope"]),
+    coverageStatus: pickFirstString(coverage, ["coverage_status"]),
+    coverageKind: pickFirstString(coverage, ["coverage_kind"]),
+    rawProfileIndexWatermark: pickFirstString(assetEntry, ["raw_profile_index_watermark"]),
+    evidenceIndexWatermark: pickFirstString(assetEntry, ["evidence_index_watermark"]),
+    acquisitionHandoffAvailable: asBoolean(acquisitionHandoff.available) ?? false,
+    acquisitionHandoffReason: pickFirstString(acquisitionHandoff, ["reason"]),
+    updatedAt: pickFirstString(projection, ["updated_at"]) || pickFirstString(pointer, ["updated_at"]),
+    raw: payload,
+  };
+}
+
+function mapCompanyAssetRecord(record: Record<string, unknown>): CompanyAssetRecord {
+  return {
+    assetId: pickFirstString(record, ["asset_id"]),
+    companyKey: pickFirstString(record, ["company_key"]),
+    targetCompany: pickFirstString(record, ["target_company"]),
+    assetType: pickFirstString(record, ["asset_type"]),
+    sourceKind: pickFirstString(record, ["source_kind"]),
+    contentRef: pickFirstString(record, ["content_ref"]),
+    sourceUrl: pickFirstString(record, ["source_url"]),
+    visibilityScope: pickFirstString(record, ["visibility_scope"]),
+    status: pickFirstString(record, ["status"]),
+    metadata: (record.metadata as Record<string, unknown>) || {},
+    raw: record,
+  };
+}
+
+function mapCompanyEvidenceRecord(record: Record<string, unknown>): CompanyEvidenceRecord {
+  return {
+    evidenceId: pickFirstString(record, ["evidence_id"]),
+    companyKey: pickFirstString(record, ["company_key"]),
+    targetCompany: pickFirstString(record, ["target_company"]),
+    assetId: pickFirstString(record, ["asset_id"]),
+    evidenceType: pickFirstString(record, ["evidence_type"]),
+    value: pickFirstString(record, ["value"]),
+    sourceUrl: pickFirstString(record, ["source_url"]),
+    sourceDomain: pickFirstString(record, ["source_domain"]),
+    status: pickFirstString(record, ["status"]),
+    metadata: (record.metadata as Record<string, unknown>) || {},
+    raw: record,
+  };
+}
+
+function mapCompanyAssertionRecord(record: Record<string, unknown>): CompanyAssertionRecord {
+  return {
+    assertionId: pickFirstString(record, ["assertion_id"]),
+    companyKey: pickFirstString(record, ["company_key"]),
+    targetCompany: pickFirstString(record, ["target_company"]),
+    assertionType: pickFirstString(record, ["assertion_type"]),
+    value: pickFirstString(record, ["value"]),
+    authority: pickFirstString(record, ["authority"]),
+    verificationStatus: pickFirstString(record, ["verification_status"]),
+    sourceEvidenceId: pickFirstString(record, ["source_evidence_id"]),
+    metadata: (record.metadata as Record<string, unknown>) || {},
+    raw: record,
+  };
+}
+
+function emptyCompanyAssetFacts(status = "not_ready"): CompanyAssetFacts {
+  return {
+    status,
+    fallbackUsed: false,
+    assets: [],
+    evidence: [],
+    assertions: [],
+  };
+}
+
+export async function getCompanyAssetFacts(params: {
+  companyKey?: string;
+  targetCompany?: string;
+  limit?: number;
+}): Promise<CompanyAssetFacts> {
+  const companyKey = String(params.companyKey || "").trim();
+  const targetCompany = String(params.targetCompany || "").trim();
+  if (!companyKey && !targetCompany) {
+    return emptyCompanyAssetFacts("invalid");
+  }
+  const query = buildApiQueryString({
+    company_key: companyKey,
+    target_company: targetCompany,
+    limit: params.limit || 100,
+  });
+  try {
+    const [assetsPayload, evidencePayload, assertionsPayload] = await Promise.all([
+      fetchJson<any>(`/api/company-assets${query}`, undefined, RESULTS_API_TIMEOUT_MS),
+      fetchJson<any>(`/api/company-assets/evidence${query}`, undefined, RESULTS_API_TIMEOUT_MS),
+      fetchJson<any>(`/api/company-assets/assertions${query}`, undefined, RESULTS_API_TIMEOUT_MS),
+    ]);
+    return {
+      status: "ready",
+      fallbackUsed:
+        Boolean(assetsPayload?.read_contract?.fallback_used) ||
+        Boolean(evidencePayload?.read_contract?.fallback_used) ||
+        Boolean(assertionsPayload?.read_contract?.fallback_used),
+      assets: asArray(assetsPayload.assets)
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+        .map(mapCompanyAssetRecord),
+      evidence: asArray(evidencePayload.evidence)
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+        .map(mapCompanyEvidenceRecord),
+      assertions: asArray(assertionsPayload.assertions)
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+        .map(mapCompanyAssertionRecord),
+    };
+  } catch {
+    return emptyCompanyAssetFacts("not_ready");
+  }
+}
+
+function publicProjectionMemberToCandidateRecord(member: Record<string, unknown>): Record<string, unknown> {
+  const publicSummary = (member.public_summary as Record<string, unknown>) || {};
+  const projectionMetrics = (member.projection_metrics as Record<string, unknown>) || {};
+  const mediaSummary = (member.media_summary as Record<string, unknown>) || {};
+  return {
+    ...publicSummary,
+    media_summary: mediaSummary,
+    candidate_identity_key: pickFirstString(member, ["candidate_identity_key"]),
+    person_identity_key: pickFirstString(member, ["person_identity_key"]),
+    profile_url_key: pickFirstString(member, ["profile_url_key"]) || pickFirstString(publicSummary, ["profile_url_key"]),
+    candidate_id:
+      pickFirstString(member, ["candidate_id"]) ||
+      pickFirstString(publicSummary, ["candidate_id", "id"]) ||
+      pickFirstString(member, ["candidate_identity_key"]),
+    id:
+      pickFirstString(member, ["candidate_id"]) ||
+      pickFirstString(publicSummary, ["candidate_id", "id"]) ||
+      pickFirstString(member, ["candidate_identity_key", "person_identity_key"]),
+    employment_status:
+      pickFirstString(member, ["employment_scope"]) ||
+      pickFirstString(publicSummary, ["employment_status", "status"]),
+    source_dataset:
+      pickFirstString(member, ["source_shard_key", "lane"]) ||
+      pickFirstString(publicSummary, ["source_dataset"]),
+    has_profile_detail:
+      publicSummary.has_profile_detail ?? projectionMetrics.has_profile_detail,
+    needs_profile_completion:
+      publicSummary.needs_profile_completion ?? projectionMetrics.needs_profile_completion,
+    low_profile_richness:
+      publicSummary.low_profile_richness ?? projectionMetrics.low_profile_richness,
+  };
+}
+
+/**
+ * Strict non-negative-integer parsing for canonical membership, summary,
+ * board, and page-envelope counts (FT2 fixed-forward r7, rerun6 review
+ * finding 4): only genuine JSON numbers that are integers >= 0 are
+ * accepted. Strings, fractions, negatives, and other types are INVALID —
+ * never coerced into agreement. Missing keys (undefined) stay "absent".
+ */
+export function strictNonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  // Strict (non-coercive) integer wire type (rerun6 finding 4): strings,
+  // fractions, and negatives are invalid, never normalized into agreement.
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function projectionVisibleMemberCount(
+  projection: Record<string, unknown>,
+  counts: Record<string, unknown>,
+): number | null {
+  const readContract = (projection.read_contract as Record<string, unknown>) || {};
+  if (
+    String(readContract.source || "").trim() !== "serving_projection_members" ||
+    readContract.fallback_used !== false ||
+    readContract.fail_closed !== true ||
+    String(counts.count_scope || "").trim() !== "exact_projection"
+  ) {
+    return null;
+  }
+  const visibleCount = nonNegativeInteger(projection.visible_member_count);
+  if (visibleCount === null) {
+    return null;
+  }
+  return [counts.result_count, counts.candidate_count, counts.visible_member_count].every(
+    (value) => nonNegativeInteger(value) === visibleCount,
+  )
+    ? visibleCount
+    : null;
+}
+
+function projectionMembershipRevision(projection: Record<string, unknown>): string {
+  return String(projection.membership_revision || "").trim();
+}
+
+function projectionCardReadinessSummary(
+  totalCandidateCount: number,
+  readiness: Record<string, unknown>,
+): {
+  cardReadyCount: number;
+  profileReadyCount: number;
+  explicitProfileCaptureCount: number | null;
+  needsProfileCompletionCount: number | null;
+  lowProfileRichnessCount: number | null;
+  previewCount: number;
+  qualityFieldsAvailable: boolean;
+  statusText: string;
+} {
+  const totalCount = Math.max(0, Math.floor(Number(totalCandidateCount) || 0));
+  const rowCount = nonNegativeInteger(readiness.row_count);
+  const profileReadyCount = nonNegativeInteger(readiness.profile_ready_count);
+  const cardReadyCount = nonNegativeInteger(readiness.card_ready_count);
+  const qualityFieldsAvailable = Boolean(
+    String(readiness.count_scope || "").trim() === "exact_projection" &&
+      String(readiness.row || "").trim().toLowerCase() === "complete" &&
+      rowCount === totalCount &&
+      profileReadyCount !== null &&
+      cardReadyCount !== null &&
+      profileReadyCount <= totalCount &&
+      cardReadyCount <= totalCount,
+  );
+  const exactCardReadyCount = qualityFieldsAvailable ? cardReadyCount || 0 : 0;
+  const exactProfileReadyCount = qualityFieldsAvailable ? profileReadyCount || 0 : 0;
+  const optionalOwnedCount = (key: string): number | null => {
+    if (!qualityFieldsAvailable || !(key in readiness)) {
+      return null;
+    }
+    const count = nonNegativeInteger(readiness[key]);
+    return count !== null && count <= totalCount ? count : null;
+  };
+  return {
+    cardReadyCount: exactCardReadyCount,
+    profileReadyCount: exactProfileReadyCount,
+    explicitProfileCaptureCount: optionalOwnedCount("explicit_profile_capture_candidate_count"),
+    needsProfileCompletionCount: optionalOwnedCount("needs_profile_completion_candidate_count"),
+    lowProfileRichnessCount: optionalOwnedCount("low_profile_richness_candidate_count"),
+    previewCount: Math.max(0, totalCount - exactCardReadyCount),
+    qualityFieldsAvailable,
+    statusText: qualityFieldsAvailable && totalCount > 0
+      ? `卡片详情已合入看板 ${exactCardReadyCount}/${totalCount}`
+      : "",
+  };
+}
+
+function projectionPayloadToDashboard(
+  payload: any,
+  candidates: Candidate[] = [],
+  runId = "",
+): DashboardData {
+  const projection = (payload.projection as Record<string, unknown>) || {};
+  const counts = (projection.counts as Record<string, unknown>) || {};
+  const readiness = (projection.readiness as Record<string, unknown>) || {};
+  const scopeSpec = (projection.scope_spec as Record<string, unknown>) || {};
+  const projectionId = pickFirstString(projection, ["projection_id"]);
+  const sourceRunId = pickFirstString(projection, ["source_run_id"]) || runId;
+  const membershipRevision = projectionMembershipRevision(projection);
+  if (!membershipRevision) {
+    throw new Error("Canonical projection revision is unavailable.");
+  }
+  const resultCount = projectionVisibleMemberCount(projection, counts);
+  if (resultCount === null) {
+    throw new Error("Canonical projection membership is unavailable or inconsistent.");
+  }
+  const payloadCandidateCount = nonNegativeInteger(payload.total_candidates);
+  if ((payloadCandidateCount !== null && payloadCandidateCount !== resultCount) || candidates.length > resultCount) {
+    throw new Error("Canonical projection rows do not match the membership contract.");
+  }
+  const cardReadiness = projectionCardReadinessSummary(resultCount, readiness);
+  const targetCompany =
+    pickFirstString(scopeSpec, ["target_company"]) ||
+    pickFirstString(projection, ["collection_id"]).replace(/^company:/, "");
+  const intentKeywords = canonicalizeDisplayKeywords(
+    asArray(scopeSpec.keywords).map((value) => asString(value)).filter(Boolean),
+  );
+  const candidateFacetSummary = mapCandidateFacetSummary(payload.facet_summary);
+  // The summary scope is consumed ONLY from its backend owners (no
+  // `exact_projection` minting): the projection reader always owns
+  // `facet_summary.count_scope` (required mirror); the top-level key is an
+  // agree-if-present mirror. Missing, null, padded, or conflicting evidence
+  // maps to "" and the board runtime state marks the summary unavailable
+  // (FT2 fixed-forward r4/r5, rerun3 finding 2 + rerun4 finding 2 + rerun5
+  // finding 5).
+  const candidateFacetSummaryScope = candidateFacetSummary
+    ? mapCandidateFacetSummaryScope(
+        facetSummaryScopeEvidence(payload.facet_summary, "count_scope", true),
+        facetSummaryScopeEvidence(payload, "facet_summary_scope", false),
+      )
+    : "";
+  // The filter contract is an INDEPENDENT backend-owned contract: its count
+  // scope comes from the projection's own `counts.facet_count_scope`, never
+  // from the summary scope derived above.
+  const projectionFilterCountScope = pickFirstString(counts, ["facet_count_scope"]);
+  return {
+    projectionId,
+    title: pickFirstString(projection, ["scope_label"]) || "Projection results",
+    snapshotId: pickFirstString((projection.provenance as Record<string, unknown>) || {}, ["snapshot_id"]) || projectionId || "projection",
+    queryLabel: pickFirstString(projection, ["scope_label"]) || "Projection results",
+    targetCompany,
+    intentKeywords,
+    resultMode: "asset_population",
+    resultModeLabel: "本地公司资产",
+    rankedCandidateCount: 0,
+    assetPopulationCount: resultCount,
+    totalCandidates: resultCount,
+    totalEvidence: candidates.reduce((sum, candidate) => sum + (candidate.evidence || []).length, 0),
+    manualReviewCount: 0,
+    layers: candidateFacetSummary?.layers?.length
+      ? candidateFacetSummary.layers
+      : buildLayeredSegmentationOptions(candidates),
+    groups: Array.from(new Set(["All", ...candidates.map((candidate) => candidate.team || "Unknown")])),
+    candidates,
+    resultViewLifecycle: {
+      state: "projection_serving",
+      baselineSnapshotId: "",
+      currentSnapshotId: "",
+      servedSnapshotId: "",
+      baselineCandidateCount: 0,
+      servedCandidateCount: resultCount,
+      expectedCandidateCount: resultCount,
+      deltaProfileProgressApplicable: false,
+      deltaProfileProgressReason: "projection_reader",
+      deltaProfileRequiredCount: Number(readiness.profile_required_count || 0) || 0,
+      deltaProfileFetchedCount: cardReadiness.profileReadyCount,
+      deltaProfileMaterializedCount: cardReadiness.cardReadyCount,
+      deltaProfileBoardVisibleCount: cardReadiness.cardReadyCount,
+      deltaProfilePendingCount: 0,
+      deltaProfileQueuedCount: 0,
+      deltaProfileRetryableCount: 0,
+      servingProjectionId: projectionId,
+      servingProjectionPhase: "canonical_projection_serving",
+      backgroundSnapshotMaterializationStatus: "",
+      outreachLayeringStatus: "",
+    },
+    boardRuntimeState: {
+      schemaVersion: 1,
+      jobId: sourceRunId,
+      resultMode: "asset_population",
+      phase: "canonical_projection_serving",
+      publicationStatus: "complete",
+      expectedCandidateCount: resultCount,
+      servedCandidateCount: resultCount,
+      publishedCandidateCount: resultCount,
+      displayReadyCandidateCount: cardReadiness.cardReadyCount,
+      previewCandidateCount: cardReadiness.previewCount,
+      profileDetailCandidateCount: cardReadiness.profileReadyCount,
+      explicitProfileCaptureCandidateCount: cardReadiness.explicitProfileCaptureCount,
+      needsProfileCompletionCandidateCount: cardReadiness.needsProfileCompletionCount,
+      lowProfileRichnessCandidateCount: cardReadiness.lowProfileRichnessCount,
+      cardMaterializationQualityFieldsAvailable: cardReadiness.qualityFieldsAvailable,
+      rowHydrationTargetCount: resultCount,
+      candidateDiscoveryCount: resultCount,
+      profileFetchRequiredCount: Number(readiness.profile_required_count || 0) || 0,
+      profileFetchedCount: cardReadiness.profileReadyCount,
+      baselineCandidateCount: 0,
+      deltaProfileRequiredCount: Number(readiness.profile_required_count || 0) || 0,
+      deltaProfileFetchedCount: cardReadiness.profileReadyCount,
+      deltaProfileMaterializedCount: cardReadiness.cardReadyCount,
+      deltaProfileBoardVisibleCount: cardReadiness.cardReadyCount,
+      deltaProfileDenominatorPromoted: true,
+      rowPublicationSequence: 0,
+      rowPublicationTier: "serving_projection_members",
+      rowPublicationRevision: membershipRevision,
+      rowPublicationWatermark: pickFirstString(projection, ["updated_at", "published_at"]),
+      rowPublicationUpdatedAt: pickFirstString(projection, ["updated_at", "published_at"]),
+      facetSummaryStatus: candidateFacetSummary ? "complete" : "unavailable",
+      facetSummaryScope: candidateFacetSummaryScope || "unavailable",
+      facetSummaryCandidateCount: candidateFacetSummary?.candidateCount || 0,
+      layeringStatus: candidateFacetSummary ? "completed" : "unavailable",
+      filterContract: {
+        source: "serving_projection_reader",
+        facetCountScope: projectionFilterCountScope || "unavailable",
+        rowFilterScope: "projection_membership",
+        backendFilteredPagingSupported: true,
+      },
+      syncStatusText: `${resultCount}/${resultCount}`,
+      syncNoteLines: [
+        { id: "candidate_discovery", text: `候选人发现 ${resultCount}/${resultCount}` },
+        ...(cardReadiness.statusText
+          ? [{ id: "card_materialization", text: cardReadiness.statusText }]
+          : []),
+      ],
+      candidateDiscoveryStatusText: `候选人发现 ${resultCount}/${resultCount}`,
+      profileFetchStatusText: "",
+      cardMaterializationStatusText: cardReadiness.statusText,
+      noteText: [
+        `候选人发现 ${resultCount}/${resultCount}`,
+        cardReadiness.statusText,
+      ].filter(Boolean).join("；"),
+    },
+    effectiveExecutionSemantics: {
+      effectiveAcquisitionMode: "projection_serving",
+      defaultResultsMode: "asset_population",
+      executionStrategyLabel: "本地公司资产",
+      fullLocalAssetReuse: false,
+      requiresDeltaAcquisition: false,
+      assetPopulationSupported: true,
+    },
+    candidateFacetSummary,
+    candidateFacetSummaryScope,
+  };
+}
+
+export function __testProjectionPayloadToDashboard(
+  payload: any,
+  candidates: Candidate[] = [],
+  runId = "",
+): DashboardData {
+  return projectionPayloadToDashboard(payload, candidates, runId);
+}
+
+export async function getProjectionDashboard(
+  projectionId: string,
+  options?: {
+    forceRefresh?: boolean;
+    runId?: string;
+  },
+): Promise<DashboardData> {
+  if (!projectionId) {
+    throw new Error("Missing projection_id. Result pages require a canonical projection.");
+  }
+  const forceRefresh = options?.forceRefresh === true;
+  if (forceRefresh) {
+    projectionDashboardCache.delete(projectionId);
+  }
+  const cached = forceRefresh ? null : readFreshCacheValue(projectionDashboardCache, projectionId, DASHBOARD_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = forceRefresh ? undefined : projectionDashboardPromiseCache.get(projectionId);
+  if (!fetchPromise) {
+    const requestGeneration = (projectionDashboardRequestGeneration.get(projectionId) || 0) + 1;
+    projectionDashboardRequestGeneration.set(projectionId, requestGeneration);
+    fetchPromise = Promise.all([
+      fetchJson<any>(`/api/projections/${encodeURIComponent(projectionId)}`, undefined, RESULTS_API_TIMEOUT_MS),
+      getProjectionCandidatePage(projectionId, {
+        offset: 0,
+        limit: DASHBOARD_INITIAL_CANDIDATE_CHUNK_SIZE,
+        forceRefresh,
+      }),
+    ])
+      .then(([projectionPayload, page]) => {
+        const dashboard = projectionPayloadToDashboard(
+          projectionPayload,
+          [],
+          options?.runId || "",
+        );
+        if (page && !dashboardCandidatePageRevisionMatches(dashboard, page)) {
+          projectionDashboardCache.delete(projectionId);
+          throw new Error("Canonical projection summary and page revisions do not match.");
+        }
+        const mergedDashboard = page ? mergeDashboardCandidatePage(dashboard, page) : dashboard;
+        return projectionDashboardRequestGeneration.get(projectionId) === requestGeneration
+          ? storeProjectionDashboardCache(projectionId, mergedDashboard)
+          : mergedDashboard;
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(projectionDashboardPromiseCache, projectionId, fetchPromise as Promise<DashboardData>);
+      });
+    projectionDashboardPromiseCache.set(projectionId, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export function storeProjectionDashboardCache(projectionId: string, dashboard: DashboardData): DashboardData {
+  return writeCacheValue(projectionDashboardCache, projectionId, dashboard);
+}
+
+/**
+ * Candidate-page envelope validation BEFORE a page is admitted (FT2
+ * fixed-forward r6, rerun5 findings 1-2; r7 overhaul per rerun6 findings
+ * 1-3). The two backend page owners emit different success envelopes, so
+ * the validator is endpoint-specific where they genuinely differ:
+ * - PROJECTION page (`serving_projection_reader`): `status` is REQUIRED
+ *   and must be exactly `"ready"` (a `not_ready` page throws with its
+ *   server reason); `limit` is the returned row count.
+ * - JOB page (`orchestrator.get_job_candidate_page`): success envelopes
+ *   OMIT `status` (a `not_ready` is served as HTTP 409 upstream); a
+ *   present `status` must still be exactly `"ready"`. `limit` is the
+ *   REQUESTED page cap and `returned_count` is the row count.
+ *
+ * Shared gates (both owners):
+ * - SERVER FILTER IDENTITY: top-level `filter_signature` and
+ *   `filter_contract.filter_signature` are required present and byte-equal
+ *   (empty string is valid for an inactive filter). The client never
+ *   substitutes its own signature.
+ * - ECHOED REQUEST IDENTITY: `applied_filter` is the server-echoed
+ *   normalized request filter and must byte-equal the client's expected
+ *   normalization of the requested filter (mirroring
+ *   `public_candidate_facets.normalize_candidate_page_filter`), and
+ *   `filter_contract.filter_active` must equal the client's narrowing
+ *   semantics — a response declaring an empty/no-op filter for a narrowed
+ *   request is a contradiction, not a page.
+ * - COMPLETE READY FILTER-CONTRACT STATE: `source`, `facet_count_scope`,
+ *   `row_filter_scope`, `backend_filtered_paging_supported === true`, and
+ *   boolean `filter_active` are all required — a signature-only contract
+ *   is not a ready contract.
+ * - STRICT WIRE INTEGERS + PAGINATION EQUATIONS: `offset` exactly equals
+ *   the requested offset; `filtered_candidate_count` and
+ *   `total_candidates` are strict non-negative integers with
+ *   `filtered <= total`; `has_more` is exactly
+ *   `offset + returnedCount < filtered_candidate_count`; `next_offset` is
+ *   `offset + returnedCount` when `has_more`, else `null`.
+ * - ROW SHAPE: `candidates` must be an actual array and every row a
+ *   non-array object with at least one key — malformed rows are rejected,
+ *   never silently filtered out.
+ */
+
+const CANDIDATE_PAGE_AUDIT_STATUS_IDS = [
+  "no_review_needed",
+  "needs_review",
+  "needs_profile_completion",
+  "low_profile_richness",
+  "verified_keep",
+  "verified_exclude",
+] as const;
+const EXCEL_INTAKE_CURRENT_JOB_MARKER_ID = "excel_intake:current_job";
+const EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL = "本次Excel导入";
+const EXCEL_INTAKE_CURRENT_JOB_MARKER_VALUE = `job_scoped_marker:${EXCEL_INTAKE_CURRENT_JOB_MARKER_ID}`;
+
+function normalizeCandidatePageFilterListValues(values: string[]): string[] {
+  // Shared trivial normalization with the backend
+  // (`normalize_candidate_page_filter_values`): comma-split, trim,
+  // lowercase, dedupe order-preserved. The backend additionally drops ids
+  // outside its registry vocabulary — the frontend sends canonical ids
+  // only, so any such drop shows up as an applied_filter MISMATCH and
+  // fails closed rather than being pre-computed here.
+  const normalized: string[] = [];
+  for (const value of values) {
+    for (const item of String(value || "").split(",")) {
+      const normalizedItem = item.trim().toLowerCase();
+      if (normalizedItem && !normalized.includes(normalizedItem)) {
+        normalized.push(normalizedItem);
+      }
+    }
+  }
+  return normalized;
+}
+
+function normalizeCandidatePageRecallValues(values: string[]): string[] {
+  // Mirror of the backend `normalize_candidate_page_recall_filter_values`.
+  const normalized: string[] = [];
+  for (const value of normalizeCandidatePageFilterListValues(values)) {
+    const lowered = value.toLowerCase();
+    let item: string | null = null;
+    if (lowered === "all") {
+      item = "all";
+    } else if (
+      lowered === EXCEL_INTAKE_CURRENT_JOB_MARKER_VALUE ||
+      value === EXCEL_INTAKE_CURRENT_JOB_MARKER_LABEL
+    ) {
+      item = EXCEL_INTAKE_CURRENT_JOB_MARKER_VALUE;
+    } else if (lowered.startsWith("keyword:")) {
+      const keyword = value.slice("keyword:".length).trim().toLowerCase();
+      item = keyword ? `keyword:${keyword}` : null;
+    } else {
+      item = `keyword:${lowered}`;
+    }
+    if (item && !normalized.includes(item)) {
+      normalized.push(item);
+    }
+  }
+  return normalized;
+}
+
+function expectedAppliedCandidatePageFilter(
+  filter: DashboardCandidatePageFilter | undefined,
+): Record<string, unknown> {
+  const normalized = JSON.parse(
+    dashboardCandidatePageFilterSignature(filter),
+  ) as Required<DashboardCandidatePageFilter>;
+  return {
+    search_keyword: normalized.searchKeyword.trim().slice(0, 200),
+    recall_buckets: normalizeCandidatePageRecallValues(normalized.recallBuckets),
+    employment_statuses: normalizeCandidatePageFilterListValues(normalized.employmentStatuses),
+    locations: normalizeCandidatePageFilterListValues(normalized.locations),
+    function_buckets: normalizeCandidatePageFilterListValues(normalized.functionBuckets),
+    layer_includes: normalizeCandidatePageFilterListValues(normalized.layerIncludes),
+    layer_excludes: normalizeCandidatePageFilterListValues(normalized.layerExcludes),
+    audit_statuses: normalizeCandidatePageFilterListValues(normalized.auditStatuses).filter((id) =>
+      (CANDIDATE_PAGE_AUDIT_STATUS_IDS as readonly string[]).includes(id),
+    ),
+  };
+}
+
+function candidatePageFilterIsActiveClientSide(
+  expected: Record<string, unknown>,
+): boolean {
+  // Mirror of the backend `candidate_page_filter_active` over the expected
+  // (already normalized) applied filter.
+  if (String(expected.search_keyword || "").trim()) {
+    return true;
+  }
+  const employment = expected.employment_statuses as string[];
+  if (
+    employment.length > 0 &&
+    !(employment.length === 2 && employment.includes("current") && employment.includes("former"))
+  ) {
+    return true;
+  }
+  const locations = expected.locations as string[];
+  if (
+    locations.length > 0 &&
+    !(
+      locations.length === 3 &&
+      locations.includes("us") &&
+      locations.includes("other") &&
+      locations.includes("unknown")
+    )
+  ) {
+    return true;
+  }
+  const functionBuckets = (expected.function_buckets as string[]).filter(
+    (id) => id !== "other" && id !== "unknown",
+  );
+  if (functionBuckets.length > 0) {
+    return true;
+  }
+  const layerIncludes = expected.layer_includes as string[];
+  const layerExcludes = expected.layer_excludes as string[];
+  if (layerIncludes.some((id) => id && id !== "layer_0") || layerExcludes.length > 0) {
+    return true;
+  }
+  const recall = expected.recall_buckets as string[];
+  if (recall.some((id) => id && id !== "all")) {
+    return true;
+  }
+  const audit = expected.audit_statuses as string[];
+  if (
+    audit.length > 0 &&
+    !(
+      audit.length === CANDIDATE_PAGE_AUDIT_STATUS_IDS.length &&
+      CANDIDATE_PAGE_AUDIT_STATUS_IDS.every((id) => audit.includes(id))
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function requireStrictWireInteger(value: unknown, field: string, endpoint: string): number {
+  const parsed = strictNonNegativeInteger(value);
+  if (parsed === null) {
+    throw new Error(`${endpoint} has an invalid ${field}.`);
+  }
+  return parsed;
+}
+
+function requireReadyServerCandidatePage(
+  payload: any,
+  endpoint: string,
+  requested: { offset: number; limit: number; filter?: DashboardCandidatePageFilter },
+  owner: "projection" | "job",
+): { serverFilterSignature: string; responseLimit: number; returnedCount: number } {
+  // Page status: required-"ready" on the projection owner; present-must-be-
+  // "ready" on the job owner (whose success envelopes omit the key).
+  const hasStatus = Object.prototype.hasOwnProperty.call(payload, "status");
+  if (owner === "projection" && !hasStatus) {
+    throw new Error(`${endpoint} is not ready: missing page status.`);
+  }
+  if (hasStatus && payload.status !== "ready") {
+    const reason = pickFirstString(payload, ["reason"]) || "unknown";
+    throw new Error(`${endpoint} is not ready: ${reason}.`);
+  }
+  // Server filter identity: both mirrors required and byte-equal.
+  const hasTopSignature = Object.prototype.hasOwnProperty.call(payload, "filter_signature");
+  const topSignature = payload.filter_signature;
+  const contractRecord =
+    payload.filter_contract && typeof payload.filter_contract === "object" && !Array.isArray(payload.filter_contract)
+      ? (payload.filter_contract as Record<string, unknown>)
+      : null;
+  const hasContractSignature = Boolean(
+    contractRecord && Object.prototype.hasOwnProperty.call(contractRecord, "filter_signature"),
+  );
+  const contractSignature = contractRecord?.filter_signature;
+  if (
+    !hasTopSignature ||
+    !hasContractSignature ||
+    typeof topSignature !== "string" ||
+    typeof contractSignature !== "string" ||
+    topSignature !== contractSignature
+  ) {
+    throw new Error(`${endpoint} has missing or conflicting server filter signatures.`);
+  }
+  // Complete ready filter-contract state.
+  if (
+    !contractRecord ||
+    !pickFirstString(contractRecord, ["source"]) ||
+    !pickFirstString(contractRecord, ["facet_count_scope"]) ||
+    !pickFirstString(contractRecord, ["row_filter_scope"]) ||
+    contractRecord.backend_filtered_paging_supported !== true ||
+    typeof contractRecord.filter_active !== "boolean"
+  ) {
+    throw new Error(`${endpoint} has an incomplete filter contract.`);
+  }
+  // Echoed request identity: applied_filter must byte-equal the expected
+  // normalization of the requested filter, and filter_active must match
+  // the client's narrowing semantics.
+  const expectedApplied = expectedAppliedCandidatePageFilter(requested.filter);
+  const appliedFilter =
+    payload.applied_filter && typeof payload.applied_filter === "object" && !Array.isArray(payload.applied_filter)
+      ? (payload.applied_filter as Record<string, unknown>)
+      : null;
+  if (!appliedFilter || JSON.stringify(appliedFilter) !== JSON.stringify(expectedApplied)) {
+    throw new Error(`${endpoint} does not match the requested filter.`);
+  }
+  if (contractRecord.filter_active !== candidatePageFilterIsActiveClientSide(expectedApplied)) {
+    throw new Error(`${endpoint} has a contradictory filter_active state.`);
+  }
+  // Row shape: an actual array of valid records (never silently filtered).
+  if (!Array.isArray(payload.candidates)) {
+    throw new Error(`${endpoint} has a malformed candidates container.`);
+  }
+  const rawRows = payload.candidates as unknown[];
+  if (
+    rawRows.some(
+      (item) =>
+        !item || typeof item !== "object" || Array.isArray(item) || Object.keys(item).length === 0,
+    )
+  ) {
+    throw new Error(`${endpoint} has malformed candidate rows.`);
+  }
+  // Strict wire integers + pagination equations.
+  const responseOffset = requireStrictWireInteger(payload.offset, "offset", endpoint);
+  const responseLimit = requireStrictWireInteger(payload.limit, "limit", endpoint);
+  const filteredCount = requireStrictWireInteger(
+    payload.filtered_candidate_count,
+    "filtered_candidate_count",
+    endpoint,
+  );
+  const totalCount = requireStrictWireInteger(payload.total_candidates, "total_candidates", endpoint);
+  if (responseOffset !== requested.offset) {
+    throw new Error(`${endpoint} does not match the requested page tuple.`);
+  }
+  const returnedCount =
+    owner === "job"
+      ? requireStrictWireInteger(payload.returned_count, "returned_count", endpoint)
+      : rawRows.length;
+  if (owner === "job" && responseLimit !== requested.limit) {
+    throw new Error(`${endpoint} does not match the requested page tuple.`);
+  }
+  // The PROJECTION owner defines `limit` as the returned row count; the JOB
+  // owner defines it as the requested page cap with `returned_count` rows.
+  if (owner === "projection" && responseLimit !== rawRows.length) {
+    throw new Error(`${endpoint} has inconsistent row counts.`);
+  }
+  if (owner === "projection" && responseLimit > requested.limit) {
+    throw new Error(`${endpoint} does not match the requested page tuple.`);
+  }
+  if (returnedCount !== rawRows.length || returnedCount > responseLimit) {
+    throw new Error(`${endpoint} has inconsistent row counts.`);
+  }
+  if (returnedCount > filteredCount || filteredCount > totalCount) {
+    throw new Error(`${endpoint} has inconsistent pagination counts.`);
+  }
+  if (typeof payload.has_more !== "boolean") {
+    throw new Error(`${endpoint} has an invalid has_more.`);
+  }
+  const expectedHasMore = responseOffset + returnedCount < filteredCount;
+  const expectedNextOffset = expectedHasMore ? responseOffset + returnedCount : null;
+  if (payload.has_more !== expectedHasMore || payload.next_offset !== expectedNextOffset) {
+    throw new Error(`${endpoint} has contradictory pagination state.`);
+  }
+  return { serverFilterSignature: topSignature, responseLimit, returnedCount };
+}
+
+export async function getProjectionCandidatePage(
+  projectionId: string,
+  options?: {
+    offset?: number;
+    limit?: number;
+    forceRefresh?: boolean;
+    filter?: DashboardCandidatePageFilter;
+  },
+): Promise<DashboardCandidatePage> {
+  const offset = Math.max(Number(options?.offset || 0), 0);
+  const limit = Math.max(Number(options?.limit || DASHBOARD_BACKGROUND_CANDIDATE_CHUNK_SIZE), 1);
+  const forceRefresh = options?.forceRefresh === true;
+  const filterSignature = dashboardCandidatePageFilterSignature(options?.filter);
+  const filterQueryParams = candidatePageFilterQueryParams(options?.filter);
+  const cacheKey = `${projectionId}:${offset}:${limit}:${filterSignature}`;
+  let fetchPromise: Promise<DashboardCandidatePage> | undefined = forceRefresh
+    ? undefined
+    : projectionCandidatePagePromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/projections/${encodeURIComponent(projectionId)}/candidates${buildApiQueryString({
+        offset,
+        limit,
+        ...filterQueryParams,
+      })}`,
+      undefined,
+      RESULTS_API_TIMEOUT_MS,
+    )
+      .then((payload): DashboardCandidatePage => {
+        const { serverFilterSignature, responseLimit, returnedCount } = requireReadyServerCandidatePage(
+          payload,
+          "Projection candidate page",
+          { offset, limit, filter: options?.filter },
+          "projection",
+        );
+        const candidates = asArray(payload.candidates)
+          .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+          .map((item) => publicProjectionMemberToCandidateRecord(item))
+          .map((item) => deriveCandidate(item));
+        const dashboard = projectionPayloadToDashboard(
+          {
+            projection: payload.projection,
+            total_candidates: payload.total_candidates,
+            facet_summary: payload.facet_summary,
+            // Raw pass-through (no ladder): the scope mapper compares BOTH
+            // summary-scope owners and disables on conflicting evidence.
+            facet_summary_scope: payload.facet_summary_scope,
+          },
+          candidates,
+        );
+        return {
+          jobId: pickFirstString(payload.projection || {}, ["source_run_id"]) || projectionId,
+          resultMode: "asset_population",
+          offset: offset,
+          limit: responseLimit,
+          returnedCount,
+          totalCandidates: Number(payload.total_candidates || payload.candidate_count || 0) || 0,
+          filteredCandidateCount:
+            Number(payload.filtered_candidate_count ?? payload.total_candidates ?? payload.candidate_count ?? 0) || 0,
+          hasMore: Boolean(payload.has_more),
+          nextOffset:
+            typeof payload.next_offset === "number" && Number.isFinite(payload.next_offset)
+              ? Number(payload.next_offset)
+              : null,
+          candidates,
+          resultViewLifecycle: dashboard.resultViewLifecycle,
+          boardRuntimeState: dashboard.boardRuntimeState,
+          candidateFacetSummary: dashboard.candidateFacetSummary,
+          candidateFacetSummaryScope: dashboard.candidateFacetSummaryScope,
+          // Server-owned filter identity (never the client-computed one).
+          filterSignature: serverFilterSignature,
+          filterContract: mapCandidatePageFilterContract(payload.filter_contract),
+        };
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(
+          projectionCandidatePagePromiseCache,
+          cacheKey,
+          fetchPromise as Promise<DashboardCandidatePage>,
+        );
+      });
+    projectionCandidatePagePromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export async function getDashboardCandidatePage(
+  jobId: string,
+  options?: {
+    offset?: number;
+    limit?: number;
+    forceRefresh?: boolean;
+    lightweight?: boolean;
+    filter?: DashboardCandidatePageFilter;
+  },
+): Promise<DashboardCandidatePage> {
+  const offset = Math.max(Number(options?.offset || 0), 0);
+  const limit = Math.max(Number(options?.limit || DASHBOARD_BACKGROUND_CANDIDATE_CHUNK_SIZE), 1);
+  const forceRefresh = options?.forceRefresh === true;
+  const lightweight = options?.lightweight !== false;
+  const filterSignature = dashboardCandidatePageFilterSignature(options?.filter);
+  const filterQueryParams = candidatePageFilterQueryParams(options?.filter);
+  const cacheKey = dashboardCandidatePageCacheKey(jobId, offset, limit, lightweight, filterSignature);
+  let fetchPromise: Promise<DashboardCandidatePage> | undefined = forceRefresh
+    ? undefined
+    : dashboardCandidatePagePromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    if (useMock) {
+      const mockCandidates = mockDashboard.candidates.slice(offset, offset + limit);
+      fetchPromise = Promise.resolve({
+        jobId,
+        resultMode: mockDashboard.resultMode,
+        offset,
+        limit,
+        returnedCount: mockCandidates.length,
+        totalCandidates: mockDashboard.totalCandidates,
+        filteredCandidateCount: mockDashboard.totalCandidates,
+        hasMore: offset + mockCandidates.length < mockDashboard.totalCandidates,
+        nextOffset: offset + mockCandidates.length < mockDashboard.totalCandidates ? offset + mockCandidates.length : null,
+        candidates: mockCandidates,
+        profileFetchProgress: mockDashboard.profileFetchProgress,
+        linkedinStage1Progress: mockDashboard.linkedinStage1Progress,
+        resultViewLifecycle: mockDashboard.resultViewLifecycle,
+        boardRuntimeState: mockDashboard.boardRuntimeState,
+        candidateFacetSummary: mockDashboard.candidateFacetSummary,
+        candidateFacetSummaryScope: mockDashboard.candidateFacetSummaryScope,
+      } satisfies DashboardCandidatePage);
+      dashboardCandidatePagePromiseCache.set(cacheKey, fetchPromise);
+      return fetchPromise;
+    }
+    fetchPromise = fetchJson<any>(
+      `/api/jobs/${jobId}/candidates${buildApiQueryString({
+        offset,
+        limit,
+        lightweight: lightweight ? 1 : undefined,
+        force_refresh: forceRefresh ? 1 : undefined,
+        ...filterQueryParams,
+      })}`,
+      undefined,
+      RESULTS_API_TIMEOUT_MS,
+    )
+      .then((payload): DashboardCandidatePage => {
+        const { serverFilterSignature, responseLimit, returnedCount } = requireReadyServerCandidatePage(
+          payload,
+          "Job candidate page",
+          { offset, limit, filter: options?.filter },
+          "job",
+        );
+        const resultMode: DashboardData["resultMode"] =
+          asString(payload.result_mode) === "asset_population" ? "asset_population" : "ranked_results";
+        return {
+          jobId: asString(payload.job_id) || jobId,
+          resultMode,
+          offset: offset,
+          limit: responseLimit,
+          returnedCount,
+          totalCandidates: Number(payload.total_candidates || 0) || 0,
+          filteredCandidateCount:
+            Number(payload.filtered_candidate_count ?? payload.total_candidates ?? 0) || 0,
+          hasMore: Boolean(payload.has_more),
+          nextOffset:
+            typeof payload.next_offset === "number" && Number.isFinite(payload.next_offset)
+              ? Number(payload.next_offset)
+              : null,
+          candidates: asArray(payload.candidates)
+            .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+            .filter((item) => Object.keys(item).length > 0)
+            .map((item) => deriveCandidate(item)),
+          profileFetchProgress: mapProfileFetchProgress(
+            (payload.profile_fetch_progress as Record<string, unknown>) || {},
+          ),
+          linkedinStage1Progress: mapLinkedinStage1Progress(
+            (payload.linkedin_stage_1_progress as Record<string, unknown>) || {},
+          ),
+          resultViewLifecycle: mapResultViewLifecycle(
+            (payload.result_view_lifecycle as Record<string, unknown>) || {},
+          ),
+          boardRuntimeState: mapBoardRuntimeState(
+            (payload.board_runtime_state as Record<string, unknown>) || {},
+          ),
+          candidateFacetSummary: mapCandidateFacetSummary(payload.facet_summary),
+          // The ONE strict scope adapter on every endpoint (rerun4 review
+          // finding 2; rerun5 finding 5): the job page OWNS its scope at the
+          // top level (required mirror); the inner `count_scope` is an
+          // agree-if-present mirror — a missing, null, padded, or
+          // conflicting mirror disables the scope instead of the top level
+          // silently winning.
+          candidateFacetSummaryScope: mapCandidateFacetSummaryScope(
+            facetSummaryScopeEvidence(payload, "facet_summary_scope", true),
+            facetSummaryScopeEvidence(payload.facet_summary, "count_scope", false),
+          ),
+          // Server-owned filter identity (never the client-computed one).
+          filterSignature: serverFilterSignature,
+          filterContract: mapCandidatePageFilterContract(payload.filter_contract),
+        };
+      })
+      .finally(() => {
+        evictPromiseCacheEntry(
+          dashboardCandidatePagePromiseCache,
+          cacheKey,
+          fetchPromise as Promise<DashboardCandidatePage>,
+        );
+      });
+    if (fetchPromise) {
+      dashboardCandidatePagePromiseCache.set(cacheKey, fetchPromise);
+    }
+  }
+  return fetchPromise as Promise<DashboardCandidatePage>;
+}
+
+export async function getDashboardBoardPatches(
+  jobId: string,
+  options?: {
+    afterPublishedAt?: string;
+    afterSequence?: number;
+    limit?: number;
+  },
+): Promise<BoardVisiblePatchLog> {
+  if (!jobId) {
+    throw new Error("Missing job_id. Board patch polling requires a valid backend job.");
+  }
+  const payload = await fetchJson<any>(
+    `/api/jobs/${jobId}/board-patches${buildApiQueryString({
+      after_published_at: options?.afterPublishedAt || undefined,
+      after_sequence: options?.afterSequence || undefined,
+      limit: options?.limit || 50,
+    })}`,
+    undefined,
+    RESULTS_API_TIMEOUT_MS,
+  );
+  return {
+    jobId: asString(payload.job_id) || jobId,
+    patches: asArray(payload.patches)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => ({
+        patchId: pickFirstString(item, ["patch_id"]),
+        sequenceIndex: Number(item.sequence_index || 0) || 0,
+        candidateCount: Number(item.candidate_count || 0) || 0,
+        cumulativeCandidateCount: Number(item.cumulative_candidate_count || 0) || 0,
+        servedCandidateCount: Number(item.served_candidate_count || 0) || 0,
+        displayReadyCandidateCount: Number(item.display_ready_candidate_count || 0) || 0,
+        profileDetailCandidateCount: Number(item.profile_detail_candidate_count || 0) || 0,
+        explicitProfileCaptureCandidateCount: Number(item.explicit_profile_capture_candidate_count || 0) || 0,
+        previewCandidateCount: Number(item.preview_candidate_count || 0) || 0,
+        needsProfileCompletionCandidateCount: Number(item.needs_profile_completion_candidate_count || 0) || 0,
+        lowProfileRichnessCandidateCount: Number(item.low_profile_richness_candidate_count || 0) || 0,
+        qualityFieldsAvailable: Boolean(item.quality_fields_available),
+        publishedAt: pickFirstString(item, ["published_at"]),
+      })),
+    returnedCount: Number(payload.returned_count || 0) || 0,
+    hasMore: Boolean(payload.has_more),
+    latestPublishedAt: pickFirstString(payload, ["latest_published_at"]),
+    latestSequenceIndex: Number(payload.latest_sequence_index || 0) || 0,
+    boardRuntimeState: mapBoardRuntimeState((payload.board_runtime_state as Record<string, unknown>) || {}),
+    resultViewLifecycle: mapResultViewLifecycle((payload.result_view_lifecycle as Record<string, unknown>) || {}),
+  };
+}
+
+export async function triggerJobCandidateProfileCompletion(payload: {
+  jobId: string;
+  candidateIds: string[];
+  forceRefresh?: boolean;
+}): Promise<Record<string, unknown>> {
+  const candidateIds = Array.from(
+    new Set(
+      (payload.candidateIds || [])
+        .map((item) => asString(item))
+        .filter(Boolean),
+    ),
+  );
+  if (!payload.jobId || candidateIds.length === 0) {
+    throw new Error("Missing job_id or candidate_ids for profile completion.");
+  }
+  return fetchJson<Record<string, unknown>>(
+    `/api/jobs/${payload.jobId}/profile-completion`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        candidate_ids: candidateIds,
+        force_refresh: payload.forceRefresh !== false,
+      }),
+    },
+    PROFILE_COMPLETION_TIMEOUT_MS,
+  );
+}
+
+export async function supplementCompanyAssets(payload: {
+  targetCompany: string;
+  snapshotId?: string;
+  importLocalBootstrapPackage?: boolean;
+  syncProjectLocalPackage?: boolean;
+  buildArtifacts?: boolean;
+  repairCurrentRosterProfileRefs?: boolean;
+  repairCurrentRosterRegistryAliases?: boolean;
+  runFormerSearchSeed?: boolean;
+  formerSearchLimit?: number;
+  formerSearchPages?: number;
+  formerSearchQueries?: string[];
+}): Promise<SupplementOperationResult> {
+  return fetchJson<SupplementOperationResult>(
+    "/api/company-assets/supplement",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        target_company: payload.targetCompany,
+        snapshot_id: payload.snapshotId || "",
+        import_local_bootstrap_package: payload.importLocalBootstrapPackage === true,
+        sync_project_local_package: payload.syncProjectLocalPackage !== false,
+        build_artifacts: payload.buildArtifacts !== false,
+        repair_current_roster_profile_refs: payload.repairCurrentRosterProfileRefs === true,
+        repair_current_roster_registry_aliases: payload.repairCurrentRosterRegistryAliases === true,
+        run_former_search_seed: payload.runFormerSearchSeed === true,
+        former_search_limit: payload.formerSearchLimit || 25,
+        former_search_pages: payload.formerSearchPages || 1,
+        former_search_queries: payload.formerSearchQueries || [],
+      }),
+    },
+    PROFILE_COMPLETION_TIMEOUT_MS,
+  );
+}
+
+export async function ingestExcelContacts(payload: {
+  file?: File;
+  filePath?: string;
+  fileContentBase64?: string;
+  filename?: string;
+  targetCompany?: string;
+  snapshotId?: string;
+  attachToSnapshot?: boolean;
+  buildArtifacts?: boolean;
+}): Promise<ExcelIntakeResponse> {
+  const body = payload.file
+    ? (() => {
+        const form = new FormData();
+        form.append("file", payload.file, payload.filename || payload.file.name);
+        appendOptionalFormField(form, "filename", payload.filename || payload.file.name);
+        appendOptionalFormField(form, "target_company", payload.targetCompany || "");
+        appendOptionalFormField(form, "snapshot_id", payload.snapshotId || "");
+        appendOptionalFormField(form, "attach_to_snapshot", payload.attachToSnapshot === true);
+        appendOptionalFormField(form, "build_artifacts", payload.buildArtifacts !== false);
+        return form;
+      })()
+    : JSON.stringify({
+        file_path: payload.filePath || "",
+        file_content_base64: payload.fileContentBase64 || "",
+        filename: payload.filename || "",
+        target_company: payload.targetCompany || "",
+        snapshot_id: payload.snapshotId || "",
+        attach_to_snapshot: payload.attachToSnapshot === true,
+        build_artifacts: payload.buildArtifacts !== false,
+      });
+  return fetchJson<ExcelIntakeResponse>(
+    "/api/intake/excel",
+    {
+      method: "POST",
+      body,
+    },
+    PROFILE_COMPLETION_TIMEOUT_MS,
+  );
+}
+
+export async function startExcelIntakeWorkflow(payload: {
+  file?: File;
+  filePath?: string;
+  fileContentBase64?: string;
+  filename?: string;
+  historyId?: string;
+  queryText?: string;
+  attachToSnapshot?: boolean;
+  buildArtifacts?: boolean;
+}): Promise<{
+  status: string;
+  workflowKind?: string;
+  batchId: string;
+  inputFilename: string;
+  totalRowCount: number;
+  createdJobCount: number;
+  groupCount: number;
+  unassignedRowCount: number;
+  unassignedRows: Array<{
+    rowKey: string;
+    name: string;
+    company: string;
+    title: string;
+  }>;
+  groups: Array<{
+    status: string;
+    jobId: string;
+    historyId: string;
+    queryText: string;
+    workflowKind?: string;
+    targetCompany: string;
+    rowCount: number;
+    sourceCompanies: string[];
+  }>;
+  jobId?: string;
+  historyId?: string;
+  queryText?: string;
+  raw: unknown;
+}> {
+  const body = payload.file
+    ? (() => {
+        const form = new FormData();
+        form.append("file", payload.file, payload.filename || payload.file.name);
+        appendOptionalFormField(form, "filename", payload.filename || payload.file.name);
+        appendOptionalFormField(form, "history_id", payload.historyId || "");
+        appendOptionalFormField(form, "query_text", payload.queryText || "");
+        appendOptionalFormField(form, "attach_to_snapshot", payload.attachToSnapshot !== false);
+        appendOptionalFormField(form, "build_artifacts", payload.buildArtifacts !== false);
+        return form;
+      })()
+    : JSON.stringify({
+        file_path: payload.filePath || "",
+        file_content_base64: payload.fileContentBase64 || "",
+        filename: payload.filename || "",
+        history_id: payload.historyId || "",
+        query_text: payload.queryText || "",
+        attach_to_snapshot: payload.attachToSnapshot !== false,
+        build_artifacts: payload.buildArtifacts !== false,
+      });
+  const response = await fetchJson<any>(
+    "/api/intake/excel/workflow",
+    {
+      method: "POST",
+      body,
+    },
+    PROFILE_COMPLETION_TIMEOUT_MS,
+  );
+  return {
+    status: String(response.status || ""),
+    batchId: String(response.batch_id || ""),
+    inputFilename: String(response.input_filename || payload.filename || ""),
+    totalRowCount: Number(response.total_row_count || 0),
+    createdJobCount: Number(response.created_job_count || 0),
+    groupCount: Number(response.group_count || 0),
+    unassignedRowCount: Number(response.unassigned_row_count || 0),
+    unassignedRows: Array.isArray(response.unassigned_rows)
+      ? response.unassigned_rows.map((item: any) => ({
+          rowKey: String(item?.row_key || ""),
+          name: String(item?.name || ""),
+          company: String(item?.company || ""),
+          title: String(item?.title || ""),
+        }))
+      : [],
+    groups: Array.isArray(response.groups)
+      ? response.groups.map((item: any) => ({
+          status: String(item?.status || ""),
+          jobId: String(item?.job_id || ""),
+          historyId: String(item?.history_id || ""),
+          queryText: String(item?.query_text || ""),
+          workflowKind: String(item?.workflow_kind || ""),
+          targetCompany: String(item?.target_company || ""),
+          rowCount: Number(item?.row_count || 0),
+          sourceCompanies: Array.isArray(item?.source_companies)
+            ? item.source_companies.map((value: unknown) => String(value || "")).filter(Boolean)
+            : [],
+        }))
+      : [],
+    jobId: response.job_id ? String(response.job_id || "") : undefined,
+    historyId: response.history_id ? String(response.history_id || "") : undefined,
+    queryText: response.query_text ? String(response.query_text || "") : undefined,
+    workflowKind: String(response.workflow_kind || ""),
+    raw: response,
+  };
+}
+
+export async function continueExcelIntakeReview(payload: {
+  intakeId: string;
+  decisions: Array<Record<string, unknown>>;
+  targetCompany?: string;
+  snapshotId?: string;
+  attachToSnapshot?: boolean;
+  buildArtifacts?: boolean;
+}): Promise<ExcelIntakeResponse> {
+  return fetchJson<ExcelIntakeResponse>(
+    "/api/intake/excel/continue",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        intake_id: payload.intakeId,
+        decisions: payload.decisions,
+        target_company: payload.targetCompany || "",
+        snapshot_id: payload.snapshotId || "",
+        attach_to_snapshot: payload.attachToSnapshot === true,
+        build_artifacts: payload.buildArtifacts !== false,
+      }),
+    },
+    PROFILE_COMPLETION_TIMEOUT_MS,
+  );
+}
+
+export async function getManualReviewItems(options?: {
+  jobId?: string;
+  targetCompany?: string;
+  status?: string;
+}): Promise<ManualReviewItem[]> {
+  if (preferLocalAssets) {
+    const localItems = await getManualReviewItemsFromLocalAssets();
+    if (localItems) {
+      return localItems;
+    }
+  }
+  if (useMock) {
+    return mockManualReviewItems;
+  }
+  const cacheKey = JSON.stringify({
+    jobId: options?.jobId || "",
+    targetCompany: options?.targetCompany || "",
+    status: options?.status ?? "open",
+  });
+  const cached = readFreshCacheValue(manualReviewItemsCache, cacheKey, LIST_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = manualReviewItemsPromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/manual-review${buildApiQueryString({
+        job_id: options?.jobId,
+        target_company: options?.targetCompany,
+        status: options?.status ?? "open",
+      })}`,
+    )
+      .then((payload) => {
+        const items = Array.isArray(payload.manual_review_items) ? payload.manual_review_items : [];
+        return writeCacheValue(
+          manualReviewItemsCache,
+          cacheKey,
+          items.map((item: Record<string, unknown>) => deriveManualReviewItem(item)),
+        );
+      })
+      .finally(() => {
+        manualReviewItemsPromiseCache.delete(cacheKey);
+      });
+    manualReviewItemsPromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export function peekManualReviewItemsCache(options?: {
+  jobId?: string;
+  targetCompany?: string;
+  status?: string;
+}): ManualReviewItem[] {
+  const cacheKey = JSON.stringify({
+    jobId: options?.jobId || "",
+    targetCompany: options?.targetCompany || "",
+    status: options?.status ?? "open",
+  });
+  return readFreshCacheValue(manualReviewItemsCache, cacheKey, LIST_CACHE_TTL_MS) || [];
+}
+
+export async function getCandidateReviewRecords(options?: {
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  status?: CandidateReviewStatus;
+}): Promise<CandidateReviewRecord[]> {
+  const cacheKey = JSON.stringify({
+    jobId: options?.jobId || "",
+    historyId: options?.historyId || "",
+    candidateId: options?.candidateId || "",
+    status: options?.status || "",
+  });
+  const cached = readFreshCacheValue(candidateReviewRecordsCache, cacheKey, LIST_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = candidateReviewRecordsPromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/candidate-review-registry${buildApiQueryString({
+        job_id: options?.jobId,
+        history_id: options?.historyId,
+        candidate_id: options?.candidateId,
+        status: options?.status,
+      })}`,
+    )
+      .then((payload) => {
+        const items = Array.isArray(payload.candidate_review_records) ? payload.candidate_review_records : [];
+        return writeCacheValue(
+          candidateReviewRecordsCache,
+          cacheKey,
+          items.map((item: Record<string, unknown>) => deriveCandidateReviewRecord(item)),
+        );
+      })
+      .finally(() => {
+        candidateReviewRecordsPromiseCache.delete(cacheKey);
+      });
+    candidateReviewRecordsPromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export function peekCandidateReviewRecordsCache(options?: {
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  status?: CandidateReviewStatus;
+}): CandidateReviewRecord[] {
+  const cacheKey = JSON.stringify({
+    jobId: options?.jobId || "",
+    historyId: options?.historyId || "",
+    candidateId: options?.candidateId || "",
+    status: options?.status || "",
+  });
+  return readFreshCacheValue(candidateReviewRecordsCache, cacheKey, LIST_CACHE_TTL_MS) || [];
+}
+
+export async function upsertCandidateReviewRecord(payload: {
+  id?: string;
+  jobId?: string;
+  historyId?: string;
+  candidateId: string;
+  candidateName: string;
+  headline?: string;
+  currentCompany?: string;
+  avatarUrl?: string;
+  linkedinUrl?: string;
+  primaryEmail?: string;
+  status: CandidateReviewStatus;
+  comment?: string;
+  source?: "manual_add" | "backend_override" | "manual_review";
+  metadata?: Record<string, unknown>;
+}): Promise<CandidateReviewRecord> {
+  const response = await fetchJson<any>("/api/candidate-review-registry", {
+    method: "POST",
+    body: JSON.stringify({
+      record_id: payload.id,
+      job_id: payload.jobId || "",
+      history_id: payload.historyId || "",
+      candidate_id: payload.candidateId,
+      candidate_name: payload.candidateName,
+      headline: payload.headline || "",
+      current_company: payload.currentCompany || "",
+      avatar_url: payload.avatarUrl || "",
+      linkedin_url: payload.linkedinUrl || "",
+      primary_email: payload.primaryEmail || "",
+      status: payload.status,
+      comment: payload.comment || "",
+      source: payload.source || "manual_review",
+      metadata: payload.metadata || {},
+    }),
+  });
+  candidateReviewRecordsCache.clear();
+  candidateReviewRecordsPromiseCache.clear();
+  manualReviewItemsCache.clear();
+  manualReviewItemsPromiseCache.clear();
+  return deriveCandidateReviewRecord((response.candidate_review_record || {}) as Record<string, unknown>);
+}
+
+export async function synthesizeManualReviewItem(
+  reviewItemId: number,
+  options?: {
+    forceRefresh?: boolean;
+  },
+): Promise<ManualReviewItem> {
+  const payload = await fetchJson<any>("/api/manual-review/synthesize", {
+    method: "POST",
+    body: JSON.stringify({
+      review_item_id: reviewItemId,
+      force_refresh: Boolean(options?.forceRefresh),
+    }),
+  });
+  return deriveManualReviewItem((payload.manual_review_item || {}) as Record<string, unknown>);
+}
+
+export async function reviewManualReviewItem(
+  reviewItemId: number,
+  action: "open" | "resolve" | "dismiss" | "escalate",
+  options?: {
+    reviewer?: string;
+    notes?: string;
+    metadataMerge?: Record<string, unknown>;
+  },
+): Promise<ManualReviewItem> {
+  const payload = await fetchJson<any>("/api/manual-review/review", {
+    method: "POST",
+    body: JSON.stringify({
+      review_item_id: reviewItemId,
+      action,
+      reviewer: options?.reviewer || "",
+      notes: options?.notes || "",
+      metadata_merge: options?.metadataMerge || {},
+    }),
+  });
+  manualReviewItemsCache.clear();
+  manualReviewItemsPromiseCache.clear();
+  candidateReviewRecordsCache.clear();
+  candidateReviewRecordsPromiseCache.clear();
+  return deriveManualReviewItem((payload.manual_review_item || {}) as Record<string, unknown>);
+}
+
+export async function getTargetCandidates(options?: {
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  sourceProjectionId?: string;
+  sourceCollectionId?: string;
+}): Promise<TargetCandidateRecord[]> {
+  const cacheKey = JSON.stringify({
+    jobId: options?.jobId || "",
+    historyId: options?.historyId || "",
+    candidateId: options?.candidateId || "",
+    followUpStatus: options?.followUpStatus || "",
+    sourceProjectionId: options?.sourceProjectionId || "",
+    sourceCollectionId: options?.sourceCollectionId || "",
+  });
+  const cached = readFreshCacheValue(targetCandidatesCache, cacheKey, LIST_CACHE_TTL_MS);
+  if (cached) {
+    return cached;
+  }
+  let fetchPromise = targetCandidatesPromiseCache.get(cacheKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/crm/records${buildApiQueryString({
+        source_projection_id: options?.sourceProjectionId,
+        source_collection_id: options?.sourceCollectionId,
+        limit: 1000,
+      })}`,
+    )
+      .then((payload) => {
+        const items = Array.isArray(payload.crm_records) ? payload.crm_records : [];
+        const mapped = items.map((item: Record<string, unknown>) => deriveTargetCandidateRecord(item));
+        const filtered = mapped.filter((item: TargetCandidateRecord) => {
+          if (options?.jobId && item.jobId !== options.jobId) {
+            return false;
+          }
+          if (options?.historyId && item.historyId !== options.historyId) {
+            return false;
+          }
+          if (options?.candidateId && item.candidateId !== options.candidateId) {
+            return false;
+          }
+          if (options?.followUpStatus && item.followUpStatus !== options.followUpStatus) {
+            return false;
+          }
+          return true;
+        });
+        return writeCacheValue(
+          targetCandidatesCache,
+          cacheKey,
+          filtered,
+        );
+      })
+      .finally(() => {
+        targetCandidatesPromiseCache.delete(cacheKey);
+      });
+    targetCandidatesPromiseCache.set(cacheKey, fetchPromise);
+  }
+  return fetchPromise;
+}
+
+export function peekTargetCandidatesCache(options?: {
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  sourceProjectionId?: string;
+  sourceCollectionId?: string;
+}): TargetCandidateRecord[] {
+  const cacheKey = JSON.stringify({
+    jobId: options?.jobId || "",
+    historyId: options?.historyId || "",
+    candidateId: options?.candidateId || "",
+    followUpStatus: options?.followUpStatus || "",
+    sourceProjectionId: options?.sourceProjectionId || "",
+    sourceCollectionId: options?.sourceCollectionId || "",
+  });
+  return readFreshCacheValue(targetCandidatesCache, cacheKey, LIST_CACHE_TTL_MS) || [];
+}
+
+export async function addProjectionCandidateToCrm(payload: {
+  projectionId: string;
+  candidateIdentityKey: string;
+  expectedMembershipRevision: string;
+  workspaceId?: string;
+  stage?: string;
+  sourceReason?: string;
+  idempotencyKey?: string;
+}): Promise<TargetCandidateRecord> {
+  if (!payload.expectedMembershipRevision.trim()) {
+    throw new Error("Canonical projection revision is required for CRM selection.");
+  }
+  const response = await fetchJson<any>("/api/crm/records", {
+    method: "POST",
+    body: JSON.stringify({
+      projection_id: payload.projectionId,
+      workspace_id: payload.workspaceId || "default",
+      candidate_identity_key: payload.candidateIdentityKey,
+      expected_membership_revision: payload.expectedMembershipRevision,
+      stage: payload.stage || "outreach_ready",
+      source_reason: payload.sourceReason || "operator_selected_from_projection",
+      idempotency_key: payload.idempotencyKey || "",
+    }),
+  });
+  const responseRevision = String(response.membership_revision || "").trim();
+  if (responseRevision !== payload.expectedMembershipRevision.trim()) {
+    throw new Error("CRM selection revision does not match the requested projection.");
+  }
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  return deriveTargetCandidateRecord((response.crm_record || {}) as Record<string, unknown>);
+}
+
+export async function addProjectionCandidatesToCrm(payload: {
+  projectionId: string;
+  candidateIdentityKeys: string[];
+  expectedMembershipRevision: string;
+  workspaceId?: string;
+  stage?: string;
+  sourceReason?: string;
+  idempotencyKey?: string;
+}): Promise<{
+  records: TargetCandidateRecord[];
+  requestedCandidateCount: number;
+  successfulWriteCount: number;
+  failedWriteCount: number;
+  membershipRevision: string;
+}> {
+  const candidateIdentityKeys = Array.from(
+    new Set(payload.candidateIdentityKeys.map((value) => value.trim()).filter(Boolean)),
+  );
+  if (!payload.expectedMembershipRevision.trim()) {
+    throw new Error("Canonical projection revision is required for CRM selection.");
+  }
+  const response = await fetchJson<any>("/api/crm/records", {
+    method: "POST",
+    body: JSON.stringify({
+      projection_id: payload.projectionId,
+      workspace_id: payload.workspaceId || "default",
+      candidate_identity_keys: candidateIdentityKeys,
+      expected_membership_revision: payload.expectedMembershipRevision,
+      stage: payload.stage || "outreach_ready",
+      source_reason: payload.sourceReason || "operator_selected_from_projection",
+      idempotency_key: payload.idempotencyKey || "",
+    }),
+  });
+  const responseRevision = String(response.membership_revision || "").trim();
+  if (responseRevision !== payload.expectedMembershipRevision.trim()) {
+    throw new Error("CRM bulk selection revision does not match the requested projection.");
+  }
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  return {
+    records: ((response.crm_records || []) as Record<string, unknown>[]).map(deriveTargetCandidateRecord),
+    requestedCandidateCount: Number(response.requested_candidate_count || candidateIdentityKeys.length),
+    successfulWriteCount: Number(response.successful_write_count || 0),
+    failedWriteCount: Number(response.failed_write_count || 0),
+    membershipRevision: responseRevision,
+  };
+}
+
+export async function upsertTargetCandidate(payload: {
+  id?: string;
+  workspaceId?: string;
+  candidateId: string;
+  historyId?: string;
+  jobId?: string;
+  candidateName: string;
+  headline?: string;
+  currentCompany?: string;
+  avatarUrl?: string;
+  linkedinUrl?: string;
+  primaryEmail?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  qualityScore?: number | null;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<TargetCandidateRecord> {
+  if (!payload.id) {
+    throw new Error("CRM target candidate updates require crm_record_id.");
+  }
+  const response = await fetchJson<any>(`/api/crm/records/${encodeURIComponent(payload.id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      candidate_id: payload.candidateId,
+      workspace_id: payload.workspaceId || "default",
+      history_id: payload.historyId || "",
+      job_id: payload.jobId || "",
+      candidate_name: payload.candidateName,
+      headline: payload.headline || "",
+      current_company: payload.currentCompany || "",
+      avatar_url: payload.avatarUrl || "",
+      linkedin_url: payload.linkedinUrl || "",
+      primary_email: payload.primaryEmail || "",
+      follow_up_status: payload.followUpStatus || "pending_outreach",
+      quality_score: payload.qualityScore ?? null,
+      comment: payload.comment || "",
+      metadata: payload.metadata || {},
+    }),
+  });
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  return deriveTargetCandidateRecord((response.crm_record || {}) as Record<string, unknown>);
+}
+
+export async function importTargetCandidatesFromJob(payload: {
+  jobId: string;
+  historyId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  limit?: number;
+}): Promise<{
+  status: string;
+  importedCount: number;
+  targetCandidates: TargetCandidateRecord[];
+}> {
+  const response = await fetchJson<any>("/api/target-candidates/import-from-job", {
+    method: "POST",
+    body: JSON.stringify({
+      job_id: payload.jobId,
+      history_id: payload.historyId || "",
+      follow_up_status: payload.followUpStatus || "pending_outreach",
+      limit: payload.limit || 2000,
+    }),
+  });
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  const items = Array.isArray(response.target_candidates) ? response.target_candidates : [];
+  return {
+    status: String(response.status || ""),
+    importedCount: Number(response.imported_count || 0),
+    targetCandidates: items.map((item: Record<string, unknown>) => deriveTargetCandidateRecord(item)),
+  };
+}
+
+export async function exportTargetCandidatesArchive(payload?: {
+  recordIds?: string[];
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+}): Promise<{
+  blob: Blob;
+  filename: string;
+  contentType: string;
+  exportContract: {
+    legacyExportPath: string;
+    canonicalExportPath: string;
+    cutoverStatus: string;
+  };
+}> {
+  void payload;
+  throw new Error("当前人选信息导出入口不可用，请使用人选信息导出或 Web Search 导出。");
+}
+
+function requireTargetCandidatePublicWebWorkspaceId(workspaceId?: string): string {
+  const value = (workspaceId || "").trim();
+  if (!value) {
+    throw new Error("Public Web Search 操作缺少后端 workspace_id，已阻止本次请求。");
+  }
+  return value;
+}
+
+// C1.4/C1.5: exports are durable async tasks. Submission, wait, and download are
+// separate contracts so task_id can later be persisted for reload/resume without
+// changing submission semantics. A succeeded response must carry the exact owner-
+// supplied artifact route; missing or near-miss handles fail closed.
+interface ExportTaskSubmission {
+  taskId: string;
+  payload: any;
+}
+
+const EXPORT_TASK_STATUSES = new Set(["queued", "running", "succeeded", "failed", "cancelled", "expired"]);
+
+function hasUnsafeDecodedExportTaskId(value: string): boolean {
+  let decoded = value;
+  for (let pass = 0; pass < 2; pass += 1) {
+    try {
+      decoded = decodeURIComponent(decoded);
+    } catch {
+      return true;
+    }
+    if (
+      decoded === "." ||
+      decoded === ".." ||
+      /[\\/?#\u0000-\u001f\u007f]/.test(decoded)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function requireExactExportTaskId(value: unknown): string {
+  const taskId = typeof value === "string" ? value : "";
+  if (
+    !taskId ||
+    taskId !== taskId.trim() ||
+    taskId.includes("%") ||
+    taskId === "." ||
+    taskId === ".." ||
+    /[\\/?#\u0000-\u001f\u007f]/.test(taskId) ||
+    /%(?:2f|5c)/i.test(taskId) ||
+    /^(?:%2e|%2e%2e)$/i.test(taskId) ||
+    hasUnsafeDecodedExportTaskId(taskId)
+  ) {
+    throw new Error("Export task id is not a valid single path segment.");
+  }
+  return taskId;
+}
+
+function throwOnExportTerminalFailure(status: string, payload: any): void {
+  if (status === "failed" || status === "cancelled" || status === "expired") {
+    const reason = String((payload && payload.error && payload.error.reason) || status);
+    throw new Error(`Export failed: ${reason}`);
+  }
+}
+
+async function submitExportTask(
+  submitPath: string,
+  submitBody: unknown,
+  timeoutMs = RESULTS_API_TIMEOUT_MS,
+): Promise<ExportTaskSubmission> {
+  const submitted = await fetchJson<any>(
+    submitPath,
+    { method: "POST", body: JSON.stringify(submitBody) },
+    timeoutMs,
+  );
+  const taskId = requireExactExportTaskId(submitted && submitted.task_id);
+  return { taskId, payload: submitted };
+}
+
+async function waitForExportArtifact(
+  taskId: string,
+  initialPayload: any,
+  timeoutMs = RESULTS_API_TIMEOUT_MS,
+): Promise<any> {
+  requireExactExportTaskId(taskId);
+  let payload = initialPayload;
+  let status = String((payload && payload.status) || "").trim().toLowerCase();
+  if (!EXPORT_TASK_STATUSES.has(status)) {
+    throw new Error(`Export returned an unknown status: ${status || "missing"}`);
+  }
+  throwOnExportTerminalFailure(status, payload);
+  const deadline = Date.now() + timeoutMs;
+  while (status !== "succeeded") {
+    if (Date.now() > deadline) {
+      throw new Error("Export timed out waiting for the artifact to be generated.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, EXPORT_POLL_INTERVAL_MS));
+    payload = await fetchJson<any>(`/api/exports/${encodeURIComponent(taskId)}`);
+    status = String((payload && payload.status) || "").trim().toLowerCase();
+    if (!EXPORT_TASK_STATUSES.has(status)) {
+      throw new Error(`Export returned an unknown status: ${status || "missing"}`);
+    }
+    throwOnExportTerminalFailure(status, payload);
+  }
+  return payload;
+}
+
+function requireExactExportArtifactHandle(taskId: string, payload: any): string {
+  const normalizedTaskId = requireExactExportTaskId(taskId);
+  const artifact = payload && typeof payload.artifact === "object" && !Array.isArray(payload.artifact)
+    ? payload.artifact
+    : null;
+  const suppliedHandle = artifact && typeof artifact.handle === "string" ? artifact.handle : "";
+  const expectedHandle = `/api/exports/${encodeURIComponent(normalizedTaskId)}/artifact`;
+  const hasDotSegment = /(?:^|\/)(?:\.{1,2}|%2e(?:%2e)?)(?:\/|$)/i.test(suppliedHandle);
+  if (
+    !suppliedHandle ||
+    suppliedHandle !== suppliedHandle.trim() ||
+    !suppliedHandle.startsWith("/") ||
+    suppliedHandle.startsWith("//") ||
+    /^[a-z][a-z0-9+.-]*:/i.test(suppliedHandle) ||
+    /[?#\\]/.test(suppliedHandle) ||
+    /%(?:2f|5c)/i.test(suppliedHandle) ||
+    hasDotSegment ||
+    suppliedHandle !== expectedHandle
+  ) {
+    throw new Error("Export succeeded without the exact canonical artifact handle.");
+  }
+  return expectedHandle;
+}
+
+export function __testRequireExactExportArtifactHandle(taskId: string, payload: any): string {
+  return requireExactExportArtifactHandle(taskId, payload);
+}
+
+export function __testRequireExactExportTaskId(value: unknown): string {
+  return requireExactExportTaskId(value);
+}
+
+async function downloadExportArtifact(
+  taskId: string,
+  completedPayload: any,
+  timeoutMs = RESULTS_API_TIMEOUT_MS,
+): Promise<{ blob: Blob; filename: string; contentType: string; headers: Headers }> {
+  const canonicalHandle = requireExactExportArtifactHandle(taskId, completedPayload);
+  return fetchBinary(canonicalHandle, { method: "GET" }, timeoutMs);
+}
+
+export async function exportTargetCandidatePublicWebArchive(payload?: {
+  recordIds?: string[];
+  workspaceId?: string;
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  mode?: "promoted_only" | "promoted_and_publishable";
+}): Promise<{
+  blob: Blob;
+  filename: string;
+  contentType: string;
+  exportStats: {
+    recordCount: number;
+    exportedRecordCount: number;
+    exportedSignalCount: number;
+    noPublicWebResultCount: number;
+    noExportableSignalCount: number;
+    nonTerminalRunCount: number;
+  };
+}> {
+  const workspaceId = requireTargetCandidatePublicWebWorkspaceId(payload?.workspaceId);
+  const submission = await submitExportTask("/api/crm/records/public-web-export", {
+    crm_record_ids: Array.from(new Set((payload?.recordIds || []).map((value) => value.trim()).filter(Boolean))),
+    workspace_id: workspaceId,
+    mode: payload?.mode || "promoted_only",
+  });
+  const completedPayload = await waitForExportArtifact(submission.taskId, submission.payload);
+  const result = await downloadExportArtifact(submission.taskId, completedPayload);
+  const headerNumber = (name: string): number => {
+    const value = Number.parseInt(result.headers.get(name) || "0", 10);
+    return Number.isFinite(value) ? value : 0;
+  };
+  return {
+    blob: result.blob,
+    filename: result.filename,
+    contentType: result.contentType,
+    exportStats: {
+      recordCount: headerNumber("X-Sourcing-Export-Record-Count"),
+      exportedRecordCount: headerNumber("X-Sourcing-Exported-Record-Count"),
+      exportedSignalCount: headerNumber("X-Sourcing-Exported-Signal-Count"),
+      noPublicWebResultCount: headerNumber("X-Sourcing-No-Public-Web-Result-Count"),
+      noExportableSignalCount: headerNumber("X-Sourcing-No-Exportable-Signal-Count"),
+      nonTerminalRunCount: headerNumber("X-Sourcing-Non-Terminal-Run-Count"),
+    },
+  };
+}
+
+export async function exportProjectionCandidatesArchive(payload: {
+  projectionId: string;
+  expectedMembershipRevision: string;
+  candidateIdentityKeys?: string[];
+  includeLlmReviewedUnconfirmedAssertions?: boolean;
+}): Promise<{
+  blob: Blob;
+  filename: string;
+  contentType: string;
+  exportStats: {
+    projectionId: string;
+    membershipRevision: string;
+    sourceCandidateCount: number;
+    recordCount: number;
+    exportedRecordCount: number;
+    skippedAssertionCount: number;
+  };
+}> {
+  if (!payload.expectedMembershipRevision.trim()) {
+    throw new Error("Canonical projection revision is required for export.");
+  }
+  const submission = await submitExportTask("/api/projections/export", {
+    projection_id: payload.projectionId,
+    expected_membership_revision: payload.expectedMembershipRevision,
+    candidate_identity_keys: Array.from(
+      new Set((payload.candidateIdentityKeys || []).map((value) => value.trim()).filter(Boolean)),
+    ),
+    include_llm_reviewed_unconfirmed_assertions: Boolean(payload.includeLlmReviewedUnconfirmedAssertions),
+  });
+  const completedPayload = await waitForExportArtifact(submission.taskId, submission.payload);
+  const result = await downloadExportArtifact(submission.taskId, completedPayload);
+  const headerNumber = (name: string): number => {
+    const value = Number.parseInt(result.headers.get(name) || "0", 10);
+    return Number.isFinite(value) ? value : 0;
+  };
+  const membershipRevision = (result.headers.get("X-Sourcing-Membership-Revision") || "").trim();
+  const sourceCandidateCount = headerNumber("X-Sourcing-Source-Candidate-Count");
+  if (!membershipRevision) {
+    throw new Error("Projection export artifact is missing its membership revision.");
+  }
+  if (membershipRevision !== payload.expectedMembershipRevision.trim()) {
+    throw new Error("Projection export artifact revision does not match the requested projection.");
+  }
+  const recordCount = headerNumber("X-Sourcing-Export-Record-Count");
+  if (recordCount > sourceCandidateCount) {
+    throw new Error("Projection export record count exceeds its canonical source membership.");
+  }
+  return {
+    blob: result.blob,
+    filename: result.filename,
+    contentType: result.contentType,
+    exportStats: {
+      projectionId: result.headers.get("X-Sourcing-Projection-Id") || payload.projectionId,
+      membershipRevision,
+      sourceCandidateCount,
+      recordCount,
+      exportedRecordCount: headerNumber("X-Sourcing-Exported-Record-Count"),
+      skippedAssertionCount: headerNumber("X-Sourcing-Skipped-Assertion-Count"),
+    },
+  };
+}
+
+export async function getTargetCandidatePublicWebSearches(options?: {
+  batchId?: string;
+  recordId?: string;
+  recordIds?: string[];
+  workspaceId?: string;
+  status?: string;
+  limit?: number;
+}): Promise<TargetCandidatePublicWebSearchState> {
+  const workspaceId = requireTargetCandidatePublicWebWorkspaceId(options?.workspaceId);
+  const scopedRecordIds = Array.from(new Set((options?.recordIds || []).map((value) => value.trim()).filter(Boolean)));
+  if (scopedRecordIds.length > 0) {
+    const response = await fetchJson<any>("/api/crm/records/public-web-search/poll", {
+      method: "POST",
+      body: JSON.stringify({
+        batch_id: options?.batchId || "",
+        crm_record_ids: scopedRecordIds,
+        workspace_id: workspaceId,
+        status: options?.status || "",
+        limit: options?.limit || Math.min(1000, Math.max(100, scopedRecordIds.length)),
+      }),
+    });
+    return deriveTargetCandidatePublicWebSearchState(response);
+  }
+  const response = await fetchJson<any>(
+    "/api/crm/records/public-web-search/poll",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        batch_id: options?.batchId,
+        crm_record_ids: options?.recordId ? [options.recordId] : [],
+        workspace_id: workspaceId,
+        status: options?.status,
+        limit: options?.limit,
+      }),
+    },
+  );
+  return deriveTargetCandidatePublicWebSearchState(response);
+}
+
+export async function getTargetCandidatePublicWebDetail(recordId: string): Promise<TargetCandidatePublicWebDetail> {
+  const response = await fetchJson<any>(
+    `/api/crm/records/${encodeURIComponent(recordId)}/public-web-search`,
+  );
+  return deriveTargetCandidatePublicWebDetail(response);
+}
+
+export async function getTargetCandidateProfile(recordId: string): Promise<TargetCandidateProfileDetail> {
+  const response = await fetchJson<any>(`/api/crm/records/${encodeURIComponent(recordId)}/profile`);
+  return deriveTargetCandidateProfileDetail(response);
+}
+
+export async function startTargetCandidatePublicWebSearch(payload: {
+  recordIds: string[];
+  workspaceId?: string;
+  options?: Record<string, unknown>;
+  forceRefresh?: boolean;
+  requestedBy?: string;
+}): Promise<TargetCandidatePublicWebStartResult> {
+  const workspaceId = requireTargetCandidatePublicWebWorkspaceId(payload.workspaceId);
+  const response = await fetchJson<any>("/api/crm/records/public-web-search", {
+    method: "POST",
+    body: JSON.stringify({
+      crm_record_ids: Array.from(new Set((payload.recordIds || []).map((value) => value.trim()).filter(Boolean))),
+      workspace_id: workspaceId,
+      options: payload.options || {},
+      force_refresh: Boolean(payload.forceRefresh),
+      requested_by: payload.requestedBy || "",
+    }),
+  });
+  const state = deriveTargetCandidatePublicWebSearchState(response);
+  const batch =
+    response.batch && typeof response.batch === "object"
+      ? deriveTargetCandidatePublicWebBatch(response.batch as Record<string, unknown>)
+      : state.batches[0] || null;
+  return {
+    ...state,
+    batch,
+    summary:
+      response.summary && typeof response.summary === "object" && !Array.isArray(response.summary)
+        ? (response.summary as Record<string, unknown>)
+        : {},
+    workerSummary:
+      response.worker_summary && typeof response.worker_summary === "object" && !Array.isArray(response.worker_summary)
+        ? (response.worker_summary as Record<string, unknown>)
+        : {},
+    job:
+      response.job && typeof response.job === "object" && !Array.isArray(response.job)
+        ? (response.job as Record<string, unknown>)
+        : {},
+  };
+}
+
+export async function cancelTargetCandidatePublicWebSearch(payload: {
+  runIds?: string[];
+  recordIds?: string[];
+  workspaceId?: string;
+  batchId?: string;
+  reason?: string;
+  operator?: string;
+}): Promise<TargetCandidatePublicWebActionResult> {
+  const workspaceId = requireTargetCandidatePublicWebWorkspaceId(payload.workspaceId);
+  const response = await fetchJson<any>("/api/crm/records/public-web-search/cancel", {
+    method: "POST",
+    body: JSON.stringify({
+      run_ids: Array.from(new Set((payload.runIds || []).map((value) => value.trim()).filter(Boolean))),
+      crm_record_ids: Array.from(new Set((payload.recordIds || []).map((value) => value.trim()).filter(Boolean))),
+      workspace_id: workspaceId,
+      batch_id: payload.batchId || "",
+      reason: payload.reason || "cancelled_from_target_candidates_panel",
+      operator: payload.operator || "frontend",
+    }),
+  });
+  return deriveTargetCandidatePublicWebActionResult(response);
+}
+
+export async function retryTargetCandidatePublicWebSearch(payload: {
+  runIds?: string[];
+  recordIds?: string[];
+  workspaceId?: string;
+  batchId?: string;
+  reason?: string;
+  operator?: string;
+}): Promise<TargetCandidatePublicWebActionResult> {
+  const workspaceId = requireTargetCandidatePublicWebWorkspaceId(payload.workspaceId);
+  const response = await fetchJson<any>("/api/crm/records/public-web-search/retry", {
+    method: "POST",
+    body: JSON.stringify({
+      run_ids: Array.from(new Set((payload.runIds || []).map((value) => value.trim()).filter(Boolean))),
+      crm_record_ids: Array.from(new Set((payload.recordIds || []).map((value) => value.trim()).filter(Boolean))),
+      workspace_id: workspaceId,
+      batch_id: payload.batchId || "",
+      reason: payload.reason || "retry_requested_from_target_candidates_panel",
+      operator: payload.operator || "frontend",
+    }),
+  });
+  return deriveTargetCandidatePublicWebActionResult(response);
+}
+
+export async function promoteTargetCandidatePublicWebSignal(payload: {
+  recordId: string;
+  signalId: string;
+  action?: "promote" | "reject";
+  operator?: string;
+  note?: string;
+  allowUnpublishable?: boolean;
+  overrideReason?: string;
+}): Promise<{
+  status: string;
+  promotion: TargetCandidatePublicWebPromotion | null;
+  detail: TargetCandidatePublicWebDetail | null;
+}> {
+  const response = await fetchJson<any>(
+    `/api/crm/records/${encodeURIComponent(payload.recordId)}/public-web-promotions`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        signal_id: payload.signalId,
+        action: payload.action || "promote",
+        operator: payload.operator || "frontend",
+        note: payload.note || "",
+        allow_unpublishable: Boolean(payload.allowUnpublishable),
+        override_reason: payload.overrideReason || "",
+      }),
+    },
+  );
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  return {
+    status: String(response.status || ""),
+    promotion:
+      response.promotion && typeof response.promotion === "object" && !Array.isArray(response.promotion)
+        ? deriveTargetCandidatePublicWebPromotion(response.promotion as Record<string, unknown>)
+        : null,
+    detail:
+      response.detail && typeof response.detail === "object" && !Array.isArray(response.detail)
+        ? deriveTargetCandidatePublicWebDetail(response.detail as Record<string, unknown>)
+        : null,
+  };
+}
+
+export async function getCandidateDetail(candidateId: string, jobId: string): Promise<CandidateDetail | null> {
+  if (!jobId) {
+    throw new Error("Missing job_id. Candidate detail requests must be scoped to a workflow result set.");
+  }
+  const payload = await fetchJson<any>(`/api/jobs/${jobId}/candidates/${encodeURIComponent(candidateId)}`);
+  const candidateRecord = {
+    ...((payload.candidate && typeof payload.candidate === "object" ? payload.candidate : {}) as Record<string, unknown>),
+    evidence: asArray(payload.evidence),
+  };
+  return deriveCandidateDetail(candidateRecord);
+}
+
+export async function getCandidateDetailsBatch(
+  candidateIds: string[],
+  jobId: string,
+): Promise<Record<string, CandidateDetail | null>> {
+  if (!jobId) {
+    throw new Error("Missing job_id. Candidate detail requests must be scoped to a workflow result set.");
+  }
+  const normalizedCandidateIds = Array.from(
+    new Set(candidateIds.map((candidateId) => candidateId.trim()).filter(Boolean)),
+  );
+  if (normalizedCandidateIds.length === 0) {
+    return {};
+  }
+  const now = Date.now();
+  const cachedDetails: Record<string, CandidateDetail | null> = {};
+  const uncachedCandidateIds: string[] = [];
+  normalizedCandidateIds.forEach((candidateId) => {
+    const cached = candidateDetailCache.get(candidateDetailCacheKey(jobId, candidateId));
+    if (cached && now - cached.cachedAt <= CANDIDATE_DETAIL_CACHE_TTL_MS) {
+      cachedDetails[candidateId] = cached.value;
+      return;
+    }
+    uncachedCandidateIds.push(candidateId);
+  });
+  if (uncachedCandidateIds.length === 0) {
+    return cachedDetails;
+  }
+  const batchKey = `${jobId}::${[...uncachedCandidateIds].sort().join(",")}`;
+  let fetchPromise = candidateDetailBatchPromiseCache.get(batchKey);
+  if (!fetchPromise) {
+    fetchPromise = fetchJson<any>(
+      `/api/jobs/${jobId}/candidates/batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          candidate_ids: uncachedCandidateIds,
+        }),
+      },
+      RESULTS_API_TIMEOUT_MS,
+    )
+      .then((payload) => {
+        const detailsByCandidateId: Record<string, CandidateDetail | null> = {};
+        asArray(payload.candidates).forEach((item) => {
+          const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+          const candidateId = asString(record.candidate_id);
+          if (!candidateId) {
+            return;
+          }
+          detailsByCandidateId[candidateId] = deriveCandidateDetail(record);
+        });
+        asArray(payload.not_found_candidate_ids)
+          .map((candidateId) => asString(candidateId))
+          .filter(Boolean)
+          .forEach((candidateId) => {
+            detailsByCandidateId[candidateId] = null;
+          });
+        uncachedCandidateIds.forEach((candidateId) => {
+          if (!(candidateId in detailsByCandidateId)) {
+            detailsByCandidateId[candidateId] = null;
+          }
+          candidateDetailCache.set(candidateDetailCacheKey(jobId, candidateId), {
+            value: detailsByCandidateId[candidateId],
+            cachedAt: Date.now(),
+          });
+        });
+        return detailsByCandidateId;
+      })
+      .finally(() => {
+        candidateDetailBatchPromiseCache.delete(batchKey);
+      });
+    candidateDetailBatchPromiseCache.set(batchKey, fetchPromise);
+  }
+  const fetchedDetails = await fetchPromise;
+  return {
+    ...cachedDetails,
+    ...fetchedDetails,
+  };
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "none" || trimmed.toLowerCase() === "null") {
+    return "";
+  }
+  return trimmed;
+}
+
+function requirePublicResponseStatus(value: unknown, context: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${context} failed: malformed status`);
+  }
+  if (value.length === 0) {
+    throw new Error(`${context} failed: missing status`);
+  }
+  return value;
+}
+
+function requirePublicResponseOutcome<const T extends readonly string[]>(
+  value: unknown,
+  allowedOutcomes: T,
+  context: string,
+): T[number] {
+  const status = requirePublicResponseStatus(value, context);
+  if (!allowedOutcomes.some((outcome) => outcome === status)) {
+    throw new Error(`${context} failed: unexpected status ${status}`);
+  }
+  return status as T[number];
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function asNonnegativeSafeInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    return undefined;
+  }
+  return value === 0 ? 0 : value;
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+    if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "n", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function pickFirstString(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function firstNonEmptyString(values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function pickCanonicalMediaSummaryAvatarUrl(...sources: Record<string, unknown>[]): string {
+  for (const source of sources) {
+    const mediaSummary = asRecord(source.media_summary);
+    const mediaContract = asRecord(mediaSummary.media_contract);
+    const avatarUrl = asString(mediaSummary.avatar_url);
+    if (!avatarUrl) {
+      continue;
+    }
+    if (asString(mediaSummary.avatar_status) !== "available") {
+      continue;
+    }
+    if (asString(mediaContract.source) !== "PersonAsset.avatar_media") {
+      continue;
+    }
+    if (asBoolean(mediaContract.fallback_used) === true) {
+      continue;
+    }
+    return resolveApiMediaUrl(avatarUrl);
+  }
+  return "";
+}
+
+function pickEmailMetadata(
+  ...values: unknown[]
+): { source?: string; status?: string; qualityScore?: number; foundInLinkedInProfile?: boolean } | undefined {
+  for (const value of values) {
+    let payload: Record<string, unknown> | null = null;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      payload = value as Record<string, unknown>;
+    } else if (typeof value === "string") {
+      const text = value.trim();
+      if (!text || !text.startsWith("{") || !text.endsWith("}")) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          payload = parsed as Record<string, unknown>;
+        }
+      } catch {
+        payload = null;
+      }
+    }
+    if (!payload) {
+      continue;
+    }
+    const source = asString(payload.source);
+    const status = asString(payload.status);
+    const rawQualityScore = payload.qualityScore ?? payload.quality_score;
+    const qualityScore =
+      typeof rawQualityScore === "number"
+        ? rawQualityScore
+        : typeof rawQualityScore === "string" && rawQualityScore.trim()
+          ? Number(rawQualityScore)
+          : undefined;
+    const rawFoundInLinkedInProfile =
+      payload.foundInLinkedInProfile ?? payload.found_in_linkedin_profile;
+    const foundInLinkedInProfile =
+      typeof rawFoundInLinkedInProfile === "boolean"
+        ? rawFoundInLinkedInProfile
+        : typeof rawFoundInLinkedInProfile === "string"
+          ? rawFoundInLinkedInProfile.trim().toLowerCase() === "true"
+            ? true
+            : rawFoundInLinkedInProfile.trim().toLowerCase() === "false"
+              ? false
+              : undefined
+          : undefined;
+    if (!source && !status && !Number.isFinite(qualityScore ?? NaN) && foundInLinkedInProfile === undefined) {
+      continue;
+    }
+    return {
+      source: source || undefined,
+      status: status || undefined,
+      qualityScore: Number.isFinite(qualityScore ?? NaN) ? Number(qualityScore) : undefined,
+      foundInLinkedInProfile,
+    };
+  }
+  return undefined;
+}
+
+function scrubCandidateEmail(
+  email: string,
+  metadata?: CandidateEmailMetadata,
+): {
+  email: string;
+  metadata?: CandidateEmailMetadata;
+} {
+  const normalizedEmail = asString(email).trim();
+  if (!normalizedEmail) {
+    return { email: "" };
+  }
+  const normalizedMetadata = metadata ? pickEmailMetadata(metadata) : undefined;
+  if (normalizedMetadata?.source === "harvestapi" && normalizedMetadata.foundInLinkedInProfile !== true) {
+    return { email: "" };
+  }
+  return {
+    email: normalizedEmail,
+    metadata: normalizedMetadata,
+  };
+}
+
+function toConfidence(value: string): CandidateConfidence {
+  if (value === "high" || value === "medium" || value === "lead_only") {
+    return value;
+  }
+  return "lead_only";
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function firstLine(value: string): string {
+  return value.split(/\s*\|\s*|\n+/).map((item) => item.trim()).find(Boolean) || value;
+}
+
+function normalizeTeam(value: string): string {
+  return value || "未分组";
+}
+
+function normalizeStructuredCandidateLines(values: string[]): string[] {
+  return values.map((value) => asString(value)).map((value) => value.trim()).filter(Boolean);
+}
+
+function candidateProfileLooksComplete(payload: {
+  experience: string[];
+  education: string[];
+  hasProfileDetail?: boolean;
+  profileCaptureKind?: string;
+  headline?: string;
+  summary?: string;
+  primaryEmail?: string;
+}): boolean {
+  const experienceLines = normalizeStructuredCandidateLines(payload.experience);
+  const educationLines = normalizeStructuredCandidateLines(payload.education);
+  const captureKind = asString(payload.profileCaptureKind).trim().toLowerCase();
+  if (PARTIAL_PROFILE_CAPTURE_KINDS.has(captureKind)) {
+    if (educationLines.length > 0 || experienceLines.length >= 2) {
+      return true;
+    }
+    return false;
+  }
+  if (FULL_PROFILE_CAPTURE_KINDS.has(captureKind)) {
+    return educationLines.length > 0 || experienceLines.length > 0;
+  }
+  if (payload.hasProfileDetail) {
+    return true;
+  }
+  if (educationLines.length > 0 || experienceLines.length >= 2) {
+    return true;
+  }
+  return Boolean(
+    experienceLines.length > 0 &&
+      firstNonEmptyString([
+        asString(payload.summary).trim(),
+        asString(payload.headline).trim(),
+        asString(payload.primaryEmail).trim(),
+      ]),
+  );
+}
+
+function normalizeCandidateProfileStatus(candidate: Candidate): Candidate {
+  const inferredHasProfileDetail = candidateProfileLooksComplete({
+    experience: candidate.experience,
+    education: candidate.education,
+    hasProfileDetail: candidate.hasProfileDetail,
+    profileCaptureKind: candidate.profileCaptureKind,
+    headline: candidate.headline,
+    summary: candidate.summary,
+    primaryEmail: candidate.primaryEmail,
+  });
+  const hasProfileDetail = inferredHasProfileDetail;
+  const linkedinUrl = asString(candidate.linkedinUrl).trim();
+  const needsProfileCompletion = Boolean(linkedinUrl && !hasProfileDetail);
+  const experienceLines = normalizeStructuredCandidateLines(candidate.experience);
+  const educationLines = normalizeStructuredCandidateLines(candidate.education);
+  const lowProfileRichness = Boolean(
+    linkedinUrl &&
+      hasProfileDetail &&
+      !needsProfileCompletion &&
+      (candidate.lowProfileRichness || experienceLines.length === 0 || educationLines.length === 0),
+  );
+  return {
+    ...candidate,
+    hasProfileDetail,
+    needsProfileCompletion,
+    lowProfileRichness,
+  };
+}
+
+function normalizeDatasetLabel(value: string): string {
+  if (!value) {
+    return "未标注来源";
+  }
+  return titleCase(value.replace(/^harvest_/, "").replace(/^company_/, ""));
+}
+
+function pickLinkedinUrlFromUrls(value: unknown): string {
+  for (const item of asArray(value)) {
+    const text = asString(item);
+    if (text.includes("linkedin.com/in/")) {
+      return text;
+    }
+  }
+  return "";
+}
+
+function pickProfilePhoto(profilePhotoMap: Record<string, string>, candidateId: string): string {
+  return asString(profilePhotoMap[candidateId] || "");
+}
+
+function toExternalLinkType(value: string): CandidateExternalLink["type"] {
+  if (value === "email" || value === "github" || value === "twitter" || value === "scholar" || value === "website") {
+    return value;
+  }
+  return "website";
+}
+
+function normalizeExternalLinks(payload: unknown): CandidateExternalLink[] {
+  return asArray(payload)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .map((item) => ({
+      label: pickFirstString(item, ["label"]) || "External",
+      url: pickFirstString(item, ["url"]),
+      type: toExternalLinkType(pickFirstString(item, ["type"])),
+    }))
+    .filter((item) => Boolean(item.url));
+}
+
+function mergeExternalLinks(
+  candidate: Candidate,
+  contactLinkMap: Record<string, unknown>,
+  candidateId: string,
+): Candidate {
+  const externalLinks = normalizeExternalLinks(contactLinkMap[candidateId]);
+  if (externalLinks.length === 0) {
+    return candidate;
+  }
+  return {
+    ...candidate,
+    externalLinks,
+  };
+}
+
+function buildLinkedinSearchUrl(name: string): string {
+  const keyword = encodeURIComponent(name || "linkedin profile");
+  return `https://www.linkedin.com/search/results/all/?keywords=${keyword}`;
+}
+
+function resolveLinkedinUrl(primary: string, fallbackName: string): string {
+  return asString(primary) || buildLinkedinSearchUrl(fallbackName);
+}
+
+function sourcePathToPublicProfilePath(sourcePath: string): string {
+  const filename = sourcePath.split("/").pop() || "";
+  return filename ? `/tml/profiles/${filename}` : "";
+}
+
+function pickProfileItem(payload: unknown): Record<string, unknown> {
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const record = payload as Record<string, unknown>;
+    if (record.item && typeof record.item === "object" && !Array.isArray(record.item)) {
+      return record.item as Record<string, unknown>;
+    }
+    return record;
+  }
+  if (Array.isArray(payload)) {
+    for (const entry of payload) {
+      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        const item = (entry as Record<string, unknown>).item;
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          return item as Record<string, unknown>;
+        }
+        return entry as Record<string, unknown>;
+      }
+    }
+  }
+  return {};
+}
+
+function joinFragments(parts: Array<string | undefined>): string {
+  return parts.map((part) => asString(part || "")).filter(Boolean).join(" · ");
+}
+
+function profileEducationLines(profileItem: Record<string, unknown>): string[] {
+  const education = asArray(profileItem.educations).map((entry) => (entry as Record<string, unknown>) || {});
+  const lines = education
+    .map((entry) =>
+      joinFragments([
+        pickFirstString(entry, ["schoolName"]),
+        pickFirstString(entry, ["degreeName"]),
+        pickFirstString(entry, ["fieldOfStudy"]),
+      ]),
+    )
+    .filter(Boolean);
+  if (lines.length > 0) {
+    return lines;
+  }
+  const topEducation = asArray(profileItem.profileTopEducation).map(
+    (entry) => ((entry && typeof entry === "object" ? entry : {}) as Record<string, unknown>),
+  );
+  return topEducation.map((entry) => pickFirstString(entry, ["schoolName"])).filter(Boolean);
+}
+
+function profileExperienceLines(profileItem: Record<string, unknown>): string[] {
+  return asArray(profileItem.experience)
+    .map((entry) => ((entry && typeof entry === "object" ? entry : {}) as Record<string, unknown>))
+    .map((entry) =>
+      joinFragments([
+        pickFirstString(entry, ["position"]),
+        pickFirstString(entry, ["companyName"]),
+        pickFirstString(entry, ["duration"]),
+      ]),
+    )
+    .filter(Boolean);
+}
+
+function profileFocusAreas(profileItem: Record<string, unknown>): string[] {
+  const topSkills = pickFirstString(profileItem, ["topSkills"]);
+  if (!topSkills) {
+    return [];
+  }
+  return topSkills
+    .split(/[•,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildNarrativeSummary(
+  name: string,
+  profileItem: Record<string, unknown>,
+  fallback: string,
+  currentCompany?: string,
+): string {
+  const headline = pickFirstString(profileItem, ["headline"]);
+  const about = pickFirstString(profileItem, ["about"]);
+  const location = joinFragments([
+    pickFirstString((profileItem.location as Record<string, unknown>) || {}, ["linkedinText"]),
+    pickFirstString(profileItem, ["locationName"]),
+  ]);
+  const currentPosition = ((asArray(profileItem.currentPosition)[0] as Record<string, unknown>) || {});
+  const positionTitle = pickFirstString(currentPosition, ["title", "position"]);
+  const positionCompany = pickFirstString(currentPosition, ["companyName"]) || currentCompany || "";
+  const experienceLines = profileExperienceLines(profileItem).slice(0, 2);
+  const educationLines = profileEducationLines(profileItem).slice(0, 1);
+  const focusAreas = profileFocusAreas(profileItem).slice(0, 4);
+
+  const intro = joinFragments([
+    name ? `${name}` : "",
+    headline || positionTitle || "候选人",
+    positionCompany ? `目前在 ${positionCompany}` : "",
+    location ? `常驻 ${location}` : "",
+  ]);
+
+  const bodyParts = [
+    intro ? `${intro}。` : "",
+    about ? `${about}。` : "",
+    experienceLines.length > 0 ? `近期经历包括：${experienceLines.join("；")}。` : "",
+    educationLines.length > 0 ? `教育背景方面：${educationLines[0]}。` : "",
+    focusAreas.length > 0 ? `技能与关注方向主要集中在 ${focusAreas.join("、")}。` : "",
+  ].filter(Boolean);
+
+  if (bodyParts.length > 0) {
+    return bodyParts.join(" ");
+  }
+  return fallback;
+}
+
+function pickFunctionIds(sourceShardFilters: unknown, ...sources: unknown[]): string[] {
+  const normalized = new Set<string>();
+  for (const source of sources) {
+    for (const item of asArray(source)) {
+      const value = asString(item);
+      if (value) {
+        normalized.add(value);
+      }
+    }
+  }
+  const values = Array.from(normalized);
+  if (values.length !== 1) {
+    return [];
+  }
+  const shardFilterRecord =
+    sourceShardFilters && typeof sourceShardFilters === "object"
+      ? (sourceShardFilters as Record<string, unknown>)
+      : {};
+  const includeIds = Array.from(
+    new Set(asArray(shardFilterRecord.function_ids).map((item) => asString(item)).filter(Boolean)),
+  );
+  const excludeIds = new Set(asArray(shardFilterRecord.exclude_function_ids).map((item) => asString(item)).filter(Boolean));
+  const effectiveShardIds = includeIds.filter((item) => !excludeIds.has(item));
+  if (
+    effectiveShardIds.length > 0 &&
+    effectiveShardIds.length === values.length &&
+    effectiveShardIds.every((item, index) => item === values[index])
+  ) {
+    return [];
+  }
+  return values;
+}
+
+/**
+ * Server-computed per-candidate function facet contract (FT0 §5.2):
+ * `{function_bucket_ids, function_bucket_source}` is ONE atomic pair owned
+ * by the backend projection build. The frontend consumes it verbatim from a
+ * single authoritative layer and never re-derives, repairs, or mixes it
+ * (FT2 fixed-forward r2, review finding 6): no trimming, no dedupe, no
+ * case repair, and no present-null-as-absence — any deviation fails closed.
+ */
+const FUNCTION_BUCKET_SOURCES = new Set(["lane_membership", "registry_evidence", "legacy_inference"]);
+
+interface FunctionBucketFacetPair {
+  ids: string[];
+  source: NonNullable<Candidate["functionBucketSource"]>;
+}
+
+function parseFunctionBucketFacetLayer(
+  idsValue: unknown,
+  sourceValue: unknown,
+  layerLabel: string,
+): FunctionBucketFacetPair | undefined {
+  const idsAbsent = idsValue === undefined;
+  const sourceAbsent = sourceValue === undefined;
+  if (idsAbsent && sourceAbsent) {
+    return undefined;
+  }
+  if (idsValue === null || sourceValue === null) {
+    throw new Error(
+      `Served candidate has an invalid function_bucket pair (${layerLabel}: present null).`,
+    );
+  }
+  if (idsAbsent || sourceAbsent) {
+    throw new Error(
+      `Served candidate has an incomplete function_bucket pair (${layerLabel}: one field missing).`,
+    );
+  }
+  if (!Array.isArray(idsValue) || idsValue.length === 0) {
+    throw new Error(
+      `Served candidate has an incomplete function_bucket pair (${layerLabel}: ids missing or empty).`,
+    );
+  }
+  const ids: string[] = [];
+  for (const item of idsValue) {
+    if (
+      typeof item !== "string" ||
+      item.length === 0 ||
+      item !== item.trim()
+    ) {
+      throw new Error(
+        `Served candidate has malformed function_bucket_ids (${layerLabel}: items must be exact non-empty strings).`,
+      );
+    }
+    if (ids.includes(item)) {
+      throw new Error(
+        `Served candidate has duplicate function_bucket_ids (${layerLabel}).`,
+      );
+    }
+    ids.push(item);
+  }
+  // Byte-exact source: no trim/case repair — a whitespace or case variant
+  // is invalid, never normalized into a valid provenance.
+  const source = typeof sourceValue === "string" ? sourceValue : "";
+  if (!FUNCTION_BUCKET_SOURCES.has(source)) {
+    throw new Error(
+      `Served candidate has an invalid function_bucket_source (${layerLabel}: ${source || "missing"}).`,
+    );
+  }
+  return { ids, source: source as FunctionBucketFacetPair["source"] };
+}
+
+function equalFunctionBucketFacetPair(
+  left: FunctionBucketFacetPair,
+  right: FunctionBucketFacetPair,
+): boolean {
+  return left.source === right.source && JSON.stringify(left.ids) === JSON.stringify(right.ids);
+}
+
+/**
+ * Resolve the atomic pair from the authoritative top-level served layer —
+ * the build-point pair computed once on the served candidate row (FT0 §5.2).
+ * The metadata mirror is a documented COMPARISON mirror only: it must equal
+ * the top-level pair byte-exactly when both are present, and a mirror
+ * without the canonical top-level pair fails closed (a comparison layer may
+ * never become the source of membership). Returns undefined only when
+ * neither layer carries anything (genuinely legacy records).
+ */
+function deriveFunctionBucketFacet(record: Record<string, unknown>): FunctionBucketFacetPair | undefined {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const topLevel = parseFunctionBucketFacetLayer(
+    record.function_bucket_ids,
+    record.function_bucket_source,
+    "top-level record",
+  );
+  const mirror = parseFunctionBucketFacetLayer(
+    metadata.function_bucket_ids,
+    metadata.function_bucket_source,
+    "metadata mirror",
+  );
+  if (!topLevel) {
+    if (mirror) {
+      throw new Error(
+        "Served candidate has a metadata function_bucket mirror without the canonical top-level pair.",
+      );
+    }
+    return undefined;
+  }
+  if (mirror && !equalFunctionBucketFacetPair(topLevel, mirror)) {
+    throw new Error("Served candidate has conflicting function_bucket mirrors.");
+  }
+  return topLevel;
+}
+
+/**
+ * Server-owned employment membership truth (FT0 §6; FT2 fixed-forward r4,
+ * rerun3 review finding 3): the canonical served field is the TOP-LEVEL
+ * `employment_statuses` list emitted by the backend membership attacher
+ * (`candidate_artifacts.py`). `metadata.cohort_employment_statuses` is a
+ * comparison-only mirror — it must agree byte-exactly and can never BECOME
+ * the membership owner:
+ * - top-level absent + metadata mirror present is a mirror WITHOUT an owner
+ *   (invalid evidence, fail closed — no borrowed membership);
+ * - top-level absent + Cohort provenance (`metadata.cohort_lane_membership`)
+ *   is a contract violation, not a legacy record (fail closed);
+ * - top-level absent with neither mirror nor provenance is a LEGACY row:
+ *   membership is `undefined` and the lossy display status may apply
+ *   downstream (display status is never membership truth for owned rows);
+ * - present values are validated strictly: a present `null`, non-list,
+ *   empty list, duplicate entries, or any value other than the exact bytes
+ *   `current` / `former` (no trim/lowercase) is invalid;
+ * - a present metadata mirror is validated by the same strict rules and
+ *   must equal the canonical layer byte-exactly (conflict fails closed).
+ */
+function parseEmploymentMembershipValue(
+  value: unknown,
+  field: string,
+): Array<"current" | "former"> {
+  if (value === null || !Array.isArray(value)) {
+    throw new Error(`Served candidate has a malformed ${field} membership.`);
+  }
+  const statuses: Array<"current" | "former"> = [];
+  for (const item of value) {
+    if (item !== "current" && item !== "former") {
+      throw new Error(`Served candidate has an invalid ${field} value.`);
+    }
+    if (statuses.includes(item)) {
+      throw new Error(`Served candidate has duplicate ${field} values.`);
+    }
+    statuses.push(item);
+  }
+  if (statuses.length === 0) {
+    throw new Error(`Served candidate has an empty ${field} membership.`);
+  }
+  return statuses;
+}
+
+function equalEmploymentMembership(
+  left: Array<"current" | "former">,
+  right: Array<"current" | "former">,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function parseCohortEmploymentStatuses(
+  record: Record<string, unknown>,
+): Candidate["cohortEmploymentStatuses"] {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const hasCanonical = Object.prototype.hasOwnProperty.call(record, "employment_statuses");
+  const canonicalValue = record.employment_statuses;
+  const hasMirror = Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses");
+  const mirrorValue = metadata.cohort_employment_statuses;
+  if (!hasCanonical || canonicalValue === undefined) {
+    if (hasMirror && mirrorValue !== undefined) {
+      throw new Error(
+        "Served candidate has a cohort_employment_statuses mirror without the canonical employment_statuses membership.",
+      );
+    }
+    const hasCohortProvenance = Object.prototype.hasOwnProperty.call(
+      metadata,
+      "cohort_lane_membership",
+    );
+    if (hasCohortProvenance) {
+      throw new Error(
+        "Served candidate has Cohort provenance without employment_statuses membership.",
+      );
+    }
+    return undefined;
+  }
+  const canonical = parseEmploymentMembershipValue(canonicalValue, "employment_statuses");
+  if (hasMirror && mirrorValue !== undefined) {
+    const mirror = parseEmploymentMembershipValue(mirrorValue, "cohort_employment_statuses");
+    if (!equalEmploymentMembership(canonical, mirror)) {
+      throw new Error("Served candidate has conflicting employment_statuses mirrors.");
+    }
+  }
+  return canonical;
+}
+
+/**
+ * Comparison-only membership mirror of an ENRICHMENT (materialized/profile)
+ * record: any membership evidence it carries (top-level canonical shape or
+ * metadata mirror shape) is extracted under the same strict validation, but
+ * WITHOUT ownership — it may only be compared against the canonical
+ * build-point membership, never substituted for it. Returns undefined when
+ * the enrichment record carries no membership evidence at all. When BOTH
+ * layers are present they must agree byte-exactly (FT2 fixed-forward r5,
+ * rerun4 review finding 6): a materialized record whose own two mirrors
+ * contradict each other is contradictory stale evidence and fails closed,
+ * never silently accepted.
+ */
+function parseEmploymentMembershipMirror(
+  record: Record<string, unknown>,
+): Array<"current" | "former"> | undefined {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const hasTopLevel =
+    Object.prototype.hasOwnProperty.call(record, "employment_statuses") &&
+    record.employment_statuses !== undefined;
+  const hasMetadataMirror =
+    Object.prototype.hasOwnProperty.call(metadata, "cohort_employment_statuses") &&
+    metadata.cohort_employment_statuses !== undefined;
+  const topLevel = hasTopLevel
+    ? parseEmploymentMembershipValue(record.employment_statuses, "employment_statuses")
+    : undefined;
+  const metadataMirror = hasMetadataMirror
+    ? parseEmploymentMembershipValue(
+        metadata.cohort_employment_statuses,
+        "cohort_employment_statuses",
+      )
+    : undefined;
+  if (topLevel && metadataMirror && !equalEmploymentMembership(topLevel, metadataMirror)) {
+    throw new Error(
+      "Served candidate enrichment has conflicting employment membership mirrors.",
+    );
+  }
+  return topLevel || metadataMirror;
+}
+
+function deriveCandidate(record: Record<string, unknown>): Candidate {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const structuredEducationLines = asArray(record.education_lines).map((value) => asString(value)).filter(Boolean);
+  const structuredExperienceLines = asArray(record.experience_lines).map((value) => asString(value)).filter(Boolean);
+  const profileSkillLines = splitStructuredText(metadata.skills).map((value) => asString(value)).filter(Boolean);
+  const matchedFieldRecords = asArray(record.matched_fields).map(
+    (item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>),
+  );
+  const sourceMatches = normalizeSourceMatches(record.source_matches, metadata.source_matches);
+  const evidenceList = asArray(record.evidence ?? metadata.evidence).map((item, index) => {
+    const source = (item as Record<string, unknown>) || {};
+    const url = pickFirstString(source, ["url", "source_url", "profile_url", "linkedin_url"]);
+    return {
+      label: pickFirstString(source, ["label", "title", "source_type"]) || `Evidence ${index + 1}`,
+      type:
+        (pickFirstString(source, ["type", "source_type"]) as
+          | "linkedin"
+          | "publication"
+          | "homepage"
+          | "github"
+          | "cv") || "homepage",
+      url: url || "#",
+      excerpt:
+        pickFirstString(source, ["excerpt", "summary", "reason", "snippet"]) ||
+        "Recovered from backend evidence artifact.",
+    };
+  });
+
+  const focusAreas = [
+    ...splitStructuredText(record.focus_areas),
+    ...splitStructuredText(metadata.focus_areas),
+    ...splitStructuredText(record.tags),
+    ...splitStructuredText(record.skills),
+    ...profileSkillLines,
+  ]
+    .map((value) => asString(value))
+    .filter(Boolean);
+
+  const team =
+    pickFirstString(record, ["team", "group_name", "group"]) ||
+    pickFirstString(metadata, ["team", "project_scope", "suspected_group"]) ||
+    "Unknown";
+
+  const employmentStatus =
+    pickFirstString(record, ["employment_status", "status"]) ||
+    pickFirstString(metadata, ["employment_status"]) ||
+    "lead";
+
+  const matchReasons = [
+    ...asArray(record.match_reasons),
+    ...asArray(record.confidence_reason ? [record.confidence_reason] : []),
+    ...asArray(metadata.match_reasons),
+    ...matchedFieldRecords.map((source) => {
+      return joinFragments([
+        pickFirstString(source, ["field"]),
+        pickFirstString(source, ["matched_on", "value"]),
+      ]);
+    }),
+  ]
+    .map((value) => asString(value))
+    .filter(Boolean);
+  const matchedKeywords = canonicalizeDisplayKeywords(
+    dedupeStrings([
+      ...distinctMatchedKeywords(matchedFieldRecords),
+      ...sourceMatchKeywords(sourceMatches),
+      ...splitStructuredText(record.matched_keywords),
+      ...splitStructuredText(metadata.matched_keywords),
+    ]),
+  );
+
+  const avatarUrl = firstNonEmptyString([
+    pickCanonicalMediaSummaryAvatarUrl(record, metadata),
+    pickFirstString(record, ["avatar_url", "photo_url", "media_url"]),
+    pickFirstString(metadata, ["avatar_url", "photo_url", "media_url"]),
+  ]);
+  const rawPrimaryEmail = firstNonEmptyString([
+    pickFirstString(record, ["primary_email", "email"]),
+    pickFirstString(metadata, ["primary_email", "email"]),
+  ]);
+  const rawPrimaryEmailMetadata =
+    pickEmailMetadata(record.primary_email_metadata, metadata.primary_email_metadata);
+  const { email: primaryEmail, metadata: primaryEmailMetadata } = scrubCandidateEmail(
+    rawPrimaryEmail,
+    rawPrimaryEmailMetadata,
+  );
+  const functionIds = pickFunctionIds(
+    metadata.source_shard_filters,
+    record.function_ids,
+    metadata.function_ids,
+  );
+  const functionBucketFacet = deriveFunctionBucketFacet(record);
+  const cohortEmploymentStatuses = parseCohortEmploymentStatuses(record);
+
+  return normalizeCandidateProfileStatus({
+    id:
+      pickFirstString(record, ["candidate_id", "id"]) ||
+      pickFirstString(record, ["candidate_identity_key", "person_identity_key", "profile_url_key"]) ||
+      pickFirstString(metadata, ["candidate_id"]) ||
+      crypto.randomUUID(),
+    candidateIdentityKey: pickFirstString(record, ["candidate_identity_key"]) || pickFirstString(metadata, ["candidate_identity_key"]),
+    personIdentityKey: pickFirstString(record, ["person_identity_key"]) || pickFirstString(metadata, ["person_identity_key"]),
+    profileUrlKey: pickFirstString(record, ["profile_url_key"]) || pickFirstString(metadata, ["profile_url_key"]),
+    name:
+      pickFirstString(record, ["display_name", "name_en", "full_name", "name"]) ||
+      pickFirstString(metadata, ["display_name"]) ||
+      "Unknown Candidate",
+    headline:
+      pickFirstString(record, ["headline", "role", "title"]) ||
+      pickFirstString(metadata, ["headline", "current_role"]) ||
+      "Candidate profile",
+    avatarUrl,
+    team: normalizeTeam(team),
+    employmentStatus:
+      employmentStatus === "current" || employmentStatus === "former" ? employmentStatus : "lead",
+    confidence: toConfidence(pickFirstString(record, ["confidence_label"]) || pickFirstString(metadata, ["confidence_label"])),
+    summary:
+      pickFirstString(record, ["summary", "explanation", "notes"]) ||
+      pickFirstString(metadata, ["summary", "bio", "about", "headline"]) ||
+      "Recovered from normalized backend candidate artifacts.",
+    rank: typeof record.rank === "number" ? Number(record.rank) : undefined,
+    score: typeof record.score === "number" ? Number(record.score) : undefined,
+    outreachLayer: parseOutreachLayer(record.outreach_layer, metadata.outreach_layer),
+    outreachLayerKey:
+      pickFirstString(record, ["outreach_layer_key"]) ||
+      pickFirstString(metadata, ["outreach_layer_key"]),
+    matchedKeywords,
+    sourceMatches,
+    currentCompany:
+      pickFirstString(record, ["current_company", "organization"]) ||
+      pickFirstString(metadata, ["current_company", "organization"]),
+    location:
+      pickFirstString(record, ["profile_location", "location"]) ||
+      pickFirstString(metadata, ["profile_location", "location"]),
+    roleBucket:
+      pickFirstString(record, ["role_bucket"]) ||
+      pickFirstString(metadata, ["role_bucket"]),
+    functionIds,
+    functionBucketIds: functionBucketFacet?.ids,
+    functionBucketSource: functionBucketFacet?.source,
+    cohortEmploymentStatuses,
+    linkedinUrl:
+      pickFirstString(record, ["linkedin_url"]) ||
+      pickFirstString(metadata, ["linkedin_url", "profile_url"]),
+    sourceDataset:
+      normalizeDatasetLabel(
+        pickFirstString(record, ["source_dataset"]) || pickFirstString(metadata, ["source_dataset"]),
+      ),
+    notesSnippet: firstLine(
+      pickFirstString(record, ["notes"]) ||
+      pickFirstString(metadata, ["notes", "about", "summary"]),
+    ),
+    primaryEmail,
+    primaryEmailMetadata,
+    needsProfileCompletion:
+      asBoolean(record.needs_profile_completion ?? metadata.needs_profile_completion) || false,
+    lowProfileRichness:
+      asBoolean(record.low_profile_richness ?? metadata.low_profile_richness) ||
+      ((asBoolean(record.has_profile_detail ?? metadata.has_profile_detail) || false) &&
+        !(asBoolean(record.needs_profile_completion ?? metadata.needs_profile_completion) || false) &&
+        Boolean(
+          firstNonEmptyString([
+            pickFirstString(record, ["linkedin_url"]),
+            pickFirstString(metadata, ["linkedin_url", "profile_url"]),
+          ]),
+        ) &&
+        (structuredExperienceLines.length === 0 || structuredEducationLines.length === 0)),
+    hasProfileDetail:
+      asBoolean(record.has_profile_detail ?? metadata.has_profile_detail) || false,
+    profileCaptureKind:
+      pickFirstString(record, ["profile_capture_kind"]) ||
+      pickFirstString(metadata, ["profile_capture_kind"]),
+    focusAreas,
+    matchReasons,
+    education:
+      structuredEducationLines.length > 0
+        ? structuredEducationLines
+        : splitStructuredText(record.education ?? metadata.education)
+            .map((value) => asString(value))
+            .filter(Boolean),
+    experience:
+      structuredExperienceLines.length > 0
+        ? structuredExperienceLines
+        : splitStructuredText(record.work_history ?? record.experience ?? metadata.experience)
+            .map((value) => asString(value))
+            .filter(Boolean),
+    evidence: evidenceList,
+  });
+}
+
+function deriveCandidateFromNormalizedRecord(
+  record: Record<string, unknown>,
+  materializedRecord: Record<string, unknown> | null,
+  profilePhotoMap: Record<string, string> = {},
+  profileSummaryMap: Record<string, Record<string, unknown>> = {},
+  contactLinkMap: Record<string, unknown> = {},
+): Candidate {
+  const materialized = materializedRecord || {};
+  const base = deriveCandidate(record);
+  const candidateId = pickFirstString(record, ["candidate_id", "id"]) || base.id;
+  const profileSummary = (profileSummaryMap[candidateId] || {}) as Record<string, unknown>;
+  const educationLines = asArray(profileSummary.education_lines).map((item) => asString(item)).filter(Boolean);
+  const schoolLine = asString(profileSummary.school_line);
+  const topSkills = asString(profileSummary.top_skills);
+  const skillTags = topSkills
+    .split(/[•,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const linkedinUrl =
+    resolveLinkedinUrl(
+      asString(profileSummary.linkedin_url) ||
+        pickFirstString(materialized, ["linkedin_url"]) ||
+        pickFirstString(record, ["linkedin_url"]) ||
+        pickLinkedinUrlFromUrls(record.urls) ||
+        base.linkedinUrl ||
+        "",
+      base.name,
+    );
+  // The function-facet pair belongs to the canonical build point (the served
+  // candidate record, already resolved inside `deriveCandidate`). A
+  // materialized/profile layer may NEVER override it (FT2 fixed-forward r2,
+  // review finding 6): when the enrichment record carries a pair it must
+  // equal the build-point pair byte-exactly, and a pair without a
+  // build-point pair fails closed — the enriched candidate always keeps
+  // `base.functionBucketIds`/`base.functionBucketSource`.
+  const materializedFunctionBucketFacet = deriveFunctionBucketFacet(materialized);
+  // Employment membership follows the SAME owner posture (FT2 fixed-forward
+  // r4, rerun3 review finding 3): the canonical build-point membership
+  // (top-level `employment_statuses`, already resolved inside
+  // `deriveCandidate`) is the only owner. A materialized record's membership
+  // evidence is a comparison-only mirror — it must equal the build-point
+  // membership byte-exactly, membership evidence without a build-point
+  // membership fails closed, and a stale materialized document can never
+  // replace the canonical base membership.
+  const materializedCohortEmploymentStatuses = parseEmploymentMembershipMirror(materialized);
+  if (materializedFunctionBucketFacet) {
+    const baseFacet: FunctionBucketFacetPair | undefined =
+      base.functionBucketIds && base.functionBucketSource
+        ? { ids: base.functionBucketIds, source: base.functionBucketSource }
+        : undefined;
+    if (!baseFacet) {
+      throw new Error(
+        "Served candidate enrichment carries a function_bucket pair without the canonical build-point pair.",
+      );
+    }
+    if (!equalFunctionBucketFacetPair(baseFacet, materializedFunctionBucketFacet)) {
+      throw new Error(
+        "Served candidate enrichment conflicts with the canonical function_bucket pair.",
+      );
+    }
+  }
+  if (materializedCohortEmploymentStatuses) {
+    if (!base.cohortEmploymentStatuses) {
+      throw new Error(
+        "Served candidate enrichment carries employment membership without the canonical build-point membership.",
+      );
+    }
+    if (!equalEmploymentMembership(base.cohortEmploymentStatuses, materializedCohortEmploymentStatuses)) {
+      throw new Error(
+        "Served candidate enrichment conflicts with the canonical employment_statuses membership.",
+      );
+    }
+  }
+
+  const enriched = {
+    ...base,
+    headline:
+      asString(profileSummary.headline) ||
+      pickFirstString(materialized, ["role", "headline", "title"]) ||
+      base.headline,
+    avatarUrl:
+      pickCanonicalMediaSummaryAvatarUrl(profileSummary, materialized, record) ||
+      pickProfilePhoto(profilePhotoMap, candidateId) ||
+      asString(profileSummary.photo_url) ||
+      pickFirstString(materialized, ["profile_photo_url", "avatar_url", "photo_url", "media_url"]) ||
+      base.avatarUrl,
+    summary:
+      asString(profileSummary.about) ||
+      pickFirstString(materialized, ["notes", "summary", "description"]) ||
+      base.summary,
+    currentCompany:
+      asString(profileSummary.current_company) ||
+      pickFirstString(materialized, ["organization", "current_company"]) ||
+      base.currentCompany,
+    location:
+      asString(profileSummary.profile_location) ||
+      asString(profileSummary.location) ||
+      pickFirstString(materialized, ["profile_location", "location"]) ||
+      base.location,
+    roleBucket:
+      pickFirstString(materialized, ["role_bucket"]) ||
+      asString(profileSummary.role_bucket) ||
+      base.roleBucket,
+    functionIds: pickFunctionIds(
+      (materialized.metadata as Record<string, unknown> | undefined)?.source_shard_filters,
+      materialized.function_ids,
+      base.functionIds,
+    ),
+    functionBucketIds: base.functionBucketIds,
+    functionBucketSource: base.functionBucketSource,
+    // The canonical base membership is retained ALWAYS; the materialized
+    // value above is a comparison-only mirror (conflict already threw).
+    cohortEmploymentStatuses: base.cohortEmploymentStatuses,
+    linkedinUrl,
+    sourceDataset:
+      normalizeDatasetLabel(pickFirstString(materialized, ["source_dataset"])) ||
+      normalizeDatasetLabel(asString(asArray(record.source_datasets)[0])) ||
+      base.sourceDataset,
+    notesSnippet:
+      firstLine(pickFirstString(materialized, ["notes"])) ||
+      firstLine(pickFirstString(record, ["manual_review_rationale"])) ||
+      base.notesSnippet,
+    primaryEmail:
+      pickFirstString(materialized, ["primary_email", "email"]) ||
+      base.primaryEmail,
+    primaryEmailMetadata:
+      pickEmailMetadata(
+        materialized.primary_email_metadata,
+        profileSummary.primary_email_metadata,
+        base.primaryEmailMetadata,
+      ) || base.primaryEmailMetadata,
+    needsProfileCompletion:
+      asBoolean(materialized.needs_profile_completion ?? profileSummary.needs_profile_completion) ??
+      base.needsProfileCompletion,
+    lowProfileRichness:
+      asBoolean(materialized.low_profile_richness ?? profileSummary.low_profile_richness) ??
+      base.lowProfileRichness,
+    hasProfileDetail:
+      asBoolean(materialized.has_profile_detail ?? profileSummary.has_profile_detail) ??
+      base.hasProfileDetail,
+    profileCaptureKind:
+      pickFirstString(materialized, ["profile_capture_kind"]) ||
+      asString(profileSummary.profile_capture_kind) ||
+      base.profileCaptureKind,
+    education:
+      educationLines.length > 0
+        ? educationLines
+        : schoolLine
+          ? [schoolLine]
+          : base.education,
+    focusAreas:
+      base.focusAreas.length > 0 ? base.focusAreas : skillTags.slice(0, 6),
+    matchReasons:
+      base.matchReasons.length > 0
+        ? base.matchReasons
+        : [
+            joinFragments([
+              pickFirstString(materialized, ["role", "headline", "title"]) || asString(profileSummary.headline),
+              asString(profileSummary.current_company) || pickFirstString(materialized, ["organization"]),
+            ]),
+          ].filter(Boolean),
+  };
+  const sanitizedEmail = scrubCandidateEmail(enriched.primaryEmail || "", enriched.primaryEmailMetadata);
+  return normalizeCandidateProfileStatus(
+    mergeExternalLinks(
+      {
+        ...enriched,
+        primaryEmail: sanitizedEmail.email,
+        primaryEmailMetadata: sanitizedEmail.metadata,
+      },
+      contactLinkMap,
+      candidateId,
+    ),
+  );
+}
+
+function deriveCandidateFromDocument(
+  record: Record<string, unknown>,
+  profilePhotoMap: Record<string, string> = {},
+  contactLinkMap: Record<string, unknown> = {},
+): Candidate {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const structuredEducationLines = asArray(record.education_lines).map((value) => asString(value)).filter(Boolean);
+  const structuredExperienceLines = asArray(record.experience_lines).map((value) => asString(value)).filter(Boolean);
+  const matchedFieldRecords = asArray(record.matched_fields ?? metadata.matched_fields).map(
+    (item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>),
+  );
+  const sourceMatches = normalizeSourceMatches(record.source_matches, metadata.source_matches);
+  const evidenceItems = asArray(record.evidence).map((item, index) => {
+    const source = ((item && typeof item === "object" ? item : {}) as Record<string, unknown>);
+    return {
+      label: pickFirstString(source, ["label", "source_type", "title"]) || `Evidence ${index + 1}`,
+      type:
+        (pickFirstString(source, ["type", "source_type"]) as
+          | "linkedin"
+          | "publication"
+          | "homepage"
+          | "github"
+          | "cv") || "homepage",
+      url: pickFirstString(source, ["url", "source_url", "linkedin_url"]) || "#",
+      excerpt:
+        pickFirstString(source, ["excerpt", "summary", "snippet", "reason"]) ||
+        "Recovered from candidate document artifact.",
+    };
+  });
+
+  const focusAreas = asArray(record.focus_areas ?? record.keywords ?? record.tags)
+    .map((value) => asString(value))
+    .filter(Boolean);
+
+  const matchReasons = asArray(record.match_reasons ?? record.reasons)
+    .map((value) => asString(value))
+    .filter(Boolean);
+
+  const employmentStatus = pickFirstString(record, ["employment_status", "status"]) || "lead";
+
+  const rawPrimaryEmail = firstNonEmptyString([
+    pickFirstString(record, ["primary_email", "email"]),
+    pickFirstString(metadata, ["primary_email", "email"]),
+  ]);
+  const rawPrimaryEmailMetadata = pickEmailMetadata(record.primary_email_metadata, metadata.primary_email_metadata);
+  const sanitizedEmail = scrubCandidateEmail(rawPrimaryEmail, rawPrimaryEmailMetadata);
+  const documentFunctionBucketFacet = deriveFunctionBucketFacet(record);
+  const documentCohortEmploymentStatuses = parseCohortEmploymentStatuses(record);
+
+  const candidate: Candidate = {
+    id: pickFirstString(record, ["candidate_id", "id"]) || crypto.randomUUID(),
+    name: pickFirstString(record, ["display_name", "name_en", "full_name", "name"]) || "Unknown Candidate",
+    headline: pickFirstString(record, ["headline", "role", "title"]) || "Candidate profile",
+    avatarUrl:
+      pickCanonicalMediaSummaryAvatarUrl(record, metadata) ||
+      pickProfilePhoto(profilePhotoMap, pickFirstString(record, ["candidate_id", "id"])) ||
+      pickFirstString(record, ["avatar_url", "photo_url", "media_url"]),
+    team: normalizeTeam(pickFirstString(record, ["team", "group_name", "group"])),
+    employmentStatus:
+      employmentStatus === "current" || employmentStatus === "former" ? employmentStatus : "lead",
+    confidence: toConfidence(pickFirstString(record, ["confidence_label"])),
+    summary:
+      pickFirstString(record, ["summary", "notes", "description"]) ||
+      "Recovered from candidate documents.",
+    outreachLayer: parseOutreachLayer(record.outreach_layer, metadata.outreach_layer),
+    outreachLayerKey:
+      pickFirstString(record, ["outreach_layer_key"]) ||
+      pickFirstString(metadata, ["outreach_layer_key"]),
+    matchedKeywords: canonicalizeDisplayKeywords(
+      dedupeStrings([
+        ...distinctMatchedKeywords(matchedFieldRecords),
+        ...sourceMatchKeywords(sourceMatches),
+        ...splitStructuredText(record.matched_keywords),
+        ...splitStructuredText(metadata.matched_keywords),
+      ]),
+    ),
+    sourceMatches,
+    currentCompany: pickFirstString(record, ["current_company", "organization"]),
+    location: pickFirstString(record, ["profile_location", "location"]),
+    roleBucket: pickFirstString(record, ["role_bucket"]),
+    functionIds: pickFunctionIds(metadata.source_shard_filters, record.function_ids, metadata.function_ids),
+    functionBucketIds: documentFunctionBucketFacet?.ids,
+    functionBucketSource: documentFunctionBucketFacet?.source,
+    cohortEmploymentStatuses: documentCohortEmploymentStatuses,
+    linkedinUrl: resolveLinkedinUrl(pickFirstString(record, ["linkedin_url"]), pickFirstString(record, ["display_name", "name_en", "full_name", "name"])),
+    sourceDataset: normalizeDatasetLabel(pickFirstString(record, ["source_dataset"])),
+    notesSnippet: firstLine(pickFirstString(record, ["notes"])),
+    primaryEmail: sanitizedEmail.email,
+    primaryEmailMetadata: sanitizedEmail.metadata,
+    needsProfileCompletion:
+      asBoolean(record.needs_profile_completion ?? metadata.needs_profile_completion) || false,
+    lowProfileRichness:
+      asBoolean(record.low_profile_richness ?? metadata.low_profile_richness) ||
+      ((asBoolean(record.has_profile_detail ?? metadata.has_profile_detail) || false) &&
+        !(asBoolean(record.needs_profile_completion ?? metadata.needs_profile_completion) || false) &&
+        Boolean(resolveLinkedinUrl(pickFirstString(record, ["linkedin_url"]), pickFirstString(record, ["display_name", "name_en", "full_name", "name"]))) &&
+        (structuredExperienceLines.length === 0 || structuredEducationLines.length === 0)),
+    hasProfileDetail:
+      asBoolean(record.has_profile_detail ?? metadata.has_profile_detail) || false,
+    profileCaptureKind:
+      pickFirstString(record, ["profile_capture_kind"]) ||
+      pickFirstString(metadata, ["profile_capture_kind"]),
+    focusAreas,
+    matchReasons,
+    education:
+      structuredEducationLines.length > 0
+        ? structuredEducationLines
+        : asArray(record.education)
+            .map((value) => asString(value))
+            .filter(Boolean),
+    experience:
+      structuredExperienceLines.length > 0
+        ? structuredExperienceLines
+        : asArray(record.work_history ?? record.experience)
+            .map((value) => asString(value))
+            .filter(Boolean),
+    evidence: evidenceItems,
+  };
+  return normalizeCandidateProfileStatus(
+    mergeExternalLinks(candidate, contactLinkMap, pickFirstString(record, ["candidate_id", "id"])),
+  );
+}
+
+/**
+ * Test hook over the production candidate projection path (same derivation
+ * used by dashboard/document mapping), so contract tests can exercise the
+ * atomic function-facet pair and employment-membership transport without
+ * re-implementing mirror logic.
+ */
+export function __testDeriveCandidate(record: Record<string, unknown>): Candidate {
+  return deriveCandidate(record);
+}
+
+/** Test hook over the materialized-enrichment overlay (atomic pair overlay). */
+export function __testDeriveCandidateFromNormalizedRecord(
+  record: Record<string, unknown>,
+  materializedRecord: Record<string, unknown> | null,
+): Candidate {
+  return deriveCandidateFromNormalizedRecord(record, materializedRecord);
+}
+
+function deriveCandidateDetail(
+  candidateRecord: Record<string, unknown>,
+  materializedRecord?: Record<string, unknown> | null,
+): CandidateDetail {
+  const base = deriveCandidate(candidateRecord);
+  const materialized = materializedRecord || {};
+  const metadata = (candidateRecord.metadata as Record<string, unknown>) || {};
+  const aliases = [
+    ...asArray(candidateRecord.aliases),
+    ...asArray(metadata.aliases),
+  ]
+    .map((value) => asString(value))
+    .filter(Boolean);
+
+  const sourceSummary = [
+    ...base.evidence.map((item) => item.label),
+    ...asArray(materialized.source_summary).map((value) => asString(value)),
+  ].filter(Boolean);
+
+  const documents = asArray(materialized.documents ?? materialized.document_sections)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .map((item, index) => ({
+      title: pickFirstString(item, ["title", "label"]) || `Document ${index + 1}`,
+      body:
+        pickFirstString(item, ["body", "summary", "content", "text"]) ||
+        "Recovered document section from materialized candidate artifacts.",
+    }));
+
+  return {
+    ...base,
+    currentCompany:
+      pickFirstString(candidateRecord, ["current_company", "organization"]) ||
+      pickFirstString(metadata, ["current_company", "organization"]) ||
+      "Unknown company",
+    location:
+      pickFirstString(candidateRecord, ["location"]) ||
+      pickFirstString(metadata, ["location"]) ||
+      "Unknown location",
+    aliases: aliases.length ? aliases : [base.name],
+    sourceSummary:
+      sourceSummary.length > 0
+        ? sourceSummary
+        : [base.sourceDataset || "Normalized artifact", base.linkedinUrl ? "LinkedIn profile available" : ""].filter(
+            Boolean,
+          ),
+    documents:
+      documents.length > 0
+        ? documents
+        : [
+            { title: "Candidate Summary", body: base.summary },
+            { title: "Match Reasons", body: base.matchReasons.join(" ") || "No detailed match reason available." },
+          ],
+  };
+}
+
+function deriveManualReviewItem(record: Record<string, unknown>): ManualReviewItem {
+  const metadata = (record.metadata as Record<string, unknown>) || {};
+  const candidateRecord = (record.candidate as Record<string, unknown>) || {};
+  const synthesis = (metadata.manual_review_synthesis as Record<string, unknown>) || {};
+  const sourceLinks = asArray(record.source_links ?? metadata.source_links).map((item) => (item as Record<string, unknown>) || {});
+  const evidenceRecords = asArray(record.evidence).map((item) => (item as Record<string, unknown>) || {});
+  const evidenceLabels = sourceLinks
+    .map((item) => firstNonEmptyString([item.label, item.title, item.source_type]))
+    .concat(
+      evidenceRecords.map((item) => firstNonEmptyString([item.title, item.source_type, item.summary])),
+    )
+    .filter(Boolean);
+
+  const candidateId =
+    pickFirstString(record, ["candidate_id", "id"]) ||
+    pickFirstString(candidateRecord, ["candidate_id", "id"]) ||
+    pickFirstString(metadata, ["candidate_id"]);
+  const candidateName =
+    pickFirstString(record, ["display_name", "name_en", "full_name", "name"]) ||
+    pickFirstString(candidateRecord, ["display_name", "name_en", "full_name", "name"]) ||
+    pickFirstString(metadata, ["display_name", "candidate_name"]) ||
+    "Unknown candidate";
+  const reviewType =
+    pickFirstString(record, ["review_type", "backlog_type"]) ||
+    pickFirstString(metadata, ["review_type"]) ||
+    "manual_review";
+  const summary =
+    pickFirstString(record, ["summary", "reason", "notes"]) ||
+    pickFirstString(metadata, ["summary", "reason"]) ||
+    "Recovered from manual review backlog.";
+  const recommendedAction =
+    pickFirstString(record, ["recommended_action", "next_action", "review_notes"]) ||
+    pickFirstString(metadata, ["recommended_action"]) ||
+    "Inspect the attached evidence and decide whether to resolve, reject, or continue research.";
+  const rawStatus = pickFirstString(record, ["status"]) || "open";
+  const normalizedStatus =
+    rawStatus === "resolved" || rawStatus === "dismissed" || rawStatus === "escalated" ? rawStatus : "open";
+  let candidate: Candidate | null = null;
+  if (Object.keys(candidateRecord).length > 0) {
+    try {
+      candidate = deriveCandidate(candidateRecord);
+    } catch {
+      candidate = null;
+    }
+  }
+
+  return {
+    id: pickFirstString(record, ["review_item_id", "id"]) || candidateId || crypto.randomUUID(),
+    reviewItemId: Number(record.review_item_id || 0) || undefined,
+    candidateId,
+    candidateName,
+    candidate,
+    reviewType,
+    status: normalizedStatus,
+    summary,
+    recommendedAction,
+    evidenceLabels: evidenceLabels.length ? evidenceLabels : ["Backlog item"],
+    notes: pickFirstString(record, ["review_notes"]),
+    synthesisSummary: pickFirstString(synthesis, ["summary"]),
+  };
+}
+
+function deriveCandidateReviewRecord(record: Record<string, unknown>): CandidateReviewRecord {
+  const metadata =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? (record.metadata as Record<string, unknown>)
+      : {};
+  const rawStatus = pickFirstString(record, ["status"]) || "needs_review";
+  const status: CandidateReviewStatus =
+    rawStatus === "no_review_needed" ||
+    rawStatus === "needs_profile_completion" ||
+    rawStatus === "low_profile_richness" ||
+    rawStatus === "verified_keep" ||
+    rawStatus === "verified_exclude"
+      ? rawStatus
+      : "needs_review";
+  const rawSource = pickFirstString(record, ["source"]) || "manual_review";
+  const source =
+    rawSource === "manual_add" || rawSource === "backend_override" ? rawSource : "manual_review";
+  const sanitizedEmail = scrubCandidateEmail(
+    pickFirstString(record, ["primary_email"]),
+    pickEmailMetadata(record.primary_email_metadata, metadata.primary_email_metadata),
+  );
+  return {
+    id: pickFirstString(record, ["id", "record_id"]) || crypto.randomUUID(),
+    jobId: pickFirstString(record, ["job_id"]),
+    historyId: pickFirstString(record, ["history_id"]),
+    candidateId: pickFirstString(record, ["candidate_id"]),
+    candidateName: pickFirstString(record, ["candidate_name", "display_name", "name"]),
+    headline: pickFirstString(record, ["headline"]),
+    currentCompany: pickFirstString(record, ["current_company"]),
+    avatarUrl: pickCanonicalMediaSummaryAvatarUrl(record, metadata) || pickFirstString(record, ["avatar_url"]),
+    linkedinUrl: pickFirstString(record, ["linkedin_url"]),
+    primaryEmail: sanitizedEmail.email,
+    primaryEmailMetadata: sanitizedEmail.metadata,
+    status,
+    comment: pickFirstString(record, ["comment"]),
+    source,
+    addedAt: pickFirstString(record, ["added_at", "created_at"]) || new Date().toISOString(),
+    updatedAt: pickFirstString(record, ["updated_at"]) || new Date().toISOString(),
+  };
+}
+
+function deriveTargetCandidateRecord(record: Record<string, unknown>): TargetCandidateRecord {
+  const metadata =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? (record.metadata as Record<string, unknown>)
+      : {};
+  const lastSourceSelection =
+    metadata.last_source_selection &&
+    typeof metadata.last_source_selection === "object" &&
+    !Array.isArray(metadata.last_source_selection)
+      ? (metadata.last_source_selection as Record<string, unknown>)
+      : {};
+  const rawStatus = pickFirstString(record, ["follow_up_status"]) || "pending_outreach";
+  const followUpStatus: TargetCandidateFollowUpStatus =
+    rawStatus === "contacted_waiting" ||
+    rawStatus === "rejected" ||
+    rawStatus === "accepted" ||
+    rawStatus === "interview_completed"
+      ? rawStatus
+      : "pending_outreach";
+  const rawQualityScore = record.quality_score;
+  const qualityScore =
+    typeof rawQualityScore === "number"
+      ? rawQualityScore
+      : typeof rawQualityScore === "string" && rawQualityScore.trim()
+        ? Number(rawQualityScore)
+        : null;
+  const sanitizedEmail = scrubCandidateEmail(
+    pickFirstString(record, ["primary_email"]),
+    pickEmailMetadata(record.primary_email_metadata, metadata.primary_email_metadata),
+  );
+  return {
+    id: pickFirstString(record, ["id", "record_id"]) || crypto.randomUUID(),
+    workspaceId: pickFirstString(record, ["workspace_id", "workspaceId"]),
+    candidateId: pickFirstString(record, ["candidate_id"]),
+    candidateIdentityKey:
+      pickFirstString(lastSourceSelection, ["candidate_identity_key"]) ||
+      pickFirstString(record, ["candidate_identity_key"]),
+    personIdentityKey: pickFirstString(record, ["person_identity_key"]),
+    sourceProjectionId:
+      pickFirstString(lastSourceSelection, ["projection_id"]) ||
+      pickFirstString(record, ["source_projection_id"]),
+    sourceMembershipRevision:
+      pickFirstString(lastSourceSelection, ["membership_revision"]) ||
+      pickFirstString(metadata, ["last_source_membership_revision", "source_membership_revision"]),
+    sourceRunId: pickFirstString(record, ["source_run_id"]),
+    sourceCollectionId: pickFirstString(record, ["source_collection_id"]),
+    historyId: pickFirstString(record, ["history_id"]),
+    jobId: pickFirstString(record, ["job_id"]),
+    candidateName: pickFirstString(record, ["candidate_name", "display_name", "name"]),
+    headline: pickFirstString(record, ["headline"]),
+    currentCompany: pickFirstString(record, ["current_company"]),
+    avatarUrl: pickCanonicalMediaSummaryAvatarUrl(record, metadata) || pickFirstString(record, ["avatar_url"]),
+    linkedinUrl: pickFirstString(record, ["linkedin_url"]),
+    primaryEmail: sanitizedEmail.email,
+    primaryEmailMetadata: sanitizedEmail.metadata,
+    followUpStatus,
+    qualityScore: Number.isFinite(qualityScore ?? NaN) ? qualityScore : null,
+    comment: pickFirstString(record, ["comment"]),
+    addedAt: pickFirstString(record, ["added_at", "created_at"]) || new Date().toISOString(),
+    updatedAt: pickFirstString(record, ["updated_at"]) || new Date().toISOString(),
+  };
+}
+
+function deriveTargetCandidatePublicWebSearchState(record: Record<string, unknown>): TargetCandidatePublicWebSearchState {
+  return {
+    status: pickFirstString(record, ["status"]) || "ok",
+    batches: asArray(record.batches)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebBatch(item)),
+    runs: asArray(record.runs)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebRun(item)),
+    phaseCommandsByRunId: asRecord(record.phase_commands_by_run_id),
+  };
+}
+
+function deriveTargetCandidatePublicWebActionResult(record: Record<string, unknown>): TargetCandidatePublicWebActionResult {
+  const state = deriveTargetCandidatePublicWebSearchState(record);
+  const batch =
+    record.batch && typeof record.batch === "object" && !Array.isArray(record.batch)
+      ? deriveTargetCandidatePublicWebBatch(record.batch as Record<string, unknown>)
+      : state.batches[0] || null;
+  return {
+    ...state,
+    batch,
+    summary:
+      record.summary && typeof record.summary === "object" && !Array.isArray(record.summary)
+        ? (record.summary as Record<string, unknown>)
+        : {},
+    workerSummary:
+      record.worker_summary && typeof record.worker_summary === "object" && !Array.isArray(record.worker_summary)
+        ? (record.worker_summary as Record<string, unknown>)
+        : {},
+    job:
+      record.job && typeof record.job === "object" && !Array.isArray(record.job)
+        ? (record.job as Record<string, unknown>)
+        : {},
+    reason: pickFirstString(record, ["reason"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebBatch(record: Record<string, unknown>): TargetCandidatePublicWebBatch {
+  return {
+    batchId: pickFirstString(record, ["batch_id", "batchId"]),
+    workspaceId: pickFirstString(record, ["workspace_id", "workspaceId"]),
+    status: normalizeTargetCandidatePublicWebStatus(pickFirstString(record, ["status"])),
+    requestedRecordIds: asArray(record.requested_record_ids).map((item) => asString(item)).filter(Boolean),
+    runIds: asArray(record.run_ids).map((item) => asString(item)).filter(Boolean),
+    sourceFamilies: asArray(record.source_families).map((item) => asString(item)).filter(Boolean),
+    summary:
+      record.summary && typeof record.summary === "object" && !Array.isArray(record.summary)
+        ? (record.summary as Record<string, unknown>)
+        : {},
+    createdAt: pickFirstString(record, ["created_at"]) || "",
+    updatedAt: pickFirstString(record, ["updated_at"]) || "",
+  };
+}
+
+function deriveTargetCandidatePublicWebRun(record: Record<string, unknown>): TargetCandidatePublicWebRun {
+  const queryManifest = asArray(record.query_manifest)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .filter((item) => Object.keys(item).length > 0);
+  return {
+    runId: pickFirstString(record, ["run_id", "runId"]),
+    workspaceId: pickFirstString(record, ["workspace_id", "workspaceId"]),
+    batchId: pickFirstString(record, ["batch_id", "batchId"]),
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    candidateId: pickFirstString(record, ["candidate_id", "candidateId"]),
+    candidateName: pickFirstString(record, ["candidate_name", "candidateName"]),
+    currentCompany: pickFirstString(record, ["current_company", "currentCompany"]),
+    linkedinUrl: pickFirstString(record, ["linkedin_url", "linkedinUrl"]),
+    status: normalizeTargetCandidatePublicWebStatus(pickFirstString(record, ["status"])),
+    phase: pickFirstString(record, ["phase"]),
+    sourceFamilies: asArray(record.source_families).map((item) => asString(item)).filter(Boolean),
+    summary:
+      record.summary && typeof record.summary === "object" && !Array.isArray(record.summary)
+        ? (record.summary as Record<string, unknown>)
+        : {},
+    queryManifest,
+    searchCheckpoint:
+      record.search_checkpoint && typeof record.search_checkpoint === "object" && !Array.isArray(record.search_checkpoint)
+        ? (record.search_checkpoint as Record<string, unknown>)
+        : {},
+    analysisCheckpoint:
+      record.analysis_checkpoint && typeof record.analysis_checkpoint === "object" && !Array.isArray(record.analysis_checkpoint)
+        ? (record.analysis_checkpoint as Record<string, unknown>)
+        : {},
+    phaseCommands: asRecord(record.phase_commands),
+    phaseCommandDisplayLine: pickFirstString(record, ["phase_command_display_line", "phaseCommandDisplayLine"]),
+    runControlState: asRecord(record.run_control_state || record.runControlState),
+    runDisplayContract: asRecord(record.run_display_contract || record.runDisplayContract),
+    artifactRoot: pickFirstString(record, ["artifact_root", "artifactRoot"]),
+    lastError: pickFirstString(record, ["last_error", "lastError"]),
+    createdAt: pickFirstString(record, ["created_at", "createdAt"]),
+    startedAt: pickFirstString(record, ["started_at", "startedAt"]),
+    completedAt: pickFirstString(record, ["completed_at", "completedAt"]),
+    updatedAt: pickFirstString(record, ["updated_at", "updatedAt"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebDetail(record: Record<string, unknown>): TargetCandidatePublicWebDetail {
+  return {
+    status: pickFirstString(record, ["status"]) || "ok",
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    targetCandidate:
+      record.target_candidate && typeof record.target_candidate === "object" && !Array.isArray(record.target_candidate)
+        ? (record.target_candidate as Record<string, unknown>)
+        : null,
+    latestRun:
+      record.latest_run && typeof record.latest_run === "object" && !Array.isArray(record.latest_run)
+        ? (record.latest_run as Record<string, unknown>)
+        : null,
+    phaseCommands: asRecord(record.phase_commands),
+    personAsset:
+      record.person_asset && typeof record.person_asset === "object" && !Array.isArray(record.person_asset)
+        ? (record.person_asset as Record<string, unknown>)
+        : null,
+    signals: asArray(record.signals)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebSignal(item)),
+    emailCandidates: asArray(record.email_candidates)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebSignal(item)),
+    profileLinks: asArray(record.profile_links)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebSignal(item)),
+    groupedSignals:
+      record.grouped_signals && typeof record.grouped_signals === "object" && !Array.isArray(record.grouped_signals)
+        ? (record.grouped_signals as Record<string, unknown>)
+        : {},
+    evidenceLinks: asArray(record.evidence_links)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebEvidenceLink(item)),
+    promotions: asArray(record.promotions)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebPromotion(item)),
+    promotionSummary:
+      record.promotion_summary && typeof record.promotion_summary === "object" && !Array.isArray(record.promotion_summary)
+        ? (record.promotion_summary as Record<string, unknown>)
+        : {},
+    rawAssetPolicy:
+      record.raw_asset_policy && typeof record.raw_asset_policy === "object" && !Array.isArray(record.raw_asset_policy)
+        ? (record.raw_asset_policy as Record<string, unknown>)
+        : {},
+  };
+}
+
+function deriveTargetCandidateProfileDetail(record: Record<string, unknown>): TargetCandidateProfileDetail {
+  const profile =
+    record.profile && typeof record.profile === "object" && !Array.isArray(record.profile)
+      ? deriveTargetCandidateComposedProfile(record.profile as Record<string, unknown>)
+      : null;
+  return {
+    status: pickFirstString(record, ["status"]) || "ok",
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    targetCandidate:
+      record.target_candidate && typeof record.target_candidate === "object" && !Array.isArray(record.target_candidate)
+        ? (record.target_candidate as Record<string, unknown>)
+        : null,
+    profile,
+    publicWebDetail:
+      record.public_web_detail && typeof record.public_web_detail === "object" && !Array.isArray(record.public_web_detail)
+        ? deriveTargetCandidatePublicWebDetail(record.public_web_detail as Record<string, unknown>)
+        : null,
+    rawAssetPolicy:
+      record.raw_asset_policy && typeof record.raw_asset_policy === "object" && !Array.isArray(record.raw_asset_policy)
+        ? (record.raw_asset_policy as Record<string, unknown>)
+        : {},
+  };
+}
+
+function deriveTargetCandidateComposedProfile(record: Record<string, unknown>): TargetCandidateComposedProfile {
+  const rawAssetPolicy =
+    record.raw_asset_policy && typeof record.raw_asset_policy === "object" && !Array.isArray(record.raw_asset_policy)
+      ? (record.raw_asset_policy as Record<string, unknown>)
+      : {};
+  return {
+    schemaVersion: Number(record.schema_version || record.schemaVersion || 1),
+    identity:
+      record.identity && typeof record.identity === "object" && !Array.isArray(record.identity)
+        ? (record.identity as Record<string, unknown>)
+        : {},
+    contact:
+      record.contact && typeof record.contact === "object" && !Array.isArray(record.contact)
+        ? (record.contact as TargetCandidateComposedProfile["contact"])
+        : {},
+    public_web:
+      record.public_web && typeof record.public_web === "object" && !Array.isArray(record.public_web)
+        ? (record.public_web as TargetCandidateComposedProfile["public_web"])
+        : {},
+    review:
+      record.review && typeof record.review === "object" && !Array.isArray(record.review)
+        ? (record.review as TargetCandidateComposedProfile["review"])
+        : {},
+    export_readiness:
+      record.export_readiness && typeof record.export_readiness === "object" && !Array.isArray(record.export_readiness)
+        ? (record.export_readiness as TargetCandidateComposedProfile["export_readiness"])
+        : {},
+    completeness:
+      record.completeness && typeof record.completeness === "object" && !Array.isArray(record.completeness)
+        ? (record.completeness as TargetCandidateComposedProfile["completeness"])
+        : {},
+    evidence_sources: asArray(record.evidence_sources)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebEvidenceLink(item)),
+    raw_asset_policy: rawAssetPolicy,
+  };
+}
+
+function deriveTargetCandidatePublicWebSignal(record: Record<string, unknown>): TargetCandidatePublicWebSignal {
+  return {
+    signalId: pickFirstString(record, ["signal_id", "signalId"]),
+    runId: pickFirstString(record, ["run_id", "runId"]),
+    signalKind: pickFirstString(record, ["signal_kind", "signalKind"]),
+    signalType: pickFirstString(record, ["signal_type", "signalType"]),
+    emailType: pickFirstString(record, ["email_type", "emailType"]),
+    value: pickFirstString(record, ["value"]),
+    normalizedValue: pickFirstString(record, ["normalized_value", "normalizedValue"]),
+    url: pickFirstString(record, ["url"]),
+    sourceUrl: pickFirstString(record, ["source_url", "sourceUrl"]),
+    sourceDomain: pickFirstString(record, ["source_domain", "sourceDomain"]),
+    sourceFamily: pickFirstString(record, ["source_family", "sourceFamily"]),
+    sourceTitle: pickFirstString(record, ["source_title", "sourceTitle"]),
+    confidenceLabel: pickFirstString(record, ["confidence_label", "confidenceLabel"]),
+    confidenceScore: asNumber(record.confidence_score ?? record.confidenceScore),
+    identityMatchLabel: pickFirstString(record, ["identity_match_label", "identityMatchLabel"]),
+    identityMatchScore: asNumber(record.identity_match_score ?? record.identityMatchScore),
+    publishable: asBoolean(record.publishable) ?? false,
+    promotionStatus: pickFirstString(record, ["promotion_status", "promotionStatus"]),
+    promotionId: pickFirstString(record, ["promotion_id", "promotionId"]) || undefined,
+    promotionAction: pickFirstString(record, ["promotion_action", "promotionAction"]) || undefined,
+    promotedField: pickFirstString(record, ["promoted_field", "promotedField"]) || undefined,
+    promotedValue: pickFirstString(record, ["promoted_value", "promotedValue"]) || undefined,
+    previousValue: pickFirstString(record, ["previous_value", "previousValue"]) || undefined,
+    promotedBy: pickFirstString(record, ["promoted_by", "promotedBy"]) || undefined,
+    promotedAt: pickFirstString(record, ["promoted_at", "promotedAt"]) || undefined,
+    promotionNote: pickFirstString(record, ["promotion_note", "promotionNote"]) || undefined,
+    promotionOverrideReason:
+      pickFirstString(record, ["promotion_override_reason", "promotionOverrideReason"]) || undefined,
+    promotionOverrideValidationReason:
+      pickFirstString(record, ["promotion_override_validation_reason", "promotionOverrideValidationReason"]) || undefined,
+    promotionRequiresManualOverride: asBoolean(
+      record.promotion_requires_manual_override ?? record.promotionRequiresManualOverride,
+    ),
+    suppressionReason: pickFirstString(record, ["suppression_reason", "suppressionReason"]),
+    evidenceExcerpt: pickFirstString(record, ["evidence_excerpt", "evidenceExcerpt"]),
+    linkShapeWarnings: asArray(record.link_shape_warnings ?? record.linkShapeWarnings)
+      .map((item) => asString(item))
+      .filter(Boolean),
+    cleanProfileLink: asBoolean(record.clean_profile_link ?? record.cleanProfileLink) ?? true,
+    artifactRefs:
+      record.artifact_refs && typeof record.artifact_refs === "object" && !Array.isArray(record.artifact_refs)
+        ? (record.artifact_refs as Record<string, unknown>)
+        : {},
+    metadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? (record.metadata as Record<string, unknown>)
+        : {},
+    createdAt: pickFirstString(record, ["created_at", "createdAt"]),
+    updatedAt: pickFirstString(record, ["updated_at", "updatedAt"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebPromotion(record: Record<string, unknown>): TargetCandidatePublicWebPromotion {
+  return {
+    promotionId: pickFirstString(record, ["promotion_id", "promotionId"]),
+    signalId: pickFirstString(record, ["signal_id", "signalId"]),
+    runId: pickFirstString(record, ["run_id", "runId"]),
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    signalKind: pickFirstString(record, ["signal_kind", "signalKind"]),
+    signalType: pickFirstString(record, ["signal_type", "signalType"]),
+    emailType: pickFirstString(record, ["email_type", "emailType"]),
+    value: pickFirstString(record, ["value"]),
+    normalizedValue: pickFirstString(record, ["normalized_value", "normalizedValue"]),
+    url: pickFirstString(record, ["url"]),
+    newValue: pickFirstString(record, ["new_value", "newValue"]),
+    previousValue: pickFirstString(record, ["previous_value", "previousValue"]),
+    sourceUrl: pickFirstString(record, ["source_url", "sourceUrl"]),
+    sourceDomain: pickFirstString(record, ["source_domain", "sourceDomain"]),
+    sourceFamily: pickFirstString(record, ["source_family", "sourceFamily"]),
+    sourceTitle: pickFirstString(record, ["source_title", "sourceTitle"]),
+    confidenceLabel: pickFirstString(record, ["confidence_label", "confidenceLabel"]),
+    confidenceScore: asNumber(record.confidence_score ?? record.confidenceScore),
+    identityMatchLabel: pickFirstString(record, ["identity_match_label", "identityMatchLabel"]),
+    identityMatchScore: asNumber(record.identity_match_score ?? record.identityMatchScore),
+    publishable: asBoolean(record.publishable) ?? false,
+    cleanProfileLink: asBoolean(record.clean_profile_link ?? record.cleanProfileLink) ?? true,
+    linkShapeWarnings: asArray(record.link_shape_warnings ?? record.linkShapeWarnings)
+      .map((item) => asString(item))
+      .filter(Boolean),
+    action: pickFirstString(record, ["action"]),
+    promotionStatus: pickFirstString(record, ["promotion_status", "promotionStatus"]),
+    operator: pickFirstString(record, ["operator"]),
+    note: pickFirstString(record, ["note"]),
+    overrideReason: pickFirstString(record, ["override_reason", "overrideReason"]),
+    overrideValidationReason: pickFirstString(record, ["override_validation_reason", "overrideValidationReason"]),
+    requiresManualOverride: asBoolean(record.requires_manual_override ?? record.requiresManualOverride) ?? false,
+    evidenceExcerpt: pickFirstString(record, ["evidence_excerpt", "evidenceExcerpt"]),
+    metadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? (record.metadata as Record<string, unknown>)
+        : {},
+    createdAt: pickFirstString(record, ["created_at", "createdAt"]),
+    updatedAt: pickFirstString(record, ["updated_at", "updatedAt"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebEvidenceLink(
+  record: Record<string, unknown>,
+): TargetCandidatePublicWebEvidenceLink {
+  return {
+    sourceUrl: pickFirstString(record, ["source_url", "sourceUrl"]),
+    sourceDomain: pickFirstString(record, ["source_domain", "sourceDomain"]),
+    sourceFamily: pickFirstString(record, ["source_family", "sourceFamily"]),
+    sourceTitle: pickFirstString(record, ["source_title", "sourceTitle"]),
+    signalIds: asArray(record.signal_ids ?? record.signalIds).map((item) => asString(item)).filter(Boolean),
+    signalKinds: asArray(record.signal_kinds ?? record.signalKinds).map((item) => asString(item)).filter(Boolean),
+    signalTypes: asArray(record.signal_types ?? record.signalTypes).map((item) => asString(item)).filter(Boolean),
+    identityMatchLabels: asArray(record.identity_match_labels ?? record.identityMatchLabels)
+      .map((item) => asString(item))
+      .filter(Boolean),
+    maxConfidenceScore: asNumber(record.max_confidence_score ?? record.maxConfidenceScore),
+  };
+}
+
+function normalizeTargetCandidatePublicWebStatus(value: string): TargetCandidatePublicWebStatus {
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "queued" ||
+    normalized === "search_submitted" ||
+    normalized === "searching" ||
+    normalized === "entry_links_ready" ||
+    normalized === "fetching" ||
+    normalized === "documents_fetched" ||
+    normalized === "analyzing" ||
+    normalized === "adjudication_completed" ||
+    normalized === "analysis_completed" ||
+    normalized === "completed" ||
+    normalized === "completed_with_errors" ||
+    normalized === "needs_review" ||
+    normalized === "failed" ||
+    normalized === "cancelled"
+  ) {
+    return normalized;
+  }
+  return "unknown";
+}
+
+async function getDashboardFromLocalAssets(): Promise<DashboardData | null> {
+  try {
+    const indexPayload = await fetchPublicJson<{ snapshotId: string; files: string[] }>("/tml/index.json");
+    const normalizedCandidates = await fetchPublicJsonOptional<unknown[]>("/tml/normalized_candidates.json", []);
+    const materializedPayload = await fetchPublicJsonOptional<unknown>("/tml/materialized_candidate_documents.json", {});
+    const candidateDocumentsPayload = await fetchPublicJsonOptional<unknown>("/tml/candidate_documents.json", []);
+    const profilePhotoMap = await fetchPublicJsonOptional<Record<string, string>>("/tml/profile_photos.json", {});
+    const profileSummaryMap = await fetchPublicJsonOptional<Record<string, Record<string, unknown>>>(
+      "/tml/profile_summaries.json",
+      {},
+    );
+    const enrichedContactLinkMap = await fetchPublicJsonOptional<Record<string, unknown>>(
+      "/tml/enriched_contact_links.json",
+      {},
+    );
+    const manualReview = await fetchPublicJson<unknown[]>("/tml/manual_review_backlog.json").catch(() => []);
+    const assetRegistry = await fetchPublicJson<Record<string, unknown>>("/tml/asset_registry.json").catch(
+      () => ({}) as Record<string, unknown>,
+    );
+
+    const materializedCandidates = extractCandidateArray(materializedPayload);
+    const materializedById = new Map(
+      materializedCandidates
+        .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+        .map((item) => [pickFirstString(item, ["candidate_id", "id"]), item] as const),
+    );
+    const candidateDocuments = extractCandidateArray(candidateDocumentsPayload);
+    const candidateSource = normalizedCandidates.length > 0 ? normalizedCandidates : candidateDocuments;
+    const candidates = candidateSource
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .map((item) =>
+        normalizedCandidates.length > 0
+          ? deriveCandidateFromNormalizedRecord(
+              item,
+              materializedById.get(pickFirstString(item, ["candidate_id", "id"])) || null,
+              profilePhotoMap,
+              profileSummaryMap,
+              enrichedContactLinkMap,
+            )
+          : deriveCandidateFromDocument(item, profilePhotoMap, enrichedContactLinkMap),
+      );
+
+    const groups = ["All", ...new Set(candidates.map((candidate) => normalizeTeam(candidate.team)).filter(Boolean))];
+    const registryAssets = assetRegistry["assets"];
+    const assetEntries = Array.isArray(registryAssets)
+      ? registryAssets.length
+      : Array.isArray((assetRegistry as { entries?: unknown[] }).entries)
+        ? ((assetRegistry as { entries?: unknown[] }).entries || []).length
+        : 0;
+
+    return {
+      title: "Local Company Asset View",
+      snapshotId: indexPayload.snapshotId,
+      queryLabel: "Recovered local company artifacts for frontend demo and testing",
+      targetCompany: "",
+      intentKeywords: [],
+      resultMode: "asset_population",
+      resultModeLabel: "公司级资产视图",
+      rankedCandidateCount: candidates.length,
+      assetPopulationCount: candidates.length,
+      totalCandidates: candidates.length,
+      totalEvidence: assetEntries,
+      manualReviewCount: manualReview.length,
+      layers: buildLayeredSegmentationOptions(candidates),
+      groups,
+      candidates,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getCandidateDetailFromLocalAssets(candidateId: string): Promise<CandidateDetail | null> {
+  try {
+    const normalizedCandidates = await fetchPublicJsonOptional<unknown[]>("/tml/normalized_candidates.json", []);
+    const candidateDocumentsPayload = await fetchPublicJsonOptional<unknown>("/tml/candidate_documents.json", []);
+    const profilePhotoMap = await fetchPublicJsonOptional<Record<string, string>>("/tml/profile_photos.json", {});
+    const profileSummaryMap = await fetchPublicJsonOptional<Record<string, Record<string, unknown>>>(
+      "/tml/profile_summaries.json",
+      {},
+    );
+    const enrichedContactLinkMap = await fetchPublicJsonOptional<Record<string, unknown>>(
+      "/tml/enriched_contact_links.json",
+      {},
+    );
+    const materializedPayload = await fetchPublicJsonOptional<unknown>("/tml/materialized_candidate_documents.json", {});
+
+    const candidateDocuments = extractCandidateArray(candidateDocumentsPayload);
+    const materializedDocuments = extractCandidateArray(materializedPayload);
+    const candidateRecords = (normalizedCandidates.length > 0 ? normalizedCandidates : candidateDocuments).map(
+      (item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>),
+    );
+    const materializedRecords = materializedDocuments.map((item) =>
+      ((item && typeof item === "object" ? item : {}) as Record<string, unknown>),
+    );
+
+    const candidateRecord =
+      candidateRecords.find((item) => pickFirstString(item, ["candidate_id", "id"]) === candidateId) ||
+      candidateRecords.find((item) => pickFirstString(item, ["display_name", "name_en"]) === candidateId) ||
+      candidateRecords[0];
+
+    if (!candidateRecord) {
+      return null;
+    }
+
+    const candidateKey = pickFirstString(candidateRecord, ["candidate_id", "id"]);
+    const materializedRecord =
+      materializedRecords.find((item) => pickFirstString(item, ["candidate_id", "id"]) === candidateKey) ||
+      materializedRecords.find(
+        (item) =>
+          pickFirstString(item, ["display_name", "name_en"]) ===
+          pickFirstString(candidateRecord, ["display_name", "name_en"]),
+      ) ||
+      null;
+
+    const profileSourcePath =
+      pickFirstString(materializedRecord || {}, ["source_path"]) ||
+      pickFirstString(candidateRecord, ["source_path"]);
+    const profilePublicPath = sourcePathToPublicProfilePath(profileSourcePath);
+    const profilePayload = profilePublicPath
+      ? await fetchPublicJsonOptional<unknown>(profilePublicPath, {})
+      : {};
+    const profileItem = pickProfileItem(profilePayload);
+
+    if (normalizedCandidates.length > 0) {
+      const detail = deriveCandidateDetail(candidateRecord, materializedRecord);
+      const enrichedBase = deriveCandidateFromNormalizedRecord(
+        candidateRecord,
+        materializedRecord,
+        profilePhotoMap,
+        profileSummaryMap,
+        enrichedContactLinkMap,
+      );
+      const profileHeadline = pickFirstString(profileItem, ["headline"]);
+      const profileAbout = pickFirstString(profileItem, ["about"]);
+      const profileLocation = joinFragments([
+        pickFirstString((profileItem.location as Record<string, unknown>) || {}, ["linkedinText"]),
+        pickFirstString(profileItem, ["locationName"]),
+      ]);
+      const profileLinkedin = pickFirstString(profileItem, ["linkedinUrl"]);
+      const profilePhoto =
+        pickFirstString(profileItem, ["photo"]) ||
+        pickFirstString((profileItem.profilePicture as Record<string, unknown>) || {}, ["url"]);
+      const canonicalAvatarUrl = pickCanonicalMediaSummaryAvatarUrl(candidateRecord, materializedRecord || {});
+      const profileEducation = profileEducationLines(profileItem);
+      const profileExperience = profileExperienceLines(profileItem);
+      const profileFocus = profileFocusAreas(profileItem);
+      const profileAlias = pickFirstString(profileItem, ["publicIdentifier"]);
+      const profileCompany = pickFirstString(
+        ((asArray(profileItem.currentPosition)[0] as Record<string, unknown>) || {}),
+        ["companyName"],
+      );
+      const narrativeSummary = buildNarrativeSummary(
+        detail.name,
+        profileItem,
+        enrichedBase.summary || detail.summary,
+        profileCompany || enrichedBase.currentCompany || detail.currentCompany,
+      );
+      return {
+        ...detail,
+        avatarUrl: canonicalAvatarUrl || profilePhoto || enrichedBase.avatarUrl,
+        headline: profileHeadline || enrichedBase.headline,
+        summary: narrativeSummary,
+        currentCompany: profileCompany || enrichedBase.currentCompany || detail.currentCompany,
+        location: profileLocation || enrichedBase.location || detail.location,
+        linkedinUrl: resolveLinkedinUrl(profileLinkedin || enrichedBase.linkedinUrl || detail.linkedinUrl || "", detail.name),
+        sourceDataset: enrichedBase.sourceDataset || detail.sourceDataset,
+        notesSnippet: enrichedBase.notesSnippet || detail.notesSnippet,
+        education: profileEducation.length > 0 ? profileEducation : detail.education,
+        experience: profileExperience.length > 0 ? profileExperience : detail.experience,
+        focusAreas: profileFocus.length > 0 ? profileFocus : detail.focusAreas,
+        aliases: profileAlias ? Array.from(new Set([profileAlias, ...detail.aliases])) : detail.aliases,
+      };
+    }
+
+    const baseCandidate = deriveCandidateFromDocument(candidateRecord, profilePhotoMap, enrichedContactLinkMap);
+    return {
+      ...baseCandidate,
+      currentCompany:
+        pickFirstString(candidateRecord, ["current_company", "organization"]) || "Unknown company",
+      location: pickFirstString(candidateRecord, ["location"]) || firstLine(pickFirstString(candidateRecord, ["notes"])) || "Unknown location",
+      aliases: [baseCandidate.name],
+      sourceSummary: [
+        ...baseCandidate.evidence.map((item) => item.label),
+        baseCandidate.sourceDataset || "",
+        baseCandidate.linkedinUrl ? "LinkedIn profile available" : "",
+      ].filter(Boolean),
+      documents: materializedRecord
+        ? [
+            {
+              title: "物化文档摘要",
+              body:
+                pickFirstString(materializedRecord, ["summary", "description"]) ||
+                "Recovered from materialized candidate documents.",
+            },
+          ]
+        : [
+            {
+              title: "候选人摘要",
+              body: baseCandidate.summary,
+            },
+            ...(baseCandidate.notesSnippet
+              ? [
+                  {
+                    title: "原始备注",
+                    body: baseCandidate.notesSnippet,
+                  },
+                ]
+              : []),
+          ],
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getManualReviewItemsFromLocalAssets(): Promise<ManualReviewItem[] | null> {
+  try {
+    const payload = await fetchPublicJson<unknown[]>("/tml/manual_review_backlog.json");
+    if (!Array.isArray(payload)) {
+      return [];
+    }
+    return payload
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .map(deriveManualReviewItem);
+  } catch {
+    return null;
+  }
+}
+
+async function getRunStatusFromLocalAssets(): Promise<RunStatusData | null> {
+  try {
+    const indexPayload = await fetchPublicJson<{ snapshotId: string; bundleId?: string; source?: string }>("/tml/index.json");
+    const normalizedCandidates = await fetchPublicJsonOptional<unknown[]>("/tml/normalized_candidates.json", []);
+    const candidateDocumentsPayload = await fetchPublicJsonOptional<unknown>("/tml/candidate_documents.json", []);
+    const manualReview = await fetchPublicJsonOptional<unknown[]>("/tml/manual_review_backlog.json", []);
+    const profileCompletion = await fetchPublicJsonOptional<unknown[]>("/tml/profile_completion_backlog.json", []);
+
+    const candidateDocuments = extractCandidateArray(candidateDocumentsPayload);
+    const candidateSource = normalizedCandidates.length > 0 ? normalizedCandidates : candidateDocuments;
+    const candidates = candidateSource
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .map((item) => (normalizedCandidates.length > 0 ? deriveCandidate(item) : deriveCandidateFromDocument(item)));
+
+    const currentCount = candidates.filter((candidate) => candidate.employmentStatus === "current").length;
+    const formerCount = candidates.filter((candidate) => candidate.employmentStatus === "former").length;
+
+    const sourceLabel =
+      indexPayload.source === "object_storage" ? "R2 asset pull" : "local runtime import";
+    const bundleLabel = indexPayload.bundleId ? `Bundle ${indexPayload.bundleId}` : "Imported artifact set";
+
+    return {
+      jobId: indexPayload.bundleId || `tml_${indexPayload.snapshotId}`,
+      status: "completed",
+      currentStage: "Asset Recovery Ready",
+      startedAt: indexPayload.snapshotId,
+      metrics: [
+        { label: "总候选人数量", value: String(candidates.length) },
+        { label: "需人工审核候选人", value: String(manualReview.length) },
+        { label: "Profile Backlog", value: String(profileCompletion.length) },
+      ],
+      timeline: [
+        {
+          id: "local_1",
+          stage: "Bundle Discovery",
+          title: "Bundle discovery completed",
+          detail: `${sourceLabel} resolved Thinking Machines Lab snapshot ${indexPayload.snapshotId}.`,
+          status: "completed",
+          startedAt: indexPayload.snapshotId,
+          completedAt: indexPayload.snapshotId,
+          sourceTags: [],
+        },
+        {
+          id: "local_2",
+          stage: "Candidate Materialization",
+          title: "Candidate materialization completed",
+          detail: `Loaded ${candidates.length} candidate records with ${currentCount} current and ${formerCount} former profiles.`,
+          status: "completed",
+          startedAt: indexPayload.snapshotId,
+          completedAt: indexPayload.snapshotId,
+          sourceTags: [],
+        },
+        {
+          id: "local_3",
+          stage: "Review Backlog",
+          title: "Review backlog completed",
+          detail: `${manualReview.length} manual review items and ${profileCompletion.length} profile completion items are available for demo workflows.`,
+          status: "completed",
+          startedAt: indexPayload.snapshotId,
+          completedAt: indexPayload.snapshotId,
+          sourceTags: [],
+        },
+      ],
+      workers: [
+        { id: "local_asset_loader", lane: "asset_loader", status: "completed", budget: bundleLabel },
+        { id: "local_candidate_view", lane: "candidate_artifacts", status: "completed", budget: `${candidates.length} candidates materialized` },
+        { id: "local_review_queue", lane: "review_surface", status: "completed", budget: `${manualReview.length} review items exposed` },
+      ],
+    };
+  } catch {
+    return null;
+  }
+}

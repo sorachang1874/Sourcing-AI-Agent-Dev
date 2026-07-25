@@ -1,0 +1,222 @@
+{
+  "schema_version": "x.grok.adaptive_recall_wave.effective_prompt_policy.v1",
+  "binding_version": "adaptive-effective-prompt-entry-semantics-v1",
+  "policy_id": "adaptive_base_discovery_effective_prompts.v1",
+  "owner": "x_first_adaptive_wave_operator",
+  "allowed_discovery_dimensions": [
+    "target_lab_affiliation",
+    "professional_role_or_function",
+    "public_research_evidence",
+    "pretraining_relevance"
+  ],
+  "entries": [
+    {
+      "policy_entry_id": "synthetic_lab_base_model_training_contract_fixture.v1",
+      "target": {
+        "lab_id": "synthetic_lab",
+        "research_focus_id": "base_model_training",
+        "scope": "Public professional evidence for a synthetic lab-neutral fixture."
+      },
+      "source_prompt_sha256": "1583b055b0156e02ddbfc0a33b4f36ab46d560d89c8d7919c772877aba173cae",
+      "authority": "fixture_only"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave1.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "c18b45a88367eb51e81c3c279c80a1d89893b79d2d34b292eb0f0d95d8d13c99",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave2.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "b5c8aeeed181d29bd85d38348b1fa77df8c4074f3b2f253b8cfbc781d6b17456",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave3.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "0173b80e9bc88a16f7c378681533f04c07f117f4f6c0b11fcda5a9021ab699f7",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave4.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "fc8d4bc1ee59a8a992b06d3def988abed6981597c795a37c3930360d18761fc5",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave5.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "c02f036e93e0815da056ae29b69b2eb81e4bd3a18376a7e477aa508aea69ada0",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave6.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "b950501b3034cf57e7e2b5a2429253a824ae23985d6a6edd12e1a9ba6294fca6",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_recall_wave7.v1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "2db5049f74f8c9d57b8c5be2232df88a10e8dbb5902adf017ced987fbfe73c76",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "openai_pretraining_zero_prior_official_discovery.v5",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "5318d0baedd1b7fe6ec0057c01dfceccff5296d0e1f85dbf5642a094ec85164b",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "prior_input_policy_id": "require_empty_prior_waves_v1",
+      "prior_input_policy_sha256": "8b2e6ed95ad3574903a2d459c0bcafb92cfa293020fd716ad311e115144ec47c",
+      "official_account_handles": [
+        "OpenAI"
+      ]
+    },
+    {
+      "policy_entry_id": "openai_pretraining_zero_prior_official_discovery_excerpt_preflight.v5_1",
+      "target": {
+        "lab_id": "openai",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical OpenAI affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "2fcf57a05cf788a564cf17f6ab84194a391d7322133503afebc9ddad7cb3e180",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "prior_input_policy_id": "require_empty_prior_waves_v1",
+      "prior_input_policy_sha256": "8b2e6ed95ad3574903a2d459c0bcafb92cfa293020fd716ad311e115144ec47c",
+      "official_account_handles": [
+        "OpenAI"
+      ]
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave1.v1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "b8073ded1675dbb96801caa36247f8cbe152d921b02dd7a18a2824cb4099d544",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2.v1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "a195728be9c6ed239d3e9912417513634c31d8ab5b01d635f541622f40cfd677",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_discovery_first.v2",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "b8f7a6e4a47b850d12a8756141fcab9d060f11c03a749d95e389fbcb94432f52",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_discovery_first_post_reply.v3",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "8b752a8dd6606ac609f47fa5ce14af7c4c7518dffa2f302ca5292e46f1180651",
+      "authority": "live_authorized"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_discovery_only.v4",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "9b9bf931bb3cc27d12c10eda65a98b5d070ef136a4d7d8735dd61a48580c85f2",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_no_person_hydration_v1",
+      "session_query_policy_sha256": "e528e99abe6b5ae19fe47a3b4520630459f91444682a786c57a59f1dc54e0270"
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_official_discovery.v5",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "09991dbb9420309628f36794a79268a3ecb1aa67439f5e3d42169cb9795c8978",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "official_account_handles": [
+        "GoogleDeepMind",
+        "DeepMind"
+      ]
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave2_official_discovery_excerpt_preflight.v5_1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "1ba6e53538ac851f1f160a80e63aec3787f31ce7c2711541450800a3cd2836d5",
+      "authority": "live_authorized",
+      "session_query_policy_id": "discovery_only_official_accounts_no_person_hydration_v2",
+      "session_query_policy_sha256": "26305c1bd1529e51bb35e9ce1533b64f09b2ed87f99981f14be5dde0718101fc",
+      "official_account_handles": [
+        "GoogleDeepMind",
+        "DeepMind"
+      ]
+    },
+    {
+      "policy_entry_id": "google_deepmind_pretraining_recall_wave3.v1",
+      "target": {
+        "lab_id": "google_deepmind",
+        "research_focus_id": "pretraining",
+        "scope": "Public professional evidence of current or historical Google DeepMind affiliation and current or historical pre-training or base-model training relevance."
+      },
+      "source_prompt_sha256": "0ff2d205592dccebdd2a5ccaccf73296bc7702cc299c46d1020ed07b18a22ab9",
+      "authority": "live_authorized"
+    }
+  ]
+}

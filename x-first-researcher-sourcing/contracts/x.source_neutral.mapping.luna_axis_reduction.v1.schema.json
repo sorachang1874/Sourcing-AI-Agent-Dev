@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.luna_axis_reduction.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "reducer_version",
+    "candidate_manifest_sha256",
+    "expected_review_count",
+    "completed_review_count",
+    "coverage_status",
+    "transition_authority",
+    "candidate_axis_rows",
+    "authorized_transition_count",
+    "reduction_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.luna_axis_reduction.v1"},
+    "reducer_version": {"const": "source_neutral_mapping_luna_axis_reducer.v1"},
+    "candidate_manifest_sha256": {"$ref": "#/$defs/sha"},
+    "expected_review_count": {"type": "integer", "minimum": 0},
+    "completed_review_count": {"type": "integer", "minimum": 0},
+    "coverage_status": {"enum": ["not_applicable", "not_started", "incomplete", "complete"]},
+    "transition_authority": {"const": "diagnostic_only_unattested"},
+    "candidate_axis_rows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/axis_row"}
+    },
+    "authorized_transition_count": {"const": 0},
+    "reduction_sha256": {"$ref": "#/$defs/sha"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
+    "axis_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_ref",
+        "axis",
+        "state_version_sha256",
+        "prior_state",
+        "prior_evidence_status",
+        "expected_evidence_count",
+        "reviewed_evidence_count",
+        "expected_evidence_manifest_sha256",
+        "reviewed_evidence_manifest_sha256",
+        "proposal_set_sha256",
+        "coverage_status",
+        "diagnostic_proposed_state",
+        "resolved_state",
+        "transition_status",
+        "transition_id"
+      ],
+      "properties": {
+        "candidate_ref": {"$ref": "#/$defs/id"},
+        "axis": {"enum": ["lab_affiliation", "pretraining_experience"]},
+        "state_version_sha256": {"$ref": "#/$defs/sha"},
+        "prior_state": {"$ref": "#/$defs/state"},
+        "prior_evidence_status": {"enum": ["fixture_asserted", "source_bound", "model_mediated_unverified", "unsupported"]},
+        "expected_evidence_count": {"type": "integer", "minimum": 0},
+        "reviewed_evidence_count": {"type": "integer", "minimum": 0},
+        "expected_evidence_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "reviewed_evidence_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "proposal_set_sha256": {"$ref": "#/$defs/sha"},
+        "coverage_status": {"enum": ["not_applicable", "not_started", "incomplete", "complete"]},
+        "diagnostic_proposed_state": {"oneOf": [{"$ref": "#/$defs/state"}, {"type": "null"}]},
+        "resolved_state": {"$ref": "#/$defs/state"},
+        "transition_status": {"const": "not_authorized"},
+        "transition_id": {"type": "null"}
+      }
+    }
+  }
+}

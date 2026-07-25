@@ -1,0 +1,221 @@
+{
+  "schema_version": "x.profile.bio_semantic.review.v2.2",
+  "status": "completed",
+  "request_id": "xbsv2r_111111111111111111111111",
+  "request_sha256": "2ad268100076fc408c5fb63cad162ae9f31cef8565008c0bfabcc6f358c78979",
+  "profile_snapshot_id": "xbsv2s_222222222222222222222222",
+  "platform_user_id": "900000000000000001",
+  "bio_sha256": "7848b585c337dfd7ff611afb6990846335b7cd7a28fe97a88dd277349b462400",
+  "execution": {
+    "mode": "offline_fake",
+    "transport_id": "offline_fake_responses",
+    "execute_live": false,
+    "transport_invocations": 1,
+    "provider_external_calls": 0,
+    "response_received": true,
+    "fallback_used": false,
+    "phase": "completed",
+    "contract_error": "none"
+  },
+  "model_receipt": {
+    "response_id": "resp_fixture_semantic_v2",
+    "response_status": "completed",
+    "model_id": "gpt-5.6-luna",
+    "prompt_version": "profile-bio-semantic-prompt-v2.2",
+    "prompt_sha256": "7504507db5945e08b91848fa1e01ccc7a1d7bd8f48f329e7057ca9b492b9d48f",
+    "output_schema_version": "x.profile.bio_semantic.model_output.v2.2",
+    "output_schema_sha256": "37436cf27cb9b6dcbc74aeaad8fa915cf9da75d3738d2e78a164a90fec0c28f6",
+    "raw_response_sha256": "a2fe14645dda1ac72be951421ac65e8cc116f0a0e1727f9c8b3af9c362124d47",
+    "model_output_sha256": "f32fa662a0f59f380c9c1aed30f807beebcba5c6ed1db643f9a65846a4b0c5bf"
+  },
+  "usage": {
+    "input_tokens": 600,
+    "output_tokens": 300,
+    "total_tokens": 900,
+    "source": "offline_fake",
+    "billable": false
+  },
+  "verdict": "proposals_available",
+  "proposals": [
+    {
+      "proposal_id": "xbsv2p_11c771e95a9a8e6be81cc714",
+      "proposal_type": "professional_region_experience",
+      "relation_state": "not_applicable",
+      "span_start": 0,
+      "span_end": 13,
+      "excerpt": "在新加坡从事模型训练研究。",
+      "excerpt_sha256": "0ae28cff1757cc1c7ddbe066359a470c3a05a8f7ed24fcfe4336f28439899891",
+      "reason_codes": [
+        "explicit_professional_region_experience"
+      ],
+      "reason": "The cited Bio span explicitly states professional region experience.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_1c1ab34e6e529dc5c19d60e0",
+      "proposal_type": "professional_affiliation",
+      "relation_state": "current_claimed",
+      "span_start": 14,
+      "span_end": 43,
+      "excerpt": "Head of growth @synthetic_hub",
+      "excerpt_sha256": "2a1b6c99491d557b39c5a03e2b0afb0cd0ef0a11044b0f9085df1a982d5809c0",
+      "reason_codes": [
+        "explicit_current_organization_claim"
+      ],
+      "reason": "The cited Bio span explicitly states a current claimed organization affiliation.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_7c970de1030256e6ea72d3f7",
+      "proposal_type": "professional_affiliation",
+      "relation_state": "previous_claimed",
+      "span_start": 44,
+      "span_end": 62,
+      "excerpt": "Prev @synth_listen",
+      "excerpt_sha256": "28dfcdc260fe80f02d3fca2bd5dfa47398d4484137912cdec66dd51c52030585",
+      "reason_codes": [
+        "explicit_previous_organization_claim"
+      ],
+      "reason": "The cited Bio span explicitly states a previous claimed organization affiliation.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_93c0809f411f85dabf5a4666",
+      "proposal_type": "professional_china_digital_ecosystem",
+      "relation_state": "not_applicable",
+      "span_start": 63,
+      "span_end": 72,
+      "excerpt": "小红书同名四万粉丝",
+      "excerpt_sha256": "d4bb0d7cbbcd75338dd77803b2565d9f7f2a7496909e6c6134a8ce28b4b63c54",
+      "reason_codes": [
+        "explicit_china_digital_ecosystem_activity"
+      ],
+      "reason": "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_ac93bcdd08a8668dd6d0f5cc",
+      "proposal_type": "professional_china_digital_ecosystem",
+      "relation_state": "not_applicable",
+      "span_start": 73,
+      "span_end": 99,
+      "excerpt": "公众号 SyntheticFounder（长文首发）",
+      "excerpt_sha256": "b8523bafb60b9c3a15cde246bea959063a6589165d1c2380d0fc54a9bbc5439c",
+      "reason_codes": [
+        "explicit_china_digital_ecosystem_activity"
+      ],
+      "reason": "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    },
+    {
+      "proposal_id": "xbsv2p_16d0a2ca0f95181781c66bcf",
+      "proposal_type": "observed_chinese_professional_content",
+      "relation_state": "not_applicable",
+      "span_start": 100,
+      "span_end": 113,
+      "excerpt": "分享中文 AI 工程实践。",
+      "excerpt_sha256": "e3a89d6df1e88f45ef7d87fa166d2ce206491a7defc4f6c18dce614324c6983b",
+      "reason_codes": [
+        "observed_chinese_professional_content"
+      ],
+      "reason": "The cited Bio span contains observed Chinese-language professional content.",
+      "reason_source": "closed_deterministic_explanation_template_v2.2",
+      "confidence": "high",
+      "evidence_basis": "profile_bio_only",
+      "requires_independent_verification": true,
+      "verification_status": "unverified_professional_context_proposal"
+    }
+  ],
+  "professional_experience_proxy_policy": {
+    "expected": {
+      "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+      "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
+    },
+    "observed": {
+      "policy_version": "profile-bio-professional-experience-proxy-policy-v1",
+      "policy_sha256": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"
+    },
+    "validation_status": "validated_canonical"
+  },
+  "professional_experience_proxy_rollup": {
+    "status": "unverified_model_derived",
+    "regions": {
+      "china": {
+        "strength": "strong_proxy",
+        "contributing_proposals": [
+          {
+            "proposal_id": "xbsv2p_16d0a2ca0f95181781c66bcf",
+            "proposal_type": "observed_chinese_professional_content",
+            "confidence": "high",
+            "mapped_strength": "weak_proxy"
+          },
+          {
+            "proposal_id": "xbsv2p_93c0809f411f85dabf5a4666",
+            "proposal_type": "professional_china_digital_ecosystem",
+            "confidence": "high",
+            "mapped_strength": "strong_proxy"
+          },
+          {
+            "proposal_id": "xbsv2p_ac93bcdd08a8668dd6d0f5cc",
+            "proposal_type": "professional_china_digital_ecosystem",
+            "confidence": "high",
+            "mapped_strength": "strong_proxy"
+          }
+        ]
+      },
+      "asia": {
+        "strength": "strong_proxy",
+        "contributing_proposals": [
+          {
+            "proposal_id": "xbsv2p_16d0a2ca0f95181781c66bcf",
+            "proposal_type": "observed_chinese_professional_content",
+            "confidence": "high",
+            "mapped_strength": "weak_proxy"
+          },
+          {
+            "proposal_id": "xbsv2p_93c0809f411f85dabf5a4666",
+            "proposal_type": "professional_china_digital_ecosystem",
+            "confidence": "high",
+            "mapped_strength": "strong_proxy"
+          },
+          {
+            "proposal_id": "xbsv2p_ac93bcdd08a8668dd6d0f5cc",
+            "proposal_type": "professional_china_digital_ecosystem",
+            "confidence": "high",
+            "mapped_strength": "strong_proxy"
+          }
+        ]
+      }
+    }
+  },
+  "error_codes": [],
+  "authority": {
+    "external_facts_accepted": false,
+    "protected_identity_inferred": false,
+    "discovery_or_ranking_authorized": false,
+    "eligibility_decided": false,
+    "canonical_employment_confirmed": false,
+    "canonical_write_authorized": false,
+    "outreach_authorized": false
+  }
+}

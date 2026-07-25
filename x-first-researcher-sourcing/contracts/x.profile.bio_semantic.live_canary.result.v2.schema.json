@@ -1,0 +1,538 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.live_canary.result.v2.schema.json",
+  "title": "Receipt-first Luna semantic live-canary result v2",
+  "description": "Closed result shape only. It is non-authoritative without validate_artifact_directory_v2 replay against the request, approval, execution, catalog, semantic-review, raw-response, and hash receipts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "error_codes",
+    "run",
+    "evidence_provenance",
+    "semantic_contract",
+    "identity",
+    "catalog",
+    "semantic",
+    "calls",
+    "usage",
+    "timing",
+    "budgets",
+    "retention",
+    "response_received",
+    "artifact_inventory",
+    "artifact_sha256s",
+    "approval_receipt_sha256",
+    "execution_receipt_sha256",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio_semantic.live_canary.result.v2"
+    },
+    "status": {
+      "enum": ["completed", "failed"]
+    },
+    "error_codes": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "enum": [
+          "catalog_transport_failed",
+          "catalog_redirect_rejected",
+          "catalog_http_failed",
+          "catalog_invalid",
+          "catalog_model_missing",
+          "total_timeout_exceeded",
+          "response_transport_failed",
+          "response_redirect_rejected",
+          "response_http_failed",
+          "response_secret_detected",
+          "response_content_type_invalid",
+          "response_model_mismatch",
+          "semantic_review_failed"
+        ]
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "probe_id", "request_id", "request_sha256", "owner_approval_id"],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^luna_canary_v2(?:_fixture)?_run_[0-9a-f]{32}$"
+        },
+        "probe_id": {
+          "enum": [
+            "profile_bio_semantic_v22_chshapi_luna_receipt_first_v2",
+            "profile_bio_semantic_v22_chshapi_luna_offline_fixture_v2"
+          ]
+        },
+        "request_id": {
+          "const": "xbsv2r_444444444444444444444444"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "owner_approval_id": {
+          "enum": [
+            "user_approved_2026_07_14_chshapi_luna_receipt_first_v2",
+            "offline_fixture_chshapi_luna_receipt_first_v2"
+          ]
+        }
+      }
+    },
+    "evidence_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_origin",
+        "production_transport_observed",
+        "formal_live_evidence_eligible",
+        "caller_injection_used"
+      ],
+      "properties": {
+        "execution_origin": {"enum": ["production_http", "offline_fixture"]},
+        "production_transport_observed": {"type": "boolean"},
+        "formal_live_evidence_eligible": {"type": "boolean"},
+        "caller_injection_used": {"type": "boolean"}
+      }
+    },
+    "semantic_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_schema_version",
+        "review_schema_version",
+        "prompt_version",
+        "prompt_sha256",
+        "output_schema_version",
+        "output_schema_sha256",
+        "proxy_policy_version",
+        "proxy_policy_sha256",
+        "pure_adjudication_api_version",
+        "pure_adjudication_implementation_sha256"
+      ],
+      "properties": {
+        "request_schema_version": {"const": "x.profile.bio_semantic.request.v2.2"},
+        "review_schema_version": {"const": "x.profile.bio_semantic.review.v2.2"},
+        "prompt_version": {"const": "profile-bio-semantic-prompt-v2.2"},
+        "prompt_sha256": {"const": "7504507db5945e08b91848fa1e01ccc7a1d7bd8f48f329e7057ca9b492b9d48f"},
+        "output_schema_version": {"const": "x.profile.bio_semantic.model_output.v2.2"},
+        "output_schema_sha256": {"const": "37436cf27cb9b6dcbc74aeaad8fa915cf9da75d3738d2e78a164a90fec0c28f6"},
+        "proxy_policy_version": {"const": "profile-bio-professional-experience-proxy-policy-v1"},
+        "proxy_policy_sha256": {"const": "a2c115e2505ed08ca5930028a8458218cbc3e0e074bd33ef96f1a51db2609e72"},
+        "pure_adjudication_api_version": {"const": "x.profile.bio_semantic.pure_adjudication.v1"},
+        "pure_adjudication_implementation_sha256": {
+          "const": "875bfdc49c6f409409575514bfcdf6f55ba27ff577ab81247ea7de271e99e070"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "base_url",
+        "requested_model",
+        "returned_model",
+        "exact_model_match",
+        "fallback_used",
+        "tools_used"
+      ],
+      "properties": {
+        "provider": {"const": "chshapi_openai_compatible_relay"},
+        "base_url": {"const": "https://api.chshapi.org/v1"},
+        "requested_model": {"const": "gpt-5.6-luna"},
+        "returned_model": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[!-~]{1,160}$"},
+            {"type": "null"}
+          ]
+        },
+        "exact_model_match": {"type": "boolean"},
+        "fallback_used": {"const": false},
+        "tools_used": {"const": false}
+      }
+    },
+    "catalog": {
+      "$ref": "x.profile.bio_semantic.live_canary.result.v1.schema.json#/properties/catalog"
+    },
+    "semantic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_status", "error_codes", "review_schema_version"],
+      "properties": {
+        "review_status": {"enum": ["completed", "failed", null]},
+        "error_codes": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "enum": [
+              "request_invalid",
+              "prompt_invalid",
+              "output_schema_invalid",
+              "proxy_policy_invalid",
+              "execute_live_required",
+              "request_mode_mismatch",
+              "execution_contract_invalid",
+              "transport_failed",
+              "response_invalid",
+              "model_output_invalid",
+              "budget_exceeded"
+            ]
+          }
+        },
+        "review_schema_version": {"enum": ["x.profile.bio_semantic.review.v2.2", null]}
+      }
+    },
+    "calls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_external_calls",
+        "model_external_calls",
+        "total_external_calls",
+        "semantic_model_calls"
+      ],
+      "properties": {
+        "catalog_external_calls": {"const": 1},
+        "model_external_calls": {"type": "integer", "minimum": 0, "maximum": 1},
+        "total_external_calls": {"type": "integer", "minimum": 1, "maximum": 2},
+        "semantic_model_calls": {"type": "integer", "minimum": 0, "maximum": 1}
+      }
+    },
+    "usage": {
+      "$ref": "x.profile.bio_semantic.live_canary.result.v1.schema.json#/properties/usage"
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "completed_at", "elapsed_ms", "timeout_ms"],
+      "properties": {
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "completed_at": {"$ref": "#/$defs/timestamp"},
+        "elapsed_ms": {"type": "integer", "minimum": 0},
+        "timeout_ms": {"const": 30000}
+      }
+    },
+    "budgets": {
+      "$ref": "x.profile.bio_semantic.live_canary.result.v1.schema.json#/properties/budgets"
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "hours", "delete_after", "deletion_status"],
+      "properties": {
+        "class": {"const": "private_raw_evidence"},
+        "hours": {"const": 24},
+        "delete_after": {"$ref": "#/$defs/timestamp"},
+        "deletion_status": {"const": "pending"}
+      }
+    },
+    "response_received": {"type": "boolean"},
+    "artifact_inventory": {
+      "enum": [
+        ["approval-receipt.json", "catalog-receipt.json", "execution-receipt.json", "request.json", "result.json"],
+        [
+          "approval-receipt.json",
+          "catalog-receipt.json",
+          "execution-receipt.json",
+          "request.json",
+          "result.json",
+          "semantic-review.json"
+        ],
+        [
+          "approval-receipt.json",
+          "catalog-receipt.json",
+          "execution-receipt.json",
+          "raw-response.json",
+          "request.json",
+          "result.json",
+          "semantic-review.json"
+        ]
+      ]
+    },
+    "artifact_sha256s": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["approval-receipt.json", "catalog-receipt.json", "execution-receipt.json", "request.json"],
+          "properties": {
+            "approval-receipt.json": {"$ref": "#/$defs/sha256"},
+            "catalog-receipt.json": {"$ref": "#/$defs/sha256"},
+            "execution-receipt.json": {"$ref": "#/$defs/sha256"},
+            "request.json": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "approval-receipt.json",
+            "catalog-receipt.json",
+            "execution-receipt.json",
+            "request.json",
+            "semantic-review.json"
+          ],
+          "properties": {
+            "approval-receipt.json": {"$ref": "#/$defs/sha256"},
+            "catalog-receipt.json": {"$ref": "#/$defs/sha256"},
+            "execution-receipt.json": {"$ref": "#/$defs/sha256"},
+            "request.json": {"$ref": "#/$defs/sha256"},
+            "semantic-review.json": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "approval-receipt.json",
+            "catalog-receipt.json",
+            "execution-receipt.json",
+            "raw-response.json",
+            "request.json",
+            "semantic-review.json"
+          ],
+          "properties": {
+            "approval-receipt.json": {"$ref": "#/$defs/sha256"},
+            "catalog-receipt.json": {"$ref": "#/$defs/sha256"},
+            "execution-receipt.json": {"$ref": "#/$defs/sha256"},
+            "raw-response.json": {"$ref": "#/$defs/sha256"},
+            "request.json": {"$ref": "#/$defs/sha256"},
+            "semantic-review.json": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "approval_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "execution_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "discovery_or_ranking_authorized",
+        "eligibility_decided",
+        "canonical_employment_confirmed",
+        "canonical_write_authorized",
+        "outreach_authorized"
+      ],
+      "properties": {
+        "discovery_or_ranking_authorized": {"const": false},
+        "eligibility_decided": {"const": false},
+        "canonical_employment_confirmed": {"const": false},
+        "canonical_write_authorized": {"const": false},
+        "outreach_authorized": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "run": {
+              "properties": {
+                "run_id": {"pattern": "^luna_canary_v2_run_[0-9a-f]{32}$"},
+                "probe_id": {"const": "profile_bio_semantic_v22_chshapi_luna_receipt_first_v2"},
+                "owner_approval_id": {"const": "user_approved_2026_07_14_chshapi_luna_receipt_first_v2"}
+              }
+            },
+            "evidence_provenance": {
+              "properties": {
+                "execution_origin": {"const": "production_http"},
+                "production_transport_observed": {"const": true},
+                "formal_live_evidence_eligible": {"const": true},
+                "caller_injection_used": {"const": false}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "run": {
+              "properties": {
+                "run_id": {"pattern": "^luna_canary_v2_fixture_run_[0-9a-f]{32}$"},
+                "probe_id": {"const": "profile_bio_semantic_v22_chshapi_luna_offline_fixture_v2"},
+                "owner_approval_id": {"const": "offline_fixture_chshapi_luna_receipt_first_v2"}
+              }
+            },
+            "evidence_provenance": {
+              "properties": {
+                "execution_origin": {"const": "offline_fixture"},
+                "production_transport_observed": {"const": false},
+                "formal_live_evidence_eligible": {"const": false},
+                "caller_injection_used": {"const": true}
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "artifact_inventory": {
+              "const": [
+                "approval-receipt.json",
+                "catalog-receipt.json",
+                "execution-receipt.json",
+                "request.json",
+                "result.json"
+              ]
+            },
+            "artifact_sha256s": {
+              "required": [
+                "approval-receipt.json",
+                "catalog-receipt.json",
+                "execution-receipt.json",
+                "request.json"
+              ]
+            },
+            "calls": {
+              "properties": {
+                "model_external_calls": {"const": 0},
+                "total_external_calls": {"const": 1},
+                "semantic_model_calls": {"const": 0}
+              }
+            },
+            "semantic": {
+              "properties": {
+                "review_status": {"const": null},
+                "error_codes": {"maxItems": 0},
+                "review_schema_version": {"const": null}
+              }
+            },
+            "usage": {"const": null},
+            "response_received": {"const": false}
+          }
+        },
+        {
+          "properties": {
+            "artifact_inventory": {
+              "const": [
+                "approval-receipt.json",
+                "catalog-receipt.json",
+                "execution-receipt.json",
+                "request.json",
+                "result.json",
+                "semantic-review.json"
+              ]
+            },
+            "artifact_sha256s": {
+              "required": [
+                "approval-receipt.json",
+                "catalog-receipt.json",
+                "execution-receipt.json",
+                "request.json",
+                "semantic-review.json"
+              ]
+            },
+            "calls": {
+              "properties": {
+                "model_external_calls": {"const": 1},
+                "total_external_calls": {"const": 2},
+                "semantic_model_calls": {"const": 1}
+              }
+            },
+            "semantic": {
+              "properties": {
+                "review_status": {"const": "failed"},
+                "error_codes": {"const": ["transport_failed"]},
+                "review_schema_version": {"const": "x.profile.bio_semantic.review.v2.2"}
+              }
+            },
+            "usage": {"const": null},
+            "response_received": {"const": false}
+          }
+        },
+        {
+          "properties": {
+            "artifact_inventory": {
+              "const": [
+                "approval-receipt.json",
+                "catalog-receipt.json",
+                "execution-receipt.json",
+                "raw-response.json",
+                "request.json",
+                "result.json",
+                "semantic-review.json"
+              ]
+            },
+            "artifact_sha256s": {
+              "required": [
+                "approval-receipt.json",
+                "catalog-receipt.json",
+                "execution-receipt.json",
+                "raw-response.json",
+                "request.json",
+                "semantic-review.json"
+              ]
+            },
+            "calls": {
+              "properties": {
+                "model_external_calls": {"const": 1},
+                "total_external_calls": {"const": 2},
+                "semantic_model_calls": {"const": 1}
+              }
+            },
+            "semantic": {
+              "properties": {
+                "review_status": {"enum": ["completed", "failed"]},
+                "review_schema_version": {"const": "x.profile.bio_semantic.review.v2.2"}
+              }
+            },
+            "response_received": {"const": true}
+          }
+        }
+      ]
+    },
+    {
+      "if": {"properties": {"status": {"const": "completed"}}},
+      "then": {
+        "properties": {
+          "error_codes": {"maxItems": 0},
+          "identity": {
+            "properties": {
+              "returned_model": {"const": "gpt-5.6-luna"},
+              "exact_model_match": {"const": true}
+            }
+          },
+          "semantic": {
+            "properties": {
+              "review_status": {"const": "completed"},
+              "error_codes": {"maxItems": 0},
+              "review_schema_version": {"const": "x.profile.bio_semantic.review.v2.2"}
+            }
+          },
+          "calls": {
+            "properties": {
+              "model_external_calls": {"const": 1},
+              "total_external_calls": {"const": 2},
+              "semantic_model_calls": {"const": 1}
+            }
+          },
+          "response_received": {"const": true}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {"properties": {"error_codes": {"minItems": 1, "maxItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "meta": {
+    "behavior_fixture": "lovable_live_roster_long_latency",
+    "purpose": "Nightly long-latency overlay for the Lovable no-baseline live-roster flow. It reuses the canonical Lovable fixture and only overrides provider timing fields.",
+    "real_api_calls_required": false,
+    "latency_profile": {
+      "company_roster_remote_wait_seconds": 60,
+      "profile_search_remote_wait_seconds": 75,
+      "profile_batch_remote_wait_seconds": [60, 75, 120, 180, 240]
+    }
+  },
+  "includes": ["lovable_live_roster.json"],
+  "harvest": {
+    "rules": [
+      {
+        "name": "lovable_company_employees_roster",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 60,
+        "scripted_actor_run_duration_ms": 60000,
+        "scripted_dataset_download_duration_ms": 3200
+      },
+      {
+        "name": "lovable_former_profile_search",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 75,
+        "scripted_actor_run_duration_ms": 75000,
+        "scripted_dataset_download_duration_ms": 3600
+      },
+      {
+        "name": "lovable_profile_scraper_former_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 180,
+        "scripted_actor_run_duration_ms": 180000,
+        "scripted_dataset_download_duration_ms": 4500
+      },
+      {
+        "name": "lovable_profile_scraper_roster_early",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 60,
+        "scripted_actor_run_duration_ms": 60000,
+        "scripted_dataset_download_duration_ms": 4200
+      },
+      {
+        "name": "lovable_profile_scraper_roster_mid_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 120,
+        "scripted_actor_run_duration_ms": 120000,
+        "scripted_dataset_download_duration_ms": 4300
+      },
+      {
+        "name": "lovable_profile_scraper_roster_fast_out_of_order",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 75,
+        "scripted_actor_run_duration_ms": 75000,
+        "scripted_dataset_download_duration_ms": 4200
+      },
+      {
+        "name": "lovable_profile_scraper_roster_long_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 240,
+        "scripted_actor_run_duration_ms": 240000,
+        "scripted_dataset_download_duration_ms": 4800
+      },
+      {
+        "name": "lovable_profile_scraper_roster_default_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 120,
+        "scripted_actor_run_duration_ms": 120000,
+        "scripted_dataset_download_duration_ms": 4300
+      }
+    ]
+  }
+}

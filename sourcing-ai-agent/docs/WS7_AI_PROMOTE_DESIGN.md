@@ -1,0 +1,436 @@
+# WS7/W7.3 — AI-Native materialize→promote Judgment Design (operator directive #3)
+
+> **OQ1–OQ8 全部 RATIFIED 2026-07-24（operator 亲答,均按本稿推荐）**：阈值族(asset_reuse_planning:1217)退役、completeness_score 保留为 AI 特征+V_COMP 非回归地板、仅『争议』决策调 AI（pre-branch 确定性分流）；任何失败类一律保 incumbent+审计（非划分器的规则梯回退）；payload 快照捕获+backfill 仅 S6-live 前必需（simulate 切片先行）；**S0 characterization oracle 强制先钉**（evaluate 决策金样+完整性公式网格+候选选择+两道 guard 拒绝形状标 permanent-hard）；additive `metadata.ai_promote_decision` 键+审计化 force_upsert 保留+dry-run 双门可见；配置 settings 模型+promote 专用 20s 超时+`SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE` opt-in。实施自 S0 起按 §7 协议;lineage guard 事务内 fail-closed 硬前置不可动。
+
+> Status: DESIGN DRAFT 2026-07-24 — **awaiting operator rulings on OQ1–OQ8 (§8) + independent review gate**. No implementation slice lands before the ruling batch is answered and the review verdict for the contract slices is recorded (contract-heavy → §9 protocol). Authority: operator ruling ③ + ④ RATIFIED 2026-07-22 ([REFACTOR_MASTER_PLAN.md](REFACTOR_MASTER_PLAN.md) §6.5, directive #3); factual base: [WS7_STRONG_AGENT_RECON_2026-07-22.md](WS7_STRONG_AGENT_RECON_2026-07-22.md) §2. Design shape mirrors the proven [WS7_AI_BATCH_DIVIDER_DESIGN.md](WS7_AI_BATCH_DIVIDER_DESIGN.md) (divider议案①, OQ1–OQ8 RATIFIED 2026-07-23).
+
+```
+status: design-draft    owner: operator (rulings pending)
+canonical-path: sourcing-ai-agent/docs/WS7_AI_PROMOTE_DESIGN.md
+drafted: 2026-07-24     oracle-pin: tests/test_organization_promote_characterization.py (S0 DONE 2026-07-24, §6/§9)
+```
+
+Unprefixed `file:line` anchors refer to `sourcing-ai-agent/src/sourcing_agent/`; test anchors to `sourcing-ai-agent/tests/`. Anchors verified on this tree (branch `governance-phase0-ttl-20260611`).
+
+---
+
+## 0. Ratified constraints (transcribed; NOT up for redesign)
+
+1. **Ruling ③ — two gates.** The storage lineage guard stays a **fail-closed HARD gate**; replay/lineage safety is NEVER delegated to AI. The AI judges promote/reject ONLY within candidates the guard has already passed. Prerequisite: **shard-recording completeness** (full request params + payload snapshot + `estimated_total` + lineage backfill), joined with the NEXT_TODO backfill残留.
+2. **Ruling ④ — fail-closed promotion.** On AI unavailability/failure, promotion **fails closed**: do NOT promote, keep the incumbent authoritative snapshot. Asset correctness is conservative — unlike the divider (ruling ④ there falls back to the rule ladder because division is an *efficiency* concern), promotion is an *asset-correctness* concern and fails toward the incumbent.
+3. **The seam is `evaluate_organization_asset_registry_promotion`.** Directive #3's "硬性规则 …历史上出过错误 promote" names the completeness threshold family in that function (§1.2). That family is what the AI judgment replaces; the storage lineage guard (§1.4) is what stays hard.
+
+**Divider-vs-promote contrast (why this is not a copy of 议案①):**
+
+| Axis | Divider (议案①) | Promote (this doc) |
+|---|---|---|
+| Concern | efficiency (batch shape) | asset correctness (which snapshot serves) |
+| AI-unavailable fallback | rule ladder + audit (ruling ④a) | **keep incumbent, no promote** (ruling ④b) |
+| Retained hard gate | provider envelope / wave invariants demote to *validators* | storage lineage guard stays a **non-demoted fail-closed gate** |
+| Current oracle | whole-dict plan-record characterization existed (ruling-① prereq, `test_fetch_profile_batch_characterization.py`) | **NO characterization oracle exists** — S0 must build it (§6) |
+| Record placement risk | additive key breaks the whole-dict plan oracle (D1) | no whole-dict registry-record oracle exists → additive audit key is safe (D1′, §2.4) |
+
+---
+
+## 1. The current hard-rule promote surface (enumerated from code)
+
+Single decision path today: `evaluate_organization_asset_registry_promotion` (asset_reuse_planning.py:1217–1407), wired through `upsert_organization_asset_registry_with_guard` (asset_reuse_planning.py:1515–1548), with a second, independent fail-closed gate inside the store write (storage.py:8633–8695). Each rule below is annotated **[AI-REPLACE]** (the judgment the AI takes over) or **[STAYS HARD]** (a fail-closed gate the AI cannot weaken).
+
+### 1.1 Deterministic pre-branches — **[STAYS RULE]** (not AI-judged; §8 OQ4)
+
+Three branches are trivially correct and need no judgment; they stay deterministic and never invoke the model:
+- lifecycle non-promotable → reject `lifecycle_state_not_promotable` (asset_reuse_planning.py:1224, via `organization_asset_lifecycle_promotable`).
+- no incumbent → promote `no_existing_authoritative` (:1232).
+- same-snapshot refresh → promote `same_snapshot_refresh` (:1241).
+
+### 1.2 The completeness threshold family — **[AI-REPLACE]**
+
+The contested judgment directive #3 targets. Constants (asset_reuse_planning.py:149–152): `MIN_RELATIVE_GAIN=0.05`, `MIN_ABSOLUTE_GAIN_SMALL=20`, `MIN_ABSOLUTE_GAIN_LARGE=100` (≥1000-count triggers LARGE, :1290–1293), `MAX_COMPLETENESS_SCORE_REGRESSION=1.0`.
+
+- **`subsumption_higher`** — six ANDed threshold checks (:1278–1287): candidate_count ≥ existing×0.98; profile_detail ≥ existing×0.98; evidence ≥ existing×0.95; missing_ratio ≤ existing+0.01; profile_gap_ratio ≤ existing+0.02; effective_lane_total ≥ existing×0.98.
+- **`completeness_higher`** — candidate score ≥ existing +1.0 (:1288).
+- **`materially_higher` family** (:1295–1314): count/profile_detail/evidence/lane_total each ≥ `max(existing+absolute_floor, existing×1.05)`; `coverage_materially_higher` = lane_total alone OR (count+detail+evidence together) (:1311–1314).
+- **Four promote branches (OR)** (:1346–1350): `explicit_baseline_inclusion_promotable` (:1331, incl. the sub-50-score "quality recovery" clause :1323–1330), `completeness_higher AND subsumption_higher`, `materially_higher_coverage_despite_snapshot_count_bias` (:1339, score_gap ≤ 3.5), `materially_higher_coverage_with_stable_quality` (:1318, score_gap ≤ 1.0).
+- **Candidate selection loop** — `select_organization_asset_registry_promotion_candidate` (:1410–1450): sorts candidates by `_organization_asset_registry_candidate_sort_key` desc, skips the incumbent registry_id/snapshot_id, returns the first `promote=True`. This orchestration (which candidates, in what order) is part of what the AI judgment consumes.
+
+### 1.3 The completeness_score formula — **[STAYS AS FEATURE, not a gate]**
+
+`completeness_score` (asset_reuse_planning.py:740–754): `35 + profile_coverage_ratio×45 − missing_ratio×18 − profile_gap_ratio×10 − manual_ratio×5 + min(8, source_snapshot_count×1.5)`, then clamped to the `[0,100]` range; `explicit_profile_capture` discounted 0.35 into coverage (:734); bands high≥75 / medium≥50 / low (:755–760). This formula is a **deterministic signal the AI reads** (an input feature), not a rule the AI bypasses. It stays computed exactly as today so the AI sees the same coverage number a human operator would; whether any threshold on it is *retained as a hard floor* is OQ2.
+
+### 1.4 The storage lineage / generation guard — **[STAYS HARD, fail-closed]**
+
+Second gate, inside `upsert_organization_asset_registry` (storage.py:8633–8695), runs against `existing_rows` read in the store transaction — structurally it CANNOT move into the planning-layer decision (it needs the in-transaction row read). Two refusal shapes when an authoritative row already exists on a different snapshot:
+1. same `materialization_generation_key` + lower sequence → `stale_generation_sequence_replay` (:8670–8675).
+2. different lineage whose `selected_snapshot_ids` is a non-empty **strict subset** of the incumbent's → `source_snapshot_coverage_regression` (:8676–8681; the incident `{041551} ⊂ {104157,041551}`).
+
+On refusal the row still upserts **non-authoritative** and returns `authoritative_promotion_refused` (:8683–8695). Legitimate new lineages with equal-or-wider coverage still promote. **This guard is the non-negotiable fail-closed floor of ruling ③ — no AI design may see, bypass, or soften it.**
+
+### 1.5 The escape hatch — `force_upsert`
+
+`registry_refresh_mode="force_upsert"` (asset_registration.py:270–279; default `"guarded_upsert"`, :78) bypasses the guarded path. Its fate is OQ7 (recommend: retained as an audited operator-only escape hatch, never a normal-path).
+
+### 1.6 The three mis-promote incidents the AI judgment must not repeat (recon §2.3)
+
+1. **OpenAI generation rollback** (`bc6b3fd` → `86db42c`): a stale-job recovery reconcile re-materialized an OLD snapshot and flipped OpenAI authoritative from generation sequence 6 (dual-source superset) back to 3. Root fix = the storage guard (§1.4), which took two rounds to calibrate (the first cross-lineage sequence compare mis-fired on serving-repair, 3 tests failed). **Lesson: replay safety belongs to the storage guard, NOT to any judgment layer — this is exactly why ruling ③ keeps the guard hard and outside the AI.**
+2. **Google simulate pollution + merge-rebuild** (`d542b3c`): an old authoritative snapshot carried 40 simulate placeholder rows yet stayed authoritative; a cross-snapshot merge rebuild synthesized a 12,837-row / 40-placeholder-leak view (75 min, killed mid-run, artifact quarantined). **Lesson: the promote judgment must treat simulate/placeholder provenance as a hard disqualifier, and coverage must be per-snapshot, not merge-synthesized.**
+3. **TML honest rejection** (same commit, the *control* case): the guard correctly rejected a TML promotion on real metrics; the operator re-routed to cache-merge with no override. **Lesson: a correct reject is a success — the AI must be free to (and audited when it does) reject.**
+
+周边债 (recon §2.3.4): `.coord/BOARD.md` + NEXT_TODO shard-lineage-backfill / profile_fetched 对账 are known gaps in the promote evidence chain — the ruling ③ prerequisite batch merges with them.
+
+---
+
+## 2. Contract: the AI promote-decision schema
+
+### 2.1 Where the AI sits relative to the current path
+
+The AI replaces the `evaluate_organization_asset_registry_promotion` call at asset_reuse_planning.py:1541 (inside `upsert_organization_asset_registry_with_guard`). The pre-branches (§1.1) still short-circuit deterministically. For a **contested** decision (incumbent exists, candidate is a different non-refresh snapshot), the flow becomes:
+
+```
+inherit/enforce/ensure coverage (:1528–1540, unchanged)
+        │
+        ▼
+guard-predicted PRE-FILTER  ──reject──▶ keep incumbent  (the storage-guard refusal predicate,
+ (§5 V-LINEAGE, read-only)                                run early so the AI never judges a
+        │ pass                                            candidate the guard will refuse)
+        ▼
+AI promote judgment  ──reject──▶ keep incumbent + audit
+        │ approve
+        ▼
+retained validators (§5 V-COMP / V-GEN / V-PROV) ──fail──▶ keep incumbent + audit
+        │ pass
+        ▼
+store.upsert_organization_asset_registry(authoritative=True)
+        │
+        ▼
+storage lineage guard (§1.4, storage.py:8633) ── FINAL fail-closed backstop ──▶ non-authoritative + refusal audit
+```
+
+**promote ⟺ guard-pass AND AI-approve AND validators-pass.** Reject may originate from any layer. The AI can only be MORE conservative than the rules — it can turn a rule-ladder `promote` into a reject, but it can NEVER turn a guard/validator reject into a promote. The storage guard (§1.4) stays as the final in-transaction backstop even after the pre-filter, because it alone reads the committed rows.
+
+> **Ordering discrepancy D-ORD (recorded honestly):** ruling ③ phrases the guard as a "硬前置" (hard precondition), but in current code `evaluate` (:1541) runs BEFORE the storage guard (storage.py:8633), which demotes post-hoc. The design reconciles this by (a) the conjunction above (order-independent for correctness) and (b) adding the guard-predicted pre-filter so "AI only judges guard-passed candidates" becomes literally true, while keeping the storage guard as the unmovable final backstop. The storage guard is NOT relocated — it depends on the in-transaction `existing_rows` read (storage.py:8615–8622).
+
+### 2.2 Decision schema — `sourcing.organization_asset.ai_promote_decision.v1`
+
+Versioned dotted-contract id (repo convention, mirrors `sourcing.profile_prefetch.ai_batch_division.v1`). One decision record per contested promote evaluation.
+
+```jsonc
+{
+  "schema_id": "sourcing.organization_asset.ai_promote_decision.v1",
+  "decision_id": "<ULID>",                      // audit + idempotency key
+  "decision_source": "ai_judge",                // | "deterministic_prebranch" | "guard_refused" | "fallback_keep_incumbent"
+  "decision": "reject",                         // "promote" | "reject" — the AI's verdict WITHIN guard-passed candidates
+  "reason": "candidate adds 72 current-lane profiles at equal completeness but drops former-lane evidence; net coverage not a superset",  // ≤240 chars free text
+  "reason_code": "ai_coverage_not_superset",    // controlled vocabulary; deterministic/guard/fallback records keep the current enum verbatim (§4)
+  "candidate_descriptor": {                     // WHAT THE AI SEES — no guard verdict, no store internals
+    "incumbent": { "snapshot_id": "…", "metrics": { "...": 0 }, "completeness_score": 0, "completeness_band": "…",
+                   "selected_snapshot_ids": ["…"], "source_snapshot_count": 0, "lifecycle_status": "ready" },
+    "candidate": { "snapshot_id": "…", "metrics": { "...": 0 }, "completeness_score": 0, "completeness_band": "…",
+                   "selected_snapshot_ids": ["…"], "source_snapshot_count": 0, "lifecycle_status": "ready",
+                   "explicit_baseline_inclusion": true },
+    "coverage_evidence": {                      // per-shard request-population match (the recon §2.4 surface)
+      "shards": [ { "shard_id": "…", "lane": "former", "search_query": "…", "locations": ["…"],
+                    "function_ids": ["8","9","19","24"], "job_titles": ["…"], "seniority": ["…"],
+                    "query_family": "…", "result_count": 304, "estimated_total_count": 0,
+                    "provider_cap_hit": false, "payload_snapshot_sha256": "…" } ],
+      "request_population_match": { "candidate_covers_incumbent_shards": true, "new_shards": [], "dropped_shards": [] }
+    },
+    "prior_snapshot_comparison": { "candidate_sort_key": [/* opaque */], "incumbent_sort_key": [/* opaque */],
+                                   "simulate_or_placeholder_provenance": false }
+  },
+  "provenance": {
+    "model_provider": "…", "requested_model": "…", "response_model": "…",
+    "prompt_sha256": "…", "input_snapshot_sha256": "…",
+    "usage": { "input_tokens": 0, "output_tokens": 0 }, "latency_ms": 0
+  },
+  "validator_results": [ { "validator": "V_LINEAGE_prefilter", "status": "pass" }, … ],
+  "fallback": null                              // or the ruling-④ keep-incumbent audit (§4)
+}
+```
+
+**The AI NEVER sees or emits the guard's verdict.** The `candidate_descriptor` carries coverage/lineage *evidence* (selected_snapshot_ids, per-shard populations) so the AI can reason about superset coverage, but the storage guard's pass/fail is computed independently and is not an AI input or output. Mirroring divider D7: the AI authors ONLY `{"decision", "reason", "reason_code"}` (wire-shape rule, F4 on anything else); the mint-side helper contributes `decision_id`, `provenance.*_sha256`, `input_snapshot_sha256`, assembles the envelope, and runs the validator battery. Hashes over descriptor data the model partially sees are caller-authored fact, not output repair.
+
+### 2.3 The prerequisite recording completeness this judgment consumes (ruling ③ 前置批)
+
+The `coverage_evidence` block requires per-shard request records. Landed (W7.1 first cut, master plan §6.5):
+- `build_acquisition_shard_registry_record` (asset_reuse_planning.py:1709) writes the full request filter face into `metadata.request_filters` (:1749–1750) — including the job_titles / seniority / exclude_* axes that `query_signature` does not project and the keywords `normalize` drops.
+- `estimated_total_count` now read from the probe summary at the root branch (:1815/:1890/:2028), fixing the hard-coded 0.
+
+**Still missing (blocks the LIVE slice, not the offline slices):**
+- **Provider payload snapshot capture** — the acquisition-execution side must persist the actual dispatched provider payload (a `payload_snapshot_sha256` per shard). Recon §2.4: the shard registry does NOT store the complete provider payload; `estimated_total_count` is still 0 across the existing 8-row PG sample; `provider_cap_hit` column exists but all-false. Lands with the 4b/probe execution batch.
+- **Existing-row lineage backfill** — `scripts/backfill_acquisition_shard_query_families --dry-run` first, merged with the NEXT_TODO shard-lineage-backfill残留.
+
+Until these land, the AI runs on whatever coverage evidence is recorded; `payload_snapshot_sha256` is nullable and its absence is itself a signal (a shard with no captured payload is weaker evidence). OQ1 decides whether payload-snapshot capture is a hard prerequisite for S5-flip or only for S6-live.
+
+### 2.4 Audit record placement
+
+The decision record lands as an **additive key `ai_promote_decision`** in the `organization_asset_registry` row's `metadata` (the registry row carries a free `metadata`/`metadata_json` payload; storage.py serializes `metadata_json` on upsert). 
+
+> **Discrepancy D1′ (contrast with divider D1):** the divider's plan record has a whole-dict characterization oracle, so any added key breaks it. Here **no whole-dict oracle exists for the `organization_asset_registry` record OR for the `evaluate` decision dict** (§6 confirms current tests are behavioral spot-checks only). The additive audit key is therefore safe to add *before* the flip — but the same absence is why the decision surface is unpinned and S0 is mandatory. The audit key must not be derived from another contract field (Contract Field Ownership rule 4).
+
+> **Calibration D1″ (S3 landing, 2026-07-24 — this doc's §2.4 was inaccurate):** the `organization_asset_registry` table has **no `metadata`/`metadata_json` column and no `schema_version`** (only `summary_json` + the lane/selection JSON columns; `migrations/0001_baseline.sql`). Adding a durable metadata column is a schema change that S5 owns (the flip's schema bump). So the S3 SHADOW slice records the decision on the seam's **RETURNED record** under the sibling key `ai_promote_decision_shadow` (record-only, the live promote path never reads it), exactly as the proven divider S3 attached its shadow to the `refill_plan_items` activity surface and deferred the durable `refill_plan_division_id` registry field to a LATER slice (S4, migration 0015). The durable `metadata.ai_promote_decision` column moves with S5's schema bump; until then the shadow is a return-surface record, not a persisted column. This keeps the S0 characterization oracle's persisted-record shape structurally untouched (the additive key is never written to a registry column) and the authoritative-row outcome byte-identical with the shadow on-vs-off.
+
+---
+
+## 3. Model invocation surface
+
+### 3.1 Provider path — follow the `ModelClient` conventions (as 议案① did)
+
+The repo's single internal-model pattern is the `ModelClient` Protocol (model_provider.py:654) with a deterministic base + provider overrides. The promote judge adds **one Protocol method**, exactly like `divide_profile_prefetch_batches` (model_provider.py:683) did:
+
+- `judge_organization_asset_promotion(self, payload: dict[str, Any]) -> dict[str, Any]: ...` added to the Protocol (:654) alongside `plan_search_strategy` / `judge_profile_membership` / `divide_profile_prefetch_batches`.
+- `DeterministicModelClient` (:692) default returns `{}` — the structural "judge unavailable" marker → ruling-④ keep-incumbent (class F1, §4). `OfflineModelClient` inherits it, so simulate/replay are keep-incumbent-by-construction.
+- `OpenAICompatibleChatModelClient` (:1510) implements it like its sibling JSON methods: `_safe_text_prompt_with_error` + `_safe_json_object` parse + the shared per-(provider, base_url, model) circuit breaker (`_record_model_provider_failure` / `_model_provider_circuit_error`, 900 s cooldown). Parse-fail/circuit-open → F4/F2. `QwenResponsesModelClient` gets the same method via `_safe_text_prompt` — but has **no circuit machinery** (divider D6): a Qwen failure maps to F3, never F2.
+- **Wiring**: the promote path already runs in the registration flow that constructs a model client via `build_model_client` (model_provider.py:2592), including the live fail-closed triple-gate `assert_live_provider_access_allowed` (:2617). A billed promote-judge call clears the same triple-gate as every live provider. The judge is threaded to `upsert_organization_asset_registry_with_guard` as an injected optional client (absent → deterministic pre-branches + keep-incumbent on contested, i.e. today's behavior minus the threshold family).
+- **Offline exercise path**: in simulate/replay, `build_model_client` returns `OfflineModelClient`, so the canonical hot path can NEVER exercise the AI branch (divider D2). Mirror the divider's scripted-client precedent (`ScriptedProfileBatchDividerModelClient` behind `SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER`): the judge gets a scripted variant behind a dedicated env (OQ8) returning deterministic schema-valid decisions so tests/simulate drive the AI path without a billed call.
+
+### 3.2 Inputs
+
+The `candidate_descriptor` (§2.2) is the payload: incumbent + candidate metric pairs (the same fields `evaluate` reads today, asset_reuse_planning.py:1254–1269), `completeness_score` as a computed feature (§1.3), selected_snapshot_ids + source_snapshot_count (lineage evidence), per-shard request populations (§2.3), and a simulate/placeholder-provenance flag (incident #2). The full payload is hashed (`input_snapshot_sha256`) into the record for replay. **The payload carries NO store internals and NO guard verdict.**
+
+### 3.3 Output parse + strict validation
+
+Strict manual schema validation (mirrors the divider's `analyze_page_asset` field-allowlist style): the model authors only `{"decision", "reason", "reason_code"}`; required keys, `decision ∈ {promote, reject}`, `reason_code` in the controlled vocabulary, `reason` non-empty ≤240 chars. Any violation → F4 → keep-incumbent. **No partial acceptance, no repair of a bad decision** — a repaired decision would launder an unauditable model error into an authoritative-snapshot flip.
+
+### 3.4 Cost / latency / seat
+
+- **One call per contested promote evaluation.** Deterministic pre-branches (§1.1) and guard-refused candidates never call the model. Promote is a materialize→promote decision point (registration / `live_promote` script / consolidation repair), **NOT a hot serving path** — no per-request latency budget applies the way ruling ②'s <1 s slot-fill does.
+- Tokens: small (metric pairs + a bounded shard list) — noise against the actor spend the snapshot represents.
+- Timeout: `ModelProviderSettings.timeout_seconds` defaults to 45 s (settings.py:29). The judge gets its own bounded timeout override (recommend 20 s, OQ8) mirroring the divider's `SOURCING_PROFILE_BATCH_DIVIDER_TIMEOUT_SECONDS` (=20, model_provider.py:33–34).
+
+---
+
+## 4. Failure / fallback semantics (ruling ④ — keep incumbent)
+
+Every failure class → **keep the incumbent authoritative snapshot (do NOT promote)** + a recorded audit. The candidate row still lands **non-authoritative** (matching the storage guard's existing behavior, storage.py:8683 — the row persists for salvage/audit lineage, the pointer does not move). This is the asset-correctness-conservative direction: a failure NEVER flips authority.
+
+| Class | Trigger | Detection point | `fallback_reason` |
+|---|---|---|---|
+| F1 judge unavailable | deterministic/offline client, model disabled, no client injected | structural `{}` return (model_provider.py:692/935 precedent) | `judge_model_unavailable` |
+| F2 circuit open | prior failure within cooldown (OpenAI-compatible only, D6) | `_model_provider_circuit_error` | `judge_circuit_open` |
+| F3 timeout / transport | call exceeds 20 s, HTTP/URL error, any Qwen failure | `_safe_text_prompt_with_error` error string | `judge_call_failed` |
+| F4 invalid output | parse failure, schema violation, decision ∉ {promote,reject}, empty reason | §3.3 strict validation | `judge_invalid_output` |
+| F5 validator rejection | any retained validator FAIL (§5) — including the guard pre-filter | §5 battery | `judge_validator_rejected:<validator>` |
+| F6 stale input | incumbent changed between input snapshot and apply (another writer flipped authority) | `input_snapshot_sha256` / incumbent snapshot_id mismatch at apply | `judge_input_stale` |
+
+Audit shape (stored in `metadata.ai_promote_decision.fallback`):
+
+```jsonc
+{
+  "decision_source": "fallback_keep_incumbent",
+  "fallback_reason": "judge_validator_rejected:V_COMP_regression_floor",
+  "judge_error": "<truncated ≤500 chars>",
+  "validator_results": [ ... ],
+  "provenance": { ... }                          // present when a call was actually made (F4/F5/F6)
+}
+```
+
+Deterministic pre-branch decisions (§1.1) keep the current reason strings verbatim (`no_existing_authoritative`, `same_snapshot_refresh`, `lifecycle_state_not_promotable`); the storage guard keeps its refusal reasons verbatim (`stale_generation_sequence_replay`, `source_snapshot_coverage_regression`). Only contested AI decisions use the new `reason_code` vocabulary. F2's 900 s cooldown means a flapping model degrades to "keep-incumbent for the cooldown window" — an explicitly acceptable state under ruling ④ (no promotion is always a safe state).
+
+---
+
+## 5. Validators-from-rules (the AI decision cannot bypass these)
+
+Each retained hard rule becomes a validator that runs regardless of the AI verdict. **The AI can only be MORE conservative:** promote requires guard-pass AND AI-approve AND every validator pass; a reject from any validator is final. Any FAIL → F5 → keep-incumbent.
+
+| # | Validator | Retained rule | Anchor | Direction |
+|---|---|---|---|---|
+| V_LINEAGE | guard-predicted pre-filter: refuse strict-subset coverage regression + stale-generation replay | storage lineage guard (§1.4) | storage.py:8670–8681 (predicate mirrored read-only pre-decision; storage.py stays the final backstop) | **AI never sees the verdict**; both the pre-filter and the in-transaction backstop fail closed |
+| V_COMP | no material completeness/coverage regression: candidate must not drop below incumbent beyond the retained floor | completeness/coverage non-regression (OQ2 sets the floor) | `MAX_COMPLETENESS_SCORE_REGRESSION` :152; `coverage_materially_higher` :1311 as the *shape* of "not a regression" | AI-approve of a regressing candidate still FAILS here |
+| V_GEN | generation monotonicity: never make an authoritative generation sequence go backward | generation sequence guard | storage.py:8670–8675 (`stale_generation_sequence_replay`) | fail-closed, independent of AI |
+| V_PROV | provenance sanity: reject simulate/placeholder-tainted candidates; require lineage evidence present | incidents #1/#2 lessons (§1.6) | recon §2.3 (simulate 40-placeholder incident) | AI-approve of a placeholder-tainted candidate still FAILS |
+| V_LIFECYCLE | candidate lifecycle promotable | §1.1 pre-branch | asset_reuse_planning.py:1224 | deterministic, pre-AI |
+
+V_COMP's exact floor is OQ2: retire the six subsumption thresholds + four promote branches to AI judgment, but keep a **coarse** non-regression floor (e.g. "candidate coverage is not strictly narrower than incumbent, and completeness_score does not regress beyond `MAX_COMPLETENESS_SCORE_REGRESSION`") so the AI's freedom is "within guard-pass and non-regression" rather than "unbounded." This is the crux of ruling ④'s conservatism: the AI gains judgment over *whether a wider/richer candidate is genuinely better*, but never the power to promote a *thinner* one.
+
+---
+
+## 6. Characterization prerequisite (S0 — mandatory before any AI slice)
+
+**Finding: no promote characterization oracle exists.** The current promote tests are behavioral spot-checks, not a whole-dict/shape-exact pin:
+- `test_organization_execution_profile.py` (82 asserts): `evaluate_organization_asset_registry_promotion` called at :101/:264/:1123 with `assertTrue(decision["subsumption_higher"])` / `assertEqual(decision["reason"], …)` — asserts *individual keys* on *hand-picked scenarios*, not the whole decision dict across the threshold-boundary grid.
+- `test_asset_consolidation_audit.py` (107 asserts): pins the two storage-guard refusal shapes (:977 `stale_generation_sequence_replay`, :996 `source_snapshot_coverage_regression`, :1010–1054 the legitimate-promotion negatives) — good coverage of §1.4, but nothing on the §1.2 threshold family.
+- `test_authoritative_source_provenance.py` (14 asserts): one `upsert_organization_asset_registry_with_guard` path (:101).
+
+None of these is the promote-side analogue of the divider's `test_fetch_profile_batch_characterization.py` (whole-dict goldens, the ruling-① prerequisite). **Therefore S0 is a required first slice**, exactly as the divider's oracle was ruling ①'s prerequisite:
+
+**S0 = pin the current promote surface byte/shape-exact BEFORE touching it:**
+1. `evaluate_organization_asset_registry_promotion` whole-dict goldens across the threshold-boundary grid: the three pre-branches (§1.1); each of the four promote branches (§1.2) at its boundary (subsumption 0.98/0.95/±0.01/±0.02 edges; completeness +1.0 edge; material floors at 20/100/×1.05; score_gap 1.0/3.5 edges; the sub-50-score quality-recovery clause :1323–1330); the LARGE (≥1000) vs SMALL absolute-floor switch (:1290–1293).
+2. `completeness_score` formula golden grid (§1.3): coverage/missing/gap/manual/snapshot-count contributions, the 0.35 explicit-capture discount, clamp[0,100], the three bands.
+3. `select_organization_asset_registry_promotion_candidate` goldens (§1.2): sort order, incumbent skip, first-promote selection, the no-candidate/no-incumbent shapes.
+4. Storage guard two-refusal-shape pins (extend/keep `test_asset_consolidation_audit.py`) as the **[STAYS HARD]** contract — these goldens are NOT demoted at flip; they are the permanent floor.
+
+Offline, pure-function (no PG for #1–#3; #4 uses the existing PG store fixture). Registered in the GH lane + lane manifest + `regression_matrix` paired mapping (asset_reuse_planning / this oracle / storage-guard), mirroring the divider's paired mapping. **The AI judgment must not weaken this oracle before flip; at flip (S5) the §1.2 threshold goldens demote to the validator battery (§5) exactly as ruling ③'s "AI 只在 guard 放行候选内判" while the §1.4 storage-guard goldens stay hard.**
+
+---
+
+## 7. Simulate-first validation ladder (live deferred to quota + operator)
+
+Every slice keeps S0 green until the single gated flip; the judge is additive throughout.
+
+1. **S0 — DONE 2026-07-24.** Characterization oracle green (the ruling-③ prerequisite for touching the threshold family). `tests/test_organization_promote_characterization.py` (23 tests / 13 subtests, green): pins the three pre-branches + four promote branches as whole-dict goldens; a threshold-boundary sweep on each subsumption edge (evidence ×0.95, missing +0.01, gap +0.02, the count/detail/lane 0.98-neutralization quirk), the score_gap 1.0/3.5 branch edges, and the LARGE(≥1000) absolute-floor switch; the completeness_score formula grid (13-row input→(score,band), incl. the 0.35 explicit-capture discount + clamp[0,100] + bands); candidate-selection goldens (sort-desc / incumbent skip / first-promote / retained); and the TWO storage-guard refusal shapes as PERMANENT-HARD whole-record pins (PG-backed). Registered: backend-ci.yml offline block + `tests/lane_manifest.py` GH_LANE_FULL + `regression_matrix` paired mapping (asset_reuse_planning.py **and** storage.py → the oracle). Pinned latent quirk (bug-as-is, flagged not fixed): the §1.2 count/detail/lane subsumption `max(existing, int(existing*0.98))` neutralizes the documented 0.98 relaxation to `≥ existing` — docs/RESIDUAL_LEDGER.md R-046; its fate is OQ2 at S5.
+2. **Shadow slices (S1–S3)** — contract module (**S1 DONE 2026-07-24**: `organization_promote_contract.py` + `tests/test_organization_promote_contract.py`, 33 tests/42 subtests — schema + V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE battery + §2.1 conjunction + F1–F6 keep-incumbent audit shapes, standalone/additive); model method + scripted client + orchestration helper (**S2 DONE 2026-07-24**: `ModelClient.judge_organization_asset_promotion` on Deterministic/Offline/OpenAI/Qwen + `ScriptedOrganizationPromoteJudgeModelClient` behind `SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE` + `organization_promote_judgment.judge_and_validate_promotion` [OQ4 contested-only, one call per contested decision, F1–F5/honest-reject → keep-incumbent via S1, guard verdict/incumbent as parameters] + `tests/test_organization_promote_model_surface.py`, 32 tests, additive); shadow recording (**S3 DONE 2026-07-24**: `organization_promote_judgment.record_organization_promote_shadow` at the `upsert_organization_asset_registry_with_guard` seam + `tests/test_organization_promote_shadow.py`, 12 tests PG-backed, additive/record-only). The judge computes and records a decision on the seam's returned record under sibling key `ai_promote_decision_shadow` (calibration D1″: no registry `metadata` column exists yet — the durable `metadata.ai_promote_decision` column is S5's schema bump); **authority still comes from `evaluate` (the ladder) + the storage guard**. S0 stays byte-identical green (the additive key is never written to a registry column); the S1 offline suite pins the decision schema, the validator battery, and every F1–F6 audit shape; the "AI decision ≠ ladder decision" divergence counter landed with S3 (free before/after evidence for the flip, incl. the byte-identical authority regression on-vs-off).
+3. **Prerequisite S4 (parallel)** — shard-recording completeness closure (§2.3): provider payload snapshot capture + lineage backfill. Its own review request (registry/shard contract fields).
+4. **Flip slice (S5)** — the judge replaces the `evaluate` seat in the conjunction (§2.1); §1.2 threshold goldens demote to validators (§5); the storage guard + its goldens STAY hard. Simulate e2e both paths (scripted judge on/off) reach coherent authoritative + audit states. **Review-gate GO required before landing.**
+5. **Live validation (S6)** — explicitly deferred to HarvestAPI/provider quota restoration + explicit operator go; red lines unchanged (triple-gate env, committed `scripts/live_*.py` only, delta-only). The `live_promote_company_snapshot.py` dry-run (recon §2.1) is extended to print the AI decision + guard prediction side by side (OQ7).
+
+### 7.1 Structural-inertness closure + scripted divergence corpus (2026-07-25)
+
+**Why this section exists — S3 was NOT WIRED, not merely off.** A read-only audit found two independent blockers, either alone sufficient:
+
+* **B0 (wiring, the real one).** `upsert_organization_asset_registry_with_guard(..., model_client: Any = None)` and `sync_company_asset_registration(..., model_client=None)` both threaded the parameter, but **every production caller left it at its default**, and the layer above — `build_company_candidate_artifacts` (`candidate_artifacts.py`, 12 callsites) — had no such parameter at all. So `record_organization_promote_shadow` was always called with `None` and returned on the first line of its try-block. **The only callers that ever supplied a client were the tests in `tests/test_organization_promote_shadow.py`**, all of which drive the seam directly — so the whole suite would have stayed green through total production inertness.
+* **B1 (config).** Even with a client threaded, the daemon's simulate-default `OfflineModelClient` fails the capability probe, and the judge opt-in cannot coexist with the divider opt-in in one process (`model_provider.py:2899` precedes `:2906`).
+
+**FIX (ADDITIVE, default-inert).** `build_company_candidate_artifacts` gains `model_client: Any = None` and passes it straight through to `sync_company_asset_registration`; the eight production callsites that already hold a client now supply it (`acquisition.py`, `snapshot_materializer.py`, `orchestrator.py` ×2, `company_asset_supplement.py` ×2, `company_asset_completion.py` ×2). It is a **pure pass-through**: it touches no artifact, no ladder decision, and no authoritative row, and with `None` / any non-judge-capable client the shadow hook still returns `None` — byte-identical to before. Two callsite assertions that pinned the old kwarg set were updated (`tests/test_snapshot_normalize.py`, `tests/test_frontend_history_recovery.py`) with the rationale recorded inline.
+
+### 7.1.1 SHADOW SAFETY GATE — capability is not permission (2026-07-25)
+
+**The wiring above, as first shipped, opened a BILLED synchronous model call on the authoritative write path.** The engagement gate was a bare structural probe (`model_client_supports_promote_judgment`: "does this class override the deterministic stub?"). That is `True` for `OpenAICompatibleChatModelClient` and `QwenResponsesModelClient` as well, and `build_model_client` returns exactly those in live mode. Once the callers threaded `self.model_client` down, a live-mode process would have issued **one provider call per CONTESTED promote decision, synchronously inside `upsert_organization_asset_registry_with_guard` right after the store write** (20 s judge timeout), from a path that is by definition optional and record-only — with **no env opt-in, no kill switch and no disclosure**. The scripted path has always required `SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE`; the real path must not be *easier* to trigger than the fake one.
+
+**Gate design.** The recorder now requires **capability AND permission**:
+
+| predicate | question | true for |
+|---|---|---|
+| `model_client_supports_promote_judgment` | would a call return anything but the F1 marker? | scripted judge, test doubles, **and the real provider clients** |
+| `promote_shadow_model_calls_permitted` | may we actually CALL it? | a class declaring `ws7_shadow_billing_free = True`, **or** `SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL` explicitly set |
+
+* `ws7_shadow_billing_free` is a class-level declaration ("my shadow method makes no billed call"). It is carried by exactly `ScriptedOrganizationPromoteJudgeModelClient` and `ScriptedProfileBatchDividerModelClient`; a test pins that allowlist so a provider client cannot quietly acquire it.
+* `SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL` is **OFF by default** and is deliberately **not** one of the three live-provider gate vars — enabling live mode does not enable the shadow's model call, and unsetting it is the kill switch for a live wave.
+* With no opt-in the recorder returns `None` **before building any payload**, so the seam cannot reach a provider no matter what client a caller threads in.
+
+**Pinned by** `tests/test_organization_promote_shadow.py::RealModelShadowSafetyGateTest`: a real-capable, non-billing-free client reaching the seam with no opt-in makes **zero** model calls and produces **no** record — asserted both directly and through the full `build_company_candidate_artifacts` production chain — while all three live-gate vars set together still do not permit the call.
+
+**The divider seam carries the mirrored gate** (`SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL`), with its exposure stated honestly rather than equated: that hook is on the **refill/mint path, not the authoritative write path** — nothing it returns can change dispatch — so an ungated real client there costs a billed call plus up to a 20 s timeout **per wave mint >300 eligible urls, taken while the scheduler lock is held**. Cost/latency on a scheduling hot spot rather than a correctness risk to authority; gated identically anyway, because an optional record-only path must never be the thing that starts billing.
+
+### 7.1.2 Anti-inertness ratchet (rebuilt 2026-07-25)
+
+The first ratchet was **vacuous for five of the nine wiring points**: `ProductionCallerThreadingPinTest` asserted `source.count("model_client=self.model_client,") >= N` over each whole caller module, and those modules contain many unrelated occurrences of the same literal, so the specific wiring lines could be deleted with every cited suite still green.
+
+It is replaced by an explicit **wiring registry** (`_PROMOTE_SHADOW_WIRING_REGISTRY` in `tests/test_organization_promote_shadow.py`): the test **parses** every `src/sourcing_agent/*.py`, finds every `build_company_candidate_artifacts` callsite keyed by `(module, enclosing qualname, ordinal)` — never by line number — and asserts each one threads **exactly** what it declares (resolving `acquisition.py`'s `**kwargs` dict form too). A new callsite, a deleted one, or a changed `model_client=` expression all fail. Verified by deleting each wiring point on a copy of `src/` one at a time: **9/9 go red** (`SUBFAILED(callsite=…)` naming the exact callsite; the `candidate_artifacts.py` pass-through additionally reds the functional `ProductionEntrypointWiringRatchetTest`).
+
+**Coverage honesty, stated rather than implied:** wiring point #1 (the `candidate_artifacts.py` pass-through) has **functional** coverage — `ProductionEntrypointWiringRatchetTest` drives the real entrypoint against a PG store. The eight **caller** wiring points have **source-level coverage only**; driving `SnapshotMaterializer.synchronize_snapshot_candidate_documents`, `SourcingOrchestrator._reconcile_completed_workflow_if_needed`, the two supplement and two completion manager entrypoints and the acquisition engine end-to-end would each need a full job-request/snapshot/store fixture to verify one pass-through kwarg. This ratchet proves the kwarg is *written* at every callsite, not that every callsite *executes* in a test.
+
+**Residual callsites are now IN the registry, not in prose.** Four callsites reach the promote seam (`sync_registration` defaults to `True`) and are deliberately left unthreaded: `candidate_artifacts.repair_missing_company_candidate_artifacts` (operator/import repair, holds no client), `candidate_artifacts.load_authoritative_company_snapshot_candidate_documents` (materialization fallback inside a READ path — its `acquisition.py` caller *does* hold a client, but the read function has no parameter to carry it), `runtime_rebuild._repair_snapshot_artifacts_if_needed`, and the operator CLI `build-company-candidate-artifacts` / `rebuild-company-serving-view` (which has `settings` in scope and *could* build a client, as `cli.py` does for the divider). They were left unwired **on purpose in this remediation batch**: its first-priority finding was that the shadow's reach into a billed provider call was too easy, so widening reach in the same pass is the wrong direction. Wiring them is S5 scope. `_persist_candidate_artifact_view` and `scripts/live_promote_company_snapshot.py` remain as before. The two `authoritative_serving_repair.py` callsites are structurally exempt (`sync_registration=False`) and the registry pins that too, so flipping it back can never go unnoticed.
+
+### 7.1.3 Contract-field ownership — `ai_promote_decision_shadow`
+
+On first engagement this key stops being invisible: `asset_reuse_planning.py` merges it into the seam's **returned** dict, which flows into `sync_status["organization_asset_registry_refresh"]["result"]` and then into the materialization payload orchestrator paths return/persist as job results. Per AGENTS.md "Contract Field Ownership":
+
+| | |
+|---|---|
+| **field** | `ai_promote_decision_shadow` (sibling key on the guard wrapper's returned record) |
+| **owner** | `organization_promote_judgment.record_organization_promote_shadow` — sole writer |
+| **source of truth** | the S2 helper's result + the S1 battery; never read back by any decision |
+| **allowed values** | the S3 shadow record shape, or the `shadow_status="shadow_error"` isolation record |
+| **consumers** | **none in the decision path.** Observability only: the seam's returned dict → `sync_status.organization_asset_registry_refresh.result` → `snapshot_materializer` materialization payload → job-result surfaces |
+| **NOT a consumer** | the persisted `organization_asset_registry` row (pinned absent by `AdditiveKeyDoesNotPollutePersistedRecordTest`), the ladder, the storage guard, any API filter/readiness/export/permission decision |
+| **fallback status** | absent whenever the shadow is inert (no client, non-capable client, or no real-model opt-in) — **absence is normal and must never be treated as an error** |
+| **migration status** | transitional. S5 replaces it with the durable `metadata.ai_promote_decision` column (registry schema bump) |
+| **deletion condition** | deleted in the S5 flip commit, when the durable column lands and the decision itself becomes authoritative |
+| **content warning** | carries model-authored text (`decision`/`reason`/`reason_code`) plus provenance hashes; treat as untrusted display data on any surface that renders it |
+
+### 7.1.4 ENGAGEMENT EVIDENCE — the SEAM is real, the DATA is synthetic
+
+`scripts/ws7_shadow_divergence_report.py engagement` provisions its own ephemeral `sourcing_test_ws7_*` PG schema, writes two competing on-disk snapshots and calls `build_company_candidate_artifacts` twice with a scripted judge. What this proves is that the **production call chain fires and a record lands** on `sync_status["organization_asset_registry_refresh"]["result"]["ai_promote_decision_shadow"]`. The **inputs are fabricated by the script** (two generated `ws7-acme-*` snapshots of 40 and 80 candidates), so this is PATH evidence, not corpus evidence, and the `decision_id` is a fresh per-run UUID that identifies nothing (earlier revisions quoted one as if it were an evidence identifier — withdrawn):
+
+```
+contested = True   engaged = True   ai_status = promoted        (SYNTHETIC INPUT)
+decision_id = <fresh per run — not an evidence identifier>
+guard_predicted_verdict = { refused: false, reason: "" }
+ladder_comparison = { contested: true, ladder_promote: true,
+                      ladder_reason: "higher_completeness_and_subsumption",
+                      ai_promote: true, agreement: true, divergence: "agree" }
+validator_results = V_LINEAGE / V_COMP / V_GEN / V_PROV / V_LIFECYCLE — all pass
+```
+
+### 7.1.5 DIVERGENCE CORPUS (live `organization_asset_registry`, read-only: 39 rows / 3 companies)
+
+| corpus | pairs | divergence | judge decision-relevant? | guard pre-filter | validator FAILs |
+|---|---|---|---|---|---|
+| **realistic** (the actual authoritative incumbent × every other snapshot of its company) | 36 | agree **33**, `ai_more_permissive` **3**, `ai_more_conservative` 0 | **9 / 36** | pass 9, `source_snapshot_coverage_regression` 27 | V_COMP 28, V_LINEAGE 24 |
+| **extended** (all in-company permutations — COUNTERFACTUAL incumbents, never quote as historical) | 806 | agree 559, `ai_more_permissive` **246**, `ai_more_conservative` 1 | **632 / 806** | pass 632, coverage-regression 174, `stale_generation_sequence_replay` **0** | V_COMP 158, V_LINEAGE 50 |
+
+**"agree 33/36" must always be decomposed — 82% of it is guard-forced.** Where the storage guard predicts a refusal, `V_LINEAGE_prefilter` fails and **no judge output can change the outcome**, so agreement is structurally forced and says nothing about judgment. Realistic corpus: of the 33 agreements, **27 are forced by a guard refusal** and only **6** occur where the judge was decision-relevant; the judge mattered in **9 of 36** pairs; the entire realistic corpus contains exactly **one** agree-on-promote pair. Extended corpus: of 559 agreements, 174 are guard-forced and 385 are judge-relevant (judge decision-relevant in 632/806). The emitted JSON carries this as `summary.agreement_decomposition`, and any surface quoting the agreement count must carry the decomposition with it — including the [REFACTOR_MASTER_PLAN.md](REFACTOR_MASTER_PLAN.md) mirror, which previously dropped the guard column entirely.
+
+`ladder_reason` values are **the ladder's branch fall-through labels, not the storage guard.** `guard_rejected` (35/36 realistic, 599/806 extended) is the final `else` of `evaluate`'s reason ladder (`asset_reuse_planning.py`) meaning "no promote branch fired". It is **not** the lineage guard's verdict — that is `guard_predicted_verdict`, which reads `{"refused": false}` on all three `ai_more_permissive` flips and on the flagged incident #1. The corpus now attaches `ladder_reason_semantics` to every pair carrying the label, and the earlier doc phrasing "the 3 `ai_more_permissive` pairs … all `ladder_reason=guard_rejected`" (which reads as "the AI overrode a storage-guard refusal") is corrected: **the guard passed in all three.** The three are `openai 20260720T104157 ← 20260720T041551`, `google 20260720T221424 ← 20260410T121946`, `thinkingmachineslab 20260722T113432 ← 20260408T011151`.
+
+**Reproducibility of the extended corpus.** The 806-pair corpus is derived from **mutable live rows** and lives in a session artifact, not in git. The harness therefore now emits **every extended pair row by default** (`--no-extended-pairs` opts out) so any quoted extended figure can be re-derived from the artifact — and no permanent code surface quotes an extended count any more (see finding 3 below).
+
+**Incident replays (§1.6), five scenarios:**
+
+| scenario | ladder | AI+battery | divergence |
+|---|---|---|---|
+| **#1 OpenAI generation rollback** (seq 6 ← seq 3) | KEEP (`guard_rejected` = no promote branch fired; **the guard itself passes**) | **PROMOTED** — all five validators pass | **`ai_more_permissive`** |
+| #1b strict-subset direction | KEEP | kept_incumbent | agree |
+| #2 Google simulate pollution | KEEP | kept_incumbent | agree |
+| **#2c polluted-incumbent recovery** (40-row polluted incumbent ← the real 4,297-row snapshot) | **PROMOTE** (`explicit_baseline_inclusion` — the correct recovery) | **KEPT_INCUMBENT — V_COMP FAIL** | `ai_more_conservative` |
+| #3 TML control | KEEP | kept_incumbent | agree |
+
+**Three findings that must be settled before S5:**
+
+1. **🚨 S5-BLOCKING — incident #1, the exact rollback this design says the judgment "must not repeat", replays as PROMOTED with all five validators passing.** This is the single most important thing the corpus produced. The storage guard does **not** refuse it (the two generation keys differ and the selections are disjoint, so neither the same-key-lower-seq arm nor the strict-subset arm fires); `validate_v_gen` is scoped to same-generation-key comparisons by its own docstring; V_COMP passes because the lane totals are equal and the candidate's `completeness_score` is *higher* (79.87 > 79.09). **Today the ONLY thing blocking it is the ladder's completeness threshold family — the exact thing S5 retires.** Retiring that family at S5 without first closing the V_GEN scope gap (or adding an equivalent cross-generation floor) **re-opens the very incident §1.6 cites as the design's motivation.** Recorded as a hard S5 gate in [RESIDUAL_LEDGER.md](RESIDUAL_LEDGER.md) **R-048** (`open (NOT accepted)`). Caveat: the rows are current post-fix state, so this is "the shape of incident #1 as recorded today", not a byte-exact time-travel replay — but the V_GEN scope gap is real regardless and is verifiable by reading `validate_v_gen` alone, with no corpus at all.
+2. **V_GEN and V_COMP's coverage arm are largely inert on real data, and V_COMP can produce a FALSE BLOCK.** 23 of 39 rows carry an empty `materialization_generation_key` (V_GEN can never fire for them; `stale_generation_sequence_replay` fired 0 times in 806 pairs), and 26 of 39 have `effective_lane_total == 0` despite `candidate_count` up to 8,314. Incident #2c is the consequence: V_COMP rejects the recovery promotion the ladder correctly makes, with "candidate 0 < incumbent 40". The retained floor is only as strong as `*_lane_effective_candidate_count`, which is unpopulated on two thirds of the corpus — this is S4's (§2.3) job, and it is a **hard S5 precondition**, not a nice-to-have.
+3. **`_shadow_ladder_comparison`'s docstring was wrong, and its first correction over-reached.** The original text ("`ai_more_permissive` should never fire on a contested decision") is wrong as a matter of code, independently of any corpus: ruling ④'s "more conservative" holds relative to **guard + validators**, not relative to the **ladder**, whose threshold family S5 retires. The first correction then asserted that "a SCRIPTED judge is more permissive than any plausible real one by construction" — a **comparative property of real models**, exactly the claim class this batch has zero evidence for. It has been rewritten as the defensible **ceiling** argument: the scripted judge's only two reject arms are precisely the predicates V_PROV/V_COMP re-check, so under the S5 conjunction a scripted promote survives **iff the guard-∧-battery floor admits it**; the CEILING on authority churn is therefore the floor's own admission count (**452/806** extended), which **no** judge — scripted or real — can exceed. The scripted `ai_more_permissive` count (**246/806**) is the SUBSET of those admissions where the ladder disagreed — churn relative to today's ladder, a LOWER bound on the ceiling, **not equal to it** (the earlier "equals that floor's admission count" phrasing was arithmetically false and is withdrawn: the floor also admits the 206 pairs the ladder promotes too, scored `agree`). Read it as a measurement of FLOOR STRENGTH; it says nothing about how a real model behaves inside that bound.
+
+**HONESTY — read before quoting any number above.** The AI side is `ScriptedOrganizationPromoteJudgeModelClient`: a 3-line rule (simulate taint → reject; narrower effective lane total → reject; else promote). Its `ai_more_permissive` count is an **upper bound on the authority churn the S5 conjunction permits — a measurement of FLOOR STRENGTH, not of AI behaviour, and not a comparison against real models**. This corpus evidences the PATH and the behaviour of the retained floors on real metric vectors, never AI judgment quality; it says nothing about prompts, reasoning, hallucination, cost or latency. The extended 806-pair corpus mixes real metric vectors with counterfactual incumbents and must never be reported as "historical decisions". A real-model corpus is a separate, operator-gated step (S6).
+
+---
+
+## 8. Operator questions (the AskUserQuestion batch)
+
+Mapping against the recon's C-section (recon §5): ruling ③ settled **Q9** (two gates), ruling ④ settled **Q12** (fail-closed). Remaining recon promote questions **Q8, Q10, Q11** belong here, plus new questions this design surfaces.
+
+- **OQ1 (= recon Q8) — AI input surface + prerequisite recording completeness.** Does the judge consume the full `candidate_descriptor` (§2.2: metric pairs, completeness_score feature, selected_snapshot_ids/lineage, per-shard request populations, simulate-provenance flag, input-snapshot hash)? And must the remaining shard-recording gaps (provider payload snapshot capture + lineage backfill, §2.3) be a hard prerequisite before which slice?
+  **Recommended**: full descriptor + snapshot hash recorded; require payload-snapshot capture + backfill as a prerequisite for **S6-live only** (offline/shadow slices S1–S3 run on whatever is recorded — a missing `payload_snapshot_sha256` is itself a weak-evidence signal). Merge the backfill with the NEXT_TODO shard-lineage-backfill残留.
+  *Alternatives*: (b) require full recording completeness before S1 — safest, but blocks all shadow evidence-gathering on a quota-blocked capture batch; (c) minimal inputs (metric pairs only) — rejected: the AI can't beat the ladder on anything the ladder can't already see.
+
+- **OQ2 (= recon Q10) — fate of the `evaluate` threshold family + retained floor.** Retire the six subsumption thresholds (0.98/0.95/0.01/0.02) and the four promote branches (§1.2) to AI judgment; keep `completeness_score` as a computed input **feature** (not a gate); keep a **coarse non-regression floor** as retained validator V_COMP (never promote a strictly narrower / completeness-regressing candidate)?
+  **Recommended**: yes — retire the branch thresholds to AI judgment; completeness_score stays a feature; the coverage-subset non-regression is already the storage guard (V_LINEAGE, stays hard) and a coarse V_COMP score floor backstops it. This keeps the AI "more-conservative-only."
+  *Alternatives*: (b) also keep `completeness_higher` (+1.0) as a hard promote floor (AI can only add rejects on top) — most conservative, smallest AI win; (c) AI fully owns regression judgment with no V_COMP floor — rejected: re-opens the incident #2 class (a persuasive reason string could flip a thinner snapshot).
+
+- **OQ3 (new) — the seat + conjunction.** Confirm: `promote ⟺ storage-guard-pass AND AI-approve AND validators-pass`; the AI replaces the `evaluate` call (asset_reuse_planning.py:1541); the storage lineage guard (storage.py:8633) stays downstream as the unmovable final backstop; a guard-predicted pre-filter runs early so the AI never judges a guard-refused candidate; the AI never sees or emits the guard verdict; reject may come from any layer (discrepancy D-ORD, §2.1)?
+  **Recommended**: yes — the only shape that satisfies ruling ③'s "AI 只在 guard 放行候选内判" without relocating the in-transaction guard.
+  *Alternatives*: relocate the guard wholesale before the AI — rejected: it depends on the in-transaction `existing_rows` read (storage.py:8615).
+
+- **OQ4 (new) — engagement scope.** Invoke the AI only on **contested** decisions (incumbent exists AND candidate is a different, non-refresh, promotable snapshot)? Keep the three pre-branches (§1.1: no-incumbent, same-snapshot-refresh, lifecycle-not-promotable) deterministic and model-free?
+  **Recommended**: yes — the pre-branches are trivially correct and cheap; judgment is only meaningful when two real snapshots compete.
+  *Alternatives*: AI on every decision — rejected: wasteful and adds model risk to trivially-correct paths.
+
+- **OQ5 (new) — failure/fallback direction (ruling ④ confirmation).** Confirm every failure class (F1–F6, §4) → keep the incumbent authoritative, do NOT promote, land the candidate row non-authoritative + audit — mirroring the storage guard's existing refusal behavior (storage.py:8683)?
+  **Recommended**: yes — a failure must never flip authority; no-promotion is always a safe state.
+  *Alternatives*: fall back to the `evaluate` ladder on judge-unavailable (like the divider's ruling ④a) — **rejected: ruling ④ explicitly separates promote (asset-correctness → keep incumbent) from division (efficiency → ladder).** Recorded to show the divider precedent was consciously NOT followed here.
+
+- **OQ6 (new) — S0 characterization oracle (mandatory).** Accept that no promote characterization oracle exists (§6 — current tests are behavioral spot-checks) and that **S0 = pin the `evaluate` decision goldens + completeness_score formula grid + candidate-selection goldens + storage-guard two-refusal pins BEFORE any AI slice**, mirroring the divider's ruling-① oracle prerequisite?
+  **Recommended**: yes — S0 is a hard prerequisite; the §1.2 threshold goldens demote to validators at flip while the §1.4 storage-guard goldens stay permanent.
+  *Alternatives*: proceed on the existing spot-checks — rejected: the flip would be unpinned; a threshold-boundary regression would land silently.
+
+- **OQ7 (new) — audit product + escape hatch + dry-run.** Land the decision record as an additive `metadata.ai_promote_decision` key on the registry row (D1′-safe, §2.4)? Keep `force_upsert` (asset_registration.py:270) as an audited operator-only escape hatch? Extend `scripts/live_promote_company_snapshot.py` dry-run to print the AI decision beside the guard prediction?
+  **Recommended**: yes to all three — additive metadata key (no whole-dict oracle to break), force_upsert retained but audit-visible + blocked in normal-path signoff (Contract Field Ownership rule 5), dry-run shows both gates.
+  *Alternatives*: new dedicated `organization_promote_decision` table — cleaner queryability, but a migration + reader/writer surface for a record that is 1:1 with a registry row; defer unless audit volume demands it.
+
+- **OQ8 (new) — model routing + timeout + scripted client.** Use the configured `ModelProviderSettings` model as-is (no per-call pin, consistent with every ModelClient method) with a promote-judge-specific 20 s timeout override; offline AI-path testing via a scripted client behind a dedicated env (mirroring `SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER`) — name `SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE`?
+  **Recommended**: yes — model choice stays operator-owned in settings; only the timeout is judge-specific; dedicated scripted flag (different blast radius from the divider/planning flags).
+  *Alternatives*: reuse the divider or planning scripted flag — rejected: couples unrelated opt-ins.
+
+**Cross-reference to remaining recon questions:** recon Q11 (audit product location + force_upsert + dry-run) is fully absorbed by OQ7. Recon Q8/Q10 are OQ1/OQ2. The recon's directive-#4 compensation questions (Q17 补 promote as a typed durable command) and directive-#5 behavior-layer questions (Q13–Q15) are OUT of this proposal's scope — they belong to the compensation doc and the behavior-layer doc respectively. Recon Q18's promote-oracle half is answered by §6 (S0).
+
+---
+
+## 9. Implementation slices + review-gate routing
+
+Each slice is independently green; §7-protocol applies (implement + targeted tests + pin commit + record review request, then continue; NO-GO freezes only the affected scope's promotion).
+
+| Slice | Content | Gate/oracle state | Review gate |
+|---|---|---|---|
+| **S0 — DONE 2026-07-24** | **Characterization oracle** (§6): `evaluate` whole-dict goldens across the threshold-boundary grid + completeness_score formula grid + candidate-selection goldens + storage-guard two-refusal pins. New `tests/test_organization_promote_characterization.py` (23 tests/13 subtests; pure-function + PG-store for the guard); GH lane + manifest + regression_matrix paired mapping (asset_reuse_planning.py **and** storage.py). **Prerequisite — landed before S1.** Flagged quirk R-046 (0.98 neutralization), pinned as-is. | oracle GREEN | request recorded (trigger 1: pins a contract surface); blocks nothing before S5 |
+| **S1 — DONE 2026-07-24** | Decision contract module: schema `sourcing.organization_asset.ai_promote_decision.v1`, strict exact-version parser (key allowlists at every level; the guard verdict has NO schema slot — structurally un-authorable by the model, which emits only `{decision, reason, reason_code}`), validator battery (V_LINEAGE pre-filter / V_COMP / V_GEN / V_PROV / V_LIFECYCLE as pure functions) + the §2.1 conjunction (`promote ⟺ guard-pass AND AI-approve AND all-validators-pass`, a blocked promote downgraded to an effective reject + F5 keep-incumbent audit) + the read-only `predict_lineage_guard_refusal` mirror of storage.py:8670-8681. New `src/sourcing_agent/organization_promote_contract.py` + `tests/test_organization_promote_contract.py` (33 tests / 42 subtests, offline pure functions). ADDITIVE ONLY — asset_reuse_planning.py / storage.py / the live promote path untouched; S0 oracle stays green untouched. Registered: backend-ci.yml offline block + `tests/lane_manifest.py` GH_LANE_FULL + `regression_matrix` paired mapping (the contract module **and** asset_reuse_planning.py / storage.py → the contract suite) + `[tool.mypy].files` / `run_python_quality.sh` lint targets (sanctioned mypy re-baseline, config hash `d01c50→c0f061`, 0 errors). | S0 untouched (green) | request recorded (trigger 1: new contract schema) — verdict blocks nothing before S5 |
+| **S2 — DONE 2026-07-24** | `ModelClient.judge_organization_asset_promotion` Protocol method (v1 surface 18→19) + deterministic default `{}` (F1 keep-incumbent) + OpenAICompatible/Qwen impls (judge-scoped 20 s timeout `SOURCING_ORGANIZATION_PROMOTE_JUDGE_TIMEOUT_SECONDS`, shared circuit / D6 Qwen-no-circuit, raw-output — validation single-sourced in S1) + scripted judge client `ScriptedOrganizationPromoteJudgeModelClient` behind `SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE` (wired into `build_model_client` offline branch; planning>divider>judge precedence) + orchestration helper `organization_promote_judgment.judge_and_validate_promotion` (OQ4 contested-only gate — non-contested resolves promote/keep WITHOUT a model call; one call per contested decision; envelope assembly with the model authoring only `{decision,reason,reason_code}`; the guard verdict + incumbent flow as PARAMETERS, never model-visible; every failure/reject F1–F5 + honest-reject → keep-incumbent via S1, NO ladder fallback). New `src/sourcing_agent/organization_promote_judgment.py` + `tests/test_organization_promote_model_surface.py` (32 tests). ADDITIVE ONLY — asset_reuse_planning.py / storage.py / the promote path untouched; S0 oracle green untouched. Registered: backend-ci.yml offline block + `tests/lane_manifest.py` GH_LANE_FULL + `regression_matrix` (helper→contract family suites + the new surface suite in `_MODEL_PROVIDER_SUITES`) + `[tool.mypy].files` / `run_python_quality.sh` lint targets (sanctioned mypy re-baseline, config hash `c0f061→bc8c87`, 0 errors) + the v1 protocol golden bump (18→19, new consumer `organization_promote_judgment.py`). | S0 untouched | rides S1 (trigger 3: model behavior) |
+| **S3 — DONE 2026-07-24** | Shadow mode: `record_organization_promote_shadow` (organization_promote_judgment.py) runs at the `upsert_organization_asset_registry_with_guard` seam (asset_reuse_planning.py:1541) AFTER the ladder decision + store write; the AI decision is computed + validated via S2/S1 but **authority stays 100% `evaluate` + the storage guard**. Records the validated `ai_promote_decision.v1` (or ruling-④ keep-incumbent audit) + a ladder-divergence digest (`agree` / `ai_more_conservative` / `not_engaged`) + the read-only guard-predicted verdict. OQ4 engagement: contested → one model call; non-contested pre-branch → skip record, NO call; no judge-capable client → no record (D2). Failure isolation: any shadow exception is caught + recorded (`shadow_status="shadow_error"`), never touching the write. Runs at most once per decision. New `tests/test_organization_promote_shadow.py` (12 tests, PG-backed) incl. THE key regression (authoritative-row outcome byte-identical shadow on-vs-off, promote + keep scenarios). Registered: backend-ci.yml offline block + lane_manifest GH_LANE_FULL + regression_matrix (shadow suite paired to asset_reuse_planning **and** organization_promote_judgment). **Calibration D1″ (below): no registry `metadata` column exists, so the record rides the seam's RETURNED record under sibling key `ai_promote_decision_shadow` (record-only); the durable `metadata.ai_promote_decision` column is S5's schema bump.** | S0 byte-identical green (oracle untouched; the additive key is NOT persisted into the registry row) | none beyond S1/S2 (additive, authority unchanged) |
+| **S4** | **Prerequisite (parallel after S0)** — shard-recording completeness closure (§2.3): provider payload snapshot capture (acquisition-execution side) + `estimated_total` / `provider_cap_hit` population + existing-row lineage backfill (`--dry-run` first, merged with NEXT_TODO). | S0 untouched | **own review request** (trigger 1: shard registry contract fields) |
+| **S5** | **Flip**: judge replaces the `evaluate` seat in the conjunction (§2.1); §1.2 threshold goldens demoted to validators (§5); storage guard + its goldens STAY hard; simulate e2e both paths. | S0 §1.2 goldens rewritten in-slice per ruling ③; §1.4 storage goldens unchanged | **GO verdict required before landing** (trigger 5: claimed feature) + operator confirmation of OQ1–OQ8 |
+| **S6** | Live promote validation (extended `live_promote` dry-run showing both gates). | n/a | operator explicit go + quota + live red lines |
+
+Ordering: **S0 first (hard prerequisite)** → S1→S2→S3 after the OQ ruling batch; S4 in parallel after S0; S5 strictly after S4's GO and the pinned review of the flip diff; S6 indefinitely deferred to quota + operator.
+
+---
+
+*Design method: read-only over the current tree (asset_reuse_planning.py:1217/731/149, storage.py:8633, asset_registration.py:270, model_provider.py:654/683/2592, settings.py:29) + the recon §2 forensics + the divider design as the proven议案 shape. No src/tests changed; no live env; no PG mutation. Anchors verified on branch `governance-phase0-ttl-20260611`.*

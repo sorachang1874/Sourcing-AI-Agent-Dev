@@ -1,0 +1,114 @@
+{
+  "schema_version": "x.stage2.field_registry.v1",
+  "registry_version": "x-stage2-field-registry-v1",
+  "field_state_values": [
+    "present_exact",
+    "present_bounded",
+    "absent",
+    "unverified"
+  ],
+  "fields": [
+    {
+      "field_id": "platform_user_id",
+      "object_kind": "profile",
+      "value_kind": "numeric_identifier",
+      "source_requirement": "same_replayable_profile_record"
+    },
+    {
+      "field_id": "current_handle",
+      "object_kind": "profile",
+      "value_kind": "handle",
+      "source_requirement": "same_replayable_profile_record"
+    },
+    {
+      "field_id": "profile_url",
+      "object_kind": "profile",
+      "value_kind": "canonical_url",
+      "source_requirement": "same_replayable_profile_record"
+    },
+    {
+      "field_id": "bio_text",
+      "object_kind": "profile",
+      "value_kind": "utf8_text",
+      "source_requirement": "same_replayable_profile_record"
+    },
+    {
+      "field_id": "bio_sha256",
+      "object_kind": "profile",
+      "value_kind": "derived_sha256",
+      "source_requirement": "derived_from_exact_bio_text"
+    },
+    {
+      "field_id": "bio_observed_at",
+      "object_kind": "profile",
+      "value_kind": "utc_timestamp",
+      "source_requirement": "same_replayable_profile_record"
+    },
+    {
+      "field_id": "bio_content_version",
+      "object_kind": "profile",
+      "value_kind": "source_version",
+      "source_requirement": "same_replayable_profile_record"
+    },
+    {
+      "field_id": "canonical_post_id",
+      "object_kind": "post",
+      "value_kind": "numeric_identifier",
+      "source_requirement": "same_replayable_post_record"
+    },
+    {
+      "field_id": "canonical_post_url",
+      "object_kind": "post",
+      "value_kind": "canonical_url",
+      "source_requirement": "same_replayable_post_record"
+    },
+    {
+      "field_id": "post_author_platform_user_id",
+      "object_kind": "post",
+      "value_kind": "numeric_identifier",
+      "source_requirement": "same_replayable_post_record"
+    },
+    {
+      "field_id": "post_author_handle",
+      "object_kind": "post",
+      "value_kind": "handle",
+      "source_requirement": "same_replayable_post_record"
+    },
+    {
+      "field_id": "post_authored_at",
+      "object_kind": "post",
+      "value_kind": "utc_timestamp",
+      "source_requirement": "same_replayable_post_record"
+    },
+    {
+      "field_id": "bounded_excerpt",
+      "object_kind": "post",
+      "value_kind": "bounded_text",
+      "source_requirement": "same_replayable_post_record"
+    },
+    {
+      "field_id": "thread_relation",
+      "object_kind": "post",
+      "value_kind": "closed_relation",
+      "source_requirement": "same_replayable_post_record"
+    }
+  ],
+  "source_bound_profile_required_fields": [
+    "platform_user_id",
+    "current_handle",
+    "profile_url",
+    "bio_text",
+    "bio_sha256",
+    "bio_observed_at",
+    "bio_content_version"
+  ],
+  "source_bound_profile_rule": "single_replayable_raw_provider_record",
+  "source_bound_profile_absence_rule": "bio_text_bio_sha256_bio_content_version_all_absent",
+  "authority": {
+    "identity_merge_authorized": false,
+    "employment_confirmation_authorized": false,
+    "discovery_or_ranking_authorized": false,
+    "canonical_write_authorized": false,
+    "outreach_authorized": false
+  }
+}

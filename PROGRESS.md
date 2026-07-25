@@ -1,0 +1,62 @@
+# PROGRESS — workspace current-state snapshot
+
+```
+owner: operator        refreshed: 2026-07-22       next-cleanup: next milestone
+budget: ≤200 lines, replace-not-append; detail lives in linked module docs / archive
+```
+
+## Where the project is
+
+- **Pipeline deliverables (2026-07-20/21 era)**: 6 lab Layer-1-3 CSVs delivered —
+  GDM 1491 rows, TML 67 (v2), OpenAI 950 (v2 → **v3 2026-07-22** restoring 14
+  wrongly-blanked X handles), Anthropic, xAI, Meta-TBD. Files under
+  `sourcing-ai-agent/runtime/test_env_live/` (deliverables tier + manifest = reorg R4).
+- **Takeover (2026-07-21)**: Kimi-era uncommitted work landed as 11 atomic commits;
+  daemon queue neutralized (13 cancelled / 23 parked to 2027-01-01 / 2 perma-zombies
+  terminalized — NEVER requeue them: duplicate paid submit); 221MB spin log archived.
+- **Phase C data layer (2026-07-22)**: OpenAI 40-person three-generation identity merge
+  landed via committed alias map (`configs/identity/openai_identity_alias_map_v1.json`)
+  + first canonical completeness gate (`scripts/check_canonical_completeness.py`);
+  authoritative flag restored to gen-6 snapshot 20260720T104157; July snapshots copied
+  checksum-verified into canonical `runtime/company_assets`; 5 labs' pointers repaired;
+  registry source_path rewritten; conflicts list rebuilt (2 genuine collisions).
+- **Daemon restart preconditions (2026-07-22)**: 3 code fixes landed — alt-ref
+  admission/resume asymmetry closed (paid-submit hazard; ORPHAN_SECONDS=0 no longer
+  required), authoritative-promotion regression guard (lineage replay + coverage
+  subset), pointer writer self-consistency. **Daemon RESTARTED 2026-07-22
+  (runtime root = `runtime/`, canonical assets `runtime/company_assets`, default
+  orphan window)**: tick 1 clean (one post-completion reconcile, zero dispatch,
+  queue untouched), google view rebuilt (52/60 destroyed files regenerated,
+  promoted back into canonical; 8 residual: identity.json,
+  retrieval_index_summary.json, 6 strict_roster_only view files — regenerable
+  by their own view passes), OpenAI authoritative untouched (104157/seq6).
+  Tick-1 serving repair minted google repair snapshot 20260722T054928 (canonical,
+  pointer advanced by `repair_authoritative_serving_generation`; registry
+  promotion intentionally awaits review). Log noise gone (2 lines vs 170MB/day).
+- **Harness reorg (2026-07-22, R0–R5 COMPLETE)**: research (external harness
+  survey + playbook doc 06/18 + 22-item gap analysis) → executed design
+  (`sourcing-ai-agent/docs/HARNESS_REORG_DESIGN.md`). Landed: root hygiene +
+  legacy archive; single entry chain (README/AGENTS/CLAUDE → snapshots → docs
+  router → module index); tool-native skills + /takeover; scripts registry
+  (`scripts/README.md`); status-banner gate FULLY GREEN (81 files bannered);
+  deliverables tier with tracked MANIFEST (6 CSVs checksummed, payloads out of
+  git); link gate green across all 366 first-party docs; docs gates wired into
+  backend-ci. Remaining follow-ups live in the migration registry + router gap
+  table (per-module doc migration passes, ARCHITECTURE/MODULES refresh).
+
+## Standing walls / hazards
+
+- chshapi relay quota EXHAUSTED (independent review re-fire queue parked);
+  HarvestAPI monthly quota EXHAUSTED (no live acquisition). Local-only window.
+- Perma-zombie commands `cmd_a32cc93e15b5f52150ac4da0` / `cmd_1330a600a2f91e5c0617a4b7`
+  are terminal — retry/resume would re-submit paid work.
+- google hot-cache snapshot 20260720T152139 lost 60 files to the (now fixed)
+  self-symlink bug; regenerable via reconcile once the daemon restarts.
+- Known dup pending a lane: anthropic "Jennifer Wang" (same URL, two candidate ids).
+
+## Recent handoff evidence
+
+Takeover intake + neutralization ledgers: operator memory
+`artifacts-intake-20260721/` (incl. `neutralization_20260721.md`). Superseded takeover
+docs archived at `sourcing-ai-agent/docs/archive/2026-07-21-takeover/`.
+Live lane state: `sourcing-ai-agent/.coord/BOARD.md` (gitignored; git wins).

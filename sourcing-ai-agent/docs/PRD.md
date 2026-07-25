@@ -1,5 +1,8 @@
 # Sourcing AI Agent PRD
 
+> Status: Design/reference doc. Useful for product or architecture context, but not the source of truth for current runtime behavior.
+
+
 ## 1. 背景
 
 `Anthropic华人专项` 和相关 Skill 已经把一个真实 sourcing 项目沉淀成了可复用的方法论，但当前仍存在三个问题：

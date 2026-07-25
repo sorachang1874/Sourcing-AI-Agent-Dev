@@ -1,0 +1,79 @@
+{
+  "cases": [
+    {
+      "case": "openai_infra_stage1_lane_skew_zero_current_former_delta",
+      "scripted_scenario": "configs/scripted/openai_infra_stage1_lane_skew_streaming.json",
+      "coverage_tags": [
+        "openai_infra_stage1_lane_skew_zero_current_former_delta"
+      ],
+      "payload": {
+        "raw_user_request": "帮我找OpenAI做Infra方向的人",
+        "top_k": 10,
+        "force_fresh_run": true,
+        "execution_preferences": {
+          "harvest_profile_actor_global_inflight": 4,
+          "harvest_profile_batch_submit_global_inflight": 4
+        }
+      },
+      "expectations": {
+        "allow_results_ready_nonterminal": false,
+        "require_terminal_job": true,
+        "post_terminal_recovery_rounds": 24,
+        "require_post_terminal_recovery_settled": true,
+        "require_post_preview_finalization_observed": true,
+        "require_no_duplicate_provider_dispatch": true,
+        "require_no_unexpected_public_web_stage": true,
+        "require_no_event_level_efficiency_violation": true,
+        "require_no_progress_contract_violation": true,
+        "require_board_runtime_state_cross_endpoint_parity": true,
+        "require_no_service_recovery_violation": true,
+        "require_no_serving_publication_gap": true,
+        "max_serving_publication_gap_ms": 30000,
+        "max_final_results_to_board_nonempty_ms": 15000,
+        "max_job_to_board_nonempty_ms": 30000,
+        "max_stage_1_preview_to_final_results_ms": 60000,
+        "max_global_next_worker_start_gap_ms": 30000,
+        "max_post_profile_url_terminal_state_leak_count": 0,
+        "max_profile_file_visible_to_board_patch_visible_ms": 30000,
+        "max_all_profiles_fetched_to_all_cards_visible_ms": 30000,
+        "max_event_level_materialization_callback_elapsed_ms": 30000,
+        "max_provider_io_actor_run_duration_ms": 120000,
+        "max_provider_io_dataset_download_duration_ms": 6000,
+        "max_provider_anomaly_count": 6,
+        "max_provider_zero_result_retry_count": 4,
+        "max_provider_zero_result_retry_exhausted_count": 1,
+        "max_provider_zero_result_accepted_count": 1,
+        "max_provider_empty_scale_count": 0,
+        "max_provider_probe_total_drift_count": 0,
+        "max_provider_empty_page_range_count": 0,
+        "max_provider_single_page_retry_count": 0,
+        "expect_explain_dispatch_strategy": "delta_from_snapshot",
+        "expect_explain_planner_mode": "delta_from_snapshot",
+        "expect_explain_requires_delta_acquisition": true,
+        "expect_explain_effective_acquisition_mode": "baseline_reuse_with_delta",
+        "expect_explain_keywords_include": ["Infra"],
+        "expect_latest_stage1_current_search_returned_count": 0,
+        "expect_latest_stage1_former_search_returned_count": 77,
+        "expect_latest_stage1_all_search_returned_count": 0,
+        "expect_latest_stage1_deduped_candidate_count": 77,
+        "expect_latest_stage1_deduped_profile_url_count": 77,
+        "expect_latest_stage1_profile_fetch_required_count": 77,
+        "expect_latest_stage1_profile_fetched_count": 77,
+        "min_provider_invocation_count": 6,
+        "min_provider_invocations_by_logical_name": {
+          "harvest_profile_search": 3,
+          "harvest_profile_scraper_batch": 3
+        },
+        "min_profile_url_total_count": 70,
+        "min_fetched_profile_count": 70,
+        "min_board_total_candidates": 70,
+        "min_agent_worker_count": 4,
+        "min_materialize_completed_count": 1,
+        "max_profile_unexplained_tiny_batch_count": 0,
+        "max_provider_slot_underuse_with_backlog_count": 0,
+        "max_repeated_materialize_signature_count": 0,
+        "max_same_worker_reconcile_repeat_count": 0
+      }
+    }
+  ]
+}

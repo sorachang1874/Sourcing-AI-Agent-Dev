@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.candidate_free_aggregate.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "privacy_class",
+    "claim_status",
+    "bindings",
+    "metric_denominators",
+    "metric_numerators",
+    "metric_rates",
+    "semantic_review_coverage_status",
+    "semantic_transition_authority",
+    "authorized_semantic_transition_count",
+    "model_call_counts_included",
+    "aggregate_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.candidate_free_aggregate.v1"},
+    "privacy_class": {"const": "candidate_free_counts_and_hashes_only"},
+    "claim_status": {"const": "diagnostic_only"},
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_sha256", "candidate_manifest_sha256", "wave_plan_sha256", "session_receipt_manifest_sha256", "hydration_receipt_manifest_sha256", "luna_result_manifest_sha256", "luna_axis_reduction_sha256"],
+      "properties": {
+        "policy_sha256": {"$ref": "#/$defs/sha"},
+        "candidate_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "wave_plan_sha256": {"$ref": "#/$defs/sha"},
+        "session_receipt_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "hydration_receipt_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "luna_result_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "luna_axis_reduction_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "metric_denominators": {"$ref": "#/$defs/metric_counts"},
+    "metric_numerators": {"$ref": "#/$defs/metric_counts"},
+    "metric_rates": {"$ref": "#/$defs/metric_rates"},
+    "semantic_review_coverage_status": {"enum": ["not_applicable", "not_started", "incomplete", "complete"]},
+    "semantic_transition_authority": {"const": "diagnostic_only_unattested"},
+    "authorized_semantic_transition_count": {"const": 0},
+    "model_call_counts_included": {"const": false},
+    "aggregate_sha256": {"$ref": "#/$defs/sha"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "metric_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_compliance", "stable_post_id_retrieval", "exact_hydration", "luna_diagnostic_review_coverage"],
+      "properties": {
+        "execution_compliance": {"type": "integer", "minimum": 0},
+        "stable_post_id_retrieval": {"type": "integer", "minimum": 0},
+        "exact_hydration": {"type": "integer", "minimum": 0},
+        "luna_diagnostic_review_coverage": {"type": "integer", "minimum": 0}
+      }
+    },
+    "metric_rates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_compliance", "stable_post_id_retrieval", "exact_hydration", "luna_diagnostic_review_coverage"],
+      "properties": {
+        "execution_compliance": {"type": ["number", "null"], "minimum": 0},
+        "stable_post_id_retrieval": {"type": ["number", "null"], "minimum": 0},
+        "exact_hydration": {"type": ["number", "null"], "minimum": 0},
+        "luna_diagnostic_review_coverage": {"type": ["number", "null"], "minimum": 0}
+      }
+    }
+  }
+}

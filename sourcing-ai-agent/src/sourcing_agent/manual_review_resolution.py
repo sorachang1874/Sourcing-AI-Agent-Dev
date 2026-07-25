@@ -14,13 +14,13 @@ from .document_extraction import (
 )
 from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id
 from .model_provider import DeterministicModelClient, ModelClient
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 def apply_manual_review_resolution(
     *,
     runtime_dir: Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     payload: dict[str, Any],
     review_item: dict[str, Any] | None,
     model_client: ModelClient | None = None,
@@ -175,7 +175,7 @@ def apply_manual_review_resolution(
     }
 
 
-def _resolve_candidate(store: SQLiteStore, payload: dict[str, Any], review_item: dict[str, Any] | None) -> Candidate | None:
+def _resolve_candidate(store: ControlPlaneStore, payload: dict[str, Any], review_item: dict[str, Any] | None) -> Candidate | None:
     candidate_id = str(payload.get("candidate_id") or (review_item or {}).get("candidate_id") or "").strip()
     if candidate_id:
         candidate = store.get_candidate(candidate_id)

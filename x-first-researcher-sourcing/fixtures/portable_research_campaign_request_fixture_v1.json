@@ -1,0 +1,111 @@
+{
+  "schema_version": "x.portable.research_campaign.request.v1",
+  "campaign_id": "fixture_general_research_campaign",
+  "as_of": "2026-07-18T12:00:00Z",
+  "scope_selection": {
+    "selection_mode": "complete_under_roots",
+    "root_scope_ids": ["fixture_lab"],
+    "selected_scope_ids": [],
+    "required_fresh_scope_kinds": ["model", "product", "capability"]
+  },
+  "analysis_questions": [
+    {
+      "question_id": "discover_research_topics",
+      "analysis_mode": "exploratory",
+      "question_text": "What research directions does this account's author appear to work on?",
+      "dimension_id": "research_workstream",
+      "target_label_ids": [],
+      "target_match_operator": "not_applicable",
+      "recall_execution_policy": "authored_surface_only",
+      "adaptive_stop_policy": null
+    },
+    {
+      "question_id": "verify_coding_work",
+      "analysis_mode": "verification",
+      "question_text": "Does this account provide evidence of experience in coding research?",
+      "dimension_id": "research_workstream",
+      "target_label_ids": ["coding"],
+      "target_match_operator": "any",
+      "recall_execution_policy": "adaptive_marginal_gain",
+      "adaptive_stop_policy": {
+        "window_size": 4,
+        "minimum_attempts_per_surface": 2,
+        "maximum_new_target_evidence_in_window": 0,
+        "scope_frontier_audit_required": true
+      }
+    }
+  ],
+  "temporal_scope": {
+    "affiliation_states": ["current", "historical", "ambiguous"],
+    "target_activity_states": ["current", "historical", "ambiguous"]
+  },
+  "channel_overrides": [
+    {"channel_id": "project_direct_credit", "enabled": true}
+  ],
+  "seed_inputs": [
+    {
+      "seed_ref": "seed_x_account",
+      "source_kind": "x_account",
+      "external_record_ref": "fixture://external/x/fixture_author",
+      "source_record_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "source_status": "fixture_synthetic",
+      "source_profile_url": "https://x.com/fixture_author",
+      "name_text": "Fixture Author",
+      "x_handle_proposals": [
+        {
+          "handle": "fixture_author",
+          "binding_status": "source_asserted",
+          "evidence_ref": "fixture://external/x/fixture_author#handle"
+        }
+      ],
+      "professional_facts": []
+    },
+    {
+      "seed_ref": "seed_linkedin_profile",
+      "source_kind": "linkedin_profile",
+      "external_record_ref": "fixture://external/linkedin/fixture_researcher",
+      "source_record_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "source_status": "fixture_synthetic",
+      "source_profile_url": "https://www.linkedin.com/in/fixture-researcher",
+      "name_text": "Fixture Researcher",
+      "x_handle_proposals": [
+        {
+          "handle": "linked_seed",
+          "binding_status": "cross_source_link_proposed",
+          "evidence_ref": "fixture://external/linkedin/fixture_researcher#x-link"
+        }
+      ],
+      "professional_facts": [
+        {
+          "fact_type": "affiliation",
+          "value": "Fixture AI Lab",
+          "temporal_state": "current",
+          "evidence_ref": "fixture://external/linkedin/fixture_researcher#affiliation"
+        }
+      ]
+    },
+    {
+      "seed_ref": "seed_name_only",
+      "source_kind": "name_only",
+      "external_record_ref": null,
+      "source_record_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "source_status": "fixture_synthetic",
+      "source_profile_url": null,
+      "name_text": "Name Only Researcher",
+      "x_handle_proposals": [],
+      "professional_facts": []
+    }
+  ],
+  "experience_verification": {
+    "enabled": false,
+    "trigger": "not_requested",
+    "dimension_ids": []
+  },
+  "authority": {
+    "provider_calls_allowed": false,
+    "product_writes_allowed": false,
+    "canonical_person_merge_allowed": false,
+    "outreach_allowed": false
+  },
+  "request_sha256": "4391239b9c181c76be25bcfe2ac7cd1e299a609937c157745af5b48f5052d956"
+}

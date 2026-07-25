@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.source_neutral.mapping.luna_state_review.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "review_id",
+    "candidate_ref",
+    "stable_post_id",
+    "hydration_projection_sha256",
+    "source_text_sha256",
+    "terminal_status",
+    "authority_status",
+    "model_claim_scope",
+    "proposed_lab_affiliation_state",
+    "proposed_pretraining_experience_state"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.source_neutral.mapping.luna_state_review.v1"},
+    "review_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "candidate_ref": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "stable_post_id": {"type": "string", "pattern": "^[1-9][0-9]{0,31}$"},
+    "hydration_projection_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "terminal_status": {"const": "reviewed"},
+    "authority_status": {"const": "diagnostic_only_unattested"},
+    "model_claim_scope": {"const": "state_proposal_only"},
+    "proposed_lab_affiliation_state": {"enum": ["current", "historical", "ambiguous", "unsupported"]},
+    "proposed_pretraining_experience_state": {"enum": ["current", "historical", "ambiguous", "unsupported"]}
+  }
+}

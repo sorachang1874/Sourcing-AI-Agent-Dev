@@ -29,14 +29,13 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
 
     def test_parse_instruction_for_full_roster_company_employees_and_fresh_run(self) -> None:
         decision = parse_review_instruction(
-            "改成 full company roster，走 Harvest company-employees lane，强制 fresh run，不允许高成本 source。",
+            "改成 full company roster，走 Harvest company-employees lane，强制 fresh run。",
             target_company="Humans&",
         )
 
         self.assertEqual(decision["acquisition_strategy_override"], "full_company_roster")
         self.assertTrue(decision["use_company_employees_lane"])
         self.assertTrue(decision["force_fresh_run"])
-        self.assertFalse(decision["allow_high_cost_sources"])
 
     def test_parse_instruction_extracts_source_families_scope_and_bias(self) -> None:
         decision = parse_review_instruction(
@@ -66,18 +65,21 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
         self.assertTrue(decision["reuse_existing_roster"])
         self.assertTrue(decision["run_former_search_seed"])
 
-    def test_parse_instruction_supports_keyword_first_without_company_employees(self) -> None:
+    def test_parse_instruction_supports_search_only_lane_without_company_employees(self) -> None:
         decision = parse_review_instruction(
-            "只用 search API 做 keyword-first acquisition，不要 company-employees，former 也要，多 query 并集。",
+            "只用 search API 做 acquisition，不要 company-employees，former 也要，多 query 并集。",
             target_company="Google",
         )
 
         self.assertEqual(decision["acquisition_strategy_override"], "scoped_search_roster")
-        self.assertTrue(decision["keyword_priority_only"])
         self.assertFalse(decision["use_company_employees_lane"])
         self.assertTrue(decision["run_former_search_seed"])
         self.assertEqual(decision["provider_people_search_query_strategy"], "all_queries_union")
         self.assertNotIn("reuse_existing_roster", decision)
+        # Retired org-size/keyword-probe knobs never re-enter a decision
+        # (operator directive 2026-07-20).
+        self.assertNotIn("keyword_priority_only", decision)
+        self.assertNotIn("large_org_keyword_probe_mode", decision)
 
     def test_parse_instruction_supports_explicit_scoped_search_roster(self) -> None:
         decision = parse_review_instruction(
@@ -91,7 +93,7 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
     def test_build_review_payload_uses_instruction_as_default_notes(self) -> None:
         payload = build_review_payload_from_instruction(
             review_id=42,
-            instruction="改成 full company roster，不允许高成本。",
+            instruction="改成 full company roster，强制 fresh run。",
             reviewer="tester",
             target_company="Humans&",
         )
@@ -99,88 +101,84 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
         self.assertEqual(payload["review_id"], 42)
         self.assertEqual(payload["action"], "approved")
         self.assertEqual(payload["reviewer"], "tester")
-        self.assertEqual(payload["notes"], "改成 full company roster，不允许高成本。")
+        self.assertEqual(payload["notes"], "改成 full company roster，强制 fresh run。")
         self.assertEqual(payload["decision"]["acquisition_strategy_override"], "full_company_roster")
-        self.assertFalse(payload["decision"]["allow_high_cost_sources"])
+        self.assertTrue(payload["decision"]["force_fresh_run"])
 
     def test_normalize_review_decision_enforces_whitelist_and_schema(self) -> None:
         decision = normalize_review_decision(
             {
                 "decision": {
                     "company_scope": ["Thinking Machines Lab"],
-                    "allow_high_cost_sources": "false",
                     "precision_recall_bias": "balanced",
                     "use_company_employees_lane": "yes",
                     "unknown_field": "ignored",
                 }
             },
             target_company="Thinking Machines Lab",
-            allowed_fields={"company_scope", "allow_high_cost_sources", "precision_recall_bias", "use_company_employees_lane"},
+            allowed_fields={"company_scope", "precision_recall_bias", "use_company_employees_lane"},
         )
 
         self.assertEqual(
             decision,
             {
                 "confirmed_company_scope": ["Thinking Machines Lab"],
-                "allow_high_cost_sources": False,
                 "precision_recall_bias": "balanced",
                 "use_company_employees_lane": True,
             },
         )
 
-    def test_normalize_review_decision_accepts_keyword_first_lane_controls(self) -> None:
+    def test_normalize_review_decision_accepts_lane_controls(self) -> None:
         decision = normalize_review_decision(
             {
                 "decision": {
-                    "keyword_priority_only": "true",
                     "use_company_employees_lane": "false",
                     "provider_people_search_query_strategy": "union",
                     "provider_people_search_max_queries": "6",
-                    "large_org_keyword_probe_mode": "yes",
+                    "provider_people_search_pages": "95",
+                    "provider_people_search_scale_chunk_pages": "4",
                 }
             },
             target_company="Google",
             allowed_fields={
-                "keyword_priority_only",
                 "use_company_employees_lane",
                 "provider_people_search_query_strategy",
                 "provider_people_search_max_queries",
-                "large_org_keyword_probe_mode",
+                "provider_people_search_pages",
+                "provider_people_search_scale_chunk_pages",
             },
         )
 
         self.assertEqual(
             decision,
             {
-                "keyword_priority_only": True,
                 "use_company_employees_lane": False,
                 "provider_people_search_query_strategy": "all_queries_union",
                 "provider_people_search_max_queries": 6,
-                "large_org_keyword_probe_mode": True,
+                "provider_people_search_pages": 95,
+                "provider_people_search_scale_chunk_pages": 4,
             },
         )
 
     def test_compile_review_payload_prefers_model_and_supplements_missing_fields(self) -> None:
         compiled = compile_review_payload_from_instruction(
             review_id=7,
-            instruction="改成 full company roster，走 Harvest company-employees lane，强制 fresh run，不允许高成本 source。",
+            instruction="改成 full company roster，走 Harvest company-employees lane，强制 fresh run。",
             reviewer="tester",
             target_company="Humans&",
             model_client=self._ModelReviewClient(
                 {
                     "decision": {
                         "acquisition_strategy_override": "full_company_roster",
-                        "allow_high_cost_sources": False,
                     }
                 }
             ),
-            gate_payload={"editable_fields": ["company_scope", "allow_high_cost_sources", "acquisition_strategy_override", "use_company_employees_lane", "force_fresh_run", "reuse_existing_roster", "run_former_search_seed"]},
+            gate_payload={"editable_fields": ["company_scope", "acquisition_strategy_override", "use_company_employees_lane", "force_fresh_run", "reuse_existing_roster", "run_former_search_seed"]},
         )
 
         payload = compiled["review_payload"]
         compiler = compiled["instruction_compiler"]
         self.assertEqual(payload["decision"]["acquisition_strategy_override"], "full_company_roster")
-        self.assertFalse(payload["decision"]["allow_high_cost_sources"])
         self.assertTrue(payload["decision"]["use_company_employees_lane"])
         self.assertTrue(payload["decision"]["force_fresh_run"])
         self.assertEqual(compiler["source"], "model")
@@ -193,7 +191,7 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
     def test_compile_review_payload_falls_back_when_model_output_is_invalid(self) -> None:
         compiled = compile_review_payload_from_instruction(
             review_id=8,
-            instruction="改成 full company roster，不允许高成本。",
+            instruction="改成 full company roster。",
             reviewer="tester",
             target_company="Humans&",
             model_client=self._ModelReviewClient(
@@ -203,13 +201,12 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
                     }
                 }
             ),
-            gate_payload={"editable_fields": ["allow_high_cost_sources", "acquisition_strategy_override"]},
+            gate_payload={"editable_fields": ["acquisition_strategy_override"]},
         )
 
         payload = compiled["review_payload"]
         compiler = compiled["instruction_compiler"]
         self.assertEqual(payload["decision"]["acquisition_strategy_override"], "full_company_roster")
-        self.assertFalse(payload["decision"]["allow_high_cost_sources"])
         self.assertEqual(compiler["source"], "deterministic")
         self.assertTrue(compiler["fallback_used"])
 
@@ -290,16 +287,15 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
         self.assertTrue(decision["reuse_existing_roster"])
         self.assertTrue(decision["run_former_search_seed"])
 
-    def test_compile_review_payload_preserves_keyword_first_axes(self) -> None:
+    def test_compile_review_payload_preserves_lane_axes(self) -> None:
         compiled = compile_review_payload_from_instruction(
             review_id=13,
-            instruction="只用 search API 做 keyword-first acquisition，不要 company-employees，former 也要，多 query 并集。",
+            instruction="只用 search API 做 acquisition，不要 company-employees，former 也要，多 query 并集。",
             reviewer="tester",
             target_company="Google",
             gate_payload={
                 "editable_fields": [
                     "acquisition_strategy_override",
-                    "keyword_priority_only",
                     "use_company_employees_lane",
                     "run_former_search_seed",
                     "provider_people_search_query_strategy",
@@ -309,23 +305,23 @@ class ReviewPlanInstructionsTest(unittest.TestCase):
 
         decision = compiled["review_payload"]["decision"]
         self.assertEqual(decision["acquisition_strategy_override"], "scoped_search_roster")
-        self.assertTrue(decision["keyword_priority_only"])
         self.assertFalse(decision["use_company_employees_lane"])
         self.assertTrue(decision["run_former_search_seed"])
         self.assertEqual(decision["provider_people_search_query_strategy"], "all_queries_union")
+        self.assertNotIn("keyword_priority_only", decision)
+        self.assertNotIn("large_org_keyword_probe_mode", decision)
 
     def test_compile_review_payload_falls_back_when_model_raises(self) -> None:
         compiled = compile_review_payload_from_instruction(
             review_id=10,
-            instruction="改成 full company roster，不允许高成本。",
+            instruction="改成 full company roster。",
             reviewer="tester",
             target_company="Humans&",
             model_client=self._FailingModelReviewClient(),
-            gate_payload={"editable_fields": ["allow_high_cost_sources", "acquisition_strategy_override"]},
+            gate_payload={"editable_fields": ["acquisition_strategy_override"]},
         )
 
         self.assertEqual(compiled["review_payload"]["decision"]["acquisition_strategy_override"], "full_company_roster")
-        self.assertFalse(compiled["review_payload"]["decision"]["allow_high_cost_sources"])
         self.assertEqual(compiled["instruction_compiler"]["source"], "deterministic")
 
     def test_compile_review_payload_surfaces_request_and_instruction_intent_rewrite(self) -> None:

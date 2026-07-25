@@ -6,11 +6,11 @@ from .asset_catalog import AssetCatalog
 from .domain import JobRequest
 from .model_provider import ModelClient
 from .planning import build_sourcing_plan
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 class CriteriaEvolutionEngine:
-    def __init__(self, catalog: AssetCatalog, store: SQLiteStore, model_client: ModelClient) -> None:
+    def __init__(self, catalog: AssetCatalog, store: ControlPlaneStore, model_client: ModelClient) -> None:
         self.catalog = catalog
         self.store = store
         self.model_client = model_client
@@ -37,8 +37,8 @@ class CriteriaEvolutionEngine:
                 }
             )
         plan = build_sourcing_plan(request, self.catalog, self.model_client)
-        patterns = self.store.list_criteria_patterns(target_company=request.target_company, status="")
-        version = self.store.create_criteria_version(
+        patterns = self.store.repos.criteria_confidence.list_patterns(target_company=request.target_company, status="")
+        version = self.store.repos.criteria_confidence.create_version(
             target_company=request.target_company,
             request_payload=request.to_record(),
             plan_payload=plan.to_record(),
@@ -49,7 +49,7 @@ class CriteriaEvolutionEngine:
             evolution_stage="feedback_recompiled",
             notes="Auto-recompiled after human review feedback updated criteria patterns.",
         )
-        compiler_run = self.store.record_criteria_compiler_run(
+        compiler_run = self.store.repos.criteria_confidence.record_compiler_run(
             version_id=version["version_id"],
             job_id=str(feedback_payload.get("job_id") or ""),
             trigger_feedback_id=feedback_id,
@@ -77,7 +77,7 @@ class CriteriaEvolutionEngine:
         target_company = str(feedback_payload.get("target_company") or "").strip()
         job_id = str(feedback_payload.get("job_id") or "").strip()
         if explicit_version_id:
-            version = self.store.get_criteria_version(explicit_version_id)
+            version = self.store.repos.criteria_confidence.get_version(explicit_version_id)
             if version is not None:
                 return version
         if job_id:
@@ -86,8 +86,8 @@ class CriteriaEvolutionEngine:
                 request_payload = job.get("request") or {}
                 target_company = str(request_payload.get("target_company") or target_company).strip()
         if target_company:
-            return self.store.get_latest_criteria_version(target_company=target_company)
-        return self.store.get_latest_criteria_version()
+            return self.store.repos.criteria_confidence.get_latest_version(target_company=target_company)
+        return self.store.repos.criteria_confidence.get_latest_version()
 
     def _resolve_request_payload(self, feedback_payload: dict[str, Any], base_version: dict[str, Any] | None) -> dict[str, Any]:
         explicit_request = feedback_payload.get("request") or feedback_payload.get("request_payload")

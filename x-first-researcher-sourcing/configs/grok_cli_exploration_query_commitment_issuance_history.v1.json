@@ -1,0 +1,18 @@
+{
+  "schema_version": "x.grok_cli.exploration.query_commitment_issuance_history.v1",
+  "history_version": "approved-query-commitment-issuances-v1",
+  "issuances": [
+    {
+      "lineage_position": 0,
+      "issuance_id": "qci_3b5939ca3949f15a0494b20a",
+      "policy_version": "openai-pretrain-base-discovery-2026-07-14-v1",
+      "policy_path": "configs/grok_cli_exploration_query_policy_descriptor.v2.json",
+      "policy_sha256": "97575b96e58f8ee106006d5c1597b07175f5f390cf85849d40893f2ab1f4bb49",
+      "protected_category_boundary_version": "base-discovery-protected-category-boundary-v3",
+      "semantic_manifest_sha256": "ceaffcf725506bbe6fe39f2c74310ad1acde3a340edf1b279c657aba7da44a9c",
+      "run_binding_commitment": "d6f54c517e46a434d9b249aa7320be77b7920cb3d21d2e7e2e5d44390e672db9",
+      "commitment_key_id": "f8eb1635d042945e64ff2ca25098894638b70a69a6151f57bd6eabbe1ef5f3bb",
+      "commitment_nonce_id": "c034604c772d7ec1a4ace412ca2d4fc9bb43a18e406a0f5f652dddf9bbf54112"
+    }
+  ]
+}

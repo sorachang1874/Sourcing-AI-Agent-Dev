@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.grok_cli.candidate_value_segment_policy.v1.schema.json",
+  "title": "Grok CLI candidate value segment policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_version",
+    "state_values",
+    "priority_tiers",
+    "segments",
+    "fallback_segment_id",
+    "fallback_priority_tier",
+    "precision_tranche",
+    "hydration"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok_cli.candidate_value_segment_policy.v1"},
+    "policy_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "state_values": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "current"},
+        {"const": "historical"},
+        {"const": "ambiguous"},
+        {"const": "unsupported"}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "priority_tiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["precision", "mixed_recall", "historical_recall", "needs_evidence"],
+      "properties": {
+        "precision": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "mixed_recall": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "historical_recall": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "needs_evidence": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/precision_current_current"},
+          {"$ref": "#/$defs/recall_current_historical"},
+          {"$ref": "#/$defs/recall_historical_current"},
+          {"$ref": "#/$defs/recall_historical_historical"}
+        ]
+      }
+    },
+    "fallback_segment_id": {"const": "needs_evidence"},
+    "fallback_priority_tier": {"const": "needs_evidence"},
+    "precision_tranche": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_segment_id",
+        "required_confidence",
+        "required_high_authority_support",
+        "require_stable_platform_user_id",
+        "require_bio"
+      ],
+      "properties": {
+        "required_segment_id": {"const": "precision_current_current"},
+        "required_confidence": {"const": "high"},
+        "required_high_authority_support": {"$ref": "#/$defs/dimensions"},
+        "require_stable_platform_user_id": {"const": true},
+        "require_bio": {"const": true}
+      }
+    },
+    "hydration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_triggers",
+        "required_high_authority_support",
+        "require_stable_platform_user_id",
+        "require_bio",
+        "historical_state_triggers_hydration"
+      ],
+      "properties": {
+        "state_triggers": {
+          "type": "array",
+          "prefixItems": [{"const": "ambiguous"}, {"const": "unsupported"}],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "required_high_authority_support": {"$ref": "#/$defs/dimensions"},
+        "require_stable_platform_user_id": {"const": true},
+        "require_bio": {"const": true},
+        "historical_state_triggers_hydration": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "dimensions": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "target_lab_affiliation_state"},
+        {"const": "pretraining_experience_state"}
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "precision_current_current": {
+      "$ref": "#/$defs/segment_base",
+      "properties": {
+        "segment_id": {"const": "precision_current_current"},
+        "target_lab_affiliation_state": {"const": "current"},
+        "pretraining_experience_state": {"const": "current"},
+        "priority_tier": {"const": "precision"},
+        "recall_pool_eligible": {"const": true}
+      }
+    },
+    "recall_current_historical": {
+      "$ref": "#/$defs/segment_base",
+      "properties": {
+        "segment_id": {"const": "recall_current_historical"},
+        "target_lab_affiliation_state": {"const": "current"},
+        "pretraining_experience_state": {"const": "historical"},
+        "priority_tier": {"const": "mixed_recall"},
+        "recall_pool_eligible": {"const": true}
+      }
+    },
+    "recall_historical_current": {
+      "$ref": "#/$defs/segment_base",
+      "properties": {
+        "segment_id": {"const": "recall_historical_current"},
+        "target_lab_affiliation_state": {"const": "historical"},
+        "pretraining_experience_state": {"const": "current"},
+        "priority_tier": {"const": "mixed_recall"},
+        "recall_pool_eligible": {"const": true}
+      }
+    },
+    "recall_historical_historical": {
+      "$ref": "#/$defs/segment_base",
+      "properties": {
+        "segment_id": {"const": "recall_historical_historical"},
+        "target_lab_affiliation_state": {"const": "historical"},
+        "pretraining_experience_state": {"const": "historical"},
+        "priority_tier": {"const": "historical_recall"},
+        "recall_pool_eligible": {"const": true}
+      }
+    },
+    "segment_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment_id",
+        "target_lab_affiliation_state",
+        "pretraining_experience_state",
+        "priority_tier",
+        "recall_pool_eligible"
+      ],
+      "properties": {
+        "segment_id": {"type": "string"},
+        "target_lab_affiliation_state": {"type": "string"},
+        "pretraining_experience_state": {"type": "string"},
+        "priority_tier": {"type": "string"},
+        "recall_pool_eligible": {"type": "boolean"}
+      }
+    }
+  }
+}

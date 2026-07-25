@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "behavior_fixture": "openai_agent_scoped_delta_long_latency",
+    "purpose": "Nightly long-latency overlay for OpenAI Agent scoped-search flows. It reuses the canonical OpenAI scripted fixture and only overrides provider timing fields.",
+    "real_api_calls_required": false,
+    "latency_profile": {
+      "profile_search_remote_wait_seconds": [45, 70],
+      "profile_batch_remote_wait_seconds": [60, 75, 90, 120, 150, 180, 240, 300]
+    }
+  },
+  "includes": ["openai_agent_scoped_delta_streaming.json"],
+  "harvest": {
+    "rules": [
+      {
+        "name": "openai_agent_current_profile_search_probe_and_scale",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 45,
+        "scripted_actor_run_duration_ms": 45000,
+        "scripted_dataset_download_duration_ms": 3200
+      },
+      {
+        "name": "openai_agent_former_profile_search_probe_and_scale",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 70,
+        "scripted_actor_run_duration_ms": 70000,
+        "scripted_dataset_download_duration_ms": 3800
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_early_live_like",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 60,
+        "scripted_actor_run_duration_ms": 60000,
+        "scripted_dataset_download_duration_ms": 4200
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_slow_out_of_order_anchor",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 180,
+        "scripted_actor_run_duration_ms": 180000,
+        "scripted_dataset_download_duration_ms": 4600
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_retryable_mid_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 120,
+        "scripted_actor_run_duration_ms": 120000,
+        "scripted_dataset_download_duration_ms": 4500
+      },
+      {
+        "name": "openai_agent_profile_scraper_current_fast_out_of_order",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 75,
+        "scripted_actor_run_duration_ms": 75000,
+        "scripted_dataset_download_duration_ms": 4200
+      },
+      {
+        "name": "openai_agent_profile_scraper_former_interleaved_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 90,
+        "scripted_actor_run_duration_ms": 90000,
+        "scripted_dataset_download_duration_ms": 4300
+      },
+      {
+        "name": "openai_agent_profile_scraper_former_timeout_long_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 300,
+        "scripted_actor_run_duration_ms": 300000,
+        "scripted_dataset_download_duration_ms": 5000
+      },
+      {
+        "name": "openai_agent_profile_scraper_batches_default_tail",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 150,
+        "scripted_actor_run_duration_ms": 150000,
+        "scripted_dataset_download_duration_ms": 4500
+      },
+      {
+        "name": "openai_agent_profile_scraper_timeout_edge",
+        "execute_sleep_position": "remote_wait",
+        "scripted_remote_wait_seconds": 240,
+        "scripted_actor_run_duration_ms": 240000,
+        "scripted_dataset_download_duration_ms": 4800
+      }
+    ]
+  }
+}

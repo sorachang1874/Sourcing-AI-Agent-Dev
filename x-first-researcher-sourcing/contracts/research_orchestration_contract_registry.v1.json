@@ -1,0 +1,54 @@
+{
+  "schema_version": "x.research_orchestration.contract_registry.v1",
+  "registry_version": "research_orchestration_contract_registry.v1",
+  "contracts": [
+    {
+      "schema_version": "x.research_orchestration.policy.v1",
+      "path": "contracts/x.research_orchestration.policy.v1.schema.json"
+    },
+    {
+      "schema_version": "x.research_scope.catalog.v1",
+      "path": "contracts/x.research_scope.catalog.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.request.v1",
+      "path": "contracts/x.portable.research_campaign.request.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.plan.v1",
+      "path": "contracts/x.portable.research_campaign.plan.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.result.v1",
+      "path": "contracts/x.portable.research_campaign.result.v1.schema.json"
+    },
+    {
+      "schema_version": "sourcing.x_first.subject_selection.v1",
+      "path": "contracts/sourcing.x_first.subject_selection.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.selected_subject.request_binding.v1",
+      "path": "contracts/x.portable.selected_subject.request_binding.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.package_manifest.v1",
+      "path": "contracts/x.portable.research_campaign.package_manifest.v1.schema.json"
+    },
+    {
+      "schema_version": "x.portable.research_campaign.semantic_validation_receipt.v1",
+      "path": "contracts/x.portable.research_campaign.semantic_validation_receipt.v1.schema.json"
+    }
+  ],
+  "checked_assets": [
+    "configs/research_orchestration_policy.v1.json",
+    "fixtures/research_scope_catalog_fixture_v1.json",
+    "fixtures/portable_research_campaign_request_fixture_v1.json",
+    "fixtures/portable_research_campaign_plan_fixture_v1.json",
+    "fixtures/portable_research_campaign_result_fixture_v1.json",
+    "fixtures/selected_subject_fixture_simulate_package_v1.json"
+  ],
+  "provider_calls_allowed": false,
+  "product_writes_allowed": false,
+  "runtime_import_allowed": false,
+  "canonical_person_write_allowed": false
+}

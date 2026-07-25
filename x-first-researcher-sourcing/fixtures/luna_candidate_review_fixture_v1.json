@@ -1,0 +1,134 @@
+{
+  "schema_version": "x.source_neutral.mapping.luna_candidate_review.fixture.v1",
+  "fixture_id": "luna_candidate_review_fixture_v1",
+  "approval_id": "fixture_luna_batch_approval_v1",
+  "lab_descriptor": {
+    "descriptor_id": "fixture_luna_batch_lab_descriptor_v1",
+    "lab_id": "fixture_lab",
+    "display_name": "Fixture Lab",
+    "official_handles": ["fixture_lab"],
+    "affiliation_aliases": ["Fixture Lab", "@fixture_lab"],
+    "project_aliases": ["Fixture Project"],
+    "x_url_host": "x.invalid"
+  },
+  "seeds": [
+    {
+      "seed_ref": "fixture_luna_candidate_001",
+      "source_kind": "linkedin_profile",
+      "external_record_ref": "fixture-snapshot-record-001",
+      "source_record_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "source_status": "fixture_synthetic",
+      "source_profile_url": "https://profiles.invalid/li/fixture-candidate-one",
+      "name_text": "Fixture Candidate One",
+      "x_handle_proposals": [
+        {
+          "handle": "fix_luna_001",
+          "binding_status": "cross_source_link_proposed",
+          "evidence_ref": "fixture-snapshot-001-handle"
+        }
+      ],
+      "professional_facts": [
+        {
+          "fact_type": "affiliation",
+          "value": "Fixture Lab",
+          "temporal_state": "current",
+          "evidence_ref": "fixture-snapshot-001-affinity"
+        },
+        {
+          "fact_type": "affiliation",
+          "value": "Example Institute",
+          "temporal_state": "historical",
+          "evidence_ref": "fixture-snapshot-001-past"
+        },
+        {
+          "fact_type": "role",
+          "value": "Research Engineer",
+          "temporal_state": "current",
+          "evidence_ref": "fixture-snapshot-001-role"
+        }
+      ]
+    },
+    {
+      "seed_ref": "fixture_luna_candidate_002",
+      "source_kind": "linkedin_profile",
+      "external_record_ref": "fixture-snapshot-record-002",
+      "source_record_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "source_status": "fixture_synthetic",
+      "source_profile_url": "https://profiles.invalid/li/fixture-candidate-two",
+      "name_text": "Fixture Candidate Two",
+      "x_handle_proposals": [],
+      "professional_facts": [
+        {
+          "fact_type": "affiliation",
+          "value": "Fixture Lab",
+          "temporal_state": "current",
+          "evidence_ref": "fixture-snapshot-002-affinity"
+        }
+      ]
+    }
+  ],
+  "bundles": {
+    "fixture_luna_candidate_001": {
+      "candidate_ref": "fixture_luna_candidate_001",
+      "seed_ref": "fixture_luna_candidate_001",
+      "account_resolution": {
+        "handle": "fix_luna_001",
+        "resolution_confidence": "high",
+        "evidence_receipts": [
+          {"receipt_kind": "grok_session_receipt", "receipt_ref": "fixture-grok-session-001"}
+        ]
+      },
+      "x_bio": {
+        "text": "Research Engineer at Fixture Lab. Previously Example Institute. Working on pre-training data and evals."
+      },
+      "items": [
+        {
+          "stable_post_id": "1900000000000000001",
+          "kind": "post",
+          "source_url": "https://x.invalid/fix_luna_001/status/1900000000000000001",
+          "author_handle": "fix_luna_001",
+          "authored_at": "2026-07-10T12:00:00.000Z",
+          "text": "Our new pre-training run at Fixture Lab scaled to two trillion tokens.",
+          "retrieval_receipt": {"receipt_kind": "x_search_receipt", "receipt_ref": "fixture-grok-receipt-post-001"}
+        },
+        {
+          "stable_post_id": "1900000000000000002",
+          "kind": "reply",
+          "source_url": "https://x.invalid/fix_luna_001/status/1900000000000000002",
+          "author_handle": "fix_luna_001",
+          "authored_at": "2026-07-11T09:30:00.000Z",
+          "text": "Yes - I led the tokenizer ablation for that pre-training sweep.",
+          "retrieval_receipt": {"receipt_kind": "x_search_receipt", "receipt_ref": "fixture-grok-receipt-post-002"}
+        }
+      ]
+    },
+    "fixture_luna_candidate_002": {
+      "candidate_ref": "fixture_luna_candidate_002",
+      "seed_ref": "fixture_luna_candidate_002",
+      "account_resolution": {
+        "handle": "fix_luna_002",
+        "resolution_confidence": "medium",
+        "evidence_receipts": []
+      },
+      "x_bio": {"text": ""},
+      "items": []
+    }
+  },
+  "model_outputs": {
+    "fixture_luna_candidate_001": {
+      "proposed_lab_affiliation_state": "current",
+      "proposed_pretraining_experience_state": "current",
+      "lab_affiliation_evidence_citations": ["seed_fact:fixture-snapshot-001-affinity", "x_bio"],
+      "pretraining_experience_evidence_citations": [
+        "post:1900000000000000001",
+        "post:1900000000000000002"
+      ]
+    },
+    "fixture_luna_candidate_002": {
+      "proposed_lab_affiliation_state": "current",
+      "proposed_pretraining_experience_state": "ambiguous",
+      "lab_affiliation_evidence_citations": ["seed_fact:fixture-snapshot-002-affinity"],
+      "pretraining_experience_evidence_citations": []
+    }
+  }
+}

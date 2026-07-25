@@ -1,24 +1,41 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
+from .acquisition_strategy import sync_location_filter_hints
 from .asset_reuse_planning import _sync_task_intent_view_from_metadata
+from .cohort_provider_compiler import COHORT_PROVIDER_MANIFEST_VERSION, CohortProviderCompiler
+from .cohort_selection import CohortSelectionValidationError, explicit_cohort_selection
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
+    is_unified_roster_partition_strategy,
     build_default_company_employee_shard_policy,
-    build_large_org_keyword_probe_shard_policy,
+    build_request_scoped_company_employee_query_plan,
+    build_request_scoped_former_search_shard_plan,
+    resolve_roster_lane_function_ids,
 )
 from .domain import JobRequest, SourcingPlan
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
 from .planning import (
-    FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
-    FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS,
-    FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
     FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+    FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES,
+    _build_provider_execution_manifest,
+    hydrate_sourcing_plan,
 )
 from .query_signal_knowledge import scope_review_hints
 from .request_normalization import materialize_request_payload
+
+# Authorized plan-review location axes (F6).  Both are sibling request
+# fields — never part of the closed cohort object — and enter canonical
+# request state only through apply_plan_review_decision below.
+PLAN_REVIEW_LOCATION_FIELDS = ("target_locations", "exclude_target_locations")
+# Tagged clear operation for the review wire contract: an initialized,
+# gate-authorized axis restored to ABSENCE serializes as
+# {"op": "clear"} so restore-absence is never collapsed with
+# not-part-of-this-decision (an omitted key) or with an explicit value.
+LOCATION_REVIEW_CLEAR_OPERATION = "clear"
 
 
 def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str, Any]:
@@ -28,19 +45,21 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
     execution_mode_hints = _build_execution_mode_hints(plan)
     editable_fields = [
         "company_scope",
+        "target_company_linkedin_url",
         "extra_source_families",
-        "allow_high_cost_sources",
         "precision_recall_bias",
         "acquisition_strategy_override",
         "use_company_employees_lane",
-        "keyword_priority_only",
         "former_keyword_queries_only",
         "provider_people_search_query_strategy",
         "provider_people_search_max_queries",
-        "large_org_keyword_probe_mode",
+        "provider_people_search_pages",
+        "provider_people_search_scale_chunk_pages",
         "force_fresh_run",
         "reuse_existing_roster",
         "run_former_search_seed",
+        "target_locations",
+        "exclude_target_locations",
     ]
     required_before_execution = False
     risk_level = "low"
@@ -78,12 +97,6 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         required_before_execution = True
         reasons.append("investor_firm_population_needs_confirmation")
         suggested_actions.append("Confirm which investor firms or tiers should be covered first.")
-
-    cost_policy = dict(plan.acquisition_strategy.cost_policy or {})
-    if bool(cost_policy.get("high_cost_requires_approval", True)):
-        required_before_execution = True
-        reasons.append("high_cost_sources_need_approval")
-        suggested_actions.append("Approve or deny high-cost source usage before execution.")
 
     publication_families = [str(item.family or "").strip() for item in plan.publication_coverage.source_families]
     if len(publication_families) <= 2:
@@ -146,7 +159,9 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
             for item in shards
         ]
         hints = {
-            "segmented_company_employee_shard_strategy": str(metadata.get("company_employee_shard_strategy") or "").strip(),
+            "segmented_company_employee_shard_strategy": _external_company_employee_shard_strategy(
+                str(metadata.get("company_employee_shard_strategy") or "").strip()
+            ),
             "segmented_company_employee_shard_count": len(shards),
             "segmented_company_employee_shards": shard_summaries,
         }
@@ -158,7 +173,11 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
             {
                 "rule_id": str(item.get("rule_id") or "").strip(),
                 "title": str(item.get("title") or item.get("rule_id") or "").strip(),
-                "include_patch": dict(item.get("include_patch") or {}),
+                "include_patch": _external_company_employee_partition_patch(
+                    str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip(),
+                    dict(policy.get("root_filters") or {}),
+                    dict(item.get("include_patch") or {}),
+                ),
                 "remainder_exclude_patch": dict(item.get("remainder_exclude_patch") or {}),
             }
             for item in list(policy.get("partition_rules") or [])
@@ -178,14 +197,22 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
                 "strategy_id": str(policy.get("strategy_id") or "").strip(),
                 "mode": str(policy.get("mode") or "").strip(),
                 "root_title": str(policy.get("root_title") or "").strip(),
-                "root_filters": dict(policy.get("root_filters") or {}),
+                "root_filters": _external_company_employee_root_filters(
+                    str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip(),
+                    dict(policy.get("root_filters") or {}),
+                ),
                 "partition_rules": partition_rules,
                 "keyword_shards": keyword_shards,
+                "request_function_ids": [
+                    str(item).strip() for item in list(policy.get("request_function_ids") or []) if str(item).strip()
+                ],
                 "max_pages": int(policy.get("max_pages") or 0),
                 "page_limit": int(policy.get("page_limit") or 0),
                 "provider_result_cap": int(policy.get("provider_result_cap") or 0),
             },
-            "segmented_company_employee_shard_strategy": str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip(),
+            "segmented_company_employee_shard_strategy": _external_company_employee_shard_strategy(
+                str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip()
+            ),
             "adaptive_probe_required_before_live_roster": True,
         }
         shard_titles = [
@@ -206,6 +233,48 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
                 f"如果一定要 fresh run，接受按 {' / '.join(shard_titles[:4])} 做 live probe 后再自动分片。",
             ]
     return hints
+
+
+def _external_company_employee_shard_strategy(strategy_id: str) -> str:
+    normalized = str(strategy_id or "").strip()
+    # Dual-accept (WS1 write-default retirement 2026-07-23): new plans mint
+    # the unified id, stored plans may still carry the legacy id; both map to
+    # the same stable external display id.
+    if is_unified_roster_partition_strategy(normalized):
+        return "adaptive_us_function_partition"
+    return normalized
+
+
+def _external_company_employee_root_filters(strategy_id: str, root_filters: dict[str, Any]) -> dict[str, Any]:
+    normalized = str(strategy_id or "").strip()
+    filters = dict(root_filters or {})
+    if is_unified_roster_partition_strategy(normalized):
+        filters.pop("function_ids", None)
+        filters.pop("exclude_function_ids", None)
+    return filters
+
+
+def _external_company_employee_partition_patch(
+    strategy_id: str,
+    root_filters: dict[str, Any],
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = str(strategy_id or "").strip()
+    normalized_patch = dict(patch or {})
+    if not is_unified_roster_partition_strategy(normalized):
+        return normalized_patch
+    root_function_ids = [str(item).strip() for item in list(dict(root_filters or {}).get("function_ids") or []) if str(item).strip()]
+    excluded = {
+        str(item).strip()
+        for item in list(normalized_patch.get("exclude_function_ids") or [])
+        if str(item).strip()
+    }
+    if root_function_ids and excluded:
+        include_ids = [item for item in root_function_ids if item not in excluded]
+        normalized_patch.pop("exclude_function_ids", None)
+        if include_ids:
+            normalized_patch["function_ids"] = include_ids
+    return normalized_patch
 
 
 def apply_plan_review_decision(
@@ -258,8 +327,12 @@ def apply_plan_review_decision(
     decision_preferences = normalize_execution_preferences(decision, target_company=target_company)
 
     extra_source_families = _normalize_list(decision.get("extra_source_families"))
-    confirmed_scope = _normalize_list(decision.get("confirmed_company_scope"))
-    allow_high_cost_sources = "allow_high_cost_sources" in decision_preferences
+    confirmed_scope_input = _normalize_list(decision.get("confirmed_company_scope"))
+    confirmed_scope = [
+        item
+        for item in confirmed_scope_input
+        if not _scope_item_matches_target_company(item, target_company=target_company)
+    ]
     precision_recall_bias = str(decision_preferences.get("precision_recall_bias") or "").strip().lower()
 
     if extra_source_families:
@@ -293,7 +366,7 @@ def apply_plan_review_decision(
         publication["seed_queries"] = seed_queries
         updated_plan["publication_coverage"] = publication
 
-    if confirmed_scope:
+    if confirmed_scope_input:
         acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
         target_company = str(updated_request.get("target_company") or "").strip()
         new_scope = [target_company] if target_company else []
@@ -302,16 +375,16 @@ def apply_plan_review_decision(
                 new_scope.append(item)
         acquisition_strategy["company_scope"] = new_scope
         filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
-        filter_hints["scope_keywords"] = confirmed_scope
+        if confirmed_scope:
+            filter_hints["scope_keywords"] = confirmed_scope
+        else:
+            filter_hints.pop("scope_keywords", None)
         acquisition_strategy["filter_hints"] = filter_hints
         updated_plan["acquisition_strategy"] = acquisition_strategy
 
-    if allow_high_cost_sources or precision_recall_bias:
+    if precision_recall_bias:
         acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
         cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-        if "allow_high_cost_sources" in decision_preferences:
-            cost_policy["high_cost_requires_approval"] = False
-            cost_policy["high_cost_sources_approved"] = bool(decision_preferences.get("allow_high_cost_sources"))
         if precision_recall_bias:
             cost_policy["precision_recall_bias"] = precision_recall_bias
         acquisition_strategy["cost_policy"] = cost_policy
@@ -324,12 +397,187 @@ def apply_plan_review_decision(
             preferences=decision_preferences,
         )
 
+    location_edited = _apply_location_review_decision(updated_request, updated_plan, decision)
     _sync_request_execution_preferences(updated_request, decision)
-    _sync_task_metadata(updated_plan)
+    _sync_task_metadata(updated_plan, request_payload=updated_request)
+    if location_edited:
+        # Task metadata is rebuilt BEFORE manifest rebinding so the canonical
+        # manifest lanes are derived from the same request-scoped roster plan
+        # the tasks carry (never from pre-edit metadata).
+        _rebind_provider_execution_manifest_after_location_edit(updated_request, updated_plan)
     return updated_request, updated_plan
 
 
-def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
+def validate_plan_review_location_decision(decision_payload: dict[str, Any] | None) -> None:
+    """Fail-closed validation for the tagged location review wire contract.
+
+    Runs at the review write boundary for EVERY action (approve, reject,
+    needs_changes), mirroring the cohort-selection posture: per authorized
+    axis the decision may carry exactly one of
+
+    - a list of location strings (replace the axis; explicit ``[]`` opts out
+      of location filtering),
+    - the tagged clear operation ``{"op": "clear"}`` (restore the axis to
+      ABSENT so the server default applies again),
+    - no key at all (the axis is not part of this decision).
+
+    Any other shape — a present JSON null, a wrong container, an unknown op
+    tag, or a clear dict carrying extra keys — fails closed before any
+    review write.
+    """
+
+    decision = dict(decision_payload or {})
+    for field_name in PLAN_REVIEW_LOCATION_FIELDS:
+        if field_name not in decision:
+            continue
+        _normalize_location_review_operation(decision.get(field_name), field_name=field_name)
+
+
+def _apply_location_review_decision(
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+    decision_payload: dict[str, Any],
+) -> bool:
+    """Authorized application owner for plan-review location edits (F6).
+
+    Location edits enter canonical request state ONLY through this path —
+    never frontend-minted, never a metadata mirror promoted to owner.  Every
+    present axis is validated before any mutation (atomic fail-closed), and
+    the three wire states are never collapsed: an absent key leaves the axis
+    untouched, the tagged clear removes the axis from the canonical request,
+    and a list replaces it.  The plan's filter hints are rebuilt through the
+    same owner as plan time (``sync_location_filter_hints``).  Returns True
+    when an edit was applied so the caller can re-sync task metadata and then
+    rebind the provider execution manifest through its canonical
+    compiler/builder — in that order, so manifest lanes derive from the
+    rebuilt roster plan rather than pre-edit metadata.
+    """
+
+    decision = dict(decision_payload or {})
+    operations: dict[str, list[str] | None] = {}
+    for field_name in PLAN_REVIEW_LOCATION_FIELDS:
+        if field_name not in decision:
+            continue
+        operations[field_name] = _normalize_location_review_operation(
+            decision.get(field_name),
+            field_name=field_name,
+        )
+    if not operations:
+        return False
+    for field_name, replacement in operations.items():
+        if replacement is None:
+            # Tagged clear: restore ABSENCE on the canonical request axis.
+            request_payload.pop(field_name, None)
+        else:
+            request_payload[field_name] = replacement
+    _sync_plan_location_filter_hints(request_payload, plan_payload)
+    return True
+
+
+def _normalize_location_review_operation(value: Any, *, field_name: str) -> list[str] | None:
+    """Return the normalized replacement list, or None for the tagged clear."""
+
+    if isinstance(value, dict):
+        if (
+            set(value) == {"op"}
+            and type(value.get("op")) is str
+            and value["op"] == LOCATION_REVIEW_CLEAR_OPERATION
+        ):
+            return None
+        raise CohortSelectionValidationError(
+            "plan_review_location_invalid_operation",
+            field_name,
+            f"{field_name} accepts only a location string list or the tagged clear operation",
+        )
+    # Replacement lists are validated through the canonical request ingress
+    # owner (JobRequest) so the review channel can never accept a shape the
+    # request itself rejects: wrong container types, a present JSON null,
+    # over-bound lists, and null/blank items fail closed with the same
+    # stable request_location_* codes as ingress.
+    probe = JobRequest.from_payload({"target_company": "plan-review-location-probe", field_name: value})
+    if field_name == "target_locations":
+        return list(probe.target_locations or [])
+    return list(probe.exclude_target_locations or [])
+
+
+def _sync_plan_location_filter_hints(
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+) -> None:
+    """Rebuild the plan's location-derived filter hints from the request."""
+
+    acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
+    if not acquisition_strategy:
+        return
+    company_scope = [
+        str(item).strip()
+        for item in list(acquisition_strategy.get("company_scope") or [])
+        if str(item).strip()
+    ]
+    target_company = str(request_payload.get("target_company") or "").strip() or (
+        company_scope[0] if company_scope else ""
+    )
+    cohort = explicit_cohort_selection(request_payload)
+    acquisition_strategy["filter_hints"] = sync_location_filter_hints(
+        dict(acquisition_strategy.get("filter_hints") or {}),
+        strategy_type=str(acquisition_strategy.get("strategy_type") or "").strip(),
+        target_company=target_company,
+        cost_policy=dict(acquisition_strategy.get("cost_policy") or {}),
+        explicit_role_authority=bool(cohort) and str(cohort.get("source") or "") == "user_explicit",
+        target_locations=(
+            list(request_payload["target_locations"]) if "target_locations" in request_payload else None
+        ),
+        exclude_target_locations=(
+            list(request_payload["exclude_target_locations"]) if "exclude_target_locations" in request_payload else None
+        ),
+    )
+    plan_payload["acquisition_strategy"] = acquisition_strategy
+
+
+def _rebind_provider_execution_manifest_after_location_edit(
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+) -> None:
+    """Rebind the canonical plan manifest after a location edit.
+
+    The stored manifest is never repaired in place and never borrowed from a
+    metadata mirror.  A cohort-compiler manifest is recompiled through its
+    sole owner (``CohortProviderCompiler``) from the reviewed canonical
+    request plus the rebuilt base filter hints — the same inputs the runtime
+    exact-recompilation preflight uses before any provider call — and a
+    legacy planning manifest is rebuilt through the same plan-time builder
+    so lane company filters cannot keep pre-edit locations.  A compiler
+    manifest whose reviewed request lost its user-explicit cohort owner is
+    an identity disagreement and fails closed instead of being repaired.
+    """
+
+    acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
+    stored_manifest = dict(acquisition_strategy.get("provider_execution_manifest") or {})
+    if not stored_manifest:
+        return
+    if str(stored_manifest.get("schema_version") or "").strip() == COHORT_PROVIDER_MANIFEST_VERSION:
+        cohort = explicit_cohort_selection(request_payload)
+        if not cohort or str(cohort.get("source") or "") != "user_explicit":
+            raise CohortSelectionValidationError(
+                "plan_review_location_manifest_rebind_failed",
+                "provider_execution_manifest",
+                "stored cohort provider manifest has no user_explicit cohort owner on the reviewed request",
+            )
+        acquisition_strategy["provider_execution_manifest"] = CohortProviderCompiler().compile(
+            deepcopy(request_payload),
+            base_filter_hints=dict(acquisition_strategy.get("filter_hints") or {}),
+        )
+        plan_payload["acquisition_strategy"] = acquisition_strategy
+        return
+    hydrated = hydrate_sourcing_plan(plan_payload)
+    acquisition_strategy["provider_execution_manifest"] = _build_provider_execution_manifest(
+        acquisition_strategy=hydrated.acquisition_strategy,
+        acquisition_tasks=list(hydrated.acquisition_tasks or []),
+    )
+    plan_payload["acquisition_strategy"] = acquisition_strategy
+
+
+def _sync_task_metadata(plan_payload: dict[str, Any], request_payload: dict[str, Any] | None = None) -> None:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
     publication = dict(plan_payload.get("publication_coverage") or {})
     publication_families = [
@@ -346,7 +594,23 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
     strategy_type = str(acquisition_strategy.get("strategy_type") or "").strip()
     search_channel_order = list(acquisition_strategy.get("search_channel_order") or [])
     search_seed_queries = list(acquisition_strategy.get("search_seed_queries") or [])
-    max_pages = _default_review_full_roster_max_pages(target_company) if strategy_type == "full_company_roster" else 10
+    max_pages = _default_review_full_roster_max_pages(target_company, plan_payload) if strategy_type == "full_company_roster" else 10
+    request_roster_plan: dict[str, Any] = {"shards": [], "company_filters": {}, "function_ids": [], "locations": [], "exclude_locations": []}
+    if strategy_type == "full_company_roster":
+        # Rebuild the same request-scoped roster contract the planner emitted
+        # (one unified method, no company branches) so plan-review sync never
+        # drops or distorts explicit location/functionID wiring.
+        request_roster_plan = build_request_scoped_company_employee_query_plan(
+            target_locations=dict(request_payload or {}).get("target_locations"),
+            function_ids=resolve_roster_lane_function_ids(
+                request_payload,
+                planning_mode=str(dict(request_payload or {}).get("planning_mode") or ""),
+            ),
+            max_pages=max_pages,
+            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+            exclude_target_locations=dict(request_payload or {}).get("exclude_target_locations"),
+        )
+    request_roster_function_ids = list(request_roster_plan.get("function_ids") or [])
     shard_policy = _build_review_company_shard_policy(
         strategy_type=strategy_type,
         target_company=target_company,
@@ -354,6 +618,9 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
         filter_hints=filter_hints,
         cost_policy=cost_policy,
         max_pages=max_pages,
+        locations=list(request_roster_plan.get("locations") or []) if strategy_type == "full_company_roster" else None,
+        exclude_locations=list(request_roster_plan.get("exclude_locations") or []),
+        request_function_ids=request_roster_function_ids,
     )
     for task in plan_payload.get("acquisition_tasks") or []:
         if not isinstance(task, dict):
@@ -379,19 +646,45 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
         if str(task.get("task_type") or "") == "acquire_full_roster":
             metadata["max_pages"] = max_pages
             metadata["page_limit"] = FULL_COMPANY_EMPLOYEES_PAGE_LIMIT
+            metadata["company_employee_base_filters"] = (
+                dict(request_roster_plan.get("company_filters") or {}) if strategy_type == "full_company_roster" else {}
+            )
+            # This writer emits ONLY the unified adaptive-policy shape since
+            # 2026-07-22 (strategy Step 1): for full_company_roster the policy
+            # builder is total (never empty), and for other strategies the
+            # roster request plan is empty — the former "small-company
+            # concrete-shards" write branch was unreachable both ways.
+            # STORED plans with the explicit-shards shape (policy={} +
+            # company_employee_shards + request-function-partition strategy id)
+            # remain a READ contract honored by the acquisition
+            # task_metadata_shards path until the pre-unification rows age out
+            # (deletion conditions: RESIDUAL_LEDGER / master plan WS1).
             metadata["company_employee_shards"] = []
             metadata["company_employee_shard_policy"] = shard_policy
             metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
+            if strategy_type == "former_employee_search":
+                # WS1 Step 2b-ii: review sync rebuilds the former-only plan's
+                # per-function former shard plan under the same request axes
+                # (mirrors the planner; execution re-derives past companies
+                # from the resolved identity).
+                metadata["former_function_shard_plan"] = build_request_scoped_former_search_shard_plan(
+                    function_ids=resolve_roster_lane_function_ids(
+                        request_payload,
+                        planning_mode=str(dict(request_payload or {}).get("planning_mode") or ""),
+                    ),
+                    past_companies=list(company_scope or []),
+                    locations=dict(request_payload or {}).get("target_locations"),
+                    exclude_locations=dict(request_payload or {}).get("exclude_target_locations") or [],
+                )
         if str(task.get("task_type") or "") == "enrich_profiles_multisource":
             metadata["publication_source_families"] = publication_families
         task["metadata"] = _sync_task_intent_view_from_metadata(metadata)
 
 
-def _default_review_full_roster_max_pages(target_company: str) -> int:
-    company_key = normalize_company_key(target_company)
-    if company_key in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
-        return FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES
-    return FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES
+def _default_review_full_roster_max_pages(target_company: str, plan: SourcingPlan | dict[str, Any]) -> int:
+    # Unified roster contract: one paging budget for every company (no
+    # org-size bands), matching the planner's roster max-pages rule.
+    return FULL_COMPANY_EMPLOYEES_UNIFIED_MAX_PAGES
 
 
 def _build_review_company_shard_policy(
@@ -402,25 +695,18 @@ def _build_review_company_shard_policy(
     filter_hints: dict[str, Any],
     cost_policy: dict[str, Any],
     max_pages: int,
+    locations: list[str] | None = None,
+    exclude_locations: list[str] | None = None,
+    request_function_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if strategy_type != "full_company_roster":
         return {}
-    company_key = normalize_company_key(target_company)
-    if bool(cost_policy.get("large_org_keyword_probe_mode")):
-        keyword_policy = build_large_org_keyword_probe_shard_policy(
-            company_key,
-            company_scope=list(company_scope or []),
-            keyword_hints=[str(item).strip() for item in list(filter_hints.get("keywords") or []) if str(item).strip()],
-            function_ids=[str(item).strip() for item in list(filter_hints.get("function_ids") or []) if str(item).strip()],
-            max_pages=max_pages,
-            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-        )
-        if keyword_policy:
-            return keyword_policy
     return build_default_company_employee_shard_policy(
-        company_key,
         max_pages=max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+        locations=locations,
+        exclude_locations=exclude_locations,
+        request_function_ids=request_function_ids,
     )
 
 
@@ -572,13 +858,13 @@ def _apply_acquisition_review_preferences(
     if desired_strategy:
         acquisition_strategy["strategy_type"] = desired_strategy
     if desired_strategy == "full_company_roster":
-        acquisition_strategy["roster_sources"] = ["linkedin_company_roster", "company_directory_pages", "the_org"]
+        acquisition_strategy["roster_sources"] = ["harvest_company_employees", "company_directory_pages", "the_org"]
         if target_company:
             acquisition_strategy["company_scope"] = [target_company]
     elif desired_strategy == "scoped_search_roster":
-        acquisition_strategy["roster_sources"] = ["web_search_seed_queries", "linkedin_people_search", "company_suborg_sources"]
+        acquisition_strategy["roster_sources"] = ["harvest_profile_search", "company_suborg_sources"]
     elif desired_strategy == "former_employee_search":
-        acquisition_strategy["roster_sources"] = ["web_search_seed_queries", "linkedin_people_search", "news_and_bio_pages"]
+        acquisition_strategy["roster_sources"] = ["harvest_profile_search", "news_and_bio_pages"]
     elif desired_strategy == "investor_firm_roster":
         acquisition_strategy["roster_sources"] = ["funding_graph", "investor_firm_roster", "linkedin_people_search"]
 
@@ -591,38 +877,35 @@ def _apply_acquisition_review_preferences(
         cost_policy["allow_cached_roster_fallback"] = False
         cost_policy["allow_historical_profile_inheritance"] = False
         cost_policy["allow_shared_provider_cache"] = False
-    if "keyword_priority_only" in preferences:
-        cost_policy["keyword_priority_only"] = bool(preferences.get("keyword_priority_only"))
     if "former_keyword_queries_only" in preferences:
         cost_policy["former_keyword_queries_only"] = bool(preferences.get("former_keyword_queries_only"))
     if "provider_people_search_query_strategy" in preferences:
         cost_policy["provider_people_search_query_strategy"] = str(preferences.get("provider_people_search_query_strategy") or "").strip()
     if "provider_people_search_max_queries" in preferences:
         cost_policy["provider_people_search_max_queries"] = int(preferences.get("provider_people_search_max_queries") or 0)
-    if "large_org_keyword_probe_mode" in preferences:
-        cost_policy["large_org_keyword_probe_mode"] = bool(preferences.get("large_org_keyword_probe_mode"))
-    if "allow_high_cost_sources" in preferences:
-        cost_policy["high_cost_requires_approval"] = False
-        cost_policy["high_cost_sources_approved"] = bool(preferences.get("allow_high_cost_sources"))
+    if "provider_people_search_pages" in preferences:
+        cost_policy["provider_people_search_pages"] = int(preferences.get("provider_people_search_pages") or 0)
+    if "provider_people_search_scale_chunk_pages" in preferences:
+        cost_policy["provider_people_search_scale_chunk_pages"] = int(
+            preferences.get("provider_people_search_scale_chunk_pages") or 0
+        )
     strategy_for_provider = str(acquisition_strategy.get("strategy_type") or desired_strategy or current_strategy).strip().lower()
-    explicit_high_cost_preference = "allow_high_cost_sources" in preferences
     if strategy_for_provider == "scoped_search_roster":
         if "former_keyword_queries_only" not in preferences:
             cost_policy["former_keyword_queries_only"] = True
-        if bool(cost_policy.get("high_cost_sources_approved")):
-            cost_policy["provider_people_search_mode"] = "primary_only"
-            try:
-                current_min_expected = int(cost_policy.get("provider_people_search_min_expected_results") or 0)
-            except (TypeError, ValueError):
-                current_min_expected = 0
-            try:
-                current_pages = int(cost_policy.get("provider_people_search_pages") or 0)
-            except (TypeError, ValueError):
-                current_pages = 0
-            cost_policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
-            cost_policy["provider_people_search_pages"] = max(current_pages, 2)
-        elif explicit_high_cost_preference and not bool(preferences.get("allow_high_cost_sources")):
-            cost_policy["provider_people_search_mode"] = "disabled"
+        cost_policy["provider_people_search_mode"] = "primary_only"
+        if "provider_people_search_accept_zero_results" not in preferences:
+            cost_policy["provider_people_search_accept_zero_results"] = True
+        try:
+            current_min_expected = int(cost_policy.get("provider_people_search_min_expected_results") or 0)
+        except (TypeError, ValueError):
+            current_min_expected = 0
+        try:
+            current_pages = int(cost_policy.get("provider_people_search_pages") or 0)
+        except (TypeError, ValueError):
+            current_pages = 0
+        cost_policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
+        cost_policy["provider_people_search_pages"] = max(current_pages, 2)
     if "precision_recall_bias" in preferences:
         cost_policy["precision_recall_bias"] = str(preferences.get("precision_recall_bias") or "").strip()
     acquisition_strategy["cost_policy"] = cost_policy
@@ -638,10 +921,6 @@ def _apply_acquisition_review_preferences(
             reasoning.append(note)
     if force_fresh_run_present and force_fresh_run:
         note = "Plan review requested a fresh live acquisition instead of falling back to cached roster snapshots."
-        if note not in reasoning:
-            reasoning.append(note)
-    if bool(preferences.get("keyword_priority_only")):
-        note = "Plan review prioritized keyword-first acquisition over broad roster expansion."
         if note not in reasoning:
             reasoning.append(note)
     if str(preferences.get("provider_people_search_query_strategy") or "").strip().lower() == "all_queries_union":
@@ -696,6 +975,22 @@ def _normalize_list(value: Any) -> list[str]:
         seen.add(key)
         results.append(normalized)
     return results
+
+
+def _scope_item_matches_target_company(value: str, *, target_company: str) -> bool:
+    candidate = " ".join(str(value or "").split()).strip()
+    target = " ".join(str(target_company or "").split()).strip()
+    if not candidate or not target:
+        return False
+    candidate_key = normalize_company_key(candidate)
+    target_key = normalize_company_key(target)
+    if candidate_key and target_key and candidate_key == target_key:
+        return True
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", candidate, flags=re.IGNORECASE)
+    if not match:
+        return False
+    slug_key = normalize_company_key(str(match.group(1) or ""))
+    return bool(slug_key and target_key and slug_key == target_key)
 
 
 def _coerce_bool(payload: dict[str, Any], *keys: str) -> bool:

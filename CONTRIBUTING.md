@@ -1,5 +1,7 @@
 # Contributing
 
+> Status: Reference (2026-04 era). Engineering rules 的 canonical 来源是 [AGENTS.md](AGENTS.md)；本文件保留分支/PR 惯例，与 AGENTS.md 冲突时以 AGENTS.md 为准。
+
 本文件定义 `Sourcing AI Agent Dev` 的协作开发规则。目标很简单：
 
 - `main` 永远稳定、可发布

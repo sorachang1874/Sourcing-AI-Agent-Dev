@@ -3,13 +3,15 @@ import unittest
 
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.domain import JobRequest
-from sourcing_agent.storage import SQLiteStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class AgentRuntimeTest(unittest.TestCase):
+class AgentRuntimeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = SQLiteStore(f"{self.tempdir.name}/runtime.db")
+        self.store = self.make_pg_store(f"{self.tempdir.name}/runtime.db")
         self.runtime = AgentRuntimeCoordinator(self.store)
         self.request = JobRequest(
             raw_user_request="帮我找 xAI 的 RL researcher",

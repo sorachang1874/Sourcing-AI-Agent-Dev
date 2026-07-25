@@ -1,0 +1,228 @@
+{
+  "meta": {
+    "behavior_fixture": "google_gemini_provider_quality_streaming",
+    "driver_query": "帮我找Google做Gemini方向的人",
+    "purpose": "Scripted provider-quality SLO fixture for Harvest profile-search page coverage anomalies: probe total drift, empty scaled result, empty chunk range, and single-page retry recovery.",
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "fresh_runtime_required": true,
+      "effective_acquisition_mode": "scoped_live_search",
+      "provider_quality_anomaly_metrics_required": true,
+      "chunked_fallback_degraded_query_required": true
+    },
+    "synthetic_counts": {
+      "current_profile_search_returned": 2,
+      "former_profile_search_returned": 18,
+      "expected_deduped_candidate_count": 20,
+      "expected_deduped_profile_url_count": 20,
+      "expected_profile_fetch_required_count": 20
+    },
+    "expected_provider_anomalies": {
+      "empty_scale_count": 1,
+      "probe_total_drift_count": 1,
+      "empty_page_range_count": 1,
+      "single_page_retry_count": 2
+    }
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "google_gemini_current_profile_search_probe_reports_three_pages",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"],
+          "payload_equals": {
+            "startPage": 1,
+            "takePages": 1,
+            "maxItems": 25
+          }
+        },
+        "scripted_actor_run_duration_ms": 24000,
+        "scripted_dataset_download_duration_ms": 1800,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "current",
+          "search_query": "Gemini",
+          "estimated_total_count": 3,
+          "returned_count": 1,
+          "total_pages": 3,
+          "linkedin_slug_prefix": "google-gemini-provider-current",
+          "full_name_template": "Google Gemini Provider Current {slug_index:04d}",
+          "headline_template": "Gemini systems engineer at Google DeepMind",
+          "summary_template": "Probe row for provider-quality page coverage drift."
+        }
+      },
+      {
+        "name": "google_gemini_current_profile_search_scaled_empty",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"],
+          "payload_equals": {
+            "startPage": 1,
+            "takePages": 3
+          }
+        },
+        "scripted_actor_run_duration_ms": 26000,
+        "scripted_dataset_download_duration_ms": 1900,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "current",
+          "search_query": "Gemini",
+          "estimated_total_count": 3,
+          "returned_count": 0,
+          "total_pages": 3,
+          "linkedin_slug_prefix": "google-gemini-provider-current"
+        }
+      },
+      {
+        "name": "google_gemini_current_profile_search_chunk_empty_pages_2_3",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"],
+          "payload_equals": {
+            "startPage": 2,
+            "takePages": 2
+          }
+        },
+        "scripted_actor_run_duration_ms": 25000,
+        "scripted_dataset_download_duration_ms": 1800,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "current",
+          "search_query": "Gemini",
+          "estimated_total_count": 3,
+          "returned_count": 0,
+          "total_pages": 3,
+          "linkedin_slug_prefix": "google-gemini-provider-current"
+        }
+      },
+      {
+        "name": "google_gemini_current_profile_search_single_page_2_recovers",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"],
+          "payload_equals": {
+            "startPage": 2,
+            "takePages": 1
+          }
+        },
+        "scripted_actor_run_duration_ms": 18000,
+        "scripted_dataset_download_duration_ms": 1400,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "current",
+          "search_query": "Gemini",
+          "estimated_total_count": 3,
+          "returned_count": 1,
+          "total_pages": 3,
+          "linkedin_slug_prefix": "google-gemini-provider-current",
+          "full_name_template": "Google Gemini Provider Current {slug_index:04d}",
+          "headline_template": "Gemini reliability engineer at Google DeepMind",
+          "summary_template": "Recovered from a single-page retry after an empty chunk response."
+        }
+      },
+      {
+        "name": "google_gemini_current_profile_search_single_page_3_empty",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"],
+          "payload_equals": {
+            "startPage": 3,
+            "takePages": 1
+          }
+        },
+        "scripted_actor_run_duration_ms": 17000,
+        "scripted_dataset_download_duration_ms": 1300,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "current",
+          "search_query": "Gemini",
+          "estimated_total_count": 3,
+          "returned_count": 0,
+          "total_pages": 3,
+          "linkedin_slug_prefix": "google-gemini-provider-current"
+        }
+      },
+      {
+        "name": "google_gemini_former_profile_search_provider_quality",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "google", "Gemini"]
+        },
+        "scripted_actor_run_duration_ms": 22000,
+        "scripted_dataset_download_duration_ms": 1600,
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "former",
+          "search_query": "Gemini",
+          "estimated_total_count": 18,
+          "returned_count": 18,
+          "total_pages": 1,
+          "linkedin_slug_prefix": "google-gemini-provider-former",
+          "full_name_template": "Google Gemini Provider Former {slug_index:04d}",
+          "headline_template": "Former Gemini researcher at Google DeepMind",
+          "summary_template": "Former Google DeepMind contributor with Gemini model systems experience."
+        }
+      },
+      {
+        "name": "google_gemini_provider_profile_scraper_current",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["google-gemini-provider-current"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 20,
+        "execute_sleep_position": "remote_wait",
+        "scripted_actor_run_duration_ms": 45000,
+        "scripted_dataset_download_duration_ms": 3200,
+        "pending_message": "Scripted Google Gemini provider-quality current profile batch is still running.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "Google",
+          "search_query": "Gemini",
+          "location": "United States",
+          "full_name_template": "Google Gemini Provider Current {slug_index:04d}",
+          "title_template": "Gemini Reliability Engineer",
+          "headline_template": "{title} at Google DeepMind",
+          "about_template": "Works on Gemini reliability, model quality, and production AI infrastructure.",
+          "previous_company": "OpenAI",
+          "previous_title": "AI Infrastructure Engineer",
+          "skills": ["Gemini", "Reliability", "AI infrastructure", "Model evaluation"]
+        }
+      },
+      {
+        "name": "google_gemini_provider_profile_scraper_former",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["google-gemini-provider-former"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 25,
+        "execute_sleep_position": "remote_wait",
+        "scripted_actor_run_duration_ms": 50000,
+        "scripted_dataset_download_duration_ms": 3600,
+        "pending_message": "Scripted Google Gemini provider-quality former profile batch is still running.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "Google",
+          "search_query": "Gemini",
+          "location": "United States",
+          "full_name_template": "Google Gemini Provider Former {slug_index:04d}",
+          "title_template": "Former Gemini Research Engineer",
+          "headline_template": "{title} at Google DeepMind",
+          "about_template": "Formerly worked on Gemini model systems, evaluation, and AI infrastructure.",
+          "previous_company": "Anthropic",
+          "previous_title": "Research Engineer",
+          "skills": ["Gemini", "Model systems", "Evaluation", "Research engineering"]
+        }
+      }
+    ]
+  }
+}

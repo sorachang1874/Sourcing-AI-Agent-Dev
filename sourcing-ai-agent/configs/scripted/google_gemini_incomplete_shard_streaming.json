@@ -1,0 +1,187 @@
+{
+  "meta": {
+    "behavior_fixture": "google_gemini_incomplete_shard_streaming",
+    "driver_query": "帮我找Google做Gemini方向的人",
+    "purpose": "Scripted reproduction of the authoritative-coverage guardrail: a Google authoritative baseline is reusable as a baseline, but incomplete or missing exact Gemini shard proof must not become full local reuse. The workflow must stay delta_from_snapshot and acquire a coherent scoped Gemini current/former delta.",
+    "expected_behavior": {
+      "provider_mode": "scripted",
+      "real_api_calls_required": false,
+      "authoritative_baseline_can_seed_delta": true,
+      "full_local_reuse_allowed_without_exact_gemini_shard": false,
+      "stage_1_public_web_seed_fallback_allowed": false,
+      "coherent_stage1_projection_required": true
+    },
+    "synthetic_counts": {
+      "current_profile_search_returned": 48,
+      "former_profile_search_returned": 18,
+      "expected_deduped_candidate_count": 66,
+      "expected_deduped_profile_url_count": 66,
+      "expected_profile_fetch_required_count": 66
+    }
+  },
+  "harvest": {
+    "rules": [
+      {
+        "name": "google_gemini_current_profile_search_delta",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["currentCompanies", "google", "Gemini"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted Google Gemini current profile-search actor is draining scoped current rows.",
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "current",
+          "search_query": "Gemini",
+          "estimated_total_count": 48,
+          "returned_count": 48,
+          "total_pages": 3,
+          "linkedin_slug_prefix": "google-gemini-current",
+          "full_name_template": "Google Gemini Current {slug_index:04d}",
+          "headline_template": "Gemini product and systems researcher at Google DeepMind",
+          "summary_template": "Works on Gemini model products, multimodal systems, evaluation, safety, and production AI infrastructure."
+        }
+      },
+      {
+        "name": "google_gemini_former_profile_search_delta",
+        "match": {
+          "logical_name": "harvest_profile_search",
+          "payload_contains": ["pastCompanies", "google", "Gemini"]
+        },
+        "execute_pending_rounds": 1,
+        "execute_sleep_seconds": 4,
+        "partial_result": true,
+        "pending_message": "Scripted Google Gemini former profile-search actor is draining scoped former rows.",
+        "generated_body": {
+          "kind": "profile_search",
+          "company": "Google",
+          "employment_scope": "former",
+          "search_query": "Gemini",
+          "estimated_total_count": 18,
+          "returned_count": 18,
+          "total_pages": 1,
+          "linkedin_slug_prefix": "google-gemini-former",
+          "full_name_template": "Google Gemini Former {slug_index:04d}",
+          "headline_template": "Former Gemini researcher at Google DeepMind",
+          "summary_template": "Former Google DeepMind contributor with Gemini, model evaluation, and AI product infrastructure experience."
+        }
+      },
+      {
+        "name": "google_gemini_profile_scraper_current_early",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["google-gemini-current-0001"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 45,
+        "execute_sleep_position": "remote_wait",
+        "pending_message": "Scripted Google Gemini early current profile batch is still running.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "Google",
+          "search_query": "Gemini",
+          "location": "United States",
+          "full_name_template": "Google Gemini {slug_index:04d}",
+          "title_template": "Gemini Research Engineer",
+          "headline_template": "{title} at Google DeepMind",
+          "about_template": "Builds Gemini product systems, model evaluation workflows, multimodal research infrastructure, and AI launch tooling.",
+          "previous_company": "Meta",
+          "previous_title": "AI Research Engineer",
+          "skills": ["Gemini", "Model evaluation", "Multimodal AI", "AI infrastructure"]
+        }
+      },
+      {
+        "name": "google_gemini_profile_scraper_current_mid_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["google-gemini-current-0030"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 60,
+        "execute_sleep_position": "remote_wait",
+        "pending_message": "Scripted Google Gemini mid-tail current profile batch is still running.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 2,
+            "kind": "retryable",
+            "message": "Scripted transient profile-scraper delay; Gemini batch ownership should stay durable and idempotent."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "Google",
+          "search_query": "Gemini",
+          "location": "United States",
+          "full_name_template": "Google Gemini {slug_index:04d}",
+          "title_template": "Gemini Product Engineer",
+          "headline_template": "{title} at Google DeepMind",
+          "about_template": "Works on Gemini product integrations, evaluation systems, launch quality, and AI platform infrastructure.",
+          "previous_company": "OpenAI",
+          "previous_title": "Applied AI Engineer",
+          "skills": ["Gemini", "Product AI", "Evaluation", "Platform engineering"]
+        }
+      },
+      {
+        "name": "google_gemini_profile_scraper_former_tail",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["google-gemini-former-0001"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 50,
+        "execute_sleep_position": "remote_wait",
+        "pending_message": "Scripted Google Gemini former profile batch is still running.",
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "Google",
+          "search_query": "Gemini",
+          "location": "United States",
+          "full_name_template": "Google Gemini Former {slug_index:04d}",
+          "title_template": "Former Gemini Research Engineer",
+          "headline_template": "{title} at Google DeepMind",
+          "about_template": "Formerly worked on Gemini model systems, evaluation, and AI infrastructure at Google DeepMind.",
+          "previous_company": "Anthropic",
+          "previous_title": "Research Engineer",
+          "skills": ["Gemini", "Model systems", "Evaluation", "Research engineering"]
+        }
+      },
+      {
+        "name": "google_gemini_profile_scraper_default",
+        "match": {
+          "logical_name": "harvest_profile_scraper_batch",
+          "payload_contains": ["google-gemini"]
+        },
+        "execute_pending_rounds": 2,
+        "execute_sleep_seconds": 70,
+        "execute_sleep_position": "remote_wait",
+        "pending_message": "Scripted Google Gemini fallback profile batch is still running.",
+        "errors": [
+          {
+            "phase": "execute",
+            "round": 1,
+            "kind": "timeout",
+            "retryable": true,
+            "message": "Scripted timeout edge on the Google Gemini path; recovery should continue without duplicate dispatch."
+          }
+        ],
+        "generated_body": {
+          "kind": "profile_scraper_batch",
+          "company": "Google",
+          "search_query": "Gemini",
+          "location": "United States",
+          "full_name_template": "Google Gemini {slug_index:04d}",
+          "title_template": "Gemini AI Engineer",
+          "headline_template": "{title} at Google DeepMind",
+          "about_template": "Works on Gemini model quality, product systems, and production AI infrastructure.",
+          "previous_company": "DeepMind",
+          "previous_title": "Software Engineer",
+          "skills": ["Gemini", "AI systems", "Product quality", "Infrastructure"]
+        }
+      }
+    ]
+  }
+}

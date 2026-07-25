@@ -1,0 +1,135 @@
+{
+  "artifact_id": "gdm-artifact-ack-topology-v2-2026-07-16",
+  "claim_status": "diagnostic_only_not_qualified",
+  "contract_version": "x-first.live-diagnostic.aggregate-receipt.v1",
+  "privacy_class": "candidate_free_aggregate",
+  "strategy_id": "gdm_artifact_ack_topology_v2",
+  "execution": {
+    "completed_native_x_call_count": 61,
+    "deadline_seconds": 300,
+    "duplicate_call_signature_count": 0,
+    "elapsed_ms": 174228,
+    "exit_code": 0,
+    "generic_web_call_count": 0,
+    "kill_sent": false,
+    "term_sent": false,
+    "timed_out": false,
+    "tool_counts": {
+      "x_keyword_search": 39,
+      "x_semantic_search": 6,
+      "x_thread_fetch": 16,
+      "x_user_search": 0
+    }
+  },
+  "query_audit": {
+    "classification": "mixed_phase_model_mediated_unverified",
+    "person_seeded_exact_name_count_in_violating_query": 2,
+    "person_seeded_query_count": 1,
+    "pure_discovery_accepted_union_eligible": false
+  },
+  "query_family_breakdown": {
+    "calls_by_family": {
+      "acknowledgement": 17,
+      "artifact": 17,
+      "other": 7,
+      "project": 3,
+      "thread": 16,
+      "topology": 1
+    },
+    "classifier": "exclusive_regex_precedence_acknowledgement_topology_artifact_project_other_with_thread_tool_owner",
+    "marginal_leads_by_family": "unavailable_no_query_to_lead_provenance",
+    "refs_by_family": "unavailable_no_query_to_ref_provenance"
+  },
+  "terminal": {
+    "empty_progress_json_object_count": 3,
+    "final_json_object_count": 1,
+    "final_object_after_last_completed_tool": true,
+    "final_object_pinned_validator_error_count": 0,
+    "final_status": "X_DISCOVERY_PARTIAL",
+    "lead_count": 45,
+    "limitations": [
+      "native_x_search_incomplete",
+      "profile_hydration_incomplete",
+      "thread_hydration_incomplete"
+    ],
+    "source_ref_count": 74,
+    "source_surface_counts": {
+      "bio": 0,
+      "mention": 6,
+      "official_post": 59,
+      "profile": 0,
+      "quote": 0,
+      "reply": 2,
+      "self_post": 0,
+      "thread": 7
+    },
+    "terminal_json_object_count": 4,
+    "wrapper_structured_output_error": true
+  },
+  "comparison_to_frozen": {
+    "accepted_union_lead_count_remains": 96,
+    "existing_lead_new_ref_signature_count": 16,
+    "frozen_lead_count": 96,
+    "frozen_ref_signature_count": 199,
+    "marginal_hydration_queue_count": 37,
+    "marginal_lead_new_ref_signature_count": 57,
+    "new_ref_signature_count": 73,
+    "overlap_lead_count": 8,
+    "overlap_ref_signature_count": 1,
+    "potential_union_if_future_hydration_accepts_all": 133
+  },
+  "efficiency": {
+    "marginal_leads_per_call": 0.606557,
+    "marginal_leads_per_minute": 12.741924,
+    "refs_per_call": 1.213115,
+    "vs_artifact_v1_marginal_per_call_ratio": 1.728689,
+    "vs_artifact_v1_marginal_per_minute_ratio": 2.3417,
+    "vs_function_v2_marginal_per_call_ratio": 4.650273,
+    "vs_function_v2_marginal_per_minute_ratio": 9.970207
+  },
+  "next_stage": {
+    "classification": "model_mediated_unverified",
+    "queue_count": 37,
+    "required_work": "exact_profile_post_reply_evidence_hydration_then_luna_judge"
+  },
+  "hook_capability": {
+    "credential_debug_artifact_purged": true,
+    "native_x_pretool_coverage_proven": false,
+    "outcome": "EXCLUDED_CAPABILITY_GAP",
+    "temporary_trust_removed": true
+  },
+  "pins": {
+    "frozen_handle_set_sha256": "1e3b5af2108c4c6488911016a1dbd6924d11021586268ddf227048794abb5903",
+    "frozen_ref_signature_sha256": "8e7447286af38b97062b799a4f5ae9635fadf19e7222c7582d27628afb7ec611",
+    "pinned_commit": "e7d9e04",
+    "schema_sha256": "63980fda86a0c7eac507cf6c23e18073a4a7dcc578a497d543b78f28761d5efd",
+    "validator_sha256": "fec01545a46afbfb1454729f2114b570f3d77773757a7602a40b33048e6e4241"
+  },
+  "source_artifact_bindings": [
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-artifact-ack-topology-v2-hooked-20260716T140814Z/unhooked-live/audit-summary.json",
+      "sha256": "d78067ef1f75b2c94b75995fa8d0bf02979657099782b7674c30cc39d2a72837",
+      "source_id": "candidate-free-private-audit"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-artifact-ack-topology-v2-hooked-20260716T140814Z/unhooked-live/execution-receipt.json",
+      "sha256": "52eba152840eac50730c199c9c0b23be43436e03720409ed1be9992437e6a8dd",
+      "source_id": "execution-receipt"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-artifact-ack-topology-v2-hooked-20260716T140814Z/unhooked-live/query-audit-private.jsonl",
+      "sha256": "3699d9cf4ea0e0197151b60ec6ec4e4634f2d1c7decf52d20aa885da25659989",
+      "source_id": "private-query-audit"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-artifact-ack-topology-v2-hooked-20260716T140814Z/unhooked-live/marginal-hydration-queue.private.json",
+      "sha256": "8a6463c5f9437d06459738bb288616236f1ac2bb6a9498f77b4a95f56f0b78f7",
+      "source_id": "private-marginal-hydration-queue"
+    },
+    {
+      "owner_private_path": "/Users/changyuyi/.local/state/x-first-researcher-sourcing/direct-grok-diagnostics/gdm-artifact-ack-topology-v2-hooked-20260716T140814Z/hook-capability-receipt.json",
+      "sha256": "7a30f26942d6589945b23a33896623ce2cf53bab9ac4254c6d30ed44b82243ef",
+      "source_id": "hook-capability-receipt"
+    }
+  ]
+}

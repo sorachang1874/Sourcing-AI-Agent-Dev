@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.request.v1.schema.json",
+  "title": "Adaptive Grok recall-wave operator request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "target",
+    "prompt_source",
+    "prior_waves",
+    "transport",
+    "emergency",
+    "technical_limits",
+    "approval",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {"const": "x.grok.adaptive_recall_wave.request.v1"},
+    "request_id": {"type": "string", "pattern": "^xwave_req_[0-9a-f]{32}$"},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lab_id", "research_focus_id", "scope"],
+      "properties": {
+        "lab_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+        "research_focus_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+        "scope": {"type": "string", "minLength": 1, "maxLength": 20000}
+      }
+    },
+    "prompt_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "prior_waves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["wave_id", "path", "sha256"],
+        "properties": {
+          "wave_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+          "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_id", "model_id", "reasoning_effort", "grok_binary_sha256"],
+      "properties": {
+        "provider_id": {"const": "grok_cli_oauth"},
+        "model_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+        "reasoning_effort": {"enum": ["low", "medium", "high"]},
+        "grok_binary_sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          ]
+        }
+      }
+    },
+    "emergency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_turns", "deadline_ms", "term_grace_ms", "kill_grace_ms"],
+      "properties": {
+        "max_turns": {"type": "integer", "minimum": 1, "maximum": 512},
+        "deadline_ms": {"type": "integer", "minimum": 1000, "maximum": 3600000},
+        "term_grace_ms": {"type": "integer", "minimum": 100, "maximum": 60000},
+        "kill_grace_ms": {"type": "integer", "minimum": 100, "maximum": 60000}
+      }
+    },
+    "technical_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_stdout_bytes",
+        "max_stderr_bytes",
+        "max_json_bytes",
+        "max_json_depth",
+        "max_json_nodes",
+        "max_prompt_bytes",
+        "max_compiled_prompt_bytes",
+        "max_prior_wave_bytes",
+        "max_total_prior_wave_bytes",
+        "max_prior_json_depth",
+        "max_prior_json_nodes"
+      ],
+      "properties": {
+        "max_stdout_bytes": {"type": "integer", "minimum": 1000000, "maximum": 536870912},
+        "max_stderr_bytes": {"type": "integer", "minimum": 65536, "maximum": 67108864},
+        "max_json_bytes": {"type": "integer", "minimum": 1000000, "maximum": 536870912},
+        "max_json_depth": {"type": "integer", "minimum": 16, "maximum": 512},
+        "max_json_nodes": {"type": "integer", "minimum": 10000, "maximum": 5000000},
+        "max_prompt_bytes": {"type": "integer", "minimum": 65536, "maximum": 67108864},
+        "max_compiled_prompt_bytes": {"type": "integer", "minimum": 65536, "maximum": 536870912},
+        "max_prior_wave_bytes": {"type": "integer", "minimum": 1000000, "maximum": 536870912},
+        "max_total_prior_wave_bytes": {"type": "integer", "minimum": 1000000, "maximum": 1073741824},
+        "max_prior_json_depth": {"type": "integer", "minimum": 16, "maximum": 512},
+        "max_prior_json_nodes": {"type": "integer", "minimum": 10000, "maximum": 5000000}
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grant_id"],
+      "properties": {
+        "grant_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"}
+          ]
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_identity_write_authorized",
+        "outreach_authorized",
+        "product_write_authorized",
+        "protected_identity_inference_authorized",
+        "provider_fallback_authorized"
+      ],
+      "properties": {
+        "canonical_identity_write_authorized": {"const": false},
+        "outreach_authorized": {"const": false},
+        "product_write_authorized": {"const": false},
+        "protected_identity_inference_authorized": {"const": false},
+        "provider_fallback_authorized": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_evidence.bundle.v1.schema.json",
+  "title": "X profile Bio evidence proposal bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_version",
+    "subject",
+    "profile_snapshot",
+    "proposals",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio_evidence.bundle.v1"
+    },
+    "policy_version": {
+      "const": "profile-bio-signal-v1.5"
+    },
+    "subject": {
+      "$ref": "#/$defs/subject"
+    },
+    "profile_snapshot": {
+      "$ref": "#/$defs/profile_snapshot"
+    },
+    "proposals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/proposal"
+      }
+    },
+    "claims": {
+      "const": {
+        "display_alias_used_as_identity": false,
+        "name_signal_used": false,
+        "nationality_inferred": false,
+        "ethnicity_inferred": false,
+        "physical_region_inferred_from_language_or_ecosystem": false,
+        "affiliation_confirmed": false,
+        "discovery_or_ranking_authorized": false,
+        "canonical_write_authorized": false
+      }
+    }
+  },
+  "$defs": {
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provisional_person_id",
+        "platform_user_id"
+      ],
+      "properties": {
+        "provisional_person_id": {
+          "type": "string",
+          "pattern": "^pp_x_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "platform_user_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{1,24}$"
+        }
+      }
+    },
+    "profile_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "platform_user_id",
+        "profile_url",
+        "current_handle",
+        "display_alias",
+        "bio_text",
+        "observed_at",
+        "content_version",
+        "content_sha256",
+        "retrieval_mode",
+        "native_profile_receipt_ref",
+        "field_capabilities"
+      ],
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^xps_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "platform_user_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{1,24}$"
+        },
+        "profile_url": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 300,
+          "pattern": "^https://[a-z0-9.-]+\\.invalid/[A-Za-z0-9/_-]+$"
+        },
+        "current_handle": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,15}$"
+        },
+        "display_alias": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "bio_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        },
+        "content_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "retrieval_mode": {
+          "const": "offline_fixture"
+        },
+        "native_profile_receipt_ref": {
+          "const": null
+        },
+        "field_capabilities": {
+          "const": {
+            "platform_user_id": "present",
+            "current_handle": "present",
+            "display_alias": "present",
+            "bio_text": "present"
+          }
+        }
+      }
+    },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "version",
+        "tool_call_id"
+      ],
+      "properties": {
+        "mode": {
+          "const": "offline_fixture"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "tool_call_id": {
+          "const": null
+        }
+      }
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "script",
+        "language_candidate",
+        "ecosystem_id",
+        "affiliation_relation",
+        "organization_handle",
+        "organization_platform_user_id",
+        "role_text",
+        "resolution_status"
+      ],
+      "properties": {
+        "script": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "language_candidate": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ecosystem_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "affiliation_relation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "organization_handle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "organization_platform_user_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "resolution_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal_id",
+        "kind",
+        "source_field",
+        "span_start",
+        "span_end",
+        "excerpt",
+        "excerpt_sha256",
+        "proposal_status",
+        "extractor",
+        "details"
+      ],
+      "properties": {
+        "proposal_id": {
+          "type": "string",
+          "pattern": "^xbp_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "kind": {
+          "enum": [
+            "observed_chinese_content",
+            "china_ecosystem_self_claim",
+            "organization_mention"
+          ]
+        },
+        "source_field": {
+          "const": "bio_text"
+        },
+        "span_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "span_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "excerpt_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "proposal_status": {
+          "const": "proposed"
+        },
+        "extractor": {
+          "$ref": "#/$defs/extractor"
+        },
+        "details": {
+          "$ref": "#/$defs/details"
+        }
+      }
+    }
+  }
+}

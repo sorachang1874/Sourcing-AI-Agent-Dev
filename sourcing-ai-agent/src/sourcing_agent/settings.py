@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from .local_postgres import resolve_default_control_plane_db_path
+from .runtime_environment import NON_LIVE_PROVIDER_MODES, normalize_provider_mode
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,7 +14,7 @@ class QwenSettings:
     enabled: bool
     api_key: str = ""
     base_url: str = "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1"
-    model: str = "qwen-flash"
+    model: str = "qwen3.5-plus-2026-04-20"
     timeout_seconds: int = 45
 
 
@@ -24,6 +27,11 @@ class ModelProviderSettings:
     model: str = ""
     api_style: str = "openai_chat_completions"
     timeout_seconds: int = 45
+    # Floor applied to every text-prompt max_tokens budget.  Reasoning-served
+    # models (e.g. DeepSeek's served deepseek-v4-flash) spend part of the
+    # budget on reasoning before emitting content, so the caller's small
+    # budgets (500-1400) starve the actual answer; 0 keeps caller budgets.
+    min_max_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +82,10 @@ class SearchProviderSettings:
     google_browser_browsers_path: str = "/tmp/playwright-browsers"
     google_browser_headless: bool = True
     google_browser_locale: str = "en-US"
+    enable_model_native_search: bool = False
+    model_native_search_mode: str = "disabled"
+    model_native_search_max_queries_per_operation: int = 0
+    model_native_search_cost_budget_usd: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,11 +142,46 @@ class AppSettings:
     model_provider: ModelProviderSettings = field(default_factory=ModelProviderSettings)
 
 
+def _resolve_path_env(value: str | Path | None, *, base_dir: Path) -> Path | None:
+    if value in (None, ""):
+        return None
+    path = Path(str(value)).expanduser()
+    if not path.is_absolute():
+        path = (base_dir / path).resolve()
+    return path
+
+
+def _read_secret_text_file(path_value: str | Path | None, *, base_dir: Path) -> str:
+    path = _resolve_path_env(path_value, base_dir=base_dir)
+    if path is None:
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if key.strip().lower().replace("_", " ") == "api key":
+            return value.strip()
+    return text
+
+
 def load_settings(project_root: str | Path) -> AppSettings:
-    root = Path(project_root)
-    runtime_dir = root / "runtime"
+    root = Path(project_root).resolve()
+    external_provider_mode = normalize_provider_mode()
+    non_live_external_providers = external_provider_mode in NON_LIVE_PROVIDER_MODES
+    runtime_dir = _resolve_path_env(os.getenv("SOURCING_RUNTIME_DIR"), base_dir=root) or (root / "runtime")
+    runtime_dir = runtime_dir.resolve()
     secret_dir = runtime_dir / "secrets"
-    secret_file = secret_dir / "providers.local.json"
+    legacy_secret_file = root / "runtime" / "secrets" / "providers.local.json"
+    explicit_secret_file = _resolve_path_env(os.getenv("SOURCING_SECRETS_FILE"), base_dir=root)
+    if explicit_secret_file is not None:
+        secret_file = explicit_secret_file
+    else:
+        candidate_secret_file = secret_dir / "providers.local.json"
+        secret_file = candidate_secret_file if candidate_secret_file.exists() or runtime_dir == (root / "runtime") else legacy_secret_file
     secret_payload = _load_json_file(secret_file)
 
     qwen_payload = secret_payload.get("qwen", {})
@@ -150,7 +197,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
     base_url = os.getenv("DASHSCOPE_BASE_URL") or str(
         qwen_payload.get("base_url", "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1")
     ).strip()
-    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen-flash")).strip()
+    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen3.5-plus-2026-04-20")).strip()
     timeout = os.getenv("DASHSCOPE_TIMEOUT_SECONDS") or qwen_payload.get("timeout_seconds", 45)
 
     try:
@@ -158,7 +205,15 @@ def load_settings(project_root: str | Path) -> AppSettings:
     except (TypeError, ValueError):
         timeout_seconds = 45
 
-    model_provider_api_key = os.getenv("MODEL_PROVIDER_API_KEY") or str(model_provider_payload.get("api_key", "")).strip()
+    model_provider_api_key_file = os.getenv("MODEL_PROVIDER_API_KEY_FILE") or str(
+        model_provider_payload.get("api_key_file", "")
+    ).strip()
+    model_provider_file_api_key = _read_secret_text_file(model_provider_api_key_file, base_dir=root)
+    model_provider_api_key = (
+        os.getenv("MODEL_PROVIDER_API_KEY")
+        or model_provider_file_api_key
+        or str(model_provider_payload.get("api_key", "")).strip()
+    )
     model_provider_base_url = os.getenv("MODEL_PROVIDER_BASE_URL") or str(model_provider_payload.get("base_url", "")).strip()
     model_provider_model = os.getenv("MODEL_PROVIDER_MODEL") or str(model_provider_payload.get("model", "")).strip()
     model_provider_name = os.getenv("MODEL_PROVIDER_NAME") or str(model_provider_payload.get("provider_name", "")).strip()
@@ -170,8 +225,25 @@ def load_settings(project_root: str | Path) -> AppSettings:
         model_provider_timeout_seconds = int(model_provider_timeout)
     except (TypeError, ValueError):
         model_provider_timeout_seconds = 45
+    model_provider_min_max_tokens_raw = os.getenv("MODEL_PROVIDER_MIN_MAX_TOKENS") or model_provider_payload.get(
+        "min_max_tokens", 0
+    )
+    try:
+        model_provider_min_max_tokens = max(0, int(model_provider_min_max_tokens_raw or 0))
+    except (TypeError, ValueError):
+        model_provider_min_max_tokens = 0
 
-    semantic_api_key = os.getenv("DASHSCOPE_API_KEY") or str(semantic_payload.get("api_key", "")).strip() or api_key
+    semantic_enabled = _coerce_bool(
+        os.getenv("SOURCING_SEMANTIC_PROVIDER_ENABLED"),
+        default=_coerce_bool(semantic_payload.get("enabled"), default=False),
+    )
+    semantic_api_key = str(
+        os.getenv("SEMANTIC_PROVIDER_API_KEY")
+        or os.getenv("DASHSCOPE_SEMANTIC_API_KEY")
+        or semantic_payload.get("api_key", "")
+    ).strip()
+    if semantic_enabled and not semantic_api_key:
+        semantic_api_key = os.getenv("DASHSCOPE_API_KEY") or api_key
     embedding_base_url = os.getenv("DASHSCOPE_EMBEDDING_BASE_URL") or str(
         semantic_payload.get("embedding_base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1")
     ).strip()
@@ -229,6 +301,8 @@ def load_settings(project_root: str | Path) -> AppSettings:
     except (TypeError, ValueError):
         search_max_results_value = 10
     serper_api_key = os.getenv("SERPER_API_KEY") or str(search_payload.get("serper_api_key", "")).strip()
+    if non_live_external_providers:
+        serper_api_key = ""
     serper_base_url = os.getenv("SERPER_BASE_URL") or str(
         search_payload.get("serper_base_url", "https://google.serper.dev/search")
     ).strip()
@@ -238,6 +312,9 @@ def load_settings(project_root: str | Path) -> AppSettings:
     )
     dataforseo_login = os.getenv("DATAFORSEO_LOGIN") or str(search_payload.get("dataforseo_login", "")).strip()
     dataforseo_password = os.getenv("DATAFORSEO_PASSWORD") or str(search_payload.get("dataforseo_password", "")).strip()
+    if non_live_external_providers:
+        dataforseo_login = ""
+        dataforseo_password = ""
     dataforseo_base_url = os.getenv("DATAFORSEO_BASE_URL") or str(
         search_payload.get("dataforseo_base_url", "https://api.dataforseo.com")
     ).strip()
@@ -289,6 +366,32 @@ def load_settings(project_root: str | Path) -> AppSettings:
     google_browser_locale = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_LOCALE") or str(
         search_payload.get("google_browser_locale", "en-US")
     ).strip()
+    enable_model_native_search = _coerce_bool(
+        os.getenv("SEARCH_PROVIDER_ENABLE_MODEL_NATIVE_SEARCH"),
+        default=bool(search_payload.get("enable_model_native_search", False)),
+    )
+    model_native_search_mode = str(
+        os.getenv("SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_MODE")
+        or search_payload.get("model_native_search_mode", "disabled")
+    ).strip().lower()
+    if not model_native_search_mode:
+        model_native_search_mode = "disabled"
+    model_native_search_max_queries = (
+        os.getenv("SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_MAX_QUERIES")
+        or search_payload.get("model_native_search_max_queries_per_operation", 0)
+    )
+    try:
+        model_native_search_max_queries_per_operation = int(model_native_search_max_queries)
+    except (TypeError, ValueError):
+        model_native_search_max_queries_per_operation = 0
+    model_native_search_cost_budget = (
+        os.getenv("SEARCH_PROVIDER_MODEL_NATIVE_SEARCH_COST_BUDGET_USD")
+        or search_payload.get("model_native_search_cost_budget_usd", 0.0)
+    )
+    try:
+        model_native_search_cost_budget_usd = float(model_native_search_cost_budget)
+    except (TypeError, ValueError):
+        model_native_search_cost_budget_usd = 0.0
 
     object_storage_provider = os.getenv("OBJECT_STORAGE_PROVIDER") or str(
         object_storage_payload.get("provider", "filesystem")
@@ -356,6 +459,8 @@ def load_settings(project_root: str | Path) -> AppSettings:
         shared_harvest_token = str(profile_search_payload.get("api_token", "")).strip()
     if not shared_harvest_token:
         shared_harvest_token = str(company_employees_payload.get("api_token", "")).strip()
+    if non_live_external_providers:
+        shared_harvest_token = ""
 
     def _harvest_actor_settings(
         payload: dict,
@@ -370,6 +475,8 @@ def load_settings(project_root: str | Path) -> AppSettings:
         default_collect_email: bool = False,
     ) -> HarvestActorSettings:
         api_token = shared_harvest_token or str(payload.get("api_token", "")).strip()
+        if non_live_external_providers:
+            api_token = ""
         actor_id = str(payload.get("actor_id", actor_id_default)).strip()
         timeout = os.getenv(timeout_env) or payload.get("timeout_seconds", 180)
         max_charge = os.getenv(charge_env) or payload.get("max_total_charge_usd", default_charge)
@@ -406,9 +513,12 @@ def load_settings(project_root: str | Path) -> AppSettings:
         project_root=root,
         runtime_dir=runtime_dir,
         secrets_file=secret_file,
-        jobs_dir=runtime_dir / "jobs",
-        company_assets_dir=runtime_dir / "company_assets",
-        db_path=runtime_dir / "sourcing_agent.db",
+        jobs_dir=_resolve_path_env(os.getenv("SOURCING_JOBS_DIR"), base_dir=root) or (runtime_dir / "jobs"),
+        company_assets_dir=_resolve_path_env(os.getenv("SOURCING_COMPANY_ASSETS_DIR"), base_dir=root) or (runtime_dir / "company_assets"),
+        db_path=(
+            _resolve_path_env(os.getenv("SOURCING_DB_PATH"), base_dir=root)
+            or resolve_default_control_plane_db_path(runtime_dir, base_dir=root)
+        ),
         qwen=QwenSettings(
             enabled=bool(api_key),
             api_key=api_key,
@@ -417,7 +527,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
             timeout_seconds=timeout_seconds,
         ),
         semantic=SemanticProviderSettings(
-            enabled=bool(semantic_api_key),
+            enabled=bool(semantic_enabled and semantic_api_key),
             api_key=semantic_api_key,
             embedding_base_url=embedding_base_url.rstrip("/"),
             embedding_model=embedding_model,
@@ -455,6 +565,10 @@ def load_settings(project_root: str | Path) -> AppSettings:
             google_browser_browsers_path=google_browser_browsers_path,
             google_browser_headless=google_browser_headless,
             google_browser_locale=google_browser_locale,
+            enable_model_native_search=enable_model_native_search,
+            model_native_search_mode=model_native_search_mode,
+            model_native_search_max_queries_per_operation=max(0, min(model_native_search_max_queries_per_operation, 100)),
+            model_native_search_cost_budget_usd=max(0.0, model_native_search_cost_budget_usd),
         ),
         object_storage=ObjectStorageSettings(
             enabled=bool(
@@ -487,7 +601,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
                 default_charge=5.0,
                 default_items=25,
                 default_mode="full",
-                default_collect_email=True,
+                default_collect_email=False,
             ),
             profile_search=_harvest_actor_settings(
                 profile_search_payload,
@@ -518,6 +632,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
             model=model_provider_model,
             api_style=model_provider_api_style or "openai_chat_completions",
             timeout_seconds=model_provider_timeout_seconds,
+            min_max_tokens=model_provider_min_max_tokens,
         ),
     )
 

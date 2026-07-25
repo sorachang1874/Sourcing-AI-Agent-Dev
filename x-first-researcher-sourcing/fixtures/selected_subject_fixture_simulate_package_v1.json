@@ -1,0 +1,1490 @@
+{
+  "artifacts": {
+    "binding": {
+      "authority": {
+        "canonical_person_merge_allowed": false,
+        "outreach_allowed": false,
+        "product_writes_allowed": false,
+        "provider_calls_allowed": false
+      },
+      "binding_sha256": "99c2475e99e09a9c45011fa0f4fa7e054e09a08e265f47acade03bb023c7eeb1",
+      "campaign_id": "fixture_general_research_campaign",
+      "portable_request_contract_schema_sha256": "b756a031a5cfca273ffc6b97b0d65dacc24811a0487a354a641c731122ce4c3b",
+      "portable_request_schema_version": "x.portable.research_campaign.request.v1",
+      "portable_request_sha256": "d92abc4780bc930fcace17ef4659f3a8546296cef575e6457714e51087a27ef9",
+      "schema_version": "x.portable.selected_subject.request_binding.v1",
+      "selection_artifact_sha256": "1c0d6a5e2f806c07ef058ea7ef212a00c3ded057e920fd38db96469bfbd274d3",
+      "selection_contract_schema_sha256": "86a5924d6b551b6af61cfccd9e94a426bdd046db4545e922dc8ae3bc5483b754",
+      "selection_id": "fixture_selected_subjects",
+      "selection_schema_version": "sourcing.x_first.subject_selection.v1",
+      "subject_bindings": [
+        {
+          "seed_ref": "selected_in_progress_subject",
+          "seed_sha256": "d0640001c1753d196f56460e0b50962f73058092a5e29d1eecf426e0841c7411",
+          "source_kind": "professional_profile",
+          "source_record_ref": "fixture://product/snapshot/candidate-2",
+          "source_record_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "source_subject_ref": "selected_in_progress_subject"
+        },
+        {
+          "seed_ref": "selected_linkedin_subject",
+          "seed_sha256": "e323e71a0a720efc2b839fdb52b2d11fe785fbe73ba7aa32e4b29cefec840260",
+          "source_kind": "linkedin_profile",
+          "source_record_ref": "fixture://product/snapshot/candidate-1",
+          "source_record_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_subject_ref": "selected_linkedin_subject"
+        },
+        {
+          "seed_ref": "selected_name_only_subject",
+          "seed_sha256": "0ce1c465f16be6f849e4db699b325410a269a8e6724b3d0deb44a421cfdb6159",
+          "source_kind": "name_only",
+          "source_record_ref": "fixture://product/snapshot/candidate-3",
+          "source_record_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "source_subject_ref": "selected_name_only_subject"
+        }
+      ]
+    },
+    "catalog": {
+      "catalog_id": "fixture_research_scope_catalog",
+      "catalog_sha256": "6730a9e079df2e25e74f9ba6b91b454a340cbc475e74829b984cf3a907f9b28b",
+      "catalog_version": "fixture_research_scope_catalog.v1",
+      "coverage_assertions": [
+        {
+          "coverage_id": "fixture_lab_core_family_coverage",
+          "coverage_status": "complete",
+          "evidence_refs": [
+            "fixture://coverage/fixture_lab_core_family"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "member_scope_ids": [
+            "fixture_coding",
+            "fixture_model",
+            "fixture_product"
+          ],
+          "member_set_sha256": "b59804d0d3849654284599db0547d9f9fcf14ae2898c947fc6c59b29baf58a37",
+          "open_gaps": [],
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "refresh_method": "manual_verified",
+          "root_scope_id": "fixture_lab",
+          "scope_kinds": [
+            "model",
+            "product",
+            "capability"
+          ],
+          "source_status": "fixture_synthetic"
+        }
+      ],
+      "generated_at": "2026-07-18T00:00:00Z",
+      "schema_version": "x.research_scope.catalog.v1",
+      "scope_nodes": [
+        {
+          "aliases": [
+            "Fixture AI Lab",
+            "Fixture Lab"
+          ],
+          "containment_parent_scope_ids": [],
+          "display_name": "Fixture AI Lab",
+          "evidence_refs": [
+            "fixture://scope/fixture_lab"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_lab",
+          "scope_kind": "organization",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Model",
+            "FM"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_lab"
+          ],
+          "display_name": "Fixture Model",
+          "evidence_refs": [
+            "fixture://scope/fixture_model"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_model",
+          "scope_kind": "model",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Assistant",
+            "Fixture Chat"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_lab"
+          ],
+          "display_name": "Fixture Assistant",
+          "evidence_refs": [
+            "fixture://scope/fixture_product"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_product",
+          "scope_kind": "product",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Desktop",
+            "Fixture App"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_product"
+          ],
+          "display_name": "Fixture Desktop",
+          "evidence_refs": [
+            "fixture://scope/fixture_application"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_application",
+          "scope_kind": "application",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Coding",
+            "Code Capability"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_model",
+            "fixture_product"
+          ],
+          "display_name": "Fixture Coding Capability",
+          "evidence_refs": [
+            "fixture://scope/fixture_coding"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_coding",
+          "scope_kind": "capability",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Reasoning Program",
+            "Reasoning Program"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_lab"
+          ],
+          "display_name": "Fixture Reasoning Program",
+          "evidence_refs": [
+            "fixture://scope/fixture_program"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_program",
+          "scope_kind": "research_program",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Model Team",
+            "Model Team"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_model"
+          ],
+          "display_name": "Fixture Model Team",
+          "evidence_refs": [
+            "fixture://scope/fixture_team"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_team",
+          "scope_kind": "team",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Strike Team",
+            "Coding Strike Team"
+          ],
+          "containment_parent_scope_ids": [
+            "fixture_coding"
+          ],
+          "display_name": "Fixture Strike Team",
+          "evidence_refs": [
+            "fixture://scope/fixture_initiative"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_initiative",
+          "scope_kind": "initiative",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Health",
+            "Healthcare"
+          ],
+          "containment_parent_scope_ids": [],
+          "display_name": "Health",
+          "evidence_refs": [
+            "fixture://scope/fixture_health"
+          ],
+          "last_verified_at": "2026-07-18T00:00:00Z",
+          "refresh_after": "2026-08-18T00:00:00Z",
+          "scope_id": "fixture_health",
+          "scope_kind": "industry",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        }
+      ],
+      "taxonomies": [
+        {
+          "dimension_id": "research_workstream",
+          "display_name": "Research workstream",
+          "labels": [
+            {
+              "aliases": [
+                "pretraining",
+                "pre-training",
+                "foundation model training"
+              ],
+              "display_name": "Pre-training",
+              "label_id": "pretraining"
+            },
+            {
+              "aliases": [
+                "posttraining",
+                "post-training",
+                "alignment"
+              ],
+              "display_name": "Post-training",
+              "label_id": "posttraining"
+            },
+            {
+              "aliases": [
+                "midtraining",
+                "mid-training",
+                "continued pretraining"
+              ],
+              "display_name": "Mid-training",
+              "label_id": "midtraining"
+            },
+            {
+              "aliases": [
+                "evaluation",
+                "evals",
+                "model evaluation"
+              ],
+              "display_name": "Evaluation",
+              "label_id": "evaluation"
+            },
+            {
+              "aliases": [
+                "benchmark",
+                "benchmarking",
+                "leaderboard"
+              ],
+              "display_name": "Benchmark",
+              "label_id": "benchmark"
+            },
+            {
+              "aliases": [
+                "infrastructure",
+                "training systems",
+                "distributed systems"
+              ],
+              "display_name": "Infrastructure",
+              "label_id": "infrastructure"
+            },
+            {
+              "aliases": [
+                "data",
+                "dataset",
+                "data curation"
+              ],
+              "display_name": "Data",
+              "label_id": "data"
+            },
+            {
+              "aliases": [
+                "coding",
+                "code generation",
+                "software engineering"
+              ],
+              "display_name": "Coding",
+              "label_id": "coding"
+            },
+            {
+              "aliases": [
+                "mathematics",
+                "math",
+                "theorem proving"
+              ],
+              "display_name": "Mathematics",
+              "label_id": "mathematics"
+            },
+            {
+              "aliases": [
+                "multimodal",
+                "vision-language",
+                "audio-language"
+              ],
+              "display_name": "Multimodal",
+              "label_id": "multimodal"
+            }
+          ]
+        },
+        {
+          "dimension_id": "industry_domain",
+          "display_name": "Industry domain",
+          "labels": [
+            {
+              "aliases": [
+                "health",
+                "healthcare",
+                "biomedicine"
+              ],
+              "display_name": "Health",
+              "label_id": "health"
+            },
+            {
+              "aliases": [
+                "finance",
+                "financial services",
+                "fintech"
+              ],
+              "display_name": "Finance",
+              "label_id": "finance"
+            },
+            {
+              "aliases": [
+                "design",
+                "creative tools",
+                "human-computer interaction"
+              ],
+              "display_name": "Design",
+              "label_id": "design"
+            }
+          ]
+        }
+      ]
+    },
+    "plan": {
+      "analysis_contract": {
+        "active_followup_states": [
+          "target_core",
+          "target_adjacent",
+          "ambiguous"
+        ],
+        "default_precision_states": [
+          "target_core"
+        ],
+        "generic_relevance_states": [
+          "target_core",
+          "target_adjacent",
+          "ambiguous",
+          "out_of_scope"
+        ],
+        "quality_metric_ids": [
+          "candidate_authored_both_surface_coverage_rate",
+          "source_bound_evidence_rate",
+          "target_direction_core_rate",
+          "target_direction_active_rate",
+          "evidence_backed_temporal_state_rate",
+          "target_core_unique_account_yield_per_native_call",
+          "cross_source_handle_resolution_rate"
+        ],
+        "questions": [
+          {
+            "adaptive_stop_policy": null,
+            "analysis_mode": "verification",
+            "classification_instruction": "Classify evidence against the configured target labels using target_core, target_adjacent, ambiguous, or out_of_scope; keep temporal state separate.",
+            "dimension_id": "research_workstream",
+            "question_id": "verify_coding_work",
+            "question_text": "Does this account provide evidence of experience in coding research?",
+            "recall_execution_policy": "authored_surface_only",
+            "target_labels": [
+              {
+                "aliases": [
+                  "coding",
+                  "code generation",
+                  "software engineering"
+                ],
+                "display_name": "Coding",
+                "label_id": "coding"
+              }
+            ],
+            "target_match_operator": "any"
+          }
+        ]
+      },
+      "campaign_id": "fixture_general_research_campaign",
+      "candidate_authored_tasks": [
+        {
+          "candidate_scoring_allowed": false,
+          "coverage_queries": [
+            {
+              "coverage_authority": "mechanical_single_handle",
+              "native_tool": "x_keyword_search",
+              "query_text": "from:progress_x -filter:replies",
+              "surface": "post"
+            },
+            {
+              "coverage_authority": "mechanical_single_handle",
+              "native_tool": "x_keyword_search",
+              "query_text": "from:progress_x filter:replies",
+              "surface": "reply"
+            }
+          ],
+          "handle": "progress_x",
+          "handle_binding_statuses": [
+            "cross_source_link_proposed"
+          ],
+          "handle_proposals": [
+            {
+              "binding_status": "cross_source_link_proposed",
+              "evidence_ref": "fixture://product/snapshot/candidate-2#x-handle",
+              "seed_ref": "selected_in_progress_subject",
+              "source_status": "source_bound"
+            }
+          ],
+          "question_ids": [
+            "verify_coding_work"
+          ],
+          "recall_targets": [
+            {
+              "adaptive_stop_policy": null,
+              "execution_policy": "authored_surface_only",
+              "question_id": "verify_coding_work",
+              "recall_aliases": [
+                "code generation",
+                "coding",
+                "software engineering"
+              ],
+              "recall_queries": []
+            }
+          ],
+          "scope_ids": [
+            "fixture_coding",
+            "fixture_lab",
+            "fixture_model",
+            "fixture_product"
+          ],
+          "seed_refs": [
+            "selected_in_progress_subject"
+          ],
+          "surfaces": [
+            "post",
+            "reply"
+          ],
+          "task_id": "cas_35fa7e39df9518e43cf1ba4f"
+        },
+        {
+          "candidate_scoring_allowed": false,
+          "coverage_queries": [
+            {
+              "coverage_authority": "mechanical_single_handle",
+              "native_tool": "x_keyword_search",
+              "query_text": "from:selected_x -filter:replies",
+              "surface": "post"
+            },
+            {
+              "coverage_authority": "mechanical_single_handle",
+              "native_tool": "x_keyword_search",
+              "query_text": "from:selected_x filter:replies",
+              "surface": "reply"
+            }
+          ],
+          "handle": "selected_x",
+          "handle_binding_statuses": [
+            "cross_source_link_proposed"
+          ],
+          "handle_proposals": [
+            {
+              "binding_status": "cross_source_link_proposed",
+              "evidence_ref": "fixture://product/snapshot/candidate-1#x-handle",
+              "seed_ref": "selected_linkedin_subject",
+              "source_status": "source_bound"
+            }
+          ],
+          "question_ids": [
+            "verify_coding_work"
+          ],
+          "recall_targets": [
+            {
+              "adaptive_stop_policy": null,
+              "execution_policy": "authored_surface_only",
+              "question_id": "verify_coding_work",
+              "recall_aliases": [
+                "code generation",
+                "coding",
+                "software engineering"
+              ],
+              "recall_queries": []
+            }
+          ],
+          "scope_ids": [
+            "fixture_coding",
+            "fixture_lab",
+            "fixture_model",
+            "fixture_product"
+          ],
+          "seed_refs": [
+            "selected_linkedin_subject"
+          ],
+          "surfaces": [
+            "post",
+            "reply"
+          ],
+          "task_id": "cas_b268321fc19850a0d08b785c"
+        }
+      ],
+      "catalog_sha256": "6730a9e079df2e25e74f9ba6b91b454a340cbc475e74829b984cf3a907f9b28b",
+      "counts": {
+        "candidate_authored_task_count": 2,
+        "enabled_channel_count": 1,
+        "handle_resolution_count": 1,
+        "optional_channel_task_count": 0,
+        "resolved_scope_node_count": 4
+      },
+      "experience_verification": {
+        "base_population_rewrite_allowed": false,
+        "dimension_ids": [],
+        "enabled": false,
+        "identity_inference_allowed": false,
+        "queue_activation": "disabled",
+        "trigger": "not_requested"
+      },
+      "freshness_status": "ready",
+      "handle_resolution_queue": [
+        {
+          "candidate_scoring_allowed": false,
+          "external_record_ref": "fixture://product/snapshot/candidate-3",
+          "name_text": "Selected Name Only",
+          "professional_facts": [],
+          "reason": "x_handle_resolution_required",
+          "seed_ref": "selected_name_only_subject",
+          "source_kind": "name_only",
+          "source_profile_url": null,
+          "source_record_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "source_status": "source_bound"
+        }
+      ],
+      "integration_boundary": {
+        "artifact_transport": "versioned_json_only",
+        "canonical_person_write_allowed": false,
+        "cross_source_links_are_reversible_proposals": true,
+        "runtime_import_allowed": false,
+        "x_account_is_canonical_person": false
+      },
+      "optional_channel_tasks": [],
+      "plan_sha256": "3cb1625982cc51778bed1a9390226147bc2bedec0086404978b1a8cea1d72550",
+      "policy_sha256": "81e7996106a45c8137d92d63200a77c099048069f06d53189e2809df88dd223f",
+      "request_sha256": "d92abc4780bc930fcace17ef4659f3a8546296cef575e6457714e51087a27ef9",
+      "resolved_channels": [
+        {
+          "authority": "primary_subject_evidence",
+          "channel_id": "candidate_authored_surface",
+          "enabled": true,
+          "resolution_source": "policy_default",
+          "supported_surfaces": [
+            "post",
+            "reply"
+          ]
+        },
+        {
+          "authority": "named_seed_requires_subject_followup",
+          "channel_id": "project_direct_credit",
+          "enabled": false,
+          "resolution_source": "policy_default",
+          "supported_surfaces": [
+            "post",
+            "reply",
+            "quote"
+          ]
+        },
+        {
+          "authority": "official_anchor_or_named_seed",
+          "channel_id": "official_source",
+          "enabled": false,
+          "resolution_source": "policy_default",
+          "supported_surfaces": [
+            "post"
+          ]
+        },
+        {
+          "authority": "low_authority_graph_seed_only",
+          "channel_id": "conversation_graph",
+          "enabled": false,
+          "resolution_source": "policy_default",
+          "supported_surfaces": [
+            "reply",
+            "quote",
+            "thread"
+          ]
+        }
+      ],
+      "resolved_scope_nodes": [
+        {
+          "aliases": [
+            "Fixture Coding",
+            "Code Capability"
+          ],
+          "display_name": "Fixture Coding Capability",
+          "scope_id": "fixture_coding",
+          "scope_kind": "capability",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture AI Lab",
+            "Fixture Lab"
+          ],
+          "display_name": "Fixture AI Lab",
+          "scope_id": "fixture_lab",
+          "scope_kind": "organization",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Model",
+            "FM"
+          ],
+          "display_name": "Fixture Model",
+          "scope_id": "fixture_model",
+          "scope_kind": "model",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        },
+        {
+          "aliases": [
+            "Fixture Assistant",
+            "Fixture Chat"
+          ],
+          "display_name": "Fixture Assistant",
+          "scope_id": "fixture_product",
+          "scope_kind": "product",
+          "source_status": "fixture_synthetic",
+          "status": "active"
+        }
+      ],
+      "schema_version": "x.portable.research_campaign.plan.v1",
+      "temporal_scope": {
+        "affiliation_states": [
+          "current",
+          "historical",
+          "ambiguous"
+        ],
+        "axes_are_independent": true,
+        "target_activity_states": [
+          "current",
+          "historical",
+          "ambiguous"
+        ]
+      }
+    },
+    "policy": {
+      "active_followup_states": [
+        "target_core",
+        "target_adjacent",
+        "ambiguous"
+      ],
+      "authority": {
+        "business_candidate_cap": null,
+        "product_writes_allowed": false,
+        "provider_calls_allowed": false,
+        "technical_ceilings_are_business_caps": false
+      },
+      "channel_order": [
+        "candidate_authored_surface",
+        "project_direct_credit",
+        "official_source",
+        "conversation_graph"
+      ],
+      "channel_registry": [
+        {
+          "authority": "primary_subject_evidence",
+          "channel_id": "candidate_authored_surface",
+          "default_enabled": true,
+          "supported_surfaces": [
+            "post",
+            "reply"
+          ]
+        },
+        {
+          "authority": "named_seed_requires_subject_followup",
+          "channel_id": "project_direct_credit",
+          "default_enabled": false,
+          "supported_surfaces": [
+            "post",
+            "reply",
+            "quote"
+          ]
+        },
+        {
+          "authority": "official_anchor_or_named_seed",
+          "channel_id": "official_source",
+          "default_enabled": false,
+          "supported_surfaces": [
+            "post"
+          ]
+        },
+        {
+          "authority": "low_authority_graph_seed_only",
+          "channel_id": "conversation_graph",
+          "default_enabled": false,
+          "supported_surfaces": [
+            "reply",
+            "quote",
+            "thread"
+          ]
+        }
+      ],
+      "default_precision_states": [
+        "target_core"
+      ],
+      "experience_verification": {
+        "base_population_rewrite_allowed": false,
+        "default_enabled": false,
+        "dimension_ids": [
+          "china_asia_professional_educational_experience"
+        ],
+        "explicit_query_trigger_required": true,
+        "identity_inference_allowed": false
+      },
+      "generic_relevance_states": [
+        "target_core",
+        "target_adjacent",
+        "ambiguous",
+        "out_of_scope"
+      ],
+      "policy_version": "research_orchestration_policy.v1",
+      "portability": {
+        "accepted_seed_source_kinds": [
+          "x_account",
+          "linkedin_profile",
+          "professional_profile",
+          "name_only"
+        ],
+        "canonical_person_write_allowed": false,
+        "cross_source_link_is_reversible_proposal": true,
+        "runtime_import_allowed": false,
+        "x_account_is_canonical_person": false
+      },
+      "quality_metric_ids": [
+        "candidate_authored_both_surface_coverage_rate",
+        "source_bound_evidence_rate",
+        "target_direction_core_rate",
+        "target_direction_active_rate",
+        "evidence_backed_temporal_state_rate",
+        "target_core_unique_account_yield_per_native_call",
+        "cross_source_handle_resolution_rate"
+      ],
+      "schema_version": "x.research_orchestration.policy.v1",
+      "supported_analysis_modes": [
+        "exploratory",
+        "verification",
+        "hybrid"
+      ],
+      "supported_scope_node_kinds": [
+        "organization",
+        "model",
+        "product",
+        "application",
+        "research_program",
+        "capability",
+        "industry",
+        "team",
+        "initiative"
+      ]
+    },
+    "request": {
+      "analysis_questions": [
+        {
+          "adaptive_stop_policy": null,
+          "analysis_mode": "verification",
+          "dimension_id": "research_workstream",
+          "question_id": "verify_coding_work",
+          "question_text": "Does this account provide evidence of experience in coding research?",
+          "recall_execution_policy": "authored_surface_only",
+          "target_label_ids": [
+            "coding"
+          ],
+          "target_match_operator": "any"
+        }
+      ],
+      "as_of": "2026-07-18T12:00:00Z",
+      "authority": {
+        "canonical_person_merge_allowed": false,
+        "outreach_allowed": false,
+        "product_writes_allowed": false,
+        "provider_calls_allowed": false
+      },
+      "campaign_id": "fixture_general_research_campaign",
+      "channel_overrides": [],
+      "experience_verification": {
+        "dimension_ids": [],
+        "enabled": false,
+        "trigger": "not_requested"
+      },
+      "request_sha256": "d92abc4780bc930fcace17ef4659f3a8546296cef575e6457714e51087a27ef9",
+      "schema_version": "x.portable.research_campaign.request.v1",
+      "scope_selection": {
+        "required_fresh_scope_kinds": [
+          "model",
+          "product",
+          "capability"
+        ],
+        "root_scope_ids": [
+          "fixture_lab"
+        ],
+        "selected_scope_ids": [],
+        "selection_mode": "complete_under_roots"
+      },
+      "seed_inputs": [
+        {
+          "external_record_ref": "fixture://product/snapshot/candidate-2",
+          "name_text": "Selected In Progress",
+          "professional_facts": [
+            {
+              "evidence_ref": "fixture://product/snapshot/candidate-2#role",
+              "fact_type": "role",
+              "temporal_state": "current",
+              "value": "Research Engineer"
+            }
+          ],
+          "seed_ref": "selected_in_progress_subject",
+          "source_kind": "professional_profile",
+          "source_profile_url": "https://example.com/selected-in-progress",
+          "source_record_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "source_status": "source_bound",
+          "x_handle_proposals": [
+            {
+              "binding_status": "cross_source_link_proposed",
+              "evidence_ref": "fixture://product/snapshot/candidate-2#x-handle",
+              "handle": "progress_x"
+            }
+          ]
+        },
+        {
+          "external_record_ref": "fixture://product/snapshot/candidate-1",
+          "name_text": "Selected Researcher",
+          "professional_facts": [
+            {
+              "evidence_ref": "fixture://product/snapshot/candidate-1#affiliation",
+              "fact_type": "affiliation",
+              "temporal_state": "current",
+              "value": "Fixture AI Lab"
+            }
+          ],
+          "seed_ref": "selected_linkedin_subject",
+          "source_kind": "linkedin_profile",
+          "source_profile_url": "https://www.linkedin.com/in/selected-researcher",
+          "source_record_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_status": "source_bound",
+          "x_handle_proposals": [
+            {
+              "binding_status": "cross_source_link_proposed",
+              "evidence_ref": "fixture://product/snapshot/candidate-1#x-handle",
+              "handle": "selected_x"
+            }
+          ]
+        },
+        {
+          "external_record_ref": "fixture://product/snapshot/candidate-3",
+          "name_text": "Selected Name Only",
+          "professional_facts": [],
+          "seed_ref": "selected_name_only_subject",
+          "source_kind": "name_only",
+          "source_profile_url": null,
+          "source_record_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "source_status": "source_bound",
+          "x_handle_proposals": []
+        }
+      ],
+      "temporal_scope": {
+        "affiliation_states": [
+          "current",
+          "historical",
+          "ambiguous"
+        ],
+        "target_activity_states": [
+          "current",
+          "historical",
+          "ambiguous"
+        ]
+      }
+    },
+    "result": {
+      "affiliation_results": [
+        {
+          "evidence_refs": [
+            "selected_linkedin_subject"
+          ],
+          "matches_temporal_filter": true,
+          "reason": "source profile reports current affiliation",
+          "scope_id": "fixture_lab",
+          "source_status": "source_bound",
+          "temporal_state": "current",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ],
+      "authority": {
+        "automatic_cross_source_merge_allowed": false,
+        "canonical_person_write_allowed": false,
+        "outreach_allowed": false,
+        "product_writes_allowed": false
+      },
+      "campaign_id": "fixture_general_research_campaign",
+      "catalog_sha256": "6730a9e079df2e25e74f9ba6b91b454a340cbc475e74829b984cf3a907f9b28b",
+      "coverage": {
+        "candidate_authored_both_surface_attempted": 2,
+        "candidate_authored_post_attempted": 2,
+        "candidate_authored_reply_attempted": 2,
+        "coverage_source_status": "fixture_synthetic",
+        "metric_values": [
+          {
+            "denominator": 2,
+            "metric_id": "candidate_authored_both_surface_coverage_rate",
+            "numerator": 1
+          },
+          {
+            "denominator": 4,
+            "metric_id": "source_bound_evidence_rate",
+            "numerator": 0
+          },
+          {
+            "denominator": 1,
+            "metric_id": "target_direction_core_rate",
+            "numerator": 1
+          },
+          {
+            "denominator": 1,
+            "metric_id": "target_direction_active_rate",
+            "numerator": 1
+          },
+          {
+            "denominator": 2,
+            "metric_id": "evidence_backed_temporal_state_rate",
+            "numerator": 2
+          },
+          {
+            "denominator": 0,
+            "metric_id": "target_core_unique_account_yield_per_native_call",
+            "numerator": 0
+          },
+          {
+            "denominator": 3,
+            "metric_id": "cross_source_handle_resolution_rate",
+            "numerator": 2
+          }
+        ],
+        "observation_count": 4,
+        "resolved_account_count": 2,
+        "subjects_total": 3,
+        "terminal_subject_outcomes": 2
+      },
+      "cross_source_link_proposals": [
+        {
+          "automatic_merge_authorized": false,
+          "evidence_refs": [
+            "hre_progress_x"
+          ],
+          "human_review_required": true,
+          "proposal_id": "link_progress_x",
+          "seed_ref": "selected_in_progress_subject",
+          "source_status": "fixture_synthetic",
+          "status": "proposed",
+          "x_account_ref": "xacct_progress_x"
+        },
+        {
+          "automatic_merge_authorized": false,
+          "evidence_refs": [
+            "hre_selected_x"
+          ],
+          "human_review_required": true,
+          "proposal_id": "link_selected_x",
+          "seed_ref": "selected_linkedin_subject",
+          "source_status": "fixture_synthetic",
+          "status": "proposed",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ],
+      "dimension_results": [
+        {
+          "dimension_id": "research_workstream",
+          "evidence_refs": [
+            "obs_selected_x_post",
+            "obs_selected_x_reply"
+          ],
+          "matched_label_ids": [
+            "coding"
+          ],
+          "matches_temporal_filter": true,
+          "question_id": "verify_coding_work",
+          "reason": "fixture authored surfaces discuss coding",
+          "relevance_state": "target_core",
+          "source_status": "fixture_synthetic",
+          "target_activity_temporal_state": "current",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ],
+      "discovery_origins": [],
+      "execution_window": {
+        "completed_at": "2026-07-18T08:01:00Z",
+        "started_at": "2026-07-18T07:59:00Z"
+      },
+      "experience_verification_queue": [],
+      "exploratory_findings": [],
+      "external_accounts": [
+        {
+          "current_handle": "progress_x",
+          "handle_history_proposals": [],
+          "identity_status": "provisional_handle",
+          "platform_user_id": null,
+          "profile_url": "https://x.com/progress_x",
+          "x_account_ref": "xacct_progress_x"
+        },
+        {
+          "current_handle": "selected_x",
+          "handle_history_proposals": [],
+          "identity_status": "provisional_handle",
+          "platform_user_id": null,
+          "profile_url": "https://x.com/selected_x",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ],
+      "handle_resolution_attempts": [],
+      "handle_resolution_evidence": [
+        {
+          "canonical_url": "https://x.com/selected_x",
+          "content_sha256": "d52fa29995a84040bb874b182310716d3924e82f190d147b310155c4a3849567",
+          "evidence_id": "hre_selected_x",
+          "evidence_kind": "x_profile_name",
+          "observed_at": "2026-07-18T08:00:00Z",
+          "observed_value": "Fixture X profile matches selected researcher handle proposal.",
+          "query_sha256": "422bb808fdf03695f929c9f3d4db0979022353bb2a4e7034b5585fa55a7069b7",
+          "query_text": "resolve selected researcher to @selected_x",
+          "receipt_ref": "sha256:e41db63c3179389272521ec4ea1c2b38e5bf94c6dcbefd7c073dac95fa3cd8ca",
+          "retrieval_receipt": {
+            "canonical_url": "https://x.com/selected_x",
+            "content_sha256": "d52fa29995a84040bb874b182310716d3924e82f190d147b310155c4a3849567",
+            "observed_at": "2026-07-18T08:00:00Z",
+            "query_sha256": "422bb808fdf03695f929c9f3d4db0979022353bb2a4e7034b5585fa55a7069b7",
+            "receipt_locator": null,
+            "receipt_sha256": "e41db63c3179389272521ec4ea1c2b38e5bf94c6dcbefd7c073dac95fa3cd8ca",
+            "schema_version": "x.handle_resolution.retrieval_receipt.v1",
+            "source_status": "fixture_synthetic"
+          },
+          "seed_ref": "selected_linkedin_subject",
+          "source_status": "fixture_synthetic",
+          "x_account_ref": "xacct_selected_x"
+        },
+        {
+          "canonical_url": "https://x.com/progress_x",
+          "content_sha256": "129985b6458a471f89f82a8b7fd7c237f627b181cda17c95b661cbc9c6f3c2f7",
+          "evidence_id": "hre_progress_x",
+          "evidence_kind": "x_profile_name",
+          "observed_at": "2026-07-18T08:00:00Z",
+          "observed_value": "Fixture X profile matches in-progress researcher handle proposal.",
+          "query_sha256": "f945f69b9f59616cd7a6e55770ff793ab68a6440275165c83bb619de8a41d671",
+          "query_text": "resolve selected in-progress researcher to @progress_x",
+          "receipt_ref": "sha256:1684e132c9f0f4c3303e908a7c4316578ac5b6ed23413919f7ae6c8eca065fab",
+          "retrieval_receipt": {
+            "canonical_url": "https://x.com/progress_x",
+            "content_sha256": "129985b6458a471f89f82a8b7fd7c237f627b181cda17c95b661cbc9c6f3c2f7",
+            "observed_at": "2026-07-18T08:00:00Z",
+            "query_sha256": "f945f69b9f59616cd7a6e55770ff793ab68a6440275165c83bb619de8a41d671",
+            "receipt_locator": null,
+            "receipt_sha256": "1684e132c9f0f4c3303e908a7c4316578ac5b6ed23413919f7ae6c8eca065fab",
+            "schema_version": "x.handle_resolution.retrieval_receipt.v1",
+            "source_status": "fixture_synthetic"
+          },
+          "seed_ref": "selected_in_progress_subject",
+          "source_status": "fixture_synthetic",
+          "x_account_ref": "xacct_progress_x"
+        }
+      ],
+      "handle_resolution_outcomes": [],
+      "limitations": [],
+      "observations": [
+        {
+          "author_handle": "progress_x",
+          "author_platform_user_id": null,
+          "canonical_url": "https://x.com/progress_x/status/3011",
+          "content_sha256": "be8553d905c304c4d9fd67885a95a9d9db63380e5a9343ab234baac1e9a0212c",
+          "observation_id": "obs_progress_x_post",
+          "observed_at": "2026-07-18T08:00:00Z",
+          "platform_object_id": "3011",
+          "published_at": "2026-07-17T08:00:00Z",
+          "receipt_ref": "fixture://receipt/progress_x/post",
+          "source_status": "fixture_synthetic",
+          "surface": "post",
+          "text_or_excerpt": "Fixture progress_x post discusses coding research.",
+          "x_account_ref": "xacct_progress_x"
+        },
+        {
+          "author_handle": "progress_x",
+          "author_platform_user_id": null,
+          "canonical_url": "https://x.com/progress_x/status/3012",
+          "content_sha256": "1dac65e7702d60a69f55ae0ba602c11994ba3992874884c2937634411e79e9ab",
+          "observation_id": "obs_progress_x_reply",
+          "observed_at": "2026-07-18T08:00:00Z",
+          "platform_object_id": "3012",
+          "published_at": "2026-07-17T09:00:00Z",
+          "receipt_ref": "fixture://receipt/progress_x/reply",
+          "source_status": "fixture_synthetic",
+          "surface": "reply",
+          "text_or_excerpt": "Fixture progress_x reply discusses coding research.",
+          "x_account_ref": "xacct_progress_x"
+        },
+        {
+          "author_handle": "selected_x",
+          "author_platform_user_id": null,
+          "canonical_url": "https://x.com/selected_x/status/3021",
+          "content_sha256": "3596e8359d39a7b3258371008618722536e910a5564876cba8751e2f971b1481",
+          "observation_id": "obs_selected_x_post",
+          "observed_at": "2026-07-18T08:00:00Z",
+          "platform_object_id": "3021",
+          "published_at": "2026-07-17T08:00:00Z",
+          "receipt_ref": "fixture://receipt/selected_x/post",
+          "source_status": "fixture_synthetic",
+          "surface": "post",
+          "text_or_excerpt": "Fixture selected_x post discusses coding research.",
+          "x_account_ref": "xacct_selected_x"
+        },
+        {
+          "author_handle": "selected_x",
+          "author_platform_user_id": null,
+          "canonical_url": "https://x.com/selected_x/status/3022",
+          "content_sha256": "a22f471fc393c0d38476f3da7fb578892f6b89267978be89d272366908b40853",
+          "observation_id": "obs_selected_x_reply",
+          "observed_at": "2026-07-18T08:00:00Z",
+          "platform_object_id": "3022",
+          "published_at": "2026-07-17T09:00:00Z",
+          "receipt_ref": "fixture://receipt/selected_x/reply",
+          "source_status": "fixture_synthetic",
+          "surface": "reply",
+          "text_or_excerpt": "Fixture selected_x reply discusses coding research.",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ],
+      "optional_channel_attempts": [],
+      "optional_channel_evidence": [],
+      "optional_channel_outcomes": [],
+      "plan_sha256": "3cb1625982cc51778bed1a9390226147bc2bedec0086404978b1a8cea1d72550",
+      "relationship_results": [],
+      "request_sha256": "d92abc4780bc930fcace17ef4659f3a8546296cef575e6457714e51087a27ef9",
+      "result_sha256": "13de3eba22301d28151a7143fff26834113d0b8ab74bd912216dbbe3ae792c88",
+      "schema_version": "x.portable.research_campaign.result.v1",
+      "semantic_recall_attempts": [],
+      "semantic_recall_outcomes": [
+        {
+          "adaptive_stop_decision": null,
+          "attempted_query_sha256s": [],
+          "execution_policy": "authored_surface_only",
+          "question_id": "verify_coding_work",
+          "receipt_refs": [
+            "fixture://receipt/selected_x/post",
+            "fixture://receipt/selected_x/reply"
+          ],
+          "stop_reason": "broad_authored_surface_completed",
+          "terminal_state": "authored_surface_complete",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ],
+      "status": "partial",
+      "subject_outcomes": [
+        {
+          "reason": "fixture handle analyzed",
+          "seed_ref": "selected_linkedin_subject",
+          "terminal_state": "analyzed",
+          "x_account_refs": [
+            "xacct_selected_x"
+          ]
+        },
+        {
+          "reason": "fixture pagination continuation remains available",
+          "seed_ref": "selected_in_progress_subject",
+          "terminal_state": "research_in_progress",
+          "x_account_refs": [
+            "xacct_progress_x"
+          ]
+        },
+        {
+          "reason": "fixture name-only subject needs resolution",
+          "seed_ref": "selected_name_only_subject",
+          "terminal_state": "handle_resolution_required",
+          "x_account_refs": []
+        }
+      ],
+      "surface_attempts": [
+        {
+          "bound_observation_count": 1,
+          "continuation_ref": "fixture://cursor/progress_x/post/page-2",
+          "continuation_state": "continuation_available",
+          "execution_state": "completed",
+          "input_continuation_ref": null,
+          "ordinal": 1,
+          "query_sha256": "01ffa36c9da364fc23f3c251fbd4679347402e2b403f28342d6a31e5fe172600",
+          "query_text": "from:progress_x -filter:replies",
+          "receipt_ref": "fixture://receipt/progress_x/post",
+          "result_truncated": true,
+          "source_status": "fixture_synthetic",
+          "surface": "post",
+          "x_account_ref": "xacct_progress_x"
+        },
+        {
+          "bound_observation_count": 1,
+          "continuation_ref": null,
+          "continuation_state": "exhausted",
+          "execution_state": "completed",
+          "input_continuation_ref": null,
+          "ordinal": 1,
+          "query_sha256": "2d4612c75744f92ef0cc26360854d36bc0deff4c2940b446f88a93fbf1c9469a",
+          "query_text": "from:progress_x filter:replies",
+          "receipt_ref": "fixture://receipt/progress_x/reply",
+          "result_truncated": false,
+          "source_status": "fixture_synthetic",
+          "surface": "reply",
+          "x_account_ref": "xacct_progress_x"
+        },
+        {
+          "bound_observation_count": 1,
+          "continuation_ref": null,
+          "continuation_state": "exhausted",
+          "execution_state": "completed",
+          "input_continuation_ref": null,
+          "ordinal": 1,
+          "query_sha256": "6d9136f4827eb3aedc0b5847a676f0196e6fc8eea4c7b20deaf09970a4d82222",
+          "query_text": "from:selected_x -filter:replies",
+          "receipt_ref": "fixture://receipt/selected_x/post",
+          "result_truncated": false,
+          "source_status": "fixture_synthetic",
+          "surface": "post",
+          "x_account_ref": "xacct_selected_x"
+        },
+        {
+          "bound_observation_count": 1,
+          "continuation_ref": null,
+          "continuation_state": "exhausted",
+          "execution_state": "completed",
+          "input_continuation_ref": null,
+          "ordinal": 1,
+          "query_sha256": "9e297fb44db16fe69be62d5bbd1fc3e5c59c7a8517733d91bff53e8ae8f5c85d",
+          "query_text": "from:selected_x filter:replies",
+          "receipt_ref": "fixture://receipt/selected_x/reply",
+          "result_truncated": false,
+          "source_status": "fixture_synthetic",
+          "surface": "reply",
+          "x_account_ref": "xacct_selected_x"
+        }
+      ]
+    },
+    "selection": {
+      "artifact_sha256": "1c0d6a5e2f806c07ef058ea7ef212a00c3ded057e920fd38db96469bfbd274d3",
+      "authority": {
+        "canonical_person_merge_allowed": false,
+        "outreach_allowed": false,
+        "product_writes_allowed": false,
+        "provider_calls_allowed": false
+      },
+      "contract_schema_sha256": "86a5924d6b551b6af61cfccd9e94a426bdd046db4545e922dc8ae3bc5483b754",
+      "exported_at": "2026-07-18T07:00:00Z",
+      "schema_version": "sourcing.x_first.subject_selection.v1",
+      "selection_id": "fixture_selected_subjects",
+      "snapshot": {
+        "membership_revision": "7",
+        "projection_ref": "fixture://product/projection/rev-7",
+        "selected_candidate_count": 3,
+        "selected_member_keys_sha256": "16c11e776dabcd15ab76358a4f753bb8d9407d4e1e78a726fc45a631011a3993",
+        "source_candidate_count": 10,
+        "workspace_ref": "fixture://product/workspace"
+      },
+      "subjects": [
+        {
+          "exported_seed_sha256": "e323e71a0a720efc2b839fdb52b2d11fe785fbe73ba7aa32e4b29cefec840260",
+          "name_text": "Selected Researcher",
+          "professional_facts": [
+            {
+              "evidence_ref": "fixture://product/snapshot/candidate-1#affiliation",
+              "fact_type": "affiliation",
+              "temporal_state": "current",
+              "value": "Fixture AI Lab"
+            }
+          ],
+          "source_kind": "linkedin_profile",
+          "source_profile_url": "https://www.linkedin.com/in/selected-researcher",
+          "source_public_summary_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "source_record_ref": "fixture://product/snapshot/candidate-1",
+          "source_record_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_status": "source_bound",
+          "source_subject_ref": "selected_linkedin_subject",
+          "x_handle_proposals": [
+            {
+              "binding_status": "cross_source_link_proposed",
+              "evidence_ref": "fixture://product/snapshot/candidate-1#x-handle",
+              "handle": "selected_x"
+            }
+          ]
+        },
+        {
+          "exported_seed_sha256": "d0640001c1753d196f56460e0b50962f73058092a5e29d1eecf426e0841c7411",
+          "name_text": "Selected In Progress",
+          "professional_facts": [
+            {
+              "evidence_ref": "fixture://product/snapshot/candidate-2#role",
+              "fact_type": "role",
+              "temporal_state": "current",
+              "value": "Research Engineer"
+            }
+          ],
+          "source_kind": "professional_profile",
+          "source_profile_url": "https://example.com/selected-in-progress",
+          "source_public_summary_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "source_record_ref": "fixture://product/snapshot/candidate-2",
+          "source_record_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "source_status": "source_bound",
+          "source_subject_ref": "selected_in_progress_subject",
+          "x_handle_proposals": [
+            {
+              "binding_status": "cross_source_link_proposed",
+              "evidence_ref": "fixture://product/snapshot/candidate-2#x-handle",
+              "handle": "progress_x"
+            }
+          ]
+        },
+        {
+          "exported_seed_sha256": "0ce1c465f16be6f849e4db699b325410a269a8e6724b3d0deb44a421cfdb6159",
+          "name_text": "Selected Name Only",
+          "professional_facts": [],
+          "source_kind": "name_only",
+          "source_profile_url": null,
+          "source_public_summary_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+          "source_record_ref": "fixture://product/snapshot/candidate-3",
+          "source_record_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "source_status": "source_bound",
+          "source_subject_ref": "selected_name_only_subject",
+          "x_handle_proposals": []
+        }
+      ]
+    }
+  },
+  "manifest": {
+    "artifacts": {
+      "binding": {
+        "contract_schema_sha256": "ef2f6dc742658a5b6507f7320bc2ed5530612e97097eadf1c3e4a46405835c1d",
+        "declared_content_sha256": "99c2475e99e09a9c45011fa0f4fa7e054e09a08e265f47acade03bb023c7eeb1",
+        "payload_sha256": "a381168d5e78e60b373f1b347163e97ea70059de67ca6fc9b14d9f568f18ecea",
+        "schema_version": "x.portable.selected_subject.request_binding.v1"
+      },
+      "catalog": {
+        "contract_schema_sha256": "9399fa128bbe9c5420e5c5e1988858b1201a9f24222435dcc0a775a922170bf9",
+        "declared_content_sha256": "6730a9e079df2e25e74f9ba6b91b454a340cbc475e74829b984cf3a907f9b28b",
+        "payload_sha256": "c578a15757df744e51bb1fcbd4571bbe064e7c10ece205aa61f67cdfa6ac1495",
+        "schema_version": "x.research_scope.catalog.v1"
+      },
+      "plan": {
+        "contract_schema_sha256": "f0dc7a78a8287f51f4d2a0543634079391d3816891c52f09cf4c87f402327543",
+        "declared_content_sha256": "3cb1625982cc51778bed1a9390226147bc2bedec0086404978b1a8cea1d72550",
+        "payload_sha256": "3021748d3c29c47571a824e1b26c40272b2e0c5aee9af2a61793892de757142a",
+        "schema_version": "x.portable.research_campaign.plan.v1"
+      },
+      "policy": {
+        "contract_schema_sha256": "6a19698b1ca829453ce1a9c87fbfb0df694c0da3e9e047375d028f1c441b2575",
+        "declared_content_sha256": "81e7996106a45c8137d92d63200a77c099048069f06d53189e2809df88dd223f",
+        "payload_sha256": "81e7996106a45c8137d92d63200a77c099048069f06d53189e2809df88dd223f",
+        "schema_version": "x.research_orchestration.policy.v1"
+      },
+      "request": {
+        "contract_schema_sha256": "b756a031a5cfca273ffc6b97b0d65dacc24811a0487a354a641c731122ce4c3b",
+        "declared_content_sha256": "d92abc4780bc930fcace17ef4659f3a8546296cef575e6457714e51087a27ef9",
+        "payload_sha256": "64868a6e84bd6e89cf161f3dadc781c6988a0ae9ccdb2a1669753184f96abd09",
+        "schema_version": "x.portable.research_campaign.request.v1"
+      },
+      "result": {
+        "contract_schema_sha256": "31dbfc3d9f31a026df9fbe1d66fad38d00f91ff47f071533837adaa4f4f31403",
+        "declared_content_sha256": "13de3eba22301d28151a7143fff26834113d0b8ab74bd912216dbbe3ae792c88",
+        "payload_sha256": "06189fc6c82f6e04c03495b4d46d35ecee9b5319cc45d4d975ef34ed276d6e07",
+        "schema_version": "x.portable.research_campaign.result.v1"
+      },
+      "selection": {
+        "contract_schema_sha256": "86a5924d6b551b6af61cfccd9e94a426bdd046db4545e922dc8ae3bc5483b754",
+        "declared_content_sha256": "1c0d6a5e2f806c07ef058ea7ef212a00c3ded057e920fd38db96469bfbd274d3",
+        "payload_sha256": "ee75aad73fe553c95d1fadc7cf38d4b84a07f1dad8e1968e143a99e2ded06a16",
+        "schema_version": "sourcing.x_first.subject_selection.v1"
+      }
+    },
+    "authority": {
+      "live_authority": false,
+      "model_calls_allowed": false,
+      "product_writes_allowed": false,
+      "provider_calls_allowed": false
+    },
+    "campaign_id": "fixture_general_research_campaign",
+    "manifest_sha256": "f2ac74a74bfc21c105b52e07167afddcff48b2c7408a809d08211cbc8e033407",
+    "package_id": "package_7e0965252404a7ff4af2dc86",
+    "package_mode": "fixture_simulate",
+    "schema_version": "x.portable.research_campaign.package_manifest.v1",
+    "selection_id": "fixture_selected_subjects"
+  },
+  "semantic_validation_receipt": {
+    "artifact_payload_sha256s": {
+      "binding": "a381168d5e78e60b373f1b347163e97ea70059de67ca6fc9b14d9f568f18ecea",
+      "catalog": "c578a15757df744e51bb1fcbd4571bbe064e7c10ece205aa61f67cdfa6ac1495",
+      "plan": "3021748d3c29c47571a824e1b26c40272b2e0c5aee9af2a61793892de757142a",
+      "policy": "81e7996106a45c8137d92d63200a77c099048069f06d53189e2809df88dd223f",
+      "request": "64868a6e84bd6e89cf161f3dadc781c6988a0ae9ccdb2a1669753184f96abd09",
+      "result": "06189fc6c82f6e04c03495b4d46d35ecee9b5319cc45d4d975ef34ed276d6e07",
+      "selection": "ee75aad73fe553c95d1fadc7cf38d4b84a07f1dad8e1968e143a99e2ded06a16"
+    },
+    "authority": {
+      "live_authority": false,
+      "product_writes_allowed": false,
+      "promotion_authorized": false
+    },
+    "campaign_id": "fixture_general_research_campaign",
+    "checks": [
+      "selection_semantics_valid",
+      "request_binding_semantics_valid",
+      "policy_semantics_valid",
+      "catalog_semantics_valid",
+      "request_semantics_valid",
+      "canonical_plan_valid",
+      "result_semantics_valid",
+      "fixture_execution_only"
+    ],
+    "effects": {
+      "model_call_count": 0,
+      "product_write_count": 0,
+      "provider_call_count": 0,
+      "simulated_external_attempt_count": 4,
+      "simulated_external_evidence_count": 6
+    },
+    "manifest_sha256": "f2ac74a74bfc21c105b52e07167afddcff48b2c7408a809d08211cbc8e033407",
+    "package_id": "package_7e0965252404a7ff4af2dc86",
+    "receipt_id": "receipt_f2ac74a74bfc21c105b52e07",
+    "receipt_sha256": "615e9c068c3ba9fe12ad86f9b955ab3f5c41f8a668a81f43872e5fa40621537e",
+    "schema_version": "x.portable.research_campaign.semantic_validation_receipt.v1",
+    "selection_id": "fixture_selected_subjects",
+    "validated_at": "2026-07-18T08:02:00Z",
+    "validation_mode": "fixture_simulate",
+    "validation_status": "passed",
+    "validator": {
+      "validator_id": "x_first.portable_campaign.semantic_validator",
+      "validator_revision": "x_first.portable_campaign.semantic_validator.v1",
+      "validator_revision_sha256": "f44f61134d689efc5115fff538fd6149150847a24dc4ab1acccd570c92ffb10d"
+    }
+  }
+}

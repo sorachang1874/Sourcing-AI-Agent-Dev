@@ -1,0 +1,39 @@
+{
+  "aggregate_sha256": "1d8f3a2a80dec067533006515cd77909c1a472b713473a11e00e8ba19054dd9e",
+  "artifact_id": "gdm_query_family_calibration_20260717",
+  "batch_canary": {
+    "attested_native_x_calls": 6,
+    "calls_per_candidate": 2,
+    "candidate_grain": 3,
+    "elapsed_ms_per_call": 7787.5,
+    "flat_blocks": 6,
+    "ledger_and_format_passed": true,
+    "marginal_unique_references": 4,
+    "open_saturation_cells": 0,
+    "singleton_elapsed_ratio": 0.662063,
+    "stable_unique_references": 6
+  },
+  "calibration_counts": {
+    "actual_native_x_calls": 46,
+    "candidate_authored_expansion_calls": 31,
+    "final_frontier": 37,
+    "initial_frontier": 17,
+    "marginal_unique_stable_references": 20,
+    "official_full_text_anchors": 4,
+    "official_source_anchors": 4,
+    "open_saturation_cells": 0,
+    "trailing_zero_half_windows": 2
+  },
+  "candidate_fields_included": false,
+  "candidate_text_included": false,
+  "claim_status": "diagnostic_method_calibration_only",
+  "conclusion": "method_shape_calibrated_not_global_recall_plateau",
+  "privacy_class": "candidate_free_counts_and_hashes_only",
+  "schema_version": "x.source_neutral.mapping.calibration_aggregate.v1",
+  "source_bindings": {
+    "private_receipt_sha256": "9d32eb26ec368585d45090c3d1c619349b8248f7e15204cd1dd797806985236a",
+    "private_source_binding_count": 14,
+    "private_source_binding_manifest_sha256": "af52c4ab0ba8566db2f0111c6f38b4a324118b94838f0d0bb62d55a44c2a35c7",
+    "private_summary_sha256": "e802ef5559d2ab9caffcf23b94eeacdc8e2b85353748ea189a72220ad48b0312"
+  }
+}

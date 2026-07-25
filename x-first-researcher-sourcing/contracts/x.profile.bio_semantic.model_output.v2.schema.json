@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.invalid/x.profile.bio_semantic.model_output.v2.2.schema.json",
+  "title": "X profile Bio semantic model output v2.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "profile_snapshot_id",
+    "platform_user_id",
+    "bio_sha256",
+    "verdict",
+    "proposals",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.profile.bio_semantic.model_output.v2.2"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^xbsv2r_[0-9a-f]{24}$"
+    },
+    "profile_snapshot_id": {
+      "type": "string",
+      "pattern": "^xbsv2s_[0-9a-f]{24}$"
+    },
+    "platform_user_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{1,24}$"
+    },
+    "bio_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "verdict": {
+      "enum": [
+        "proposals_available",
+        "no_supported_professional_context",
+        "abstained"
+      ]
+    },
+    "proposals": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "proposal_type",
+          "relation_state",
+          "span_start",
+          "span_end",
+          "excerpt",
+          "reason_codes",
+          "reason",
+          "reason_source",
+          "confidence",
+          "evidence_basis",
+          "requires_independent_verification"
+        ],
+        "properties": {
+          "proposal_type": {
+            "enum": [
+              "professional_region_experience",
+              "professional_china_digital_ecosystem",
+              "professional_affiliation",
+              "observed_chinese_professional_content"
+            ]
+          },
+          "relation_state": {
+            "enum": [
+              "current_claimed",
+              "previous_claimed",
+              "future_or_aspirational",
+              "unspecified",
+              "not_applicable"
+            ]
+          },
+          "span_start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000
+          },
+          "span_end": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "excerpt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "reason_codes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "description": "Exactly one code is allowed; runtime validation requires the exact code owned by proposal_type plus relation_state.",
+            "items": {
+              "enum": [
+                "explicit_professional_region_experience",
+                "explicit_china_digital_ecosystem_activity",
+                "explicit_current_organization_claim",
+                "explicit_previous_organization_claim",
+                "observed_chinese_professional_content",
+                "ambiguous_professional_context_requires_review"
+              ]
+            }
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "The cited Bio span explicitly states professional region experience.",
+              "The cited Bio span explicitly states China digital-ecosystem professional activity.",
+              "The cited Bio span explicitly states a current claimed organization affiliation.",
+              "The cited Bio span explicitly states a previous claimed organization affiliation.",
+              "The cited Bio span states a future or aspirational organization affiliation.",
+              "The cited Bio span states an organization affiliation with unspecified timing.",
+              "The cited Bio span contains observed Chinese-language professional content."
+            ],
+            "description": "Closed deterministic explanation template selected by proposal_type plus relation_state; it cannot carry model-authored facts or identity claims."
+          },
+          "reason_source": {
+            "const": "closed_deterministic_explanation_template_v2.2"
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "evidence_basis": {
+            "const": "profile_bio_only"
+          },
+          "requires_independent_verification": {
+            "const": true
+          }
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_facts_used",
+        "protected_identity_inferred",
+        "discovery_or_ranking_recommended",
+        "eligibility_decided",
+        "canonical_employment_asserted",
+        "canonical_write_recommended"
+      ],
+      "properties": {
+        "external_facts_used": {
+          "const": false
+        },
+        "protected_identity_inferred": {
+          "const": false
+        },
+        "discovery_or_ranking_recommended": {
+          "const": false
+        },
+        "eligibility_decided": {
+          "const": false
+        },
+        "canonical_employment_asserted": {
+          "const": false
+        },
+        "canonical_write_recommended": {
+          "const": false
+        }
+      }
+    }
+  }
+}

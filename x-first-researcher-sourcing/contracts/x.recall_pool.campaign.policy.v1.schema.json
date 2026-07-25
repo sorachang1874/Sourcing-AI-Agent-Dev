@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.recall_pool.campaign.policy.v1.schema.json",
+  "title": "X-first recall-pool campaign policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_version", "kill_ceilings", "stop_advisory", "public_prompt_sha256_allowlist", "authority"],
+  "properties": {
+    "schema_version": {"const": "x.recall_pool.campaign.policy.v1"},
+    "policy_version": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$"},
+    "kill_ceilings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_wave_files", "max_bytes_per_wave", "max_raw_session_file_bytes", "max_total_input_bytes", "max_candidate_rows_in_memory", "max_evidence_rows_in_memory"],
+      "properties": {
+        "max_wave_files": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "max_bytes_per_wave": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "max_raw_session_file_bytes": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "max_total_input_bytes": {"type": "integer", "minimum": 1, "maximum": 20000000000},
+        "max_candidate_rows_in_memory": {"type": "integer", "minimum": 1, "maximum": 10000000},
+        "max_evidence_rows_in_memory": {"type": "integer", "minimum": 1, "maximum": 100000000}
+      }
+    },
+    "stop_advisory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_comparable_waves", "lookback_comparable_waves", "max_latest_new_unique_per_completed_call_for_plateau", "minimum_productivity_decline_fraction", "require_nonincreasing_productivity"],
+      "properties": {
+        "minimum_comparable_waves": {"type": "integer", "minimum": 2},
+        "lookback_comparable_waves": {"type": "integer", "minimum": 2},
+        "max_latest_new_unique_per_completed_call_for_plateau": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_productivity_decline_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "require_nonincreasing_productivity": {"const": true}
+      }
+    },
+    "public_prompt_sha256_allowlist": {"const": []},
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["business_candidate_limit", "stop_advisory_enforced", "provider_calls_allowed", "product_writes_allowed"],
+      "properties": {
+        "business_candidate_limit": {"type": "null"},
+        "stop_advisory_enforced": {"const": false},
+        "provider_calls_allowed": {"const": false},
+        "product_writes_allowed": {"const": false}
+      }
+    }
+  }
+}

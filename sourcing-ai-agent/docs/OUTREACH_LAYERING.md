@@ -1,5 +1,8 @@
 # Outreach Layering
 
+> Status: Design/reference doc. Useful for product or architecture context, but not the source of truth for current runtime behavior.
+
+
 这个模块用于在本地 JSON 资产（`runtime/company_assets/.../normalized_artifacts/materialized_candidate_documents.json`）上做分层筛选，支持“自然语言简称 -> 可审计层级结果”的分析流程。
 
 ## Layer 定义

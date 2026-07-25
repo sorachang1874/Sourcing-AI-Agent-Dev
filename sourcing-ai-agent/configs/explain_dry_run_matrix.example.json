@@ -1,0 +1,37 @@
+{
+  "cases": [
+    {
+      "case": "openai_pretrain_delta",
+      "payload": {
+        "raw_user_request": "我想要OpenAI做Pre-train方向的人",
+        "top_k": 10
+      },
+      "expect": {
+        "target_company": "OpenAI",
+        "keywords": ["Pre-train"],
+        "org_scale_band": "large",
+        "default_acquisition_mode": "scoped_search_roster",
+        "dispatch_strategy": "delta_from_snapshot",
+        "planner_mode": "delta_from_snapshot",
+        "requires_delta_acquisition": true,
+        "current_lane": "delta_acquisition",
+        "former_lane": "delta_acquisition"
+      }
+    },
+    {
+      "case": "physical_intelligence_full_roster",
+      "payload": {
+        "raw_user_request": "给我Physical Intelligence的所有成员",
+        "top_k": 10
+      },
+      "expect": {
+        "target_company": "Physical Intelligence",
+        "org_scale_band": "unknown",
+        "default_acquisition_mode": "full_company_roster",
+        "dispatch_strategy": "new_job",
+        "current_lane": "live_acquisition",
+        "former_lane": "live_acquisition"
+      }
+    }
+  ]
+}

@@ -1,21 +1,23 @@
 import json
-from hashlib import sha1
-from pathlib import Path
 import tempfile
 import unittest
+from hashlib import sha1
+from pathlib import Path
 from unittest import mock
 
+from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.company_asset_completion import CompanyAssetCompletionManager
 from sourcing_agent.company_asset_supplement import CompanyAssetSupplementManager
 from sourcing_agent.connectors import CompanyIdentity
-from sourcing_agent.domain import Candidate
+from sourcing_agent.domain import Candidate, EvidenceRecord
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.settings import load_settings
-from sourcing_agent.storage import SQLiteStore
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CompanyAssetSupplementTest(unittest.TestCase):
+class CompanyAssetSupplementTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.project_root = Path(self.tempdir.name)
         self.runtime_dir = self.project_root / "runtime"
@@ -55,7 +57,7 @@ class CompanyAssetSupplementTest(unittest.TestCase):
             )
         )
         (snapshot_dir / "candidate_documents.json").write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False, indent=2))
-        self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
         self.settings = load_settings(self.project_root)
 
     def tearDown(self) -> None:
@@ -462,6 +464,168 @@ class CompanyAssetSupplementTest(unittest.TestCase):
         self.assertEqual(updated.metadata.get("profile_url"), "https://www.linkedin.com/in/opaque-alice")
         self.assertIn("https://www.linkedin.com/in/alice-example", updated.metadata.get("more_profiles") or [])
 
+    def test_rebuild_rejects_uncommitted_cohort_search_seed_generation(self) -> None:
+        manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            asset_completion_manager=CompanyAssetCompletionManager(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.settings,
+            ),
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        (discovery_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "target_company": "Acme",
+                    "company_identity": json.loads((snapshot_dir / "identity.json").read_text(encoding="utf-8")),
+                    "cohort_publication_digest": "a" * 64,
+                    "query_summaries": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (discovery_dir / "entries.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "full_name": "Partial Cohort Person",
+                        "profile_url": "https://www.linkedin.com/in/partial-cohort-person/",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = manager.rebuild_linkedin_stage_1_snapshot(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+        )
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "missing_roster_and_search_seed_snapshots")
+        self.assertFalse((snapshot_dir / "candidate_documents.linkedin_stage_1.json").exists())
+
+    def test_merge_candidates_into_snapshot_retargets_cross_company_candidate_and_refreshes_registry(self) -> None:
+        manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            asset_completion_manager=CompanyAssetCompletionManager(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.settings,
+            ),
+        )
+        cross_company_candidate = Candidate(
+            candidate_id="candidate-cross-company",
+            name_en="Alex Transfer",
+            display_name="Alex Transfer",
+            category="employee",
+            target_company="OtherCo",
+            organization="OtherCo",
+            employment_status="current",
+            role="Infrastructure Engineer",
+            linkedin_url="https://www.linkedin.com/in/alex-transfer/",
+        )
+        cross_company_evidence = EvidenceRecord(
+            evidence_id="evidence-cross-company",
+            candidate_id="candidate-cross-company",
+            source_type="excel_upload_row",
+            title="Excel upload row",
+            url="https://www.linkedin.com/in/alex-transfer/",
+            summary="Imported from Excel supplement.",
+            source_dataset="excel_upload_row",
+            source_path="/tmp/alex-transfer.xlsx",
+            metadata={"row_key": "Contacts#1"},
+        )
+
+        result = manager.merge_candidates_into_snapshot(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+            candidates=[cross_company_candidate],
+            evidence=[cross_company_evidence],
+            source_kind="excel_intake",
+            source_summary={"intake_id": "excel-1"},
+            build_artifacts=True,
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["projection_summary"]["retargeted_candidate_count"], 1)
+        snapshot_payload = json.loads(
+            (self.runtime_dir / "company_assets" / "acme" / "20260406T120000" / "candidate_documents.json").read_text()
+        )
+        self.assertEqual(len(snapshot_payload["candidates"]), 1)
+        merged_candidate = snapshot_payload["candidates"][0]
+        self.assertEqual(merged_candidate["target_company"], "Acme")
+        self.assertEqual(merged_candidate["metadata"]["supplement_source_candidate_id"], "candidate-cross-company")
+        registry_row = self.store.get_authoritative_organization_asset_registry(target_company="Acme")
+        self.assertEqual(registry_row["candidate_count"], 1)
+        self.assertEqual(registry_row["snapshot_id"], "20260406T120000")
+
+    def test_sync_project_local_anthropic_package_copies_selected_assets_into_repo_package(self) -> None:
+        manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            asset_completion_manager=CompanyAssetCompletionManager(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.settings,
+            ),
+        )
+        external_root = self.project_root / "external_anthropic"
+        (external_root / "data").mkdir(parents=True, exist_ok=True)
+        workbook_path = external_root / "anthropic_v1.xlsx"
+        workbook_path.write_text("workbook", encoding="utf-8")
+        readme_path = external_root / "README.md"
+        readme_path.write_text("readme", encoding="utf-8")
+        progress_path = external_root / "PROGRESS.md"
+        progress_path.write_text("progress", encoding="utf-8")
+        api_accounts_path = external_root / "api_accounts.json"
+        api_accounts_path.write_text("{}", encoding="utf-8")
+        company_ids_path = external_root / "company_ids.json"
+        company_ids_path.write_text("{}", encoding="utf-8")
+        publications_path = external_root / "data" / "publications_unified.json"
+        publications_path.write_text("[]", encoding="utf-8")
+        scholar_path = external_root / "data" / "scholar_scan_results.json"
+        scholar_path.write_text("{}", encoding="utf-8")
+        investor_path = external_root / "investor_chinese_members_final.json"
+        investor_path.write_text("{}", encoding="utf-8")
+
+        catalog = AssetCatalog(
+            project_root=self.project_root,
+            dev_root=self.project_root.parent,
+            anthropic_root=external_root,
+            anthropic_workbook=workbook_path,
+            anthropic_readme=readme_path,
+            anthropic_progress=progress_path,
+            legacy_api_accounts=api_accounts_path,
+            legacy_company_ids=company_ids_path,
+            anthropic_publications=publications_path,
+            scholar_scan_results=scholar_path,
+            investor_members_json=investor_path,
+            employee_scan_skill=self.project_root / "employee_skill.md",
+            investor_scan_skill=self.project_root / "investor_skill.md",
+            onepager_skill=self.project_root / "onepager_skill.md",
+            anthropic_asset_source="external_legacy",
+            anthropic_project_root=None,
+            anthropic_external_root=external_root,
+        )
+
+        with mock.patch("sourcing_agent.company_asset_supplement.AssetCatalog.discover", return_value=catalog):
+            result = manager.sync_project_local_anthropic_package()
+
+        self.assertEqual(result["status"], "completed")
+        project_package_root = self.project_root / "local_asset_packages" / "anthropic"
+        self.assertTrue((project_package_root / "anthropic_v1.xlsx").exists())
+        self.assertTrue((project_package_root / "data" / "publications_unified.json").exists())
+        self.assertTrue((project_package_root / "package_manifest.json").exists())
+
     def test_repair_current_roster_registry_aliases_reuses_historical_harvest_profiles(self) -> None:
         manager = CompanyAssetSupplementManager(
             runtime_dir=self.runtime_dir,
@@ -522,16 +686,16 @@ class CompanyAssetSupplementTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["repaired_count"], 1)
-        registry_by_raw = self.store.get_linkedin_profile_registry(raw_member_url)
+        registry_by_raw = self.store.repos.linkedin_profile_registry.get(raw_member_url)
         assert registry_by_raw is not None
         self.assertEqual(registry_by_raw["status"], "fetched")
         self.assertEqual(registry_by_raw["profile_url"], vanity_url)
         self.assertEqual(registry_by_raw["raw_linkedin_url"], raw_member_url)
         self.assertEqual(registry_by_raw["sanity_linkedin_url"], vanity_url)
-        self.assertEqual(Path(registry_by_raw["last_raw_path"]), raw_profile_path)
+        self.assertEqual(Path(registry_by_raw["last_raw_path"]).resolve(), raw_profile_path.resolve())
         self.assertIn(raw_member_url, registry_by_raw.get("alias_urls") or [])
         self.assertIn(vanity_url, registry_by_raw.get("alias_urls") or [])
-        registry_by_vanity = self.store.get_linkedin_profile_registry(vanity_url)
+        registry_by_vanity = self.store.repos.linkedin_profile_registry.get(vanity_url)
         assert registry_by_vanity is not None
         self.assertEqual(registry_by_vanity["profile_url"], vanity_url)
         self.assertTrue(Path(result["summary_path"]).exists())

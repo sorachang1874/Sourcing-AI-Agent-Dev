@@ -1,0 +1,92 @@
+{
+  "assertions": [],
+  "candidate_packets": [],
+  "canonical_writes": [],
+  "capability": {
+    "proof_scope": "offline_synthetic_only",
+    "verdict": "fixture_contract_validated",
+    "x_native_access_proven": false
+  },
+  "claims": {
+    "current_employment_guaranteed": false,
+    "exhaustive": false,
+    "outreach_permission": false,
+    "researcher_mapping_authorized": false
+  },
+  "errors": [],
+  "execution_mode": "fixture_only",
+  "identity_link_proposals": [],
+  "observations": [
+    {
+      "author_handle": "fixture_openai_official",
+      "authored_at": "2026-07-11T12:00:00.000Z",
+      "canonical_url": "https://posts.invalid/fixture_openai_official/status/xpost_fixture_001",
+      "excerpt": "Synthetic capability evidence 001 for xpost_fixture_001 about public technical model-training work.",
+      "full_body_stored": false,
+      "observation_id": "xprobe_obs_fixture_001",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "platform_object_id": "xpost_fixture_001",
+      "platform_user_id": "xuid_fixture_official_openai"
+    },
+    {
+      "author_handle": "fixture_openai_official",
+      "authored_at": "2026-07-12T12:00:00.000Z",
+      "canonical_url": "https://posts.invalid/fixture_openai_official/status/xpost_fixture_002",
+      "excerpt": "Synthetic capability evidence 002 for xpost_fixture_002 about public technical model-training work.",
+      "full_body_stored": false,
+      "observation_id": "xprobe_obs_fixture_002",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "platform_object_id": "xpost_fixture_002",
+      "platform_user_id": "xuid_fixture_official_openai"
+    },
+    {
+      "author_handle": "fixture_openai_official",
+      "authored_at": "2026-07-13T12:00:00.000Z",
+      "canonical_url": "https://posts.invalid/fixture_openai_official/status/xpost_fixture_003",
+      "excerpt": "Synthetic capability evidence 003 for xpost_fixture_003 about public technical model-training work.",
+      "full_body_stored": false,
+      "observation_id": "xprobe_obs_fixture_003",
+      "observed_at": "2026-07-14T00:00:00.000Z",
+      "platform_object_id": "xpost_fixture_003",
+      "platform_user_id": "xuid_fixture_official_openai"
+    }
+  ],
+  "probe_id": "xprobe_fixture_openai_official_v1",
+  "provenance": {
+    "access_mode": "fixture",
+    "model_id": null,
+    "prompt_version": "fixture-capability-v1",
+    "provider_id": "offline_fixture",
+    "provider_request_id": null,
+    "raw_response_sha256": "b4073d48187f563ebe09e3a0feea08be0e6d087ec3eb3e0d5acf94ff98e18349",
+    "request_sha256": "3b68114ca47ad83c7887325aa302c1dbabf0a9071962fc86f93b153c8815da95",
+    "tool_id": null
+  },
+  "request_sha256": "3b68114ca47ad83c7887325aa302c1dbabf0a9071962fc86f93b153c8815da95",
+  "retention": {
+    "class": "synthetic_fixture_only",
+    "delete_after": null,
+    "deletion_status": "not_applicable_synthetic",
+    "full_body_stored": false
+  },
+  "run": {
+    "completed_at": "2026-07-14T00:00:00.000Z",
+    "run_id": "xprobe_run_fixture_openai_official_v1",
+    "started_at": "2026-07-14T00:00:00.000Z",
+    "status": "completed"
+  },
+  "schema_version": "x.grok.capability_probe.result.v1",
+  "task": {
+    "status": "succeeded",
+    "stop_reason": "fixture_complete",
+    "task_id": "xprobe_task_fixture_openai_official_v1"
+  },
+  "usage": {
+    "cost_usd": 0,
+    "elapsed_ms": 0,
+    "executions": 0,
+    "external_calls": 0,
+    "observations": 3,
+    "pages": 0
+  }
+}

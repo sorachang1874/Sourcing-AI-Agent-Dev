@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "behavior_fixture": "target_candidate_public_web_search",
+    "purpose": "Scripted target-candidate Public Web Search fixture that returns candidate-specific profile links so manual E2E covers search, adjudication, materialization, and export with non-empty public_web_summary fields.",
+    "real_api_calls_required": false
+  },
+  "search": {
+    "rules": [
+      {
+        "name": "target_candidate_public_web_candidate_links",
+        "match": {
+          "query_contains": ["homepage"],
+          "query_not_contains": ["linkedin.com/in", "linkedin.com/company"]
+        },
+        "poll_pending_rounds": 1,
+        "poll_sleep_seconds": 0.3,
+        "result_templates": [
+          {
+            "title": "{candidate_name} - personal homepage",
+            "url": "https://{candidate_slug}.example.dev/",
+            "snippet": "{candidate_name} works on AI systems and product engineering at {company}. Personal homepage with projects, publications, and contact context.",
+            "metadata": {
+              "scripted_surface": "personal_homepage",
+              "candidate_name": "{candidate_name}",
+              "company": "{company}"
+            }
+          },
+          {
+            "title": "{candidate_name} - GitHub",
+            "url": "https://github.com/{candidate_slug}",
+            "snippet": "{candidate_name} builds AI tooling and developer infrastructure related to {company}.",
+            "metadata": {
+              "scripted_surface": "github_profile",
+              "candidate_name": "{candidate_name}",
+              "company": "{company}"
+            }
+          },
+          {
+            "title": "{candidate_name} - Google Scholar",
+            "url": "https://scholar.google.com/citations?user={candidate_slug}",
+            "snippet": "{candidate_name} publication and research profile with AI systems work at {company}.",
+            "metadata": {
+              "scripted_surface": "scholar_profile",
+              "candidate_name": "{candidate_name}",
+              "company": "{company}"
+            }
+          }
+        ],
+        "message": "Scripted target-candidate Public Web Search returned candidate-specific profile links."
+      },
+      {
+        "name": "target_candidate_public_web_candidate_profile_fallback",
+        "match": {
+          "query_contains": ["site:github.com"]
+        },
+        "result_templates": [
+          {
+            "title": "{candidate_name} - GitHub",
+            "url": "https://github.com/{candidate_slug}",
+            "snippet": "{candidate_name} engineering and AI projects. Current company context: {company}.",
+            "metadata": {
+              "scripted_surface": "github_profile",
+              "candidate_name": "{candidate_name}",
+              "company": "{company}"
+            }
+          }
+        ],
+        "message": "Scripted target-candidate Public Web Search returned a GitHub fallback profile."
+      }
+    ]
+  }
+}

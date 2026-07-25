@@ -3,14 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .execution_preferences import (
-    infer_execution_preferences_from_text,
-    normalize_execution_preferences,
-)
+from .execution_preferences import infer_execution_preferences_from_text, normalize_execution_preferences
 from .model_provider import ModelClient
 from .query_intent_rewrite import interpret_query_intent_rewrite
 from .request_normalization import materialize_request_payload
-
 
 _SOURCE_FAMILY_ALIASES: dict[str, str] = {
     "openreview": "OpenReview",
@@ -30,15 +26,14 @@ _SOURCE_FAMILY_ALIASES: dict[str, str] = {
 _ALLOWED_DECISION_FIELDS = {
     "confirmed_company_scope",
     "extra_source_families",
-    "allow_high_cost_sources",
     "precision_recall_bias",
     "acquisition_strategy_override",
     "use_company_employees_lane",
-    "keyword_priority_only",
     "former_keyword_queries_only",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
-    "large_org_keyword_probe_mode",
+    "provider_people_search_pages",
+    "provider_people_search_scale_chunk_pages",
     "force_fresh_run",
     "reuse_existing_roster",
     "run_former_search_seed",
@@ -48,18 +43,18 @@ _DECISION_FIELD_ALIASES = {
     "confirmed_scope": "confirmed_company_scope",
     "scope": "confirmed_company_scope",
     "source_families": "extra_source_families",
-    "high_cost_sources_approved": "allow_high_cost_sources",
     "force_company_employees": "use_company_employees_lane",
     "allow_company_employee_api": "use_company_employees_lane",
-    "keyword_first": "keyword_priority_only",
-    "keyword_priority": "keyword_priority_only",
     "former_search_queries_only": "former_keyword_queries_only",
     "former_keyword_only": "former_keyword_queries_only",
     "people_search_query_strategy": "provider_people_search_query_strategy",
     "provider_people_query_strategy": "provider_people_search_query_strategy",
     "people_search_max_queries": "provider_people_search_max_queries",
     "provider_people_query_max": "provider_people_search_max_queries",
-    "large_org_keyword_probe": "large_org_keyword_probe_mode",
+    "people_search_pages": "provider_people_search_pages",
+    "provider_people_query_pages": "provider_people_search_pages",
+    "people_search_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
+    "provider_people_query_scale_chunk_pages": "provider_people_search_scale_chunk_pages",
     "require_fresh_snapshot": "force_fresh_run",
     "disable_cached_roster_fallback": "force_fresh_run",
     "reuse_cached_roster": "reuse_existing_roster",

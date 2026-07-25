@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from .confidence_policy import DEFAULT_HIGH_THRESHOLD, DEFAULT_MEDIUM_THRESHOLD
 from .domain import (
-    Candidate,
     FACET_ALIAS_MAP,
     ROLE_BUCKET_ALIAS_MAP,
+    Candidate,
     JobRequest,
     candidate_profile_signal_text,
     candidate_searchable_text,
@@ -22,7 +22,6 @@ from .domain import (
 from .query_signal_knowledge import lookup_scope_signal
 from .request_normalization import resolve_request_intent_view
 
-
 SEARCH_FIELDS = {
     "role": 5,
     "team": 4,
@@ -35,6 +34,13 @@ SEARCH_FIELDS = {
     "notes": 3,
     "ethnicity_background": 1,
     "current_destination": 1,
+    # Scoped-search source provenance: when a candidate was fetched from a profile-search
+    # shard for keyword X, the keyword is recorded in `metadata.matched_keywords` /
+    # `metadata.source_matches[*].matched_on`. Recall must consider this signal so the
+    # frontend filter doesn't silently hide candidates the workflow already paid to fetch
+    # for that exact keyword. Lower weight than role/team because the match is a provenance
+    # claim rather than text-corroborated evidence.
+    "source_match_keywords": 3,
 }
 
 ORGANIZATION_SEARCH_FIELDS = {
@@ -74,6 +80,7 @@ REQUEST_MEMBERSHIP_CATEGORIES = {
     "lead",
     "non_member",
 }
+DEFAULT_TECHNICAL_POPULATION_CATEGORIES = {"researcher", "engineer"}
 
 KEYWORD_ALIAS_MAP = {
     "基础设施": ["infrastructure", "infra", "platform", "distributed systems", "systems"],
@@ -315,6 +322,7 @@ def _candidate_blob(candidate: Candidate) -> str:
             candidate_searchable_text(candidate),
             " ".join(derive_candidate_facets(candidate)),
             derive_candidate_role_bucket(candidate),
+            _candidate_source_match_keyword_text(candidate),
         ]
     )
 
@@ -441,7 +449,14 @@ def candidate_matches_structured_filters(
         if involvement_label == "no":
             return False
 
-    if effective_must_have_facets and not all(_normalize(facet) in candidate_facets for facet in effective_must_have_facets):
+    enforceable_must_have_facets = [
+        normalize_requested_facet(facet)
+        for facet in effective_must_have_facets
+        if normalize_requested_facet(facet) in FACET_ALIAS_MAP
+    ]
+    if enforceable_must_have_facets and not all(
+        _normalize(facet) in candidate_facets for facet in enforceable_must_have_facets
+    ):
         return False
     if effective_role_buckets and primary_role_bucket_mode == "hard":
         candidate_role_bucket = _normalize(derive_candidate_role_bucket(candidate))
@@ -506,7 +521,42 @@ def _requested_category_filters(
                 continue
             seen_role_like.add(normalized_role_like)
             requested_role_categories.append(normalized_role_like)
+    if _default_technical_population_categories_are_soft(request, intent_view=intent_view):
+        membership_categories = ["employee", "former_employee"]
+        requested_role_categories = []
     return membership_categories, requested_role_categories
+
+
+def _default_technical_population_categories_are_soft(
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any],
+) -> bool:
+    """Keep default technical-population hints from becoming hard retrieval gates.
+
+    Normalization intentionally uses categories=['researcher', 'engineer'] for broad
+    technical-direction acquisition. That is useful for provider function targeting,
+    but retrieval should still return clear members such as "Head of Infrastructure"
+    when the user did not explicitly ask for researcher-only or engineer-only.
+    """
+
+    normalized_categories = {
+        _normalize(item)
+        for item in list(intent_view.get("categories") or request.categories or [])
+        if _normalize(item)
+    }
+    if not normalized_categories or not normalized_categories.issubset(DEFAULT_TECHNICAL_POPULATION_CATEGORIES):
+        return False
+    role_targeting = dict(dict(intent_view.get("semantic_brief") or {}).get("role_targeting") or {})
+    if list(role_targeting.get("explicit_text_role_buckets") or []):
+        return False
+    if list(intent_view.get("must_have_primary_role_buckets") or request.must_have_primary_role_buckets or []):
+        return False
+    return str(role_targeting.get("provenance") or "").strip().lower() in {
+        "structured",
+        "default_technical",
+        "default_technical_from_weak_structured_singleton",
+    }
 
 
 def _role_text_supports_bucket(role_text: str, bucket: str) -> bool:
@@ -582,7 +632,46 @@ def _candidate_field_value(candidate: Candidate, field_name: str) -> str:
         return _candidate_organization_scope_text(candidate)
     if field_name == "acquisition_scope":
         return _candidate_acquisition_scope_text(candidate)
+    if field_name == "source_match_keywords":
+        return _candidate_source_match_keyword_text(candidate)
     return str(getattr(candidate, field_name) or "").strip()
+
+
+def _candidate_source_match_keyword_text(candidate: Candidate) -> str:
+    """Concatenate provenance keywords from `metadata.matched_keywords` / `source_matches`.
+
+    These are recorded by scoped-search sharding when a candidate is fetched from a
+    profile-search shard for keyword X. They are how recall knows the candidate matched
+    that keyword without forcing every shard's seed query into the candidate's text fields.
+    """
+
+    metadata = dict(candidate.metadata or {})
+    values: list[str] = []
+    for item in list(metadata.get("matched_keywords") or []):
+        text = str(item or "").strip()
+        if text:
+            values.append(text)
+    for record in list(metadata.get("source_matches") or []):
+        if not isinstance(record, dict):
+            continue
+        text = str(record.get("matched_on") or record.get("keyword") or "").strip()
+        if text:
+            values.append(text)
+        for keyword in list(record.get("matched_keywords") or []):
+            text = str(keyword or "").strip()
+            if text:
+                values.append(text)
+    if not values:
+        return ""
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        lowered = value.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        deduped.append(value)
+    return " | ".join(deduped)
 
 
 def _normalize(value: str) -> str:
@@ -622,6 +711,12 @@ def _score_keyword_pool(
                 continue
             matched_variant = next((item for item in variants if _normalize(item) in normalized_value), "")
             if not matched_variant:
+                continue
+            if _should_skip_keyword_match(
+                keyword=keyword,
+                matched_variant=matched_variant,
+                field_name=field_name,
+            ):
                 continue
             exact_match = _normalize(matched_variant) == _normalize(keyword)
             effective_weight = weight if exact_match else round(weight * 0.65, 2)
@@ -669,6 +764,15 @@ def _score_keyword_pool(
             matched_fields.append(supporting)
             score += supporting_weight
     return score, matched_fields
+
+
+def _should_skip_keyword_match(*, keyword: str, matched_variant: str, field_name: str) -> bool:
+    if field_name != "derived_facets":
+        return False
+    normalized_keyword = str(keyword or "").strip()
+    if not re.fullmatch(r"[A-Z]{2,3}", normalized_keyword):
+        return False
+    return _normalize(matched_variant) == _normalize(normalized_keyword)
 
 
 def _keyword_variants(keyword: str, criteria_patterns: list[dict[str, Any]]) -> list[str]:

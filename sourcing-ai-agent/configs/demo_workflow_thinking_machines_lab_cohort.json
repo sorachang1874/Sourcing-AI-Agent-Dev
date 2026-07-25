@@ -1,0 +1,30 @@
+{
+  "raw_user_request": "Map Thinking Machines Lab researchers and product managers across both current and former employment, with pre-training and model-development evidence prioritized for review.",
+  "target_company": "Thinking Machines Lab",
+  "cohort_selection": {
+    "schema_version": "cohort_selection.v1",
+    "role_bucket_ids": [
+      "research",
+      "product_management"
+    ],
+    "employment_statuses": [
+      "current",
+      "former"
+    ],
+    "role_match": "any",
+    "source": "user_explicit"
+  },
+  "keywords": [
+    "pre-training",
+    "model development",
+    "multimodal"
+  ],
+  "organization_keywords": [
+    "Thinking Machines Lab"
+  ],
+  "top_k": 8,
+  "slug_resolution_limit": 8,
+  "profile_detail_limit": 5,
+  "publication_scan_limit": 6,
+  "publication_lead_limit": 8
+}

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sourcing-ai-agent.invalid/contracts/x.grok.adaptive_recall_wave.campaign_bridge.v1.schema.json",
+  "title": "Adaptive Grok recall-wave blocked campaign bridge v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "campaign_admission",
+    "reason_code",
+    "source_payload_status",
+    "source_payload_binding",
+    "source_binding",
+    "wave_input",
+    "authority"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "x.grok.adaptive_recall_wave.campaign_bridge.v1"
+    },
+    "campaign_admission": {
+      "const": "blocked"
+    },
+    "reason_code": {
+      "const": "native_x_source_payload_not_replayable"
+    },
+    "source_payload_status": {
+      "const": "replay_unavailable"
+    },
+    "source_payload_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captured_payload_count",
+        "captured_payload_sha256s"
+      ],
+      "properties": {
+        "captured_payload_count": {
+          "const": 0
+        },
+        "captured_payload_sha256s": {
+          "const": []
+        }
+      }
+    },
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "request_id",
+        "execution_mode",
+        "terminal_status",
+        "session_proof_status",
+        "effective_model_id",
+        "operator_request_artifact_sha256",
+        "operator_request_canonical_sha256",
+        "operator_receipt_artifact_sha256",
+        "sanitized_result_artifact_sha256",
+        "session_transcript_artifact_sha256",
+        "bridge_schema_sha256"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^grok_wave_live_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^xwave_req_[0-9a-f]{32}$"
+        },
+        "execution_mode": {
+          "const": "live"
+        },
+        "terminal_status": {
+          "const": "completed"
+        },
+        "session_proof_status": {
+          "const": "verified"
+        },
+        "effective_model_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "operator_request_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "operator_request_canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "operator_receipt_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sanitized_result_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "session_transcript_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bridge_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "wave_input": {
+      "type": "null"
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_write_authorized",
+        "canonical_identity_write_authorized",
+        "live_provider_call_authorized",
+        "outreach_authorized",
+        "product_write_authorized",
+        "source_bound_evidence_claim_authorized"
+      ],
+      "properties": {
+        "campaign_write_authorized": {
+          "const": false
+        },
+        "canonical_identity_write_authorized": {
+          "const": false
+        },
+        "live_provider_call_authorized": {
+          "const": false
+        },
+        "outreach_authorized": {
+          "const": false
+        },
+        "product_write_authorized": {
+          "const": false
+        },
+        "source_bound_evidence_claim_authorized": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

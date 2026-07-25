@@ -1,40 +1,60 @@
 from __future__ import annotations
 
 from .domain import AcquisitionStrategyPlan, JobRequest, PublicationCoveragePlan, PublicationSourcePlan
-from .request_normalization import resolve_request_intent_view
+from .query_signal_knowledge import naturalize_search_query_terms
+from .request_normalization import build_effective_job_request
 
 
 def compile_publication_coverage_plan(
     request: JobRequest,
     acquisition_strategy: AcquisitionStrategyPlan,
 ) -> PublicationCoveragePlan:
-    intent_view = resolve_request_intent_view(request)
+    effective_request, intent_view = build_effective_job_request(request)
+    topic_terms = naturalize_search_query_terms(
+        list(effective_request.keywords or [])
+        + list(effective_request.must_have_keywords or [])
+        + list(effective_request.must_have_facets or [])
+    )
+    scope_terms = naturalize_search_query_terms(
+        list(effective_request.organization_keywords or [])
+        + list(acquisition_strategy.company_scope[1:] or [])
+        + [str(effective_request.target_company or request.target_company or "").strip()]
+    )
     text = " ".join(
         [
-            str(request.raw_user_request or ""),
-            str(request.query or ""),
-            " ".join(list(intent_view.get("organization_keywords") or [])),
-            " ".join(list(intent_view.get("keywords") or [])),
-            " ".join(list(intent_view.get("must_have_keywords") or [])),
-            " ".join(list(intent_view.get("must_have_facets") or [])),
+            str(effective_request.raw_user_request or ""),
+            str(effective_request.query or ""),
+            " ".join(scope_terms),
+            " ".join(topic_terms),
         ]
     ).lower()
-    company = str(intent_view.get("target_company") or request.target_company or "").strip() or "target company"
-    scope_terms = _dedupe(list(intent_view.get("organization_keywords") or []) + list(acquisition_strategy.company_scope[1:] or [company]))
+    company = str(effective_request.target_company or request.target_company or "").strip() or "target company"
+    if not scope_terms:
+        scope_terms = [company]
+    directional_scope_terms = scope_terms[:2]
+    directional_topic_terms = topic_terms[:3]
+    research_query_hints = _dedupe(
+        [f"{term} research" for term in directional_scope_terms]
+        + [f"{company} {topic} research" for topic in directional_topic_terms]
+    )
+    publication_query_hints = _dedupe(
+        [f"{term} arXiv" for term in directional_scope_terms]
+        + [f"{company} {topic} paper" for topic in directional_topic_terms]
+    )
 
     source_families = [
         PublicationSourcePlan(
             family="official_research",
             priority="high",
             rationale="Technical sourcing should always inspect official research outputs before relying on secondary summaries.",
-            query_hints=[f"{term} research" for term in scope_terms[:2]],
+            query_hints=research_query_hints[:4],
             extraction_mode="deterministic_then_llm_validate",
         ),
         PublicationSourcePlan(
             family="publication_platforms",
             priority="high",
             rationale="arXiv / OpenReview style platforms provide the most structured author evidence.",
-            query_hints=[f"{term} arXiv" for term in scope_terms[:2]],
+            query_hints=publication_query_hints[:4],
             extraction_mode="deterministic",
         ),
     ]
@@ -45,7 +65,10 @@ def compile_publication_coverage_plan(
                 family="official_engineering",
                 priority="high",
                 rationale="Engineering blog posts and technical writeups often mention contributors who never appear on research papers.",
-                query_hints=[f"{term} engineering" for term in scope_terms[:2]],
+                query_hints=_dedupe(
+                    [f"{term} engineering" for term in directional_scope_terms]
+                    + [f"{company} {topic} engineering" for topic in directional_topic_terms]
+                )[:4],
                 extraction_mode="llm_extract_contributors",
             )
         )
@@ -55,7 +78,11 @@ def compile_publication_coverage_plan(
             family="official_blog_and_docs",
             priority="medium",
             rationale="Blog and docs pages widen coverage beyond formal publications and catch product or applied teams.",
-            query_hints=[f"{term} blog" for term in scope_terms[:2]] + [f"{term} docs" for term in scope_terms[:1]],
+            query_hints=_dedupe(
+                [f"{term} blog" for term in directional_scope_terms]
+                + [f"{term} docs" for term in directional_scope_terms[:1]]
+                + [f"{company} {topic} blog" for topic in directional_topic_terms]
+            )[:5],
             extraction_mode="llm_extract_contributors",
         )
     )
@@ -75,6 +102,8 @@ def compile_publication_coverage_plan(
         [f"{company} publication"]
         + [f"{term} author acknowledgement" for term in scope_terms[:3]]
         + [f"{term} contributor" for term in scope_terms[:3]]
+        + [f"{company} {term} research" for term in topic_terms[:3]]
+        + [f"{company} {term} contributor" for term in topic_terms[:3]]
     )
     extraction_strategy = [
         "Use deterministic parsers for structured author lists and metadata.",
