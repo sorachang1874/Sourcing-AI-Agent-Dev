@@ -12,20 +12,28 @@ The load-bearing pins, in ruling order:
 * OQ6 — ``stage="promote"`` is rejected with the explicit scope-out reason (no
   recovery-tick command-owner seat exists to attach a promote intent to).
 * OQ5 / R-019 (RESIDUAL_LEDGER.md:38, `pending remediation`, call-site ceiling
-  24) — a compensation intent can never mint a NEW dispatch identity: the
-  ``target_command_owner`` must be an EXISTING recovery-tick seat and the
-  ``owner_idempotency_key`` must live in that owner's own command-type
-  namespace. Compensation-authored keys (a ``compensation*`` namespace, the
-  schema id, or a key embedding the intent's own ``intent_id``) are rejected.
-* OQ7 — the attempt ladder is bounded at 3 and a spent intent MUST already carry
-  ``compensation_exhausted_needs_human``; a silent re-loop is inexpressible.
+  24) — the ``target_command_owner`` must be an EXISTING recovery-tick seat, a
+  command type may belong to seats of exactly ONE stage, and the
+  ``owner_idempotency_key`` must match that owner's real key GRAMMAR (exact
+  segment shape). Compensation-authored keys (a ``compensation*`` namespace, the
+  schema id, or a key embedding the intent's own ``intent_id``) are rejected, and
+  so is every namespace-conformant but free-form suffix.
+  **Stated honestly (D-C9):** a grammar match is a SHAPE check, not a derivation
+  check. Proving a key was actually computed by an owner needs the store, so it
+  is the S3 gate ``V_KEY_store_derived`` / ``derivation_verified`` — pinned here
+  as a contract surface, not as a claim this offline module can make.
+* OQ7 — the attempt ladder is bounded at 3, a spent intent may never carry a
+  NULL terminal status (a silent re-loop is inexpressible), and the §4 ladder's
+  output always round-trips through ``validate_v_attempt`` so a spent intent can
+  still be CLOSED.
 
 Companion oracle: tests/test_recovery_tick_characterization.py (the recovery-tick
-floor, 18/18) stays green and UNTOUCHED — S1 wires nothing into the tick. The
-seat table is cross-checked against
-``recovery_drain_registry.DEFAULT_RECOVERY_DRAIN_BINDINGS`` here so it cannot
-drift from the real drain bindings. Pure/offline: no store, no model client, no
-orchestrator import.
+floor, 18/18) stays green and UNTOUCHED — S1 wires nothing into the tick. All 18
+seat rows are cross-checked against that oracle's ``CHARACTERIZED_PHASE_SEQUENCE``
+(phase + owner label), and the 9 registry-bound rows additionally against
+``recovery_drain_registry.DEFAULT_RECOVERY_DRAIN_BINDINGS``, so the seat table
+cannot drift from either source of truth. The contract MODULE stays pure/offline
+(stdlib only); those two cross-checks are lazy imports inside their test methods.
 """
 
 from __future__ import annotations
@@ -34,12 +42,15 @@ import unittest
 from typing import Any
 
 from sourcing_agent.pipeline_compensation_contract import (
+    ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND,
     ATTEMPT_MAX_CEILING,
     BACKOFF_OWNER_RECOVERY_TICK_POLL,
     COMPENSABLE_STAGE_VALUES,
     CREATED_BY_PHASE_COMPENSATION_AUDIT,
     DEFAULT_COMPENSATION_SEATS,
     GAP_DETECTED_BY_COMPLETENESS_AUDIT,
+    GAP_SIGNAL_VALUES,
+    OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE,
     REPLAY_OUTCOME_ALREADY_SUCCEEDED,
     REPLAY_OUTCOME_COMPENSATED,
     REPLAY_OUTCOME_GAP_ABSENT,
@@ -63,9 +74,11 @@ from sourcing_agent.pipeline_compensation_contract import (
     TERMINAL_STATUS_SUPERSEDED,
     VALIDATOR_IDS,
     VALIDATOR_RESULT_STATUS_PASS,
+    VALIDATOR_RESULT_STATUS_SKIPPED,
     VALIDATOR_V_ATTEMPT,
     VALIDATOR_V_DELTA,
     VALIDATOR_V_KEY,
+    VALIDATOR_V_KEY_DERIVATION,
     VALIDATOR_V_LINEAGE,
     VALIDATOR_V_SEAT,
     VALIDATOR_V_SIGNAL,
@@ -76,6 +89,7 @@ from sourcing_agent.pipeline_compensation_contract import (
     SourceLineage,
     build_compensation_escalation,
     build_compensation_seat_index,
+    describe_owner_key_grammars,
     normalize_compensation_escalation,
     normalize_compensation_intent,
     resolve_compensation_outcome,
@@ -83,6 +97,7 @@ from sourcing_agent.pipeline_compensation_contract import (
     validate_v_attempt,
     validate_v_delta,
     validate_v_key,
+    validate_v_key_derivation,
     validate_v_lineage,
     validate_v_seat,
     validate_v_signal,
@@ -92,6 +107,16 @@ from sourcing_agent.pipeline_compensation_contract import (
 _HEX = "ab" * 32
 _SHARD_ID = "profile_search|former|Google Multimodal Researcher|us"
 _SEAT_INDEX = build_compensation_seat_index()
+
+# Real owner-key shapes (durable_runtime `command_id_for` = "cmd_" + sha1[:24];
+# every `*_idempotency_key` builder = command_type + ":" + sha1[:24]; the
+# start-v2 receipt digest is a full sha256).
+_COMMAND_ID = "cmd_3d1f0a7c9b2e4856ad01c2f4"
+_SCOPE_HASH = "9f2c1a55d0b34e6f7a81be04"
+_RECEIPT_DIGEST = "cd" * 32
+_ACQUIRE_KEY = f"acquisition.probe.submit:acquisition_run:ar-77:parent:{_COMMAND_ID}"
+_FETCH_KEY = f"linkedin.profile_refill.submit_batch:{_SCOPE_HASH}"
+_MATERIALIZE_KEY = f"snapshot.compaction.run:{_SCOPE_HASH}"
 
 
 def _lineage(**overrides: Any) -> dict[str, Any]:
@@ -136,7 +161,7 @@ def _acquire_intent(**overrides: Any) -> dict[str, Any]:
         },
         "compensation_action": {
             "target_command_owner": "acquisition_probe_command_owner",
-            "owner_idempotency_key": "acquisition.probe.submit:acquisition_run:ar-77:parent:cmd-42",
+            "owner_idempotency_key": _ACQUIRE_KEY,
             "delta_only": True,
         },
         "attempt": {
@@ -175,7 +200,7 @@ def _fetch_intent(**overrides: Any) -> dict[str, Any]:
         },
         "compensation_action": {
             "target_command_owner": "profile_refill_command_owner",
-            "owner_idempotency_key": "linkedin.profile_refill.submit_batch:job-2026-07-24-0001:wave-3",
+            "owner_idempotency_key": _FETCH_KEY,
             "delta_only": True,
         },
         "attempt": {
@@ -213,7 +238,7 @@ def _materialize_intent(**overrides: Any) -> dict[str, Any]:
         },
         "compensation_action": {
             "target_command_owner": "snapshot_full_materialization",
-            "owner_idempotency_key": "snapshot.compaction.run:9f2c1a55d0b34e6f7a81",
+            "owner_idempotency_key": _MATERIALIZE_KEY,
             "delta_only": True,
         },
         "attempt": {
@@ -365,11 +390,68 @@ class CompensationIntentSchemaTest(unittest.TestCase):
             normalize_compensation_intent(payload)
 
     def test_durable_key_is_the_oq3_identity(self) -> None:
+        # OQ3 keys on (stage, sub_unit_id, source_lineage) and source_lineage has
+        # FOUR fields — the key must carry all of them (D-C12).
         intent = normalize_compensation_intent(_acquire_intent())
         self.assertEqual(
             intent.durable_key(),
-            (STAGE_ACQUIRE, _SHARD_ID, "op-2026-07-24-0001", "job-2026-07-24-0001"),
+            (STAGE_ACQUIRE, _SHARD_ID, "op-2026-07-24-0001", "job-2026-07-24-0001", "genkey-tml-0007", ""),
         )
+
+    def test_durable_key_distinguishes_two_materialization_generations(self) -> None:
+        # REGRESSION (D-C12): the earlier 4-tuple dropped
+        # materialization_generation_key + refill_plan_division_id, so two gaps
+        # of the same sub-unit from different generations collided and the S3
+        # dedup swallowed the second one as a duplicate — it was never compensated.
+        first = normalize_compensation_intent(
+            _materialize_intent(
+                sub_unit={
+                    "kind": SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT,
+                    "sub_unit_id": "snapshot-2026-07-24-0009",
+                    "source_lineage": _lineage(materialization_generation_key="gen-A"),
+                }
+            )
+        )
+        second = normalize_compensation_intent(
+            _materialize_intent(
+                sub_unit={
+                    "kind": SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT,
+                    "sub_unit_id": "snapshot-2026-07-24-0009",
+                    "source_lineage": _lineage(materialization_generation_key="gen-B"),
+                }
+            )
+        )
+        self.assertNotEqual(first.durable_key(), second.durable_key())
+        self.assertEqual(len({first.durable_key(), second.durable_key()}), 2)
+
+    def test_durable_key_distinguishes_two_refill_plan_divisions(self) -> None:
+        first = normalize_compensation_intent(
+            _fetch_intent(
+                sub_unit={
+                    "kind": SUB_UNIT_KIND_PROFILE_REGISTRY_ITEM,
+                    "sub_unit_id": "linkedin.com/in/example-person",
+                    "source_lineage": _lineage(refill_plan_division_id="div-0003"),
+                }
+            )
+        )
+        second = normalize_compensation_intent(
+            _fetch_intent(
+                sub_unit={
+                    "kind": SUB_UNIT_KIND_PROFILE_REGISTRY_ITEM,
+                    "sub_unit_id": "linkedin.com/in/example-person",
+                    "source_lineage": _lineage(refill_plan_division_id="div-0004"),
+                }
+            )
+        )
+        self.assertNotEqual(first.durable_key(), second.durable_key())
+
+    def test_durable_key_carries_every_source_lineage_field(self) -> None:
+        intent = normalize_compensation_intent(_fetch_intent())
+        lineage = intent.sub_unit.source_lineage
+        key = intent.durable_key()
+        for field_name, value in lineage.to_payload().items():
+            with self.subTest(lineage_field=field_name):
+                self.assertIn(value, key)
 
 
 class CompensationSeatTableTest(unittest.TestCase):
@@ -387,6 +469,21 @@ class CompensationSeatTableTest(unittest.TestCase):
         self.assertEqual([seat.phase for seat in DEFAULT_COMPENSATION_SEATS if seat.stage == STAGE_PROMOTE], [])
         self.assertNotIn(STAGE_PROMOTE, {seat.stage for seat in DEFAULT_COMPENSATION_SEATS})
 
+    def test_every_seat_is_a_phase_the_characterized_tick_already_runs(self) -> None:
+        # THE drift guard for all 18 rows (the earlier cut checked only the 9
+        # registry-bound ones, so a rename of e.g. `board_visible_apply` in the
+        # tick would leave a dead seat with zero test signal — and V_SEAT would
+        # keep accepting a phase the tick no longer runs). The tick oracle is the
+        # source of truth regression_matrix.py already routes this module to.
+        from tests.test_recovery_tick_characterization import CHARACTERIZED_PHASE_SEQUENCE
+
+        characterized = dict(CHARACTERIZED_PHASE_SEQUENCE)
+        self.assertEqual(len(DEFAULT_COMPENSATION_SEATS), 18)
+        for seat in DEFAULT_COMPENSATION_SEATS:
+            with self.subTest(phase=seat.phase):
+                self.assertIn(seat.phase, characterized)
+                self.assertEqual(seat.owner_label, characterized[seat.phase])
+
     def test_registry_bound_seats_match_the_real_drain_bindings(self) -> None:
         # Drift guard: the seat table mirrors recovery_drain_registry rather than
         # importing it (a pure contract module must not pull durable_runtime in).
@@ -399,6 +496,83 @@ class CompensationSeatTableTest(unittest.TestCase):
             with self.subTest(phase=seat.phase):
                 self.assertIn(seat.phase, bindings)
                 self.assertEqual(seat.owner_label, bindings[seat.phase])
+        # The other 9 are literal tick phases with no drain-registry binding;
+        # they are covered by the oracle cross-check above, not by this one.
+        unbound = {seat.phase for seat in DEFAULT_COMPENSATION_SEATS if not seat.registry_bound}
+        self.assertEqual(len(unbound), 9)
+        self.assertEqual(unbound & set(bindings), set())
+
+    def test_no_command_type_spans_two_stages(self) -> None:
+        # REGRESSION (D-C11): `legacy_materialization_adapter` (stage=materialize)
+        # used to carry `linkedin.discovery_query.run`, which is ALSO the sole
+        # command type of the acquire-stage `operation_native_discovery_activity_owner`
+        # seat. V_SEAT compares the intent's stage against the SEAT's declared
+        # stage, so a table that seats an acquire-family paid command under a
+        # materialize row pre-authorizes the crossing from the inside.
+        stage_by_command_type: dict[str, set[str]] = {}
+        for seat in DEFAULT_COMPENSATION_SEATS:
+            for command_type in seat.command_types:
+                stage_by_command_type.setdefault(command_type, set()).add(seat.stage)
+        for command_type, stages in sorted(stage_by_command_type.items()):
+            with self.subTest(command_type=command_type):
+                self.assertEqual(len(stages), 1, f"{command_type} spans stages {sorted(stages)}")
+        self.assertNotIn(
+            "linkedin.discovery_query.run",
+            {ct for seat in DEFAULT_COMPENSATION_SEATS if seat.stage == STAGE_MATERIALIZE for ct in seat.command_types},
+        )
+
+    def test_a_cross_stage_command_type_table_fails_closed(self) -> None:
+        from sourcing_agent.pipeline_compensation_contract import CompensationSeat
+
+        with self.assertRaises(CompensationContractError) as caught:
+            build_compensation_seat_index(
+                (
+                    CompensationSeat(
+                        phase="operation_native_discovery_activity_owner",
+                        owner_label="linkedin_acquisition_owner",
+                        stage=STAGE_ACQUIRE,
+                        command_types=("linkedin.discovery_query.run",),
+                    ),
+                    CompensationSeat(
+                        phase="legacy_materialization_adapter",
+                        owner_label="durable_runtime_migration_adapter",
+                        stage=STAGE_MATERIALIZE,
+                        command_types=("linkedin.discovery_query.run",),
+                        registry_bound=False,
+                    ),
+                )
+            )
+        self.assertIn("may belong to exactly one stage", str(caught.exception))
+
+    def test_every_seat_command_type_has_a_registered_key_grammar(self) -> None:
+        for seat in DEFAULT_COMPENSATION_SEATS:
+            for command_type in seat.command_types:
+                with self.subTest(phase=seat.phase, command_type=command_type):
+                    self.assertIn(command_type, OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE)
+                    self.assertTrue(describe_owner_key_grammars(command_type))
+
+    def test_a_seat_naming_a_grammarless_command_type_fails_closed(self) -> None:
+        from sourcing_agent.pipeline_compensation_contract import CompensationSeat
+
+        with self.assertRaises(CompensationContractError) as caught:
+            build_compensation_seat_index(
+                (
+                    CompensationSeat(
+                        phase="acquisition_probe_command_owner",
+                        owner_label="acquisition_probe_owner",
+                        stage=STAGE_ACQUIRE,
+                        command_types=("compensation.topup.dispatch",),
+                    ),
+                )
+            )
+        self.assertIn("no owner key grammar", str(caught.exception))
+
+    def test_the_seat_table_no_longer_carries_a_key_check_waiver(self) -> None:
+        # REGRESSION: `inherits_root_operation_key=True` was an unconditional
+        # early pass in V_KEY for the seat fronting the PAID `acquisition.run.create`.
+        for seat in DEFAULT_COMPENSATION_SEATS:
+            with self.subTest(phase=seat.phase):
+                self.assertFalse(hasattr(seat, "inherits_root_operation_key"))
 
     def test_all_seven_acquisition_command_owners_are_compensable(self) -> None:
         from sourcing_agent.recovery_drain_registry import DEFAULT_RECOVERY_DRAIN_BINDINGS
@@ -504,39 +678,97 @@ class ValidatorKeyTest(unittest.TestCase):
             seat_index=_SEAT_INDEX,
         )
 
-    def test_owner_namespaced_keys_pass_for_every_seat_command_type(self) -> None:
-        for seat in DEFAULT_COMPENSATION_SEATS:
-            if seat.inherits_root_operation_key:
-                continue
-            for command_type in seat.command_types:
-                with self.subTest(phase=seat.phase, command_type=command_type):
-                    self.assertIsNone(self._check(key=f"{command_type}:scope-abc", owner=seat.phase))
-                    self.assertIsNone(self._check(key=command_type, owner=seat.phase))
-
     def test_real_owner_key_grammars_pass(self) -> None:
+        # Every shape transcribed from the code that mints it.
         cases = [
-            ("acquisition_intent_resolve_command_owner", "acquisition.intent.resolve:parent:cmd-9"),
-            ("acquisition_plan_build_command_owner", "acquisition.plan.build:parent:cmd-9"),
+            ("acquisition_run_create_command_owner", f"acquisition.run.create:start-v2:{_RECEIPT_DIGEST}"),
+            ("acquisition_intent_resolve_command_owner", f"acquisition.intent.resolve:parent:{_COMMAND_ID}"),
+            ("acquisition_plan_build_command_owner", f"acquisition.plan.build:parent:{_COMMAND_ID}"),
             (
                 "acquisition_plan_review_request_command_owner",
-                "acquisition.plan_review.request:plan:plan-3:parent:cmd-9",
+                f"acquisition.plan_review.request:plan:plan-3:parent:{_COMMAND_ID}",
             ),
             ("acquisition_plan_commit_command_owner", "acquisition.plan.commit:review:1234"),
-            ("acquisition_scale_plan_command_owner", "acquisition.scale.plan:acquisition_run:ar-1:parent:cmd-9"),
-            ("profile_url_terminal_record_command_owner", "linkedin.profile_url_terminal.record:0f1e2d3c4b5a69788796"),
-            ("operation_native_profile_fetch_activity_owner", "linkedin.profile_fetch.activity.run:source:9ab3"),
-            ("snapshot_full_materialization", "snapshot.compaction.run:9f2c1a55d0b34e6f7a81"),
-            ("collection_authoritative_merge", "collection.authoritative.merge:coll-1:proj-2"),
+            (
+                "acquisition_probe_command_owner",
+                f"acquisition.probe.collect:acquisition_run:ar-1:parent:{_COMMAND_ID}",
+            ),
+            (
+                "acquisition_scale_plan_command_owner",
+                f"acquisition.scale.plan:acquisition_run:ar-1:parent:{_COMMAND_ID}",
+            ),
+            ("operation_native_discovery_activity_owner", f"linkedin.discovery_query.run:{_SCOPE_HASH}"),
+            ("profile_refill_command_owner", f"linkedin.profile_refill.submit_batch:{_SCOPE_HASH}"),
+            ("profile_url_terminal_record_command_owner", f"linkedin.profile_url_terminal.record:{_SCOPE_HASH}"),
+            (
+                "operation_native_profile_fetch_activity_owner",
+                f"linkedin.profile_fetch.activity.run:source:{_SCOPE_HASH}",
+            ),
+            (
+                "operation_native_profile_fetch_activity_owner",
+                f"linkedin.profile_fetch.provider.fetch:activity:{_SCOPE_HASH}",
+            ),
+            (
+                "operation_native_profile_fetch_activity_owner",
+                f"linkedin.profile_terminal.admit:activity:{_SCOPE_HASH}",
+            ),
+            ("local_apply_backlog", f"linkedin.local_profile_delta.apply:{_SCOPE_HASH}"),
+            ("board_visible_apply", f"projection.board_visible_patch.publish:{_SCOPE_HASH}"),
+            ("snapshot_full_materialization", f"snapshot.compaction.run:{_SCOPE_HASH}"),
+            ("collection_authoritative_merge", f"collection.authoritative.merge:{_SCOPE_HASH}"),
+            ("legacy_materialization_adapter", f"projection.person_search_index.build:{_SCOPE_HASH}"),
+            ("legacy_materialization_adapter", f"projection.facet_layering.build:{_SCOPE_HASH}"),
         ]
         for owner, key in cases:
-            with self.subTest(owner=owner):
+            with self.subTest(owner=owner, key=key):
                 self.assertIsNone(self._check(key=key, owner=owner))
 
+    def test_every_seat_has_at_least_one_admissible_and_one_fabricated_key(self) -> None:
+        # Blanket property: for EVERY seat, a bare command type and a
+        # namespace-conformant free-form suffix are both rejected.
+        for seat in DEFAULT_COMPENSATION_SEATS:
+            for command_type in seat.command_types:
+                with self.subTest(phase=seat.phase, command_type=command_type):
+                    self.assertIsNotNone(self._check(key=command_type, owner=seat.phase))
+                    self.assertIsNotNone(self._check(key=f"{command_type}:scope-abc", owner=seat.phase))
+                    self.assertIsNotNone(self._check(key=f"{command_type}:", owner=seat.phase))
+
+    def test_a_namespace_conformant_but_fabricated_suffix_is_rejected(self) -> None:
+        # THE central regression: the earlier fence was `key == command_type or
+        # key.startswith(command_type + ":")`, so every one of these validated and
+        # would have minted a brand-new paid command identity at S3 (OQ5/R-019).
+        fabricated = [
+            ("acquisition_plan_build_command_owner", "acquisition.plan.build:parent:00000000-DOES-NOT-EXIST"),
+            ("acquisition_probe_command_owner", "acquisition.probe.submit:brand-new-identity-minted-by-compensation"),
+            ("acquisition_probe_command_owner", "acquisition.probe.submit:compensation-topup-2026-07-24-shard-A"),
+            ("acquisition_probe_command_owner", "acquisition.probe.submit:TOPUP:whatever-i-want"),
+            (
+                "acquisition_probe_command_owner",
+                f"acquisition.probe.submit:acquisition_run:ar-1:parent:{_COMMAND_ID}:x",
+            ),
+            ("acquisition_probe_command_owner", "acquisition.probe.submit:acquisition_run:ar-1:parent:cmd-42"),
+            ("snapshot_full_materialization", "snapshot.compaction.run:scope-abc"),
+            ("snapshot_full_materialization", "snapshot.compaction.run:9f2c1a55d0b34e6f7a81"),
+            ("snapshot_full_materialization", f"snapshot.compaction.run:{_SCOPE_HASH.upper()}"),
+            ("operation_native_discovery_activity_owner", "linkedin.discovery_query.run:seed-invented-by-compensation"),
+            (
+                "operation_native_profile_fetch_activity_owner",
+                f"linkedin.profile_fetch.activity.run:{_SCOPE_HASH}",
+            ),
+            ("acquisition_intent_resolve_command_owner", f"acquisition.intent.resolve:{_COMMAND_ID}"),
+        ]
+        for owner, key in fabricated:
+            with self.subTest(owner=owner, key=key):
+                reason = self._check(key=key, owner=owner)
+                self.assertIsNotNone(reason, f"{key!r} must not validate for {owner!r}")
+                assert reason is not None
+                self.assertIn("does not match any owner key grammar", reason)
+
     def test_a_foreign_owner_namespace_is_rejected(self) -> None:
-        reason = self._check(key="snapshot.compaction.run:abc", owner="acquisition_probe_command_owner")
+        reason = self._check(key=f"snapshot.compaction.run:{_SCOPE_HASH}", owner="acquisition_probe_command_owner")
         self.assertIsNotNone(reason)
         assert reason is not None
-        self.assertIn("own command-type namespace", reason)
+        self.assertIn("does not match any owner key grammar", reason)
 
     def test_an_empty_key_is_rejected(self) -> None:
         for key in ("", "   "):
@@ -570,16 +802,105 @@ class ValidatorKeyTest(unittest.TestCase):
         assert reason is not None
         self.assertIn("NEW dispatch identity", reason)
 
-    def test_the_root_inherited_seat_waives_only_the_namespace_check(self) -> None:
-        # acquisition.run.create inherits the ROOT operation's opaque key.
-        self.assertIsNone(self._check(key="agent-start-v2:9f2c1a55", owner="acquisition_run_create_command_owner"))
-        # ...but a self-minted key is still rejected for that seat.
-        self.assertIsNotNone(
-            self._check(key="compensation:root:1", owner="acquisition_run_create_command_owner"),
-        )
+    def test_the_root_acquisition_run_seat_no_longer_accepts_an_arbitrary_string(self) -> None:
+        # THE second central regression: `inherits_root_operation_key=True` was an
+        # unconditional early pass, so ANY non-compensation string validated for
+        # the seat fronting the PAID `acquisition.run.create` — the most expensive
+        # paid unit in the system. Its real key IS command-type-namespaced
+        # (`acquisition.run.create:start-v2:{sha256}`,
+        # acquisition_start_v2_create_postgres / _result_postgres), so the waiver's
+        # premise was false (D-C10).
+        owner = "acquisition_run_create_command_owner"
+        for key in (
+            "x",
+            "totally-made-up-key-9999",
+            "acquisition_run:brand_new_paid_run",
+            "  padded-fabrication  ",
+            "ACQUISITION.RUN.CREATE-but-not-really",
+            "agent-start-v2:9f2c1a55",
+            "acquisition.run.create",
+            "acquisition.run.create:start-v2:not-a-digest",
+            f"acquisition.run.create:start-v2:{_SCOPE_HASH}",
+            f"acquisition.run.create:parent:{_COMMAND_ID}",
+        ):
+            with self.subTest(key=key):
+                self.assertIsNotNone(self._check(key=key, owner=owner), f"{key!r} must not validate")
+        # ...and the one real shape still passes.
+        self.assertIsNone(self._check(key=f"acquisition.run.create:start-v2:{_RECEIPT_DIGEST}", owner=owner))
+        # ...as does the self-minted rejection, ahead of the grammar check.
+        reason = self._check(key="compensation:root:1", owner=owner)
+        self.assertIsNotNone(reason)
+        assert reason is not None
+        self.assertIn("may never mint a dispatch identity", reason)
 
     def test_an_unknown_seat_defers_to_v_seat_without_double_reporting(self) -> None:
         self.assertIsNone(self._check(key="anything", owner="not_a_seat"))
+
+
+class ValidatorKeyDerivationTest(unittest.TestCase):
+    """V_KEY_store_derived — the S3-only half of OQ5 (D-C9).
+
+    The offline grammar check cannot prove derivation; this validator is the
+    contract surface S3 must call with the owner's persisted keys.
+    """
+
+    def test_a_key_present_in_the_owner_inventory_passes(self) -> None:
+        self.assertIsNone(
+            validate_v_key_derivation(
+                owner_idempotency_key=_ACQUIRE_KEY,
+                existing_owner_idempotency_keys=(f"snapshot.compaction.run:{_SCOPE_HASH}", _ACQUIRE_KEY),
+            )
+        )
+
+    def test_a_grammar_conformant_key_with_no_command_row_is_rejected(self) -> None:
+        # The exact hole the grammar check cannot close: well-shaped, wrong hash.
+        reason = validate_v_key_derivation(
+            owner_idempotency_key=f"snapshot.compaction.run:{'0' * 24}",
+            existing_owner_idempotency_keys=(f"snapshot.compaction.run:{_SCOPE_HASH}",),
+        )
+        self.assertIsNotNone(reason)
+        assert reason is not None
+        self.assertIn("NEW dispatch identity", reason)
+        self.assertIn("already_succeeded", reason)
+
+    def test_an_empty_inventory_rejects_everything(self) -> None:
+        for inventory in ((), ("", "   ")):
+            with self.subTest(inventory=inventory):
+                self.assertIsNotNone(
+                    validate_v_key_derivation(
+                        owner_idempotency_key=_ACQUIRE_KEY, existing_owner_idempotency_keys=inventory
+                    )
+                )
+
+    def test_the_entrypoint_reports_the_row_as_skipped_when_no_inventory_is_given(self) -> None:
+        result = validate_compensation_intent(_acquire_intent())
+        self.assertTrue(result["valid"], result["failures"])
+        self.assertFalse(result["derivation_verified"])
+        row = next(entry for entry in result["validator_results"] if entry["validator"] == VALIDATOR_V_KEY_DERIVATION)
+        self.assertEqual(row["status"], VALIDATOR_RESULT_STATUS_SKIPPED)
+        self.assertIn("S3 MUST supply the inventory", row["reason"])
+
+    def test_the_entrypoint_verifies_derivation_when_the_inventory_is_supplied(self) -> None:
+        result = validate_compensation_intent(_acquire_intent(), existing_owner_idempotency_keys=(_ACQUIRE_KEY,))
+        self.assertTrue(result["valid"], result["failures"])
+        self.assertTrue(result["derivation_verified"])
+        row = next(entry for entry in result["validator_results"] if entry["validator"] == VALIDATOR_V_KEY_DERIVATION)
+        self.assertEqual(row["status"], VALIDATOR_RESULT_STATUS_PASS)
+
+    def test_the_entrypoint_fails_an_undeived_key_when_the_inventory_is_supplied(self) -> None:
+        result = validate_compensation_intent(
+            _acquire_intent(),
+            existing_owner_idempotency_keys=(f"acquisition.probe.submit:acquisition_run:ar-99:parent:{_COMMAND_ID}",),
+        )
+        self.assertFalse(result["valid"])
+        self.assertFalse(result["derivation_verified"])
+        self.assertEqual([failure["validator_id"] for failure in result["failures"]], [VALIDATOR_V_KEY_DERIVATION])
+        self.assertIsNone(result["durable_key"])
+
+    def test_a_schema_failure_still_reports_derivation_unverified(self) -> None:
+        result = validate_compensation_intent({"schema_id": "nope"}, existing_owner_idempotency_keys=(_ACQUIRE_KEY,))
+        self.assertFalse(result["valid"])
+        self.assertFalse(result["derivation_verified"])
 
 
 class ValidatorDeltaTest(unittest.TestCase):
@@ -643,11 +964,46 @@ class ValidatorDeltaTest(unittest.TestCase):
         )
         self.assertIsNotNone(reason)
         assert reason is not None
-        self.assertIn("not among the shard ids the evidence names", reason)
+        self.assertIn("not among the identities the evidence names", reason)
+        self.assertIn("evidence_ref.missing_shard_ids", reason)
 
-    def test_non_shard_anchors_are_not_shard_checked(self) -> None:
+    def test_a_truncated_shard_anchor_is_also_accepted(self) -> None:
+        self.assertIsNone(
+            validate_v_delta(
+                kind=SUB_UNIT_KIND_ACQUISITION_SHARD,
+                sub_unit_id=_SHARD_ID,
+                signal=SIGNAL_ROSTER_TRUNCATED,
+                evidence_ref=GapEvidenceRef(truncated_shard_ids=(_SHARD_ID,)),
+                delta_only=True,
+            )
+        )
+
+    def test_the_anchor_coverage_table_pins_exactly_which_kinds_are_exempt(self) -> None:
+        # D-C13: the anchor binding is enforced only for kinds whose evidence
+        # slots carry identities. The exemption is DECLARED here, not implied by
+        # a hard-coded `if` — so a new identity slot turns the check on by
+        # editing the table alone, and any silent widening of the exempt set
+        # fails this test.
+        self.assertEqual(
+            ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND[SUB_UNIT_KIND_ACQUISITION_SHARD],
+            ("missing_shard_ids", "truncated_shard_ids"),
+        )
+        exempt = {kind for kind, slots in ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND.items() if not slots}
+        self.assertEqual(exempt, {SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT, SUB_UNIT_KIND_PROFILE_REGISTRY_ITEM})
+        # Every kind has a row: a kind missing from the table would silently be
+        # treated as exempt.
+        from sourcing_agent.pipeline_compensation_contract import SUB_UNIT_KIND_VALUES
+
+        self.assertEqual(set(ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND), set(SUB_UNIT_KIND_VALUES))
+        # Each exempt kind's own signals genuinely have no identity slot.
+        from sourcing_agent.pipeline_compensation_contract import _REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL
+
+        self.assertEqual(_REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL[SIGNAL_RETRY_WAIT_TAIL], ("retry_wait_url_count",))
+        self.assertEqual(_REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL[SIGNAL_BOARD_VISIBLE_BACKLOG], ("backlog_item_count",))
+
+    def test_exempt_kinds_are_anchored_by_their_own_id_not_by_the_evidence(self) -> None:
         # A partial manifest's anchor is the snapshot durable unit; the shard
-        # evidence explains WHY it is incomplete.
+        # evidence explains WHY it is incomplete. Documented gap, not a silent one.
         self.assertIsNone(
             validate_v_delta(
                 kind=SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT,
@@ -657,6 +1013,26 @@ class ValidatorDeltaTest(unittest.TestCase):
                 delta_only=True,
             )
         )
+
+    def test_an_unknown_signal_fails_closed_with_the_contract_error(self) -> None:
+        # It used to leak a bare KeyError, so a caller catching
+        # CompensationContractError crashed instead of rejecting.
+        with self.assertRaises(CompensationContractError) as caught:
+            validate_v_delta(
+                kind=SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT,
+                sub_unit_id="u1",
+                signal="new_signal_2027",
+                evidence_ref=GapEvidenceRef(backlog_item_count=1),
+                delta_only=True,
+            )
+        self.assertIn("no registered evidence slot", str(caught.exception))
+
+    def test_every_gap_signal_has_an_evidence_slot_row(self) -> None:
+        # Pins the two collections in sync so the next signal added to the enum
+        # cannot silently arm the fail-closed path above.
+        from sourcing_agent.pipeline_compensation_contract import _REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL
+
+        self.assertEqual(set(GAP_SIGNAL_VALUES), set(_REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL))
 
     def test_board_visible_backlog_uses_its_own_evidence_slot(self) -> None:
         self.assertIsNone(
@@ -823,9 +1199,43 @@ class ValidatorAttemptTest(unittest.TestCase):
         self.assertIn("requires a spent attempt ladder", reason)
 
     def test_compensated_and_superseded_terminals_are_legal_at_any_count(self) -> None:
+        # REGRESSION (D-C14): this used to exercise only count=1, so it
+        # over-claimed "any count" while the count==max boundary was rejected —
+        # which is exactly the state the §4 ladder emits for a spent intent whose
+        # gap later closes, leaving an escalated row with NO way to ever close.
         for terminal in (TERMINAL_STATUS_COMPENSATED, TERMINAL_STATUS_SUPERSEDED):
-            with self.subTest(terminal=terminal):
-                self.assertIsNone(validate_v_attempt(attempt=self._attempt(1, terminal=terminal)))
+            for count in range(0, ATTEMPT_MAX_CEILING + 1):
+                with self.subTest(terminal=terminal, count=count):
+                    self.assertIsNone(validate_v_attempt(attempt=self._attempt(count, terminal=terminal)))
+
+    def test_a_spent_escalated_intent_can_still_be_closed(self) -> None:
+        spent = self._attempt(ATTEMPT_MAX_CEILING, terminal=TERMINAL_STATUS_EXHAUSTED_NEEDS_HUMAN)
+        self.assertIsNone(validate_v_attempt(attempt=spent))
+        for outcome, expected in (
+            (REPLAY_OUTCOME_ALREADY_SUCCEEDED, TERMINAL_STATUS_COMPENSATED),
+            (REPLAY_OUTCOME_GAP_ABSENT, TERMINAL_STATUS_SUPERSEDED),
+        ):
+            with self.subTest(replay_outcome=outcome):
+                resolved = resolve_compensation_outcome(
+                    replay_outcome=outcome, attempt_count=spent.count, attempt_max=spent.max
+                )
+                self.assertEqual(resolved["terminal_status"], expected)
+                closed = CompensationAttempt(
+                    count=int(resolved["next_attempt_count"]),
+                    max=spent.max,
+                    backoff_owner=BACKOFF_OWNER_RECOVERY_TICK_POLL,
+                    terminal_status=resolved["terminal_status"],
+                )
+                self.assertIsNone(validate_v_attempt(attempt=closed))
+
+    def test_a_spent_ladder_may_never_carry_a_null_terminal_status(self) -> None:
+        # The one shape OQ7 makes inexpressible: fail-open / silent re-loop.
+        for maximum in range(1, ATTEMPT_MAX_CEILING + 1):
+            with self.subTest(maximum=maximum):
+                reason = validate_v_attempt(attempt=self._attempt(maximum, maximum=maximum))
+                self.assertIsNotNone(reason)
+                assert reason is not None
+                self.assertIn("never a silent re-loop, never fail-open", reason)
 
 
 class CompensationLadderTest(unittest.TestCase):
@@ -868,6 +1278,38 @@ class CompensationLadderTest(unittest.TestCase):
         )
         self.assertEqual(outcome["next_attempt_count"], ATTEMPT_MAX_CEILING)
         self.assertEqual(outcome["terminal_status"], TERMINAL_STATUS_EXHAUSTED_NEEDS_HUMAN)
+
+    def test_every_ladder_outcome_round_trips_through_v_attempt(self) -> None:
+        # THE agreement regression (D-C14): the ladder used to emit
+        # (count=3, terminal="compensated"/"superseded") states that
+        # validate_v_attempt then rejected, so a resolved intent could not be
+        # written back at all.
+        outcomes = (
+            REPLAY_OUTCOME_ALREADY_SUCCEEDED,
+            REPLAY_OUTCOME_COMPENSATED,
+            REPLAY_OUTCOME_GAP_ABSENT,
+            REPLAY_OUTCOME_TRANSIENT_FAILURE,
+        )
+        checked = 0
+        for outcome in outcomes:
+            for maximum in range(1, ATTEMPT_MAX_CEILING + 1):
+                for count in range(0, maximum + 1):
+                    with self.subTest(replay_outcome=outcome, attempt_max=maximum, attempt_count=count):
+                        resolved = resolve_compensation_outcome(
+                            replay_outcome=outcome, attempt_count=count, attempt_max=maximum
+                        )
+                        next_attempt = CompensationAttempt(
+                            count=int(resolved["next_attempt_count"]),
+                            max=maximum,
+                            backoff_owner=BACKOFF_OWNER_RECOVERY_TICK_POLL,
+                            terminal_status=resolved["terminal_status"],
+                        )
+                        self.assertIsNone(
+                            validate_v_attempt(attempt=next_attempt),
+                            f"{outcome} @ {count}/{maximum} -> {resolved}",
+                        )
+                        checked += 1
+        self.assertEqual(checked, 4 * (2 + 3 + 4))
 
     def test_the_ladder_fails_closed_on_bad_inputs(self) -> None:
         with self.assertRaises(CompensationContractError):
@@ -929,6 +1371,30 @@ class EscalationRecordTest(unittest.TestCase):
             with self.assertRaises(CompensationContractError):
                 normalize_compensation_escalation({**good, "dispatch_payload": {}})
 
+    def test_escalation_rejects_a_count_that_overshoots_max(self) -> None:
+        # REGRESSION (D-C15): the normalizer checked only `count < max`, so
+        # `count=3, max=1` was ACCEPTED here while validate_v_attempt rejected
+        # the equivalent intent state — the two surfaces disagreed on what a
+        # well-formed spent ladder is.
+        intent = normalize_compensation_intent(_spent_intent())
+        good = build_compensation_escalation(intent=intent, escalation_reason="spent")
+        with self.assertRaises(CompensationContractError) as caught:
+            normalize_compensation_escalation({**good, "attempt_count": 3, "attempt_max": 1})
+        self.assertIn("exceeds", str(caught.exception))
+        self.assertIsNotNone(
+            validate_v_attempt(
+                attempt=CompensationAttempt(
+                    count=3, max=1, backoff_owner=BACKOFF_OWNER_RECOVERY_TICK_POLL, terminal_status=None
+                )
+            )
+        )
+
+    def test_escalation_accepts_the_boundary_where_count_equals_max(self) -> None:
+        intent = normalize_compensation_intent(_spent_intent())
+        good = build_compensation_escalation(intent=intent, escalation_reason="spent")
+        self.assertEqual(good["attempt_count"], good["attempt_max"])
+        self.assertEqual(normalize_compensation_escalation(good), good)
+
 
 class ValidateCompensationIntentTest(unittest.TestCase):
     """The top-level fail-closed entrypoint."""
@@ -946,10 +1412,15 @@ class ValidateCompensationIntentTest(unittest.TestCase):
                 self.assertEqual(result["failures"], [])
                 self.assertEqual(result["normalized"], payload)
                 self.assertEqual([entry["validator"] for entry in result["validator_results"]], list(VALIDATOR_IDS))
-                self.assertTrue(
-                    all(entry["status"] == VALIDATOR_RESULT_STATUS_PASS for entry in result["validator_results"])
-                )
+                offline_rows = [
+                    entry for entry in result["validator_results"] if entry["validator"] != VALIDATOR_V_KEY_DERIVATION
+                ]
+                self.assertTrue(all(entry["status"] == VALIDATOR_RESULT_STATUS_PASS for entry in offline_rows))
+                # The store-derivation row is honestly reported as unproven
+                # offline — S3 must supply the inventory (D-C9).
+                self.assertFalse(result["derivation_verified"])
                 self.assertIsNotNone(result["durable_key"])
+                self.assertEqual(len(result["durable_key"]), 6)
 
     def test_a_strict_parse_failure_reports_only_the_schema_validator(self) -> None:
         result = validate_compensation_intent({"schema_id": "nope"})
@@ -966,7 +1437,7 @@ class ValidateCompensationIntentTest(unittest.TestCase):
                 _acquire_intent(
                     compensation_action={
                         "target_command_owner": "compensation_acquire_owner",
-                        "owner_idempotency_key": "acquisition.probe.submit:acquisition_run:ar-1:parent:cmd-1",
+                        "owner_idempotency_key": _ACQUIRE_KEY,
                         "delta_only": True,
                     }
                 ),
@@ -986,7 +1457,7 @@ class ValidateCompensationIntentTest(unittest.TestCase):
                 _acquire_intent(
                     compensation_action={
                         "target_command_owner": "acquisition_probe_command_owner",
-                        "owner_idempotency_key": "acquisition.probe.submit:acquisition_run:ar-1:parent:cmd-1",
+                        "owner_idempotency_key": _ACQUIRE_KEY,
                         "delta_only": False,
                     }
                 ),

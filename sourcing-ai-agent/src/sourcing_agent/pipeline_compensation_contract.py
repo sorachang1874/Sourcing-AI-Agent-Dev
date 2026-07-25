@@ -13,34 +13,61 @@ decision: there is no ``ModelClient`` method, no model call, and no
 model-authored field. Every field of a compensation intent is caller-authored
 fact composed from signals the pipeline stages ALREADY self-report (OQ2).
 
-THE STRUCTURAL PROPERTY THIS MODULE EXISTS TO ENFORCE (OQ5, the R-019 hard
-constraint — RESIDUAL_LEDGER.md:38, status `pending remediation`, call-site
-ceiling 24): **a compensation intent can never mint a new dispatch identity.**
-R-019's remediation clause blocks the next touch of operation
-retry/dispatch/command completion, any new ``_connect_with_transaction_lock``
-caller, **or any live/W6/manual operation/acquisition-control signoff** — so
-compensation may ride ONLY the recovery tick's existing idempotent command-owner
-replays. Three allowlists make that structural rather than conventional:
+THE STRUCTURAL PROPERTY THIS MODULE ENFORCES, AND ITS HONEST LIMIT (OQ5, the
+R-019 hard constraint — RESIDUAL_LEDGER.md:38, status `pending remediation`,
+call-site ceiling 24). R-019's remediation clause blocks the next touch of
+operation retry/dispatch/command completion, any new
+``_connect_with_transaction_lock`` caller, **or any live/W6/manual
+operation/acquisition-control signoff** — so compensation may ride ONLY the
+recovery tick's existing idempotent command-owner replays.
+
+**WHAT THIS OFFLINE CONTRACT ACTUALLY GUARANTEES** (do not overstate it — the
+earlier wording "a NEW dispatch identity is structurally inexpressible" was
+FALSE as written and is corrected here; see D-C9):
 
 * ``target_command_owner`` must name a seat in :data:`DEFAULT_COMPENSATION_SEATS`
   — a recovery-tick phase that already exists in the characterized phase
   sequence (tests/test_recovery_tick_characterization.py) and already drains a
   typed command owner. A novel owner name is rejected; there is no way to point
-  an intent at a phase the tick does not already run.
-* ``owner_idempotency_key`` must live in that seat's OWN command-type namespace
-  (``"<command_type>"`` or ``"<command_type>:…"`` — the grammar every owner
-  actually uses: ``acquisition_command_owner.py:715/784/855/1869/1956``,
-  ``profile_fetch_owner.py:314``, ``durable_runtime.py:2309/2531``). A key the
-  compensation layer could only have authored itself (a ``compensation*``
-  namespace, the schema id, the audit phase name, or a key embedding the
-  intent's own ``intent_id``) is rejected outright. A replay under an owner's own
-  key hits that owner's existing ``already_succeeded`` short-circuit and pays
-  nothing (§5 rule 1).
+  an intent at a phase the tick does not already run. A command type may belong
+  to seats of exactly ONE stage, so a stage's intent can never name another
+  stage's paid command family (:func:`build_compensation_seat_index`).
+* ``owner_idempotency_key`` must match the target seat's per-command-type
+  **GRAMMAR** — the exact segment shape that owner actually computes today
+  (:data:`OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE`, transcribed from
+  ``acquisition_start_v2_create_postgres.py:333``,
+  ``acquisition_command_owner.py:715/784/855/1869/1956``,
+  ``profile_fetch_owner.py:314/436/543`` and the
+  ``durable_runtime.py`` ``*_idempotency_key`` builders). A free-form suffix, a
+  self-minted ``compensation*`` namespace, the schema id, or a key embedding the
+  intent's own ``intent_id`` is rejected outright.
 * There is NO schema slot anywhere — top level, ``sub_unit``, ``gap``,
   ``compensation_action`` — for a provider payload, a request body, a command
   payload, a budget, or a dispatch target. The strict key allowlists reject any
   attempt to inject one. **The intent carries a pointer, never a payload; it has
   no payment authority of its own** (§2.1 rule 1).
+
+**WHAT IT CANNOT GUARANTEE — THE HARD REQUIREMENT ON S3 (D-C9).** A pure offline
+contract cannot prove that a key was actually DERIVED by an owner: that needs a
+store lookup of the existing durable command row. A grammar-conformant key whose
+content hash or whose store-assigned opaque segments (``{plan_id}``,
+``{review_id}``, ``{acquisition_run_id}``) correspond to no existing command row
+is still admissible here — and in the runtime an unseen ``idempotency_key`` is
+NOT a no-op: ``durable_runtime.py``'s ``CommandPlanRequested`` reducer appends a
+brand-new ``WorkflowCommandSpec`` for any key not already present, and the
+owners' ``already_succeeded`` short-circuits are status checks on a command
+already resolved from the store, so a key with no matching row cannot reach them
+at all. Therefore:
+
+    **S3 MUST construct every compensation intent FROM an existing durable
+    command row (reading that owner's own persisted ``idempotency_key``) and MUST
+    re-verify membership before enqueue.** That check is expressed here as
+    :func:`validate_v_key_derivation` / the ``existing_owner_idempotency_keys``
+    argument of :func:`validate_compensation_intent`; when the caller supplies no
+    inventory the result reports ``derivation_verified=False`` and the
+    ``V_KEY_store_derived`` row is ``skipped``. **An intent with
+    ``derivation_verified=False`` MUST NOT be enqueued at S3.** S1/S2 are offline
+    and cannot supply the inventory, which is exactly why S3 owns this gate.
 
 Other structural fail-closed properties (mirroring the two proven precedents,
 ``profile_batch_division_contract.py`` and ``organization_promote_contract.py``):
@@ -115,6 +142,19 @@ SUB_UNIT_KIND_VALUES = frozenset(
         SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT,
     }
 )
+# Which `evidence_ref` slots carry IDENTITIES that a sub-unit of this kind can be
+# anchored to (V_DELTA's "the delta anchor must be one of the observed sub-units"
+# rule, §5 rule 2). A kind mapped to an EMPTY tuple is explicitly EXEMPT because
+# no evidence slot of its signals carries that kind's identities — see
+# :func:`validate_v_delta` for the per-kind justification (D-C13). Adding an
+# identity slot for an exempt kind turns the anchor check on by editing this
+# table alone.
+ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND: dict[str, tuple[str, ...]] = {
+    SUB_UNIT_KIND_ACQUISITION_SHARD: ("missing_shard_ids", "truncated_shard_ids"),
+    SUB_UNIT_KIND_SNAPSHOT_DURABLE_UNIT: (),
+    SUB_UNIT_KIND_PROFILE_REGISTRY_ITEM: (),
+}
+
 _SUB_UNIT_KINDS_BY_STAGE: dict[str, frozenset[str]] = {
     STAGE_ACQUIRE: frozenset({SUB_UNIT_KIND_ACQUISITION_SHARD}),
     STAGE_FETCH: frozenset({SUB_UNIT_KIND_PROFILE_REGISTRY_ITEM}),
@@ -230,40 +270,154 @@ _COMPENSATION_AUTHORED_KEY_PREFIXES = (
 
 
 # ---------------------------------------------------------------------------
+# Owner idempotency-key GRAMMAR (the V_KEY fence's structural half).
+#
+# Each production command type builds its idempotency key from a fixed segment
+# shape. Transcribed from the code on 2026-07-24 (symbol anchors, not line
+# numbers):
+#
+#   acquisition.run.create                  :start-v2:{sha256}
+#       acquisition_start_v2_create_postgres.py `command_key`
+#       acquisition_start_v2_result_postgres.py `_command_key_from_terminal_owner_ref`
+#   acquisition.intent.resolve              :parent:{command_id}
+#   acquisition.plan.build                  :parent:{command_id}
+#   acquisition.plan_review.request         :plan:{plan_id}:parent:{command_id}
+#   acquisition.plan.commit                 :review:{review_id}
+#   acquisition.probe.submit/collect        :acquisition_run:{id}:parent:{command_id}
+#   acquisition.scale.plan                  :acquisition_run:{id}:parent:{command_id}
+#       acquisition_command_owner.py `_plan_acquisition_*_command`
+#   linkedin.profile_fetch.activity.run     :source:{scope_hash}
+#   linkedin.profile_fetch.provider.fetch   :activity:{scope_hash}
+#   linkedin.profile_terminal.admit         :activity:{scope_hash}
+#       profile_fetch_owner.py
+#   everything else                         :{scope_hash}
+#       durable_runtime.py `*_idempotency_key` builders (sha1 hexdigest[:24])
+#
+# HONEST LIMIT: the `{plan_id}` / `{review_id}` / `{acquisition_run_id}` segments
+# are store-assigned ids whose shape this module cannot verify offline, so they
+# are matched as opaque colon-free tokens. Only the S3 store lookup
+# (`validate_v_key_derivation`) can prove such a key names a real command row.
+# ---------------------------------------------------------------------------
+
+# `command_id_for` (durable_runtime.py) — mirrored identically by
+# storage.upsert_workflow_command and control_plane_live_postgres.upsert_workflow_command.
+OWNER_KEY_TOKEN_COMMAND_ID = "{command_id}"
+# sha1(...).hexdigest()[:24] — every `*_idempotency_key` builder in durable_runtime.
+OWNER_KEY_TOKEN_SCOPE_HASH = "{scope_hash}"
+# The start-v2 receipt digest (`_require_sha256`, acquisition_start_v2.py).
+OWNER_KEY_TOKEN_SHA256 = "{sha256}"
+# A store-assigned id this module cannot shape-check offline (D-C9 residual).
+OWNER_KEY_TOKEN_OPAQUE_ID = "{opaque_id}"
+
+_OWNER_KEY_TOKEN_PATTERNS: dict[str, str] = {
+    OWNER_KEY_TOKEN_COMMAND_ID: r"cmd_[0-9a-f]{24}",
+    OWNER_KEY_TOKEN_SCOPE_HASH: r"[0-9a-f]{24}",
+    OWNER_KEY_TOKEN_SHA256: r"[0-9a-f]{64}",
+    OWNER_KEY_TOKEN_OPAQUE_ID: r"[^:\s]{1,128}",
+}
+
+_SCOPE_HASH_GRAMMAR: tuple[tuple[str, ...], ...] = ((OWNER_KEY_TOKEN_SCOPE_HASH,),)
+
+# command_type -> the alternative suffix grammars its key may take. A grammar is
+# the tuple of ':'-separated segments AFTER the command type; a segment is either
+# a literal or one of the OWNER_KEY_TOKEN_* classes.
+OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE: dict[str, tuple[tuple[str, ...], ...]] = {
+    "acquisition.run.create": (("start-v2", OWNER_KEY_TOKEN_SHA256),),
+    "acquisition.intent.resolve": (("parent", OWNER_KEY_TOKEN_COMMAND_ID),),
+    "acquisition.plan.build": (("parent", OWNER_KEY_TOKEN_COMMAND_ID),),
+    "acquisition.plan_review.request": (("plan", OWNER_KEY_TOKEN_OPAQUE_ID, "parent", OWNER_KEY_TOKEN_COMMAND_ID),),
+    "acquisition.plan.commit": (("review", OWNER_KEY_TOKEN_OPAQUE_ID),),
+    "acquisition.probe.submit": (("acquisition_run", OWNER_KEY_TOKEN_OPAQUE_ID, "parent", OWNER_KEY_TOKEN_COMMAND_ID),),
+    "acquisition.probe.collect": (
+        ("acquisition_run", OWNER_KEY_TOKEN_OPAQUE_ID, "parent", OWNER_KEY_TOKEN_COMMAND_ID),
+    ),
+    "acquisition.scale.plan": (("acquisition_run", OWNER_KEY_TOKEN_OPAQUE_ID, "parent", OWNER_KEY_TOKEN_COMMAND_ID),),
+    "linkedin.discovery_query.run": _SCOPE_HASH_GRAMMAR,
+    "linkedin.profile_refill.submit_batch": _SCOPE_HASH_GRAMMAR,
+    "linkedin.profile_url_terminal.record": _SCOPE_HASH_GRAMMAR,
+    "linkedin.profile_fetch.activity.run": (("source", OWNER_KEY_TOKEN_SCOPE_HASH),),
+    "linkedin.profile_fetch.provider.fetch": (("activity", OWNER_KEY_TOKEN_SCOPE_HASH),),
+    "linkedin.profile_terminal.admit": (("activity", OWNER_KEY_TOKEN_SCOPE_HASH),),
+    "linkedin.local_profile_delta.apply": _SCOPE_HASH_GRAMMAR,
+    "projection.board_visible_patch.publish": _SCOPE_HASH_GRAMMAR,
+    "projection.person_search_index.build": _SCOPE_HASH_GRAMMAR,
+    "projection.facet_layering.build": _SCOPE_HASH_GRAMMAR,
+    "collection.authoritative.merge": _SCOPE_HASH_GRAMMAR,
+    "snapshot.compaction.run": _SCOPE_HASH_GRAMMAR,
+}
+
+
+def _compile_owner_key_grammar(command_type: str, grammar: tuple[str, ...]) -> re.Pattern[str]:
+    if not grammar:
+        raise CompensationContractError(
+            f"owner key grammar for {command_type!r} is empty: a bare command type is not a real owner key"
+        )
+    parts = [re.escape(command_type)]
+    for segment in grammar:
+        pattern = _OWNER_KEY_TOKEN_PATTERNS.get(segment)
+        parts.append(":" + (pattern if pattern is not None else re.escape(segment)))
+    return re.compile("".join(parts) + r"\Z")
+
+
+_OWNER_KEY_PATTERNS_BY_COMMAND_TYPE: dict[str, tuple[re.Pattern[str], ...]] = {}
+
+
+def describe_owner_key_grammars(command_type: str) -> tuple[str, ...]:
+    """Human-auditable rendering of a command type's admissible key shapes."""
+    return tuple(
+        ":".join((command_type, *grammar)) for grammar in OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE.get(command_type, ())
+    )
+
+
+# ---------------------------------------------------------------------------
 # The compensation seat table — the OQ1/OQ5 fence.
 #
 # Every row is a recovery-tick phase that ALREADY exists in the characterized
 # phase sequence (tests/test_recovery_tick_characterization.py
 # CHARACTERIZED_PHASE_SEQUENCE) and already drains a typed command owner with its
-# own deterministic idempotency key. Nine of these rows are literal
-# `recovery_drain_registry.DEFAULT_RECOVERY_DRAIN_BINDINGS` bindings (the suite
-# cross-checks phase+owner against the registry so the seat table cannot drift);
-# the rest are the tick's literal named phases.
+# own deterministic idempotency key.
+#
+# DRIFT GUARD COVERAGE, stated exactly (D-C16 — the first cut checked 9 of 18 and
+# the comment claimed the whole mirror): the suite cross-checks ALL 18 rows
+# (phase AND owner label) against the tick oracle's
+# `CHARACTERIZED_PHASE_SEQUENCE`, which is the source of truth `regression_matrix`
+# already routes this module to; the 9 rows marked `registry_bound` are
+# ADDITIONALLY cross-checked against
+# `recovery_drain_registry.DEFAULT_RECOVERY_DRAIN_BINDINGS`, and the 9/9 split is
+# asserted so a row cannot quietly change sides. The other 9 are the tick's
+# literal named phases with no drain-registry binding to check against.
 #
 # Standalone by design, mirroring the divider/promote precedents: importing the
 # drain registry would pull `durable_runtime` into a pure contract module. The
-# offline suite does the cross-check instead.
+# offline suite does both cross-checks with lazy imports instead.
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class CompensationSeat:
     """One compensable recovery-tick seat: WHERE a top-up may be routed, and the
-    command-type namespace its idempotency key must come from.
+    command types whose key GRAMMAR its idempotency key must match.
 
-    ``inherits_root_operation_key`` marks the one owner whose key is not
-    prefixed with its command type: ``acquisition.run.create`` inherits the ROOT
-    operation's own ``idempotency_key`` as a locked identity field
-    (acquisition_command_owner.py ``_acquisition_root_locked_identity``). Such a
-    key is opaque, so the fence degrades to "non-empty and provably not
-    compensation-authored" for that seat only.
+    Every listed command type must have a row in
+    :data:`OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE`, and a command type may appear in
+    seats of exactly ONE stage — both enforced by
+    :func:`build_compensation_seat_index`, so the V_SEAT stage fence cannot be
+    defeated by the table's own composition.
+
+    D-C10 (corrected 2026-07-24): an earlier ``inherits_root_operation_key``
+    waiver claimed ``acquisition.run.create`` inherits an opaque ROOT operation
+    key and therefore waived the namespace check entirely. That premise was
+    FALSE — both mint sites build ``acquisition.run.create:start-v2:{sha256}``
+    (``acquisition_start_v2_create_postgres.py`` /
+    ``acquisition_start_v2_result_postgres.py``); the ``idempotency_key`` inside
+    ``_acquisition_root_locked_identity`` IS that key. The waiver is removed and
+    the seat carries its real grammar like every other.
     """
 
     phase: str
     owner_label: str
     stage: str
     command_types: tuple[str, ...]
-    inherits_root_operation_key: bool = False
     registry_bound: bool = True
 
 
@@ -274,7 +428,6 @@ DEFAULT_COMPENSATION_SEATS: tuple[CompensationSeat, ...] = (
         owner_label="acquisition_run_writer",
         stage=STAGE_ACQUIRE,
         command_types=("acquisition.run.create",),
-        inherits_root_operation_key=True,
     ),
     CompensationSeat(
         phase="acquisition_intent_resolve_command_owner",
@@ -392,13 +545,22 @@ DEFAULT_COMPENSATION_SEATS: tuple[CompensationSeat, ...] = (
         stage=STAGE_MATERIALIZE,
         # The adapter bridges legacy items onto typed commands
         # (orchestrator._LEGACY_MATERIALIZATION_ADAPTER_ITEM_COMMAND_TYPES), so
-        # its admissible key namespaces are exactly that map's values.
+        # its admissible key namespaces are that map's values MINUS
+        # `linkedin.discovery_query.run` (D-C11): that map's
+        # SEARCH_SEED_DISCOVERY_QUERY_ITEM_KIND row really does bridge onto paid
+        # LinkedIn discovery, but discovery is an ACQUIRE-stage command family
+        # whose own seat is `operation_native_discovery_activity_owner`. Leaving
+        # it here would pre-authorize a materialize-stage gap (a snapshot
+        # manifest hole) to name an acquire-stage paid dispatch identity, which
+        # V_SEAT's cross-stage fence could never catch because the seat itself
+        # declares materialize. A search-seed discovery gap is compensated at its
+        # acquire seat; `build_compensation_seat_index` now rejects any future
+        # row that re-introduces a cross-stage command type.
         command_types=(
             "linkedin.local_profile_delta.apply",
             "projection.board_visible_patch.publish",
             "projection.person_search_index.build",
             "collection.authoritative.merge",
-            "linkedin.discovery_query.run",
             "projection.facet_layering.build",
             "snapshot.compaction.run",
         ),
@@ -410,8 +572,21 @@ DEFAULT_COMPENSATION_SEATS: tuple[CompensationSeat, ...] = (
 def build_compensation_seat_index(
     seats: Iterable[CompensationSeat] = DEFAULT_COMPENSATION_SEATS,
 ) -> dict[str, CompensationSeat]:
-    """Index seats by phase, failing loudly on a duplicate or malformed row."""
+    """Index seats by phase, failing loudly on a duplicate or malformed row.
+
+    Three table-level invariants, all fail-closed:
+
+    1. Every row names a compensable stage and a non-empty command-type list.
+    2. Every command type has a key grammar (:data:`OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE`)
+       — otherwise V_KEY would silently have nothing to check for that type.
+    3. **A command type may belong to seats of exactly ONE stage.** Without this,
+       the table could pre-authorize a cross-stage crossing that V_SEAT can never
+       detect (it compares the intent's stage against the seat's declared stage,
+       so a seat that declares materialize while carrying an acquire-family paid
+       command type defeats the fence from the inside — D-C11).
+    """
     index: dict[str, CompensationSeat] = {}
+    stage_by_command_type: dict[str, tuple[str, str]] = {}
     for seat in seats:
         if not seat.phase or not seat.owner_label or not seat.command_types:
             raise CompensationContractError(f"malformed compensation seat: {seat!r}")
@@ -421,6 +596,20 @@ def build_compensation_seat_index(
             )
         if seat.phase in index:
             raise CompensationContractError(f"duplicate compensation seat phase {seat.phase!r}")
+        for command_type in seat.command_types:
+            if command_type not in OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE:
+                raise CompensationContractError(
+                    f"compensation seat {seat.phase!r} names command type {command_type!r} with no owner key grammar: "
+                    "a seat whose key shape is unknown would degrade V_KEY to a bare namespace prefix (OQ5/R-019)"
+                )
+            claimed = stage_by_command_type.get(command_type)
+            if claimed is not None and claimed[0] != seat.stage:
+                raise CompensationContractError(
+                    f"command type {command_type!r} is claimed by the {claimed[0]!r}-stage seat {claimed[1]!r} and "
+                    f"the {seat.stage!r}-stage seat {seat.phase!r}: a command type may belong to exactly one stage, "
+                    "otherwise an intent could route across stages onto another stage's paid command family"
+                )
+            stage_by_command_type.setdefault(command_type, (seat.stage, seat.phase))
         index[seat.phase] = seat
     return index
 
@@ -436,6 +625,10 @@ VALIDATOR_V_DELTA = "V_DELTA_only_anchor"
 VALIDATOR_V_LINEAGE = "V_LINEAGE_scoped"
 VALIDATOR_V_SIGNAL = "V_SIGNAL_self_reported"
 VALIDATOR_V_ATTEMPT = "V_ATTEMPT_bounded"
+# The S3-only derivation check (D-C9). It is the ONLY validator that needs state
+# this module does not have (the store's existing command keys), so offline
+# callers run the battery with it `skipped`.
+VALIDATOR_V_KEY_DERIVATION = "V_KEY_store_derived"
 VALIDATOR_IDS = (
     VALIDATOR_V_STAGE,
     VALIDATOR_V_SEAT,
@@ -444,6 +637,7 @@ VALIDATOR_IDS = (
     VALIDATOR_V_LINEAGE,
     VALIDATOR_V_SIGNAL,
     VALIDATOR_V_ATTEMPT,
+    VALIDATOR_V_KEY_DERIVATION,
 )
 
 # failures[].validator_id for strict-parse rejections, distinct from every
@@ -498,6 +692,14 @@ _ESCALATION_KEYS = frozenset(
 
 class CompensationContractError(ValueError):
     """Fail-closed strict-parse error for the compensation-intent contract."""
+
+
+_OWNER_KEY_PATTERNS_BY_COMMAND_TYPE.update(
+    {
+        command_type: tuple(_compile_owner_key_grammar(command_type, grammar) for grammar in grammars)
+        for command_type, grammars in OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE.items()
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -664,14 +866,27 @@ class CompensationIntent:
             "provenance": self.provenance.to_payload(),
         }
 
-    def durable_key(self) -> tuple[str, str, str, str]:
+    def durable_key(self) -> tuple[str, str, str, str, str, str]:
         """The OQ3 durable key ``(stage, sub_unit_id, source_lineage)``, flattened
-        to the lineage's two identity fields so it is hashable/comparable."""
+        to a hashable/comparable tuple over the lineage's FULL four fields.
+
+        D-C12 (corrected 2026-07-24): an earlier cut flattened only
+        ``operation_id`` + ``job_id``, silently dropping
+        ``materialization_generation_key`` and ``refill_plan_division_id``. OQ3
+        ratifies the whole ``source_lineage`` object as the key component, and
+        those two fields are exactly what distinguishes two gaps of the same
+        sub-unit across materialization generations / refill divisions — under
+        the S3 dedup this key exists to drive, the coarsened key swallowed the
+        second generation's gap as a duplicate and it was never compensated.
+        """
+        lineage = self.sub_unit.source_lineage
         return (
             self.stage,
             self.sub_unit.sub_unit_id,
-            self.sub_unit.source_lineage.operation_id,
-            self.sub_unit.source_lineage.job_id,
+            lineage.operation_id,
+            lineage.job_id,
+            lineage.materialization_generation_key,
+            lineage.refill_plan_division_id,
         )
 
 
@@ -947,10 +1162,18 @@ def validate_v_seat(
     """V_SEAT — the compensation action may only point at an EXISTING recovery-tick
     command-owner phase, and that phase must belong to the intent's stage (OQ1/OQ5).
 
-    This is half of the "zero new dispatch identity" fence: an intent cannot name
-    a phase the recovery tick does not already run, so compensation can never
-    introduce a new owner surface (which would double the owner face and re-open
-    R-019 — design D-C3).
+    This is the OWNER-SURFACE half of the OQ5 fence, and it IS complete: an
+    intent cannot name a phase the recovery tick does not already run, so
+    compensation can never introduce a new owner surface (which would double the
+    owner face and re-open R-019 — design D-C3). The cross-stage half is complete
+    too, but only because :func:`build_compensation_seat_index` now refuses a
+    table in which one command type spans two stages — this comparison is against
+    the SEAT's declared stage, so a seat that declared materialize while carrying
+    an acquire-family paid command type used to pre-authorize the crossing from
+    the inside (D-C11).
+
+    The KEY-IDENTITY half is NOT complete offline: see :func:`validate_v_key`'s
+    honest limit and the S3 gate :func:`validate_v_key_derivation` (D-C9).
     """
     seat = seat_index.get(target_command_owner)
     if seat is None:
@@ -974,33 +1197,36 @@ def validate_v_key(
     target_command_owner: str,
     seat_index: Mapping[str, CompensationSeat],
 ) -> str | None:
-    """V_KEY — the idempotency key must be OWNER-DERIVED, never compensation-authored
-    (OQ5, the never-double-pay fence + the R-019 zero-new-dispatch-identity rule).
+    """V_KEY — the idempotency key must match one of the target seat's own owner
+    key GRAMMARS, never a compensation-authored or free-form string (OQ5, the
+    never-double-pay fence + the R-019 no-new-dispatch-path rule).
 
     Two conditions, both required:
 
-    1. **Owner namespace.** The key must be ``"<command_type>"`` or
-       ``"<command_type>:…"`` for one of the target seat's own command types —
-       the grammar every owner actually uses today
-       (``acquisition_command_owner`` ``…:parent:{parent_command_id}`` /
-       ``…:plan:{plan_id}:parent:…`` / ``…:review:{review_id}`` /
-       ``…:acquisition_run:{id}:parent:…``; ``profile_fetch_owner``
-       ``…:source:{scope_hash}``; ``durable_runtime``
-       ``linkedin_profile_url_terminal_record_idempotency_key`` /
-       ``snapshot_compaction_run_idempotency_key`` ``…:{scope_hash}``). The one
-       exception is the ``acquisition.run.create`` seat, whose key is the ROOT
-       operation's own opaque ``idempotency_key`` (a locked identity field) —
-       for that seat the namespace check is waived, but condition 2 still holds.
-    2. **Not self-minted.** A key in a ``compensation*`` namespace, a key equal to
+    1. **Not self-minted.** A key in a ``compensation*`` namespace, a key equal to
        or prefixed by the schema id or the audit phase name, or a key embedding
        the intent's own ``intent_id`` could only have been authored by the
        compensation layer. Such a key IS a new dispatch identity and is rejected.
+    2. **Owner grammar.** The key must match, in full, one of the alternative
+       segment shapes registered for one of the target seat's command types in
+       :data:`OWNER_KEY_GRAMMARS_BY_COMMAND_TYPE`. A bare command type, a
+       free-form suffix (``…:scope-abc``), a short/again-hashed scope digest, a
+       missing ``parent``/``plan``/``review``/``source``/``activity`` label, or an
+       extra trailing segment are all rejected. **This is a shape check, not a
+       derivation check** — see the limit below.
 
-    Together these make "the contract invents a dispatch identity" inexpressible:
-    the only keys it can carry are keys an existing owner already computes, so a
-    replay always lands on that owner's existing ``already_succeeded``
-    short-circuit (``acquisition_*_command_already_succeeded`` /
-    ``acquisition_run_phase_command_already_succeeded``) and pays nothing.
+    HONEST LIMIT (D-C9 — read this before relying on the fence). A grammar match
+    does NOT prove an owner ever computed the key. The content-hash segments are
+    sha1/sha256 digests over inputs this schema has no slot for, and
+    ``{plan_id}`` / ``{review_id}`` / ``{acquisition_run_id}`` are store-assigned
+    ids matched as opaque tokens. A well-shaped key naming no existing durable
+    command row is therefore still admissible HERE, and in the runtime such a key
+    is a brand-new command identity (``durable_runtime``'s
+    ``CommandPlanRequested`` reducer appends a fresh ``WorkflowCommandSpec`` for
+    any unseen key, and the owners' ``already_succeeded`` short-circuits are
+    status checks on a command already resolved from the store — an unseen key
+    never reaches one). Proving derivation requires the store, so it is a HARD
+    REQUIREMENT ON S3, expressed as :func:`validate_v_key_derivation`.
     """
     key = owner_idempotency_key.strip()
     if not key:
@@ -1026,15 +1252,50 @@ def validate_v_key(
     if seat is None:
         # V_SEAT already reported the unknown seat; do not double-report here.
         return None
-    if seat.inherits_root_operation_key:
-        return None
+    admissible: list[str] = []
     for command_type in seat.command_types:
-        if key == command_type or key.startswith(f"{command_type}:"):
-            return None
+        for pattern in _OWNER_KEY_PATTERNS_BY_COMMAND_TYPE.get(command_type, ()):
+            if pattern.fullmatch(key):
+                return None
+        admissible.extend(describe_owner_key_grammars(command_type))
     return (
-        f"owner_idempotency_key {key!r} is not in the {target_command_owner!r} owner's own command-type namespace "
-        f"{list(seat.command_types)}: only a key the owner itself computes can hit its already_succeeded "
-        "short-circuit (never-double-pay, §5 rule 1)"
+        f"owner_idempotency_key {key!r} does not match any owner key grammar of the {target_command_owner!r} seat "
+        f"{admissible}: only a key shaped exactly as the owner itself computes it can hit that owner's "
+        "already_succeeded short-circuit (never-double-pay, §5 rule 1)"
+    )
+
+
+def validate_v_key_derivation(
+    *,
+    owner_idempotency_key: str,
+    existing_owner_idempotency_keys: Iterable[str],
+) -> str | None:
+    """V_KEY_store_derived — the S3-only half of the OQ5 fence (D-C9).
+
+    :func:`validate_v_key` can only check SHAPE. The property OQ5/R-019 actually
+    requires is that the key names a command row that ALREADY EXISTS, so the
+    replay lands on that owner's ``already_succeeded`` short-circuit and pays
+    nothing.
+    That is a store fact, so the caller supplies the inventory: the set of
+    ``idempotency_key`` values the target owner has already persisted for the
+    intent's lineage.
+
+    **S3 MUST call this (via ``validate_compensation_intent``'s
+    ``existing_owner_idempotency_keys``) and MUST refuse to enqueue any intent
+    whose result is not a pass.** Offline callers (S1 contract tests, S2 shadow
+    read surface) have no inventory; for them the battery reports this row as
+    ``skipped`` and ``derivation_verified=False``.
+    """
+    key = owner_idempotency_key.strip()
+    inventory = {str(candidate).strip() for candidate in existing_owner_idempotency_keys}
+    inventory.discard("")
+    if key in inventory:
+        return None
+    return (
+        f"owner_idempotency_key {key!r} matches no idempotency_key the target owner has already persisted "
+        f"({len(inventory)} known key(s)): a key with no existing command row is a NEW dispatch identity — the "
+        "durable reducer would append a brand-new command instead of replaying one, and no already_succeeded "
+        "short-circuit can fire (OQ5 / R-019)"
     )
 
 
@@ -1053,12 +1314,30 @@ def validate_v_delta(
     widens scope is not a top-up); the evidence must be non-empty (a "gap" with
     no self-reported evidence is not a gap and must never mint a paid replay);
     the signal's own evidence slot must be populated (a ``retry_wait_tail`` that
-    only carries shard ids is a mis-composed intent); and when the delta anchor
-    IS a shard, ``sub_unit_id`` must be one of the shard ids the evidence
-    actually names — otherwise the intent could top up a shard the audit never
-    observed as missing. A snapshot/board durable unit or a profile registry item
-    is anchored by its own id, with the shard evidence explaining WHY it is
-    incomplete.
+    only carries shard ids is a mis-composed intent); and — for every sub-unit
+    kind whose evidence CAN name identities — ``sub_unit_id`` must be one of the
+    identities the evidence actually names.
+
+    ANCHOR COVERAGE, stated exactly (D-C13; the previous cut hard-coded the shard
+    branch inline and the §5-rule-2 property was silently claimed for all three
+    kinds). :data:`ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND` is the declarative
+    table:
+
+    * ``acquisition_shard`` → ``missing_shard_ids`` + ``truncated_shard_ids``.
+      ENFORCED: the anchor must be an observed missing/truncated shard.
+    * ``snapshot_durable_unit`` → EXEMPT, because no ``evidence_ref`` slot carries
+      snapshot/board durable-unit identities: ``manifest_partial`` reports the
+      shard holes that made the manifest partial and ``board_visible_backlog``
+      reports a COUNT. The anchor is the unit's own id and the shard/backlog
+      evidence explains WHY it is incomplete.
+    * ``profile_registry_item`` → EXEMPT, because ``retry_wait_tail``'s only slot
+      is ``retry_wait_url_count``, a count with no per-URL identity face.
+
+    So the §5-rule-2 property "the intent could not top up a sub-unit the audit
+    never observed as missing" is ENFORCED for shards and is a documented gap for
+    the other two kinds until their signals grow an identity slot — at which
+    point adding that slot to the table below turns the check on with no other
+    edit. Until then, only the S3 store lookup can close it.
     """
     if not delta_only:
         return "delta_only must be true: a compensation top-up may only re-run the single named missing sub-unit"
@@ -1067,18 +1346,28 @@ def validate_v_delta(
             "gap.evidence_ref is empty: an intent with no self-reported evidence is not a detected gap and must "
             "never mint a replay (§5 rule 4, inventory-first)"
         )
-    required_slots = _REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL[signal]
+    required_slots = _REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL.get(signal)
+    if required_slots is None:
+        raise CompensationContractError(
+            f"signal {signal!r} has no registered evidence slot (known signals: "
+            f"{sorted(_REQUIRED_EVIDENCE_SLOTS_BY_SIGNAL)}): a signal the contract cannot demand evidence for must "
+            "fail closed, never fall through with an unhandled lookup"
+        )
     if not any(getattr(evidence_ref, slot) for slot in required_slots):
         return (
             f"signal {signal!r} requires a non-empty gap.evidence_ref slot among "
             f"{[f'evidence_ref.{slot}' for slot in required_slots]}"
         )
-    if kind == SUB_UNIT_KIND_ACQUISITION_SHARD:
-        named = set(evidence_ref.missing_shard_ids) | set(evidence_ref.truncated_shard_ids)
+    anchor_slots = ANCHOR_IDENTITY_SLOTS_BY_SUB_UNIT_KIND.get(kind, ())
+    if anchor_slots:
+        named: set[str] = set()
+        for slot in anchor_slots:
+            named.update(getattr(evidence_ref, slot))
         if sub_unit_id not in named:
             return (
-                f"sub_unit_id {sub_unit_id!r} is not among the shard ids the evidence names {sorted(named)}: "
-                "the delta anchor must be one of the observed missing/truncated sub-units"
+                f"sub_unit_id {sub_unit_id!r} is not among the identities the evidence names {sorted(named)} "
+                f"(slots {[f'evidence_ref.{slot}' for slot in anchor_slots]}): the delta anchor must be one of the "
+                "observed missing/truncated sub-units"
             )
     return None
 
@@ -1143,21 +1432,34 @@ def validate_v_attempt(*, attempt: CompensationAttempt) -> str | None:
 
     ``max`` may never exceed :data:`ATTEMPT_MAX_CEILING` (3) and ``count`` may
     never exceed ``max``. The load-bearing rule: a SPENT intent
-    (``count >= max``) must ALREADY carry ``compensation_exhausted_needs_human``.
-    A spent intent with a null terminal status would be a silent re-loop — the
-    self-perpetuating dispatch source the paid-dispatch red line forbids — so the
-    contract makes it inexpressible. Backoff is the recovery tick's own ≤5 s poll
-    cadence (``backoff_owner``), never a busy loop.
+    (``count >= max``) may NEVER carry a null ``terminal_status`` — that is the
+    silent re-loop, the self-perpetuating dispatch source the paid-dispatch red
+    line forbids, and the contract makes it inexpressible. Backoff is the
+    recovery tick's own ≤5 s poll cadence (``backoff_owner``), never a busy loop.
+
+    D-C14 (corrected 2026-07-24): the previous cut demanded that a spent ladder
+    carry ``compensation_exhausted_needs_human`` and NOTHING else, which put it
+    in direct contradiction with the §4 ladder — ``resolve_compensation_outcome``
+    legitimately returns ``compensated`` (owner replay reported
+    ``already_succeeded``) and ``superseded`` (the gap no longer reports a live
+    signal) at ``count == max``, and feeding either back produced a record the
+    validator rejected. Worse, an escalated needs-human row then had NO
+    expressible way to close, so the §4 lifecycle the design asks to close was
+    left permanently open. Both CLOSING terminals are now legal at any count:
+    they are strictly more final than the escalation, never a re-loop. What
+    remains inexpressible is exactly the fail-open shape — a spent ladder with no
+    terminal status — plus a premature escalation on an unspent ladder.
     """
     if attempt.max > ATTEMPT_MAX_CEILING:
         return f"attempt.max {attempt.max} exceeds the ratified ceiling {ATTEMPT_MAX_CEILING} (OQ7)"
     if attempt.count > attempt.max:
         return f"attempt.count {attempt.count} exceeds attempt.max {attempt.max}"
-    if attempt.is_spent() and attempt.terminal_status != TERMINAL_STATUS_EXHAUSTED_NEEDS_HUMAN:
+    if attempt.is_spent() and attempt.terminal_status is None:
         return (
-            f"attempt.count {attempt.count} has reached attempt.max {attempt.max} but terminal_status is "
-            f"{attempt.terminal_status!r}: a spent intent MUST terminalize to "
-            f"{TERMINAL_STATUS_EXHAUSTED_NEEDS_HUMAN!r} (OQ7 — never a silent re-loop, never fail-open)"
+            f"attempt.count {attempt.count} has reached attempt.max {attempt.max} but terminal_status is None: "
+            f"a spent intent MUST already carry a terminal status — {TERMINAL_STATUS_EXHAUSTED_NEEDS_HUMAN!r} when "
+            f"the ladder ran out, or a closing {TERMINAL_STATUS_COMPENSATED!r}/{TERMINAL_STATUS_SUPERSEDED!r} "
+            "(OQ7 — never a silent re-loop, never fail-open)"
         )
     if not attempt.is_spent() and attempt.terminal_status == TERMINAL_STATUS_EXHAUSTED_NEEDS_HUMAN:
         return (
@@ -1196,6 +1498,14 @@ def resolve_compensation_outcome(
 
     Returns ``{"terminal_status", "next_attempt_count", "escalate", "reason"}``.
     Fail-closed on an unknown ``replay_outcome`` or an out-of-range ladder.
+
+    LADDER/VALIDATOR AGREEMENT (D-C14, regression-pinned): for every admissible
+    ``(replay_outcome, attempt_count, attempt_max)`` the resulting
+    ``CompensationAttempt(count=next_attempt_count, max=attempt_max,
+    terminal_status=terminal_status)`` MUST pass :func:`validate_v_attempt`. In
+    particular a spent ladder can still be CLOSED by a later
+    ``already_succeeded`` / ``gap_absent`` observation, so a needs-human
+    escalation is not a dead end.
     """
     if replay_outcome not in REPLAY_OUTCOME_VALUES:
         raise CompensationContractError(
@@ -1300,6 +1610,16 @@ def normalize_compensation_escalation(value: Any, label: str = "escalation") -> 
         raise CompensationContractError(
             f"{label} escalates with an unspent ladder (count {attempt_count} < max {attempt_max})"
         )
+    if attempt_count > attempt_max:
+        # D-C15: the escalation record is the S2/S3 read surface for the terminal
+        # needs-human row, so it must agree with V_ATTEMPT on what a well-formed
+        # spent ladder is. The previous cut checked only `count < max` and each
+        # field's independent 0..3 range, so `count=3, max=1` was accepted here
+        # while the equivalent intent state was rejected by the validator.
+        raise CompensationContractError(
+            f"{label}.attempt_count {attempt_count} exceeds {label}.attempt_max {attempt_max} "
+            "(OQ7: the ladder is bounded by max, so count can never overshoot it)"
+        )
     if not _require_bool(payload["needs_human"], f"{label}.needs_human"):
         raise CompensationContractError(f"{label}.needs_human must be true (OQ7: escalation is never fail-open)")
     if not _require_bool(payload["board_visible"], f"{label}.board_visible"):
@@ -1322,21 +1642,29 @@ def validate_compensation_intent(
     payload: Any,
     *,
     seats: Iterable[CompensationSeat] = DEFAULT_COMPENSATION_SEATS,
+    existing_owner_idempotency_keys: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Normalize + run the full battery. Fail-closed.
 
     Returns ``{"valid", "failures": [{"validator_id", "reason"}...], "normalized",
-    "validator_results", "durable_key"}``:
+    "validator_results", "durable_key", "derivation_verified"}``:
 
-    * ``valid`` — True only when the record parses strictly AND every validator
-      passes. Unlike the promote contract (where an honest AI reject is always
-      valid), a compensation intent has no "honest negative" form: an intent that
-      fails any invariant must never be enqueued, because enqueuing it is what
-      could lead to a re-dispatch.
+    * ``valid`` — True only when the record parses strictly AND every RUN
+      validator passes. Unlike the promote contract (where an honest AI reject is
+      always valid), a compensation intent has no "honest negative" form: an
+      intent that fails any invariant must never be enqueued, because enqueuing
+      it is what could lead to a re-dispatch.
     * ``normalized`` — the round-trippable payload, or ``None`` on a strict-parse
       failure (a single ``validator_id="schema"`` failure).
-    * ``durable_key`` — the OQ3 ``(stage, sub_unit_id, operation_id, job_id)``
-      identity, present only for a valid intent.
+    * ``durable_key`` — the OQ3
+      ``(stage, sub_unit_id, operation_id, job_id, materialization_generation_key,
+      refill_plan_division_id)`` identity, present only for a valid intent.
+    * ``derivation_verified`` — whether ``V_KEY_store_derived`` actually RAN and
+      passed. It is False whenever ``existing_owner_idempotency_keys`` is None,
+      in which case that battery row is reported ``skipped``.
+      **``valid=True`` with ``derivation_verified=False`` means "well-formed but
+      UNPROVEN"; S3 MUST NOT enqueue such an intent** (D-C9). S1/S2 are offline
+      and legitimately run in that mode.
 
     An unknown ``schema_id`` (including a future ``...v2``) is rejected by
     exact-version lookup with no auto-upgrade and no repair.
@@ -1351,6 +1679,7 @@ def validate_compensation_intent(
             "normalized": None,
             "validator_results": [],
             "durable_key": None,
+            "derivation_verified": False,
         }
 
     outcomes: list[tuple[str, str | None]] = [
@@ -1409,6 +1738,37 @@ def validate_compensation_intent(
         else:
             validator_results.append({"validator": validator_id, "status": VALIDATOR_RESULT_STATUS_PASS})
 
+    derivation_verified = False
+    if existing_owner_idempotency_keys is None:
+        validator_results.append(
+            {
+                "validator": VALIDATOR_V_KEY_DERIVATION,
+                "status": VALIDATOR_RESULT_STATUS_SKIPPED,
+                "reason": (
+                    "no existing_owner_idempotency_keys inventory was supplied: this contract is offline and cannot "
+                    "prove the key was derived by an owner. S3 MUST supply the inventory and MUST refuse to enqueue "
+                    "an intent whose derivation_verified is False (D-C9 / OQ5 / R-019)"
+                ),
+            }
+        )
+    else:
+        derivation_reason = validate_v_key_derivation(
+            owner_idempotency_key=intent.compensation_action.owner_idempotency_key,
+            existing_owner_idempotency_keys=existing_owner_idempotency_keys,
+        )
+        if derivation_reason is not None:
+            validator_results.append(
+                {
+                    "validator": VALIDATOR_V_KEY_DERIVATION,
+                    "status": VALIDATOR_RESULT_STATUS_FAIL,
+                    "reason": derivation_reason,
+                }
+            )
+            failures.append({"validator_id": VALIDATOR_V_KEY_DERIVATION, "reason": derivation_reason})
+        else:
+            validator_results.append({"validator": VALIDATOR_V_KEY_DERIVATION, "status": VALIDATOR_RESULT_STATUS_PASS})
+            derivation_verified = True
+
     valid = not failures
     return {
         "valid": valid,
@@ -1416,4 +1776,5 @@ def validate_compensation_intent(
         "normalized": intent.to_payload(),
         "validator_results": validator_results,
         "durable_key": list(intent.durable_key()) if valid else None,
+        "derivation_verified": derivation_verified,
     }
