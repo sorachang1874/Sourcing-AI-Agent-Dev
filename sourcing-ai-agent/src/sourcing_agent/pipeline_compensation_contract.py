@@ -83,11 +83,14 @@ Other structural fail-closed properties (mirroring the two proven precedents,
   intent to, and its judgment shape is mid-flip under 议案③ (S5 not landed). See
   D-C2 / D-C6.
 * THE ATTEMPT LADDER IS BOUNDED AND CANNOT FAIL OPEN (OQ7). ``attempt.max`` may
-  never exceed :data:`ATTEMPT_MAX_CEILING` (3), and an intent whose
-  ``attempt.count`` has reached ``attempt.max`` MUST already carry the terminal
-  status ``compensation_exhausted_needs_human``. A spent intent with a null
-  terminal status is a schema violation, so "silently re-loop forever" is not
-  expressible.
+  never exceed :data:`ATTEMPT_MAX_CEILING` (3), and a SPENT ladder (``count`` has
+  reached ``max``) may never carry a NULL terminal status — that fail-open shape
+  is the one thing made inexpressible, so "silently re-loop forever" cannot be
+  represented. A spent ladder MAY carry either the escalation terminal
+  ``compensation_exhausted_needs_human`` or one of the two CLOSING terminals
+  (``compensated`` / ``superseded``); demanding the escalation terminal and
+  nothing else would leave an escalated needs-human row with no way to ever be
+  retired. See D-C14 and :func:`validate_v_attempt`.
 
 Anchors were re-verified against this tree on 2026-07-24; the design's own line
 spans had drifted (D-C5). Symbol anchors are used here in preference to line

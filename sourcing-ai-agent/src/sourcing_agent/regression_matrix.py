@@ -485,8 +485,10 @@ _ORGANIZATION_PROMOTE_CONTRACT_SUITES = (
 # V_DELTA/V_LINEAGE/V_SIGNAL/V_ATTEMPT battery). Its seat table names EXISTING
 # recovery-tick phases, so an edit here must re-run the contract suite AND the
 # whole-tick characterization oracle that pins those phase names/owner labels
-# (the OQ5/R-019 "zero new dispatch identity" fence is only as good as that
-# mirror).
+# (the OQ5/R-019 key-GRAMMAR fence is only as good as that mirror; note the
+# earlier "zero new dispatch identity" phrasing was WITHDRAWN as false — a pure
+# offline contract constrains key shape, not derivation, and real derivation is
+# a blocking S3 precondition. See design D-C9.)
 _PIPELINE_COMPENSATION_CONTRACT_RELATED_PATHS = {
     "src/sourcing_agent/pipeline_compensation_contract.py",
 }
