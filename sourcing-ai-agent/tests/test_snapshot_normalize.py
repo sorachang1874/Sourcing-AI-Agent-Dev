@@ -620,6 +620,10 @@ class SnapshotNormalizeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
         # now also receives snapshot_dir + the resolved company_identity
         # record (identity threading); identity content is owned by the
         # identity-resolution suites.
+        # WS7/W7.3 S3 wiring (2026-07-25): plus the engine's own model client, a
+        # pure pass-through that only makes the record-only promote-judgment
+        # SHADOW hook reachable — it changes no artifact, no ladder decision and
+        # no authoritative row (the shadow suite owns that regression).
         build_artifacts.assert_called_once_with(
             runtime_dir=self.settings.runtime_dir,
             store=self.store,
@@ -629,6 +633,7 @@ class SnapshotNormalizeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
             company_identity=unittest.mock.ANY,
             preferred_source_snapshot_ids=["baseline-1", "baseline-2"],
             build_profile="full",
+            model_client=self.model_client,
         )
 
 

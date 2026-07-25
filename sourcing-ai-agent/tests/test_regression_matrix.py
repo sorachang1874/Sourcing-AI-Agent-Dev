@@ -20,7 +20,6 @@ def _repo_root() -> Path:
 # explicit *_RELATED_PATHS entry in regression_matrix.py or a paired
 # tests/test_<module>.py file) — do NOT extend this list; shrink it.
 KNOWN_UNMAPPED_LEGACY = (
-    "src/sourcing_agent/acquisition.py",
     "src/sourcing_agent/acquisition_strategy.py",
     "src/sourcing_agent/asset_consolidation_plan.py",
     "src/sourcing_agent/asset_consolidation_repair_proposal.py",
@@ -52,7 +51,6 @@ KNOWN_UNMAPPED_LEGACY = (
     "src/sourcing_agent/serving_projection_migration.py",
     "src/sourcing_agent/serving_projection_reader.py",
     "src/sourcing_agent/smoke_expectation_contract.py",
-    "src/sourcing_agent/snapshot_materializer.py",
     "src/sourcing_agent/source_snapshot_coverage.py",
     "src/sourcing_agent/web_fetch.py",
 )

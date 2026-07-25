@@ -33,3 +33,9 @@
 - `backfill_*.py` / `build_*.py` — 一次性回填与 manifest/bundle 构建（保留为可重放证据）。
 - `bootstrap_*.sh` — 环境引导（测试环境、reviewer CODEX_HOME）。
 - `agent_network_preflight.sh` — 只读网络诊断（不得改 proxy/VPN 状态）。
+
+## WS7 影子路径证据家族（零付费；live schema 只读）
+
+| 脚本 | 用途 |
+|---|---|
+| `ws7_shadow_divergence_report.py` | 议案①（batch divider）+ 议案③（promote judge）影子路径的**接合证据**与**规则梯 vs scripted 分歧语料**。三个子命令：`engagement`（跑真实生产接缝——`queue_background_profile_prefetch` / `build_company_candidate_artifacts`——在自建并自动销毁的 `sourcing_test_ws7_*` schema 里产出真实 shadow record）、`divider`（只读回放 live registry 的 wave-scoped ready set + 磁盘快照，跑梯子与 scripted 分割，出 V1–V10 电池结果与 Jaccard 重组度）、`promote`（只读回放 `organization_asset_registry` 的 realistic 36 / extended 806 对 + 5 个事故场景）。**fail-closed**：三重门 env 任一存在即拒跑；只读连接强制 `default_transaction_read_only = on`（由 PG 而非纪律保证）；只用 scripted 确定性客户端，绝不走 `build_model_client`。**诚实性红线：scripted 客户端只能证明"路径通了"和"保留电池的行为"，证明不了任何 AI 判断质量；真模型语料是 operator-gated 的独立步骤（S6）。** |

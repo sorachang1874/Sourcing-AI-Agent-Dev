@@ -5902,6 +5902,7 @@ class AcquisitionEngine:
             "company_identity": identity.to_record(),
             "preferred_source_snapshot_ids": preferred_source_snapshot_ids or None,
             "build_profile": build_profile,
+            "model_client": self.model_client,
         }
         if runtime_tuning_overrides:
             build_kwargs["runtime_tuning_overrides"] = runtime_tuning_overrides

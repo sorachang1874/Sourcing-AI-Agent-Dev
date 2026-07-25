@@ -22603,6 +22603,7 @@ class SourcingOrchestrator(CompanyPublicWebActionMixin):
                 store=self.store,
                 target_company=request.target_company,
                 snapshot_id=snapshot_id,
+                model_client=self.model_client,
             )
         except Exception as exc:
             self._append_excel_artifact_materialization_event(
@@ -69800,6 +69801,7 @@ class SourcingOrchestrator(CompanyPublicWebActionMixin):
                 if str(item or "").strip()
             ]
             or None,
+            model_client=self.model_client,
         )
         self._append_completed_workflow_reconcile_event(
             job_id,

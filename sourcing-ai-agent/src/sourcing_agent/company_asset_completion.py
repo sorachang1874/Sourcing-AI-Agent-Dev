@@ -279,6 +279,7 @@ class CompanyAssetCompletionManager:
                 store=self.store,
                 target_company=company_name,
                 snapshot_id=snapshot_dir.name,
+                model_client=self.model_client,
             )
 
         summary = {
@@ -391,6 +392,7 @@ class CompanyAssetCompletionManager:
                 store=self.store,
                 target_company=company_name,
                 snapshot_id=snapshot_dir.name,
+                model_client=self.model_client,
             )
 
         completion_dir = snapshot_dir / "asset_completion"

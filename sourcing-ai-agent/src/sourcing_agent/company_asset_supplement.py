@@ -147,6 +147,7 @@ class CompanyAssetSupplementManager:
                 store=self.store,
                 target_company=identity.canonical_name or target_company,
                 snapshot_id=snapshot_dir.name,
+                model_client=self.model_client,
             )
 
         supplement_dir = snapshot_dir / "incremental_supplement"
@@ -431,6 +432,7 @@ class CompanyAssetSupplementManager:
                 store=self.store,
                 target_company=identity.canonical_name or target_company,
                 snapshot_id=snapshot_dir.name,
+                model_client=self.model_client,
             )
 
         supplement_dir = snapshot_dir / "incremental_supplement"

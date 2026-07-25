@@ -31,12 +31,23 @@ Postgres is available unless SOURCING_REQUIRE_PG_STORE_TESTS=1.
 
 from __future__ import annotations
 
+import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import sourcing_agent.acquisition as acquisition_module
+import sourcing_agent.candidate_artifacts as candidate_artifacts_module
+import sourcing_agent.company_asset_completion as company_asset_completion_module
+import sourcing_agent.company_asset_supplement as company_asset_supplement_module
+import sourcing_agent.orchestrator as orchestrator_module
+import sourcing_agent.snapshot_materializer as snapshot_materializer_module
 from sourcing_agent.asset_reuse_planning import upsert_organization_asset_registry_with_guard
+from sourcing_agent.candidate_artifacts import build_company_candidate_artifacts
+from sourcing_agent.domain import Candidate, EvidenceRecord, make_evidence_id
 from sourcing_agent.model_provider import (
     DeterministicModelClient,
     OfflineModelClient,
@@ -380,6 +391,200 @@ class AdditiveKeyDoesNotPollutePersistedRecordTest(unittest.TestCase):
             )
             self.assertEqual(authoritative["snapshot_id"], "cand")
             self.assertNotIn(SHADOW_RECORD_KEY, authoritative)
+
+
+def _ratchet_candidate(index: int) -> Candidate:
+    return Candidate(
+        candidate_id=f"c{index}",
+        name_en=f"Person {index}",
+        display_name=f"Person {index}",
+        category="employee",
+        target_company="Acme",
+        employment_status="current",
+        role="Research Engineer",
+        linkedin_url=f"https://www.linkedin.com/in/acme-person-{index:04d}/",
+        source_dataset="linkedin_roster",
+    )
+
+
+def _ratchet_evidence(index: int) -> EvidenceRecord:
+    url = f"https://www.linkedin.com/in/acme-person-{index:04d}/"
+    return EvidenceRecord(
+        evidence_id=make_evidence_id(f"c{index}", "linkedin_profile", "LinkedIn", url),
+        candidate_id=f"c{index}",
+        source_type="linkedin_profile",
+        title="LinkedIn",
+        url=url,
+        summary="Roster evidence.",
+        source_dataset="linkedin_roster",
+        source_path="/tmp/roster.json",
+        metadata={"profile_url": url},
+    )
+
+
+def _write_ratchet_snapshot(runtime_dir: Path, snapshot_id: str, candidate_count: int) -> None:
+    snapshot_dir = runtime_dir / "company_assets" / "acme" / snapshot_id
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    (runtime_dir / "company_assets" / "acme" / "latest_snapshot.json").write_text(
+        json.dumps(
+            {
+                "snapshot_id": snapshot_id,
+                "company_identity": {
+                    "requested_name": "Acme",
+                    "canonical_name": "Acme",
+                    "company_key": "acme",
+                    "aliases": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (snapshot_dir / "candidate_documents.json").write_text(
+        json.dumps(
+            {
+                "candidates": [_ratchet_candidate(i).to_record() for i in range(candidate_count)],
+                "evidence": [_ratchet_evidence(i).to_record() for i in range(candidate_count)],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+class ProductionEntrypointWiringRatchetTest(unittest.TestCase):
+    """ANTI-INERTNESS RATCHET (2026-07-25) — the promote shadow path must stay
+    reachable from the PRODUCTION artifact-build entrypoint.
+
+    Until 2026-07-25 ``upsert_organization_asset_registry_with_guard``'s
+    ``model_client`` parameter was DEAD in production: ``asset_registration.py``
+    threaded it, but every production caller of
+    ``sync_company_asset_registration`` left it at its ``None`` default and the
+    layer above (``build_company_candidate_artifacts``) had no such parameter at
+    all. So ``record_organization_promote_shadow`` was always called with
+    ``None`` and returned on its first line — the S3 shadow could only ever be
+    observed from tests that call the seam directly (every other test in this
+    file does exactly that, so none of them would have caught it).
+
+    This class drives the REAL ``build_company_candidate_artifacts`` entrypoint
+    against a PG-backed store and a real on-disk snapshot, and asserts a shadow
+    record actually lands on ``sync_status["organization_asset_registry_refresh"]
+    ["result"]``. It fails if the thread-through is ever removed or if a caller
+    silently reverts to the default.
+
+    Zero provider calls: the client is the deterministic scripted judge.
+    """
+
+    def _build(self, model_client: Any, *, schema_label: str) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            with pg_backed_control_plane_store(schema_label=schema_label) as store:
+                # First build: no incumbent → the deterministic pre-branch.
+                _write_ratchet_snapshot(runtime_dir, "20260101T000000", 40)
+                build_company_candidate_artifacts(
+                    runtime_dir=runtime_dir,
+                    store=store,
+                    target_company="Acme",
+                    snapshot_id="20260101T000000",
+                    model_client=model_client,
+                )
+                # Second build: a wider competing snapshot → a CONTESTED decision.
+                _write_ratchet_snapshot(runtime_dir, "20260202T000000", 80)
+                second = build_company_candidate_artifacts(
+                    runtime_dir=runtime_dir,
+                    store=store,
+                    target_company="Acme",
+                    snapshot_id="20260202T000000",
+                    model_client=model_client,
+                )
+                authoritative = store.get_authoritative_organization_asset_registry(
+                    target_company="Acme", asset_view="canonical_merged"
+                )
+                return {
+                    "refresh": dict(
+                        dict(second.get("sync_status") or {}).get("organization_asset_registry_refresh") or {}
+                    ),
+                    "authoritative_snapshot_id": str(authoritative.get("snapshot_id") or ""),
+                }
+
+    def test_judge_capable_client_reaches_the_seam_from_build_company_candidate_artifacts(self) -> None:
+        with patch.dict(os.environ, _SCRIPTED_JUDGE_ENV, clear=False):
+            outcome = self._build(_scripted_client(), schema_label="promote_shadow_ratchet_on")
+        refresh = outcome["refresh"]
+        self.assertEqual(refresh.get("status"), "completed")
+        result = dict(refresh.get("result") or {})
+        # THE ratchet assertion.
+        self.assertIn(
+            SHADOW_RECORD_KEY,
+            result,
+            "WS7/W7.3 S3 promote shadow path went INERT at the production entrypoint: "
+            "build_company_candidate_artifacts no longer threads model_client down to "
+            "upsert_organization_asset_registry_with_guard.",
+        )
+        shadow = dict(result[SHADOW_RECORD_KEY])
+        self.assertEqual(shadow["mode"], "shadow")
+        self.assertTrue(shadow["contested"], "the wider second snapshot must produce a CONTESTED decision")
+        self.assertTrue(shadow["engaged"])
+        self.assertTrue(str(shadow["decision_id"]))
+        self.assertIsNotNone(shadow["decision"])
+        self.assertIn(
+            dict(shadow["ladder_comparison"])["divergence"],
+            {"agree", "ai_more_conservative", "ai_more_permissive"},
+        )
+        # Authority is untouched by the shadow: the ladder promoted the wider row.
+        self.assertEqual(outcome["authoritative_snapshot_id"], "20260202T000000")
+
+    def test_default_none_client_stays_structurally_inert(self) -> None:
+        outcome = self._build(None, schema_label="promote_shadow_ratchet_off")
+        self.assertNotIn(SHADOW_RECORD_KEY, dict(outcome["refresh"].get("result") or {}))
+        self.assertEqual(outcome["authoritative_snapshot_id"], "20260202T000000")
+
+    def test_offline_default_client_stays_structurally_inert(self) -> None:
+        # The daemon's real simulate-default client: threaded but not judge-capable.
+        outcome = self._build(OfflineModelClient(mode="simulate"), schema_label="promote_shadow_ratchet_offline")
+        self.assertNotIn(SHADOW_RECORD_KEY, dict(outcome["refresh"].get("result") or {}))
+        self.assertEqual(outcome["authoritative_snapshot_id"], "20260202T000000")
+
+
+class ProductionCallerThreadingPinTest(unittest.TestCase):
+    """Source-level pins: the thread-through exists at the entrypoint AND every
+    production caller that holds a model client supplies it.
+
+    Without these pins a caller could silently drop back to the default and the
+    functional ratchet above (which passes the client explicitly) would stay
+    green while production went inert again.
+    """
+
+    def test_build_company_candidate_artifacts_passes_model_client_to_the_registration_sync(self) -> None:
+        source = Path(candidate_artifacts_module.__file__).read_text(encoding="utf-8")
+        self.assertIn("    model_client: Any = None,\n", source)
+        self.assertIn("            model_client=model_client,\n", source)
+
+    def test_every_model_client_holding_caller_threads_it(self) -> None:
+        expected = {
+            acquisition_module: 1,
+            company_asset_completion_module: 2,
+            company_asset_supplement_module: 2,
+            orchestrator_module: 2,
+            snapshot_materializer_module: 1,
+        }
+        for module, count in expected.items():
+            with self.subTest(module=module.__name__):
+                source = Path(module.__file__).read_text(encoding="utf-8")
+                needle = (
+                    '"model_client": self.model_client,'
+                    if module is acquisition_module
+                    else "model_client=self.model_client,"
+                )
+                # `build_company_candidate_artifacts` callsites that hold a model
+                # client must pass it; anything less re-opens the inertness gap.
+                self.assertGreaterEqual(
+                    source.count(needle),
+                    count,
+                    f"{module.__name__} stopped threading model_client into "
+                    "build_company_candidate_artifacts (WS7/W7.3 S3 shadow goes inert).",
+                )
 
 
 if __name__ == "__main__":

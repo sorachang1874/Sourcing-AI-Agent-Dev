@@ -273,6 +273,58 @@ Every slice keeps S0 green until the single gated flip; the judge is additive th
 4. **Flip slice (S5)** — the judge replaces the `evaluate` seat in the conjunction (§2.1); §1.2 threshold goldens demote to validators (§5); the storage guard + its goldens STAY hard. Simulate e2e both paths (scripted judge on/off) reach coherent authoritative + audit states. **Review-gate GO required before landing.**
 5. **Live validation (S6)** — explicitly deferred to HarvestAPI/provider quota restoration + explicit operator go; red lines unchanged (triple-gate env, committed `scripts/live_*.py` only, delta-only). The `live_promote_company_snapshot.py` dry-run (recon §2.1) is extended to print the AI decision + guard prediction side by side (OQ7).
 
+### 7.1 Structural-inertness closure + scripted divergence corpus (2026-07-25)
+
+**Why this section exists — S3 was NOT WIRED, not merely off.** A read-only audit found two independent blockers, either alone sufficient:
+
+* **B0 (wiring, the real one).** `upsert_organization_asset_registry_with_guard(..., model_client: Any = None)` and `sync_company_asset_registration(..., model_client=None)` both threaded the parameter, but **every production caller left it at its default**, and the layer above — `build_company_candidate_artifacts` (`candidate_artifacts.py`, 12 callsites) — had no such parameter at all. So `record_organization_promote_shadow` was always called with `None` and returned on the first line of its try-block. **The only callers that ever supplied a client were the tests in `tests/test_organization_promote_shadow.py`**, all of which drive the seam directly — so the whole suite would have stayed green through total production inertness.
+* **B1 (config).** Even with a client threaded, the daemon's simulate-default `OfflineModelClient` fails the capability probe, and the judge opt-in cannot coexist with the divider opt-in in one process (`model_provider.py:2899` precedes `:2906`).
+
+**FIX (ADDITIVE, default-inert).** `build_company_candidate_artifacts` gains `model_client: Any = None` and passes it straight through to `sync_company_asset_registration`; the five production callers that already hold a client now supply it (`acquisition.py`, `snapshot_materializer.py`, `orchestrator.py` ×2, `company_asset_supplement.py` ×2, `company_asset_completion.py` ×2). It is a **pure pass-through**: it touches no artifact, no ladder decision, and no authoritative row, and with `None` / any non-judge-capable client the shadow hook still returns `None` — byte-identical to before. Two callsite assertions that pinned the old kwarg set were updated (`tests/test_snapshot_normalize.py`, `tests/test_frontend_history_recovery.py`) with the rationale recorded inline.
+
+**ENGAGEMENT EVIDENCE (real run through the production entrypoint).** `scripts/ws7_shadow_divergence_report.py engagement` provisions its own ephemeral `sourcing_test_ws7_*` PG schema, writes two competing on-disk snapshots, and calls `build_company_candidate_artifacts` twice with a scripted judge. The second (contested) build produced, on `sync_status["organization_asset_registry_refresh"]["result"]["ai_promote_decision_shadow"]`:
+
+```
+contested = True   engaged = True   ai_status = promoted
+decision_id = dbc8a40399b043a184f5be2395220236
+guard_predicted_verdict = { refused: false, reason: "" }
+ladder_comparison = { contested: true, ladder_promote: true,
+                      ladder_reason: "higher_completeness_and_subsumption",
+                      ai_promote: true, agreement: true, divergence: "agree" }
+validator_results = V_LINEAGE / V_COMP / V_GEN / V_PROV / V_LIFECYCLE — all pass
+```
+
+**ANTI-INERTNESS RATCHET.** `tests/test_organization_promote_shadow.py` gains `ProductionEntrypointWiringRatchetTest` (drives the real `build_company_candidate_artifacts`; verified to FAIL when the thread-through is removed) plus `ProductionCallerThreadingPinTest` (source-level pins that every model-client-holding caller keeps supplying it — without those, a caller could quietly revert while the functional test, which passes the client explicitly, stayed green). `regression_matrix.py` now routes all seven wiring modules to that suite.
+
+**DIVERGENCE CORPUS (live `organization_asset_registry`, read-only: 39 rows / 3 companies).**
+
+| corpus | pairs | divergence | guard pre-filter | validator FAILs |
+|---|---|---|---|---|
+| **realistic** (the actual authoritative incumbent × every other snapshot of its company) | 36 | agree **33**, `ai_more_permissive` **3**, `ai_more_conservative` 0 | pass 9, `source_snapshot_coverage_regression` 27 | V_COMP 28, V_LINEAGE 24 |
+| **extended** (all in-company permutations — COUNTERFACTUAL incumbents, never quote as historical) | 806 | agree 559, `ai_more_permissive` **246**, `ai_more_conservative` 1 | pass 632, coverage-regression 174, `stale_generation_sequence_replay` **0** | V_COMP 158, V_LINEAGE 50 |
+
+The 3 realistic `ai_more_permissive` pairs — the authority flips the S5 conjunction would newly permit, all `ladder_reason=guard_rejected`: `openai 20260720T104157 ← 20260720T041551`, `google 20260720T221424 ← 20260410T121946`, `thinkingmachineslab 20260722T113432 ← 20260408T011151`.
+
+**Incident replays (§1.6), five scenarios:**
+
+| scenario | ladder | AI+battery | divergence |
+|---|---|---|---|
+| **#1 OpenAI generation rollback** (seq 6 ← seq 3) | KEEP (`guard_rejected`) | **PROMOTED** — all five validators pass | **`ai_more_permissive`** |
+| #1b strict-subset direction | KEEP | kept_incumbent | agree |
+| #2 Google simulate pollution | KEEP | kept_incumbent | agree |
+| **#2c polluted-incumbent recovery** (40-row polluted incumbent ← the real 4,297-row snapshot) | **PROMOTE** (`explicit_baseline_inclusion` — the correct recovery) | **KEPT_INCUMBENT — V_COMP FAIL** | `ai_more_conservative` |
+| #3 TML control | KEEP | kept_incumbent | agree |
+
+**Three findings that must be settled before S5:**
+
+1. **Incident #1 — the exact rollback this design says the judgment "must not repeat" — replays as PROMOTED.** The storage guard does not refuse it (the two generation keys differ and the selections are disjoint, so neither the same-key-lower-seq arm nor the strict-subset arm fires); `validate_v_gen` is scoped to same-generation-key comparisons by its own docstring; V_COMP passes because the lane totals are equal and the candidate's `completeness_score` is *higher* (79.87 > 79.09). **Today it is blocked only by the ladder's threshold family — the exact thing S5 retires.** Caveat: the rows are current post-fix state, so this is "the shape of incident #1 as recorded today", not a byte-exact time-travel replay; the V_GEN scope gap is real regardless and is verifiable by reading `validate_v_gen` alone.
+2. **V_GEN and V_COMP's coverage arm are largely inert on real data, and V_COMP can produce a FALSE BLOCK.** 23 of 39 rows carry an empty `materialization_generation_key` (V_GEN can never fire for them; `stale_generation_sequence_replay` fired 0 times in 806 pairs), and 26 of 39 have `effective_lane_total == 0` despite `candidate_count` up to 8,314. Incident #2c is the consequence: V_COMP rejects the recovery promotion the ladder correctly makes, with "candidate 0 < incumbent 40". The retained floor is only as strong as `*_lane_effective_candidate_count`, which is unpopulated on two thirds of the corpus — this is S4's (§2.3) job, and it is a **hard S5 precondition**, not a nice-to-have.
+3. **`_shadow_ladder_comparison`'s docstring is empirically false as written.** It says `ai_more_permissive` "should never fire on a contested decision"; it fires 3/36 and 246/806. This is not a recorder bug — "more conservative" holds relative to *guard + validators*, not relative to the *ladder*, whose threshold family S5 retires — the comment would have misled whoever reads shadow output at flip time, so **it was corrected in this batch** (`organization_promote_judgment._shadow_ladder_comparison`): `ai_more_permissive` is now documented as the expected, load-bearing signal — it counts the authority flips the S5 conjunction would newly permit.
+
+**HONESTY — read before quoting any number above.** The AI side is `ScriptedOrganizationPromoteJudgeModelClient`: a 3-line rule (simulate taint → reject; narrower effective lane total → reject; else promote) that is **strictly more permissive than the ladder by construction**. Its `ai_more_permissive` count is therefore an **upper bound on the authority churn the S5 conjunction permits — a measurement of FLOOR STRENGTH, not of AI behaviour**. This corpus evidences the PATH and the VALIDATOR BATTERY, never AI judgment quality; it says nothing about prompts, reasoning, hallucination, cost or latency. The extended 806-pair corpus mixes real metric vectors with counterfactual incumbents and must never be reported as "historical decisions". A real-model corpus is a separate, operator-gated step (S6).
+
+**Residual (not closed here):** `_persist_candidate_artifact_view` (`candidate_artifacts.py`, the timeline-rewrite / candidate-documents bootstrap repair path) also calls `sync_company_asset_registration` and was deliberately left unthreaded — its two callers are operator repair paths that structurally hold no model client, and adding a parameter no caller can fill would re-create exactly the dead-parameter pattern this slice removed. `scripts/live_promote_company_snapshot.py` likewise still calls the guard with no client (that is OQ7/S6's dry-run extension).
+
 ---
 
 ## 8. Operator questions (the AskUserQuestion batch)

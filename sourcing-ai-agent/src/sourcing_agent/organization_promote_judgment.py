@@ -584,9 +584,20 @@ def _shadow_ladder_comparison(
 ) -> dict[str, Any]:
     """Divergence digest: the ladder's ACTUAL promote decision vs the AI's
     effective decision (design §7 S3 — the "AI decision ≠ ladder decision"
-    counter the S5 flip consumes as free before/after evidence). Under ruling ④
-    the AI can only be MORE conservative, so ``ai_more_permissive`` should never
-    fire on a contested decision — recorded honestly if it ever does."""
+    counter the S5 flip consumes as free before/after evidence).
+
+    CORRECTED 2026-07-25 (design §7.1 finding 3). This docstring previously read
+    "under ruling ④ the AI can only be MORE conservative, so
+    ``ai_more_permissive`` should never fire on a contested decision". That is
+    empirically false: on the real registry corpus it fires 3/36 (realistic
+    incumbent-vs-candidate pairs) and 246/806 (extended permutations). It is not
+    a recorder bug — ruling ④'s "more conservative" holds relative to
+    **guard + validators** (a failure never flips authority), NOT relative to the
+    **ladder**, whose completeness threshold family S5 retires. So
+    ``ai_more_permissive`` is the expected, load-bearing signal: it counts the
+    authority flips the S5 conjunction would newly permit. Read it as an upper
+    bound on authority churn, and remember that a SCRIPTED judge is more
+    permissive than any plausible real one by construction."""
     agreement = bool(ladder_promote) == bool(ai_promote)
     if not engaged:
         divergence = "not_engaged"

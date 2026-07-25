@@ -1712,11 +1712,18 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
             )
 
         self.assertEqual(repair["status"], "completed")
+        # WS7/W7.3 S3 wiring (2026-07-25): the orchestrator now threads its own
+        # model client through so the record-only promote-judgment SHADOW hook is
+        # reachable from production. It is a pure pass-through — the artifact
+        # build, the ladder decision, and which row becomes authoritative are all
+        # unchanged, and the daemon's simulate-default OfflineModelClient keeps
+        # the shadow inert.
         artifact_build.assert_called_once_with(
             runtime_dir=self.settings.runtime_dir,
             store=self.store,
             target_company=target_company,
             snapshot_id=snapshot_id,
+            model_client=self.orchestrator.model_client,
         )
         # W6 cutover: snapshot materialization is command-owned; the durable
         # snapshot.compaction.run command is the completion evidence, and the

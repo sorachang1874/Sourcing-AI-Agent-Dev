@@ -193,6 +193,40 @@ Every slice keeps the characterization oracle green until the single gated flip;
 4. **Simulate e2e** — full-chain smoke under simulate with the scripted divider client (AI path) and without it (fallback path): both must reach dispatched/terminal states with coherent audit records; `refill_saturation`/`unfilled_available_slot_count` (enrichment.py:1253–1277) before/after comparison per ruling ②'s acceptance metrics.
 5. **Live validation — explicitly deferred** to HarvestAPI quota restoration + explicit operator go (red lines unchanged: triple-gate env, committed `scripts/live_*.py` only, delta-only paid dispatch). First live wave doubles as the D4 ceiling probe if the operator approves that scope.
 
+### 5.1 Structural-inertness closure + scripted divergence corpus (2026-07-25)
+
+**Why this section exists:** S1–S4 all landed green while the divider shadow path had never once fired in production. A read-only audit found the chain: the running worker daemon carries no `SOURCING_EXTERNAL_PROVIDER_MODE` and no scripted opt-in, so `build_model_client` returns `OfflineModelClient`, whose `divide_profile_prefetch_batches` is the inherited `DeterministicModelClient` default → the capability probe (`model_client_supports_batch_division`, gate A2) is `False` → the hook returns `None` before any work. The daemon also resolves `SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA` to `public` (an empty schema it created at its own boot), so even a fully configured daemon had nothing to divide. **Verdict: OFF BY CONFIGURATION — the seam is fully wired (`self.model_client` is threaded `cli.py:982 → acquisition.py:766 → enrichment.py:2432`); no code change was needed.** Note the two scripted opt-ins are mutually exclusive inside one process (`model_provider.py:2899` precedes `:2906`), so the divider and promote paths can never be exercised by the same daemon run.
+
+**ENGAGEMENT EVIDENCE (real run through the production seam, not a direct hook call).** `scripts/ws7_shadow_divergence_report.py engagement` provisions its own ephemeral `sourcing_test_ws7_*` PG schema, builds a real `MultiSourceEnricher` with a scripted divider client, and calls `queue_background_profile_prefetch` with `execute_profile_refill_submit_commands=False` (zero provider calls). Gates A0→A7 all cleared and the record landed on the returned `refill_plan_items["ai_batch_division_shadow"]`:
+
+```
+shadow_status = proposed   engaged = True   eligible_member_count = 600
+division_id   = 59f89ab18aa14a7f9fba9a630eeeec09   batch_count = 4
+ladder_comparison = { ladder_dispatched_batch_count: 4, ladder_dispatched_batch_sizes: [50,50,50,50],
+                      ladder_deferred_item_count: 400, ai_batch_count: 4, ai_batch_sizes: [150,150,150,150],
+                      batch_count_delta: 0, dispatched_membership_identical: false }
+```
+
+An **anti-inertness ratchet** now guards this: `tests/test_profile_batch_division_shadow.py::EndToEndSeamEngagementRatchetTest` drives the same production entrypoint against a PG store and fails if no record is produced (verified to fail when the seam's `self.model_client` is replaced with `None`), plus a paired negative test pinning that the simulate-default `OfflineModelClient` stays inert. Every other test in that file calls the hook directly and would have stayed green through total production inertness.
+
+**DIVERGENCE CORPUS (76 real ready sets >300 — 10 live-PG wave groups + 66 on-disk snapshots; `--source both`).** Live schema read-only (session `default_transaction_read_only = on`); scripted client only.
+
+| metric | result |
+|---|---|
+| engaged (OQ5 >300) | 76 / 76 |
+| battery-VALID non-ladder divisions | **42** |
+| battery-REJECTED | **34 — every one `V1_provider_envelope`** |
+| `dispatched_membership_identical` | 0 / 42 (the divisions really are different partitions) |
+| mean best-match Jaccard vs the ladder | mean **0.351**, range 0.167–0.819 |
+| ladder dispatched batch count | **4 in all 76 cases** (pinned to `available_new_worker_count`), sizes 50/75/78 |
+| ladder deferred items | **151,486** across the 76 sets |
+| AI batch count / sizes | 4–8 batches of 76–299; coverage 100% of eligible members in every valid case; envelope utilisation 0.26–1.00 |
+| V9 rounds `ceil(batch_count/inflight)` | inflight 4: ladder 1, AI 1–2 · inflight 8: ladder 1, AI 1 |
+
+**Finding D8 (new, acted on here as a design question, not a code change): V1 and V2/V10 are jointly unsatisfiable above 2,400 eligible members.** `V1` caps a batch at 300 and `V2`/`V10` cap the wave at 8 batches, so no legal division exists for `n > 8 × 300`. The corpus confirms this is exactly the binding line: every one of the 34 rejected sets has `n ≥ 2,599` and every one of the 42 valid sets has `n ≤ 2,337`. **45% of the real ready sets above the OQ5 threshold cannot be AI-divided at all.** Either the mint site must window the ready set below 2,400 before engaging the divider (S3's stated assumption, currently unenforced), or OQ5 needs an explicit *upper* engagement bound. This must be settled before S5 — today it silently degrades to the ruling-④ F5 fallback on the largest waves, i.e. exactly the waves the divider exists to improve.
+
+**HONESTY — read before quoting any number above.** The AI side is `ScriptedProfileBatchDividerModelClient`, i.e. `clamp(ceil(n/300), 4, 8)` contiguous equal chunks. It reads inventory size and the provider envelope and *nothing else* — not shard mix, not failure history, not queue state, attempts or priority. Every "divergence" number above is `f(n)` versus `g(n, worker_budget)`: two arithmetic formulas. **This corpus evidences the PATH and the VALIDATOR BATTERY, never AI judgment quality.** It says nothing about prompts, reasoning, hallucination, cost, latency, or the F2/F3 real-provider failure modes, and it is not a historical replay (the registry rows are current post-fix state). What it does buy is real: the ladder's output is shape-degenerate (uniform 50/75 contiguous slices), so any validator that has only ever seen ladder-shaped input was untested — and that is precisely where finding D8 came from. A real-model corpus is a separate, operator-gated step (S6).
+
 ## 6. Open questions for the operator (the AskUserQuestion batch)
 
 Mapping against the recon's 18-question list (recon §5): the four RATIFIED rulings settle **Q1** (ruling ① seat), **Q4** (ruling ① "rules demote to validators" shape), **Q6** (ruling ② wake semantics), **Q9** (ruling ③ two gates), **Q3+Q12** (ruling ④ both fallback directions). Of the remaining questions, **Q2, Q5, Q16, and the divider half of Q18 belong to this proposal** (Q7 is ruling ②'s metrics question but its answer is consumed here in §5.4; Q8/Q10/Q11 → ruling ③ doc; Q13–Q15 → behavior-layer doc; Q17 → compensation doc). Each restated as a decidable question:

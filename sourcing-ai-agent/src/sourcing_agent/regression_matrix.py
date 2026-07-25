@@ -446,6 +446,32 @@ _ORGANIZATION_PROMOTE_ORACLE_SUITES = (
         reason="WS7/W7.3 S3 promote-judge SHADOW at the upsert_organization_asset_registry_with_guard seam (asset_reuse_planning.py) — an edit to evaluate/the seam must re-verify that the authoritative-row outcome stays byte-identical with the shadow on vs off",
     ),
 )
+# WS7/W7.3 S3 shadow WIRING (2026-07-25): these modules are the production
+# thread-through that lets a judge-capable model client reach
+# `record_organization_promote_shadow` at the
+# `upsert_organization_asset_registry_with_guard` seam. Before the thread-through
+# landed the parameter was dead in production and the shadow path was inert;
+# an edit that drops `model_client=` from any of them silently re-opens that
+# hole, so the anti-inertness ratchet suite rides every such edit.
+_PROMOTE_SHADOW_WIRING_RELATED_PATHS = {
+    "src/sourcing_agent/candidate_artifacts.py",
+    "src/sourcing_agent/asset_registration.py",
+    "src/sourcing_agent/acquisition.py",
+    "src/sourcing_agent/company_asset_completion.py",
+    "src/sourcing_agent/company_asset_supplement.py",
+    "src/sourcing_agent/snapshot_materializer.py",
+    "src/sourcing_agent/orchestrator.py",
+}
+_PROMOTE_SHADOW_WIRING_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_organization_promote_shadow.py",
+        args=("tests/test_organization_promote_shadow.py",),
+        reason=(
+            "WS7/W7.3 S3 anti-inertness ratchet: build_company_candidate_artifacts must keep threading "
+            "model_client down to the promote-shadow seam, and every caller that holds one must keep supplying it"
+        ),
+    ),
+)
 # organization_promote_contract.py is the WS7/W7.3 S1 promote-decision contract
 # (schema sourcing.organization_asset.ai_promote_decision.v1 + validator battery
 # V_LINEAGE/V_COMP/V_GEN/V_PROV/V_LIFECYCLE). The validators formalize the ladder
@@ -666,6 +692,12 @@ def infer_pytest_invocations(
             # normal storage / workflow-explain suites, both matched below.
             saw_backend_change = True
             for invocation in _ORGANIZATION_PROMOTE_ORACLE_SUITES:
+                add(invocation)
+        if path in _PROMOTE_SHADOW_WIRING_RELATED_PATHS:
+            # No `continue`: the wiring ratchet rides ALONGSIDE the module's
+            # normal suites (artifact / orchestrator / storage), matched below.
+            saw_backend_change = True
+            for invocation in _PROMOTE_SHADOW_WIRING_SUITES:
                 add(invocation)
         if path in _STORAGE_RELATED_PATHS:
             saw_backend_change = True

@@ -527,7 +527,21 @@ def build_company_candidate_artifacts(
     build_profile: str = _DEFAULT_ARTIFACT_BUILD_PROFILE,
     runtime_tuning_overrides: dict[str, Any] | None = None,
     sync_registration: bool = True,
+    model_client: Any = None,
 ) -> dict[str, Any]:
+    """Build the canonical candidate artifacts for one company snapshot.
+
+    ``model_client`` (WS7/W7.3 S3 wiring, ADDITIVE) is a pure pass-through to
+    ``sync_company_asset_registration`` → ``upsert_organization_asset_registry_with_guard``,
+    where the record-only promote-judgment SHADOW hook lives. It NEVER affects
+    the artifact build, the ladder decision, or which registry row becomes
+    authoritative; with the default ``None`` (or any non-judge-capable client,
+    e.g. the simulate-default ``OfflineModelClient``) the shadow hook returns
+    ``None`` and the behaviour is byte-identical to before this parameter
+    existed. Before this thread-through every production caller left the
+    parameter at its default, so the shadow path was structurally unreachable
+    outside tests.
+    """
     build_options = _candidate_artifact_build_profile_options(build_profile)
     materialized_view = materialize_company_candidate_view(
         runtime_dir=runtime_dir,
@@ -721,6 +735,7 @@ def build_company_candidate_artifacts(
                 or []
             ),
             authoritative=True,
+            model_client=model_client,
         )
         sync_status = dict(registration_sync.get("sync_status") or {})
     else:

@@ -22,13 +22,17 @@ from __future__ import annotations
 
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 from unittest import mock
 
 import sourcing_agent.enrichment as enrichment_module
+from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.domain import Candidate
 from sourcing_agent.enrichment import (
+    MultiSourceEnricher,
     ProfilePrefetchBatchPlan,
     _build_profile_prefetch_batch_plan,
     _build_profile_prefetch_queue_items,
@@ -55,6 +59,7 @@ from sourcing_agent.profile_batch_division_contract import (
     VALIDATOR_V5_WORKER_BUDGET,
     VALIDATOR_V6_WAVE_MINT_ONLY,
 )
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 _SIMULATE_ENV = {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}
 _SCRIPTED_DIVIDER_ENV = {
@@ -65,6 +70,35 @@ _SCRIPTED_DIVIDER_ENV = {
 
 def _urls(prefix: str, count: int) -> list[str]:
     return [f"https://www.linkedin.com/in/{prefix}-{i:04d}/" for i in range(count)]
+
+
+def _asset_catalog(root: Path) -> AssetCatalog:
+    """Minimal on-disk catalog for the end-to-end seam ratchet (mirrors
+    tests/test_profile_prefetch_scheduler_contract.py)."""
+    return AssetCatalog(
+        project_root=root,
+        dev_root=root,
+        anthropic_root=root,
+        anthropic_workbook=root / "anthropic.xlsx",
+        anthropic_readme=root / "README.md",
+        anthropic_progress=root / "PROGRESS.md",
+        legacy_api_accounts=root / "api_accounts.json",
+        legacy_company_ids=root / "company_ids.json",
+        anthropic_publications=root / "publications.json",
+        scholar_scan_results=root / "scholar.json",
+        investor_members_json=root / "investor.json",
+        employee_scan_skill=root / "employee_skill.md",
+        investor_scan_skill=root / "investor_skill.md",
+        onepager_skill=root / "onepager_skill.md",
+    )
+
+
+class _StubHarvestProfileConnector:
+    """Enabled-but-never-called connector: the ratchet runs with
+    ``execute_profile_refill_submit_commands=False``, so no submit ever reaches
+    it (ZERO provider calls)."""
+
+    settings = type("_Settings", (), {"enabled": True})()
 
 
 def _budget(available: int, *, active: int = 0, reserved: int = 0, actor: int = 4, submit: int = 4) -> dict[str, int]:
@@ -440,6 +474,105 @@ class ShadowSeamStructuralPinTest(unittest.TestCase):
         # D1: the additive plan-record key + schema_version bump land ONLY at S5.
         self.assertNotIn('"ai_batch_division"', self.source)
         self.assertIn('"schema_version": 1,', self.source)
+
+
+class EndToEndSeamEngagementRatchetTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
+    """ANTI-INERTNESS RATCHET (2026-07-25) — the divider shadow path must stay
+    reachable through the PRODUCTION entrypoint, not just through a direct call
+    to the hook.
+
+    Every test above drives ``record_profile_prefetch_division_shadow`` directly,
+    so all of them would stay green even if the enrichment mint seam stopped
+    threading ``self.model_client`` (or if some new early-return were added ahead
+    of it). This class closes that hole: it runs the real
+    ``MultiSourceEnricher.queue_background_profile_prefetch`` against a real
+    PG-backed store with a divider-capable client and asserts a shadow record
+    actually lands on the returned ``refill_plan_items`` activity surface — i.e.
+    the gate ladder A0 (connector/worker_runtime/job_id) → A1 (post-lock
+    revalidation) → A2 (capability probe) → A3 (``wave_mint_provider_submit``) →
+    A4-A7 all clear end to end.
+
+    Zero provider calls: ``execute_profile_refill_submit_commands=False`` stops
+    at the planned-command boundary, and the client is the deterministic scripted
+    divider (pure arithmetic). The paired negative test pins the default-inert
+    contract: the simulate-default ``OfflineModelClient`` produces NO record.
+    """
+
+    def _run_wave(self, model_client: Any, *, url_count: int, label: str) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            store = self.make_pg_store(str(root / "control_plane.db"))
+            enricher = MultiSourceEnricher(
+                _asset_catalog(root),
+                accounts=[],
+                harvest_profile_connector=_StubHarvestProfileConnector(),
+                model_client=model_client,
+                store=store,
+            )
+            # A0: the seam early-returns "worker_prefetch_unavailable" without a
+            # worker runtime; the sentinel is never called on this code path.
+            enricher.worker_runtime = object()
+            candidates = [
+                Candidate(
+                    candidate_id=f"{label}_{index:04d}",
+                    name_en=f"Ratchet {index}",
+                    display_name=f"Ratchet {index}",
+                    linkedin_url=f"https://www.linkedin.com/in/{label}-{index:04d}/",
+                )
+                for index in range(url_count)
+            ]
+            return enricher.queue_background_profile_prefetch(
+                candidates=candidates,
+                snapshot_dir=root,
+                job_id=f"job_{label}",
+                request_payload={},
+                plan_payload={},
+                runtime_mode="workflow",
+                allow_shared_provider_cache=True,
+                priority=True,
+                load_cached_profile_payloads=False,
+                submit_provider=True,
+                execute_profile_refill_submit_commands=False,
+            )
+
+    def test_divider_capable_client_produces_a_shadow_record_through_the_real_seam(self) -> None:
+        with mock.patch.dict("os.environ", _SCRIPTED_DIVIDER_ENV, clear=False):
+            result = self._run_wave(
+                ScriptedProfileBatchDividerModelClient(mode="simulate"),
+                url_count=600,
+                label="ratcheton",
+            )
+        refill_plan_items = dict(result.get("refill_plan_items") or {})
+        # THE ratchet assertion: the production seam produced a shadow record.
+        self.assertIn(
+            "ai_batch_division_shadow",
+            refill_plan_items,
+            "WS7/W7.2 S3 divider shadow path went INERT at the production mint seam: "
+            "queue_background_profile_prefetch no longer reaches "
+            "record_profile_prefetch_division_shadow with a divider-capable client.",
+        )
+        record = dict(refill_plan_items["ai_batch_division_shadow"])
+        self.assertEqual(record["kind"], SHADOW_RECORD_KIND)
+        self.assertEqual(record["mode"], "shadow")
+        self.assertTrue(record["engaged"])
+        self.assertEqual(record["shadow_status"], "proposed")
+        self.assertEqual(record["skip_reason"], "")
+        self.assertGreater(int(record["eligible_member_count"]), 300)
+        division = dict(record["division"] or {})
+        self.assertEqual(division["schema_id"], SCHEMA_ID_V1)
+        self.assertEqual(division["division_source"], DIVISION_SOURCE_AI_DIVIDER)
+        self.assertGreaterEqual(int(division["batch_count"]), 4)
+        # The divergence digest is populated against the ladder's REAL plan.
+        self.assertGreater(int(dict(record["ladder_comparison"] or {})["ladder_dispatched_batch_count"]), 0)
+        # Authority is untouched: the shadow key rides the activity surface only.
+        self.assertNotIn("ai_batch_division", dict(result.get("batch_plan") or {}))
+
+    def test_offline_default_client_stays_structurally_inert_through_the_real_seam(self) -> None:
+        # The default-inert contract: no opt-in env, simulate-default client →
+        # the capability probe (A2) is False → no record, no model call.
+        with mock.patch.dict("os.environ", _SIMULATE_ENV, clear=False):
+            result = self._run_wave(OfflineModelClient(mode="simulate"), url_count=600, label="ratchetoff")
+        self.assertNotIn("ai_batch_division_shadow", dict(result.get("refill_plan_items") or {}))
 
 
 if __name__ == "__main__":

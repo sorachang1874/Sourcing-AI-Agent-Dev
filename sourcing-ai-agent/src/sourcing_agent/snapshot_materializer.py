@@ -1179,6 +1179,7 @@ class SnapshotMaterializer:
                     target_company=request.target_company,
                     snapshot_id=snapshot_dir.name,
                     preferred_source_snapshot_ids=preferred_source_snapshot_ids or None,
+                    model_client=self.model_client,
                 )
                 artifact_timings_ms = dict(dict(artifact_build.get("summary") or {}).get("timings_ms") or {})
                 artifact_timings_ms.setdefault("candidate_artifact_build", _elapsed_ms(artifact_started_at))
