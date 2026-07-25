@@ -21,11 +21,14 @@ battery — never AI judgment quality**:
     "divergence" it produces is ``f(n)`` vs ``g(n, worker_budget)``: two
     arithmetic formulas.
   * ``ScriptedOrganizationPromoteJudgeModelClient`` is a 3-line rule (simulate
-    taint → reject; narrower effective lane total → reject; else promote). It is
-    strictly MORE permissive than the ladder by construction, so its
-    ``ai_more_permissive`` count is an **upper bound on the authority churn the
-    S5 conjunction permits** — a measurement of FLOOR STRENGTH, not of AI
-    behaviour.
+    taint → reject; narrower effective lane total → reject; else promote). Its
+    two reject arms are exactly the predicates V_PROV/V_COMP re-check, so a
+    scripted promote survives the S5 conjunction iff the guard-and-battery floor
+    admits it. The CEILING on authority churn is therefore the floor's own
+    admission count (452/806 extended); ``ai_more_permissive`` (246/806) is the
+    SUBSET of those admissions where the ladder disagreed — churn relative to
+    today's ladder, a lower bound on the ceiling, NOT equal to it. Both describe
+    the FLOOR and this scripted rule, not AI behaviour.
 
 Nothing here says anything about prompts, reasoning, hallucination, cost,
 latency, or the F2/F3 real-provider failure modes. A real-model corpus is a
@@ -82,7 +85,7 @@ USAGE
 
 Subcommands:
     engagement   end-to-end proof that BOTH shadow seams engage (own schema)
-    divider      ladder-vs-scripted divergence over real ready sets (read-only)
+    divider      ladder-vs-scripted divergence over reconstructed ready sets (read-only)
     promote      ladder-vs-scripted divergence over real registry pairs (read-only)
     all          engagement + divider + promote
 """

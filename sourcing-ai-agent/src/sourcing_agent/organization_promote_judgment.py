@@ -663,12 +663,23 @@ def _shadow_ladder_comparison(
         predicates the retained battery re-checks (V_PROV / V_COMP), so under
         the S5 conjunction ``promote ⟺ guard-pass AND AI-approve AND
         validators-pass`` a scripted promote survives iff the guard-∧-battery
-        floor admits it. The scripted ``ai_more_permissive`` count therefore
-        equals that floor's admission count, which NO judge — scripted or real —
-        can exceed.
+        floor admits it.
 
-    Read ``ai_more_permissive`` as an UPPER BOUND on the authority churn the S5
-    conjunction permits, i.e. a measurement of FLOOR STRENGTH. It says nothing
+    What that licenses, stated exactly (an earlier version of this docstring
+    claimed ``ai_more_permissive`` EQUALS the floor's admission count — that is
+    arithmetically false and is withdrawn; on the 806-pair extended corpus the
+    floor admits 452 while ``ai_more_permissive`` is 246, because the floor also
+    admits the 206 pairs where the ladder promotes too and which are therefore
+    scored ``agree``):
+
+    * The CEILING on authority churn under the S5 conjunction is the floor's
+      own admission count — no judge, scripted or real, can promote anything
+      the guard-∧-battery floor refuses.
+    * ``ai_more_permissive`` is the SUBSET of those admissions on which the
+      ladder would have kept the incumbent, i.e. the churn measured relative to
+      TODAY's ladder. It is a lower bound on the ceiling, not the ceiling.
+
+    Both numbers describe the FLOOR and the scripted rule. Neither says anything
     about how a real model would behave inside that bound."""
     agreement = bool(ladder_promote) == bool(ai_promote)
     if not engaged:

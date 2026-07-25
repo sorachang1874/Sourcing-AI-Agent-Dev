@@ -9,6 +9,15 @@
   `SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS=1`) without explicit operator approval.
   Paid dispatch: inventory local + remote history first, delta-only, never retry/resume a
   terminalized paid command.
+- **Billing-capable env is FIVE vars, not three** (2026-07-25). Besides the triple gate,
+  these two permit a *model* call that costs money and are OFF by default — never set
+  either without explicit operator approval:
+  `SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL` (WS7 promote shadow; the seam sits on the
+  authoritative write path) and `SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL` (WS7 divider
+  shadow; refill/mint path, held under the scheduler lock). Without them a real provider
+  client reaching either seam makes zero calls; the scripted clients
+  (`SOURCING_SCRIPTED_*`) are billing-free and are the only sanctioned way to exercise
+  these paths.
 - Live-ops actions run committed `scripts/live_*.py` only — never /tmp scripts. The
   script registry lives in `sourcing-ai-agent/scripts/README.md`.
 - Live PG schema: `sourcing_live_tml_path_20260719`. `.local-postgres.env` has no
