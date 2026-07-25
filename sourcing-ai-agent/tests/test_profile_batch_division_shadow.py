@@ -39,6 +39,7 @@ from sourcing_agent.enrichment import (
 )
 from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 from sourcing_agent.model_provider import (
+    WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV,
     DeterministicModelClient,
     OfflineModelClient,
     ScriptedProfileBatchDividerModelClient,
@@ -48,6 +49,7 @@ from sourcing_agent.profile_batch_division import (
     SHADOW_RECORD_KIND,
     SHADOW_STATUS_ERROR,
     SKIP_REASON_BELOW_ENGAGEMENT_THRESHOLD,
+    divider_shadow_model_calls_permitted,
     model_client_supports_batch_division,
     record_profile_prefetch_division_shadow,
 )
@@ -156,7 +158,14 @@ def _plan_dispatch_snapshot(plan: ProfilePrefetchBatchPlan) -> str:
 
 
 class _SpyDividerClient(DeterministicModelClient):
-    """Divider-capable spy: canned response + call counter (OQ5/OQ6 pins)."""
+    """Divider-capable spy: canned response + call counter (OQ5/OQ6 pins).
+
+    DECLARED billing-free (a local object that never touches a network), so it
+    stands in for the scripted divider under the 2026-07-25 safety gate.
+    ``_RealCapableDividerClient`` below is the deliberately UNdeclared twin.
+    """
+
+    ws7_shadow_billing_free = True
 
     def __init__(self, response: dict[str, Any] | None = None) -> None:
         self.response = dict(response or {})
@@ -170,8 +179,96 @@ class _SpyDividerClient(DeterministicModelClient):
 
 
 class _RaisingDividerClient(DeterministicModelClient):
+    ws7_shadow_billing_free = True
+
     def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         raise RuntimeError("shadow divider client exploded")
+
+
+class _RealCapableDividerClient(DeterministicModelClient):
+    """Stands in for a REAL provider client at the mint seam: structurally
+    divider-capable and NOT declared billing-free — the exact shape of
+    ``OpenAICompatibleChatModelClient`` / ``QwenResponsesModelClient``. It does
+    no network I/O; it only records that a (billable) call was attempted."""
+
+    def __init__(self) -> None:
+        self.divide_calls = 0
+
+    def divide_profile_prefetch_batches(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        self.divide_calls += 1
+        return {}
+
+
+class RealModelShadowSafetyGateTest(unittest.TestCase):
+    """SAFETY GATE (2026-07-25) — capability is NOT permission (mirror of the
+    promote seam's gate; see profile_batch_division.divider_shadow_model_calls_permitted).
+
+    EXPOSURE, stated precisely: unlike the promote seam this hook is on the
+    REFILL/mint path, not the authoritative write path — nothing it returns can
+    change dispatch, and the ladder plan is byte-identical with it on or off.
+    What an ungated real client would have cost is a BILLED provider call plus up
+    to the 20 s divider timeout per wave mint >300 eligible urls, taken while the
+    scheduler lock is held. Cost/latency on a scheduling hot spot rather than a
+    correctness risk to authority — gated identically anyway.
+    """
+
+    def setUp(self) -> None:
+        patcher = mock.patch.dict("os.environ", _SCRIPTED_DIVIDER_ENV, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_real_capable_client_without_opt_in_makes_no_model_call(self) -> None:
+        client = _RealCapableDividerClient()
+        self.assertTrue(
+            model_client_supports_batch_division(client),
+            "the probe must still consider it CAPABLE — the gate is permission, not capability",
+        )
+        with mock.patch.dict("os.environ", {WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV: ""}, clear=False):
+            self.assertFalse(divider_shadow_model_calls_permitted(client))
+            record = record_profile_prefetch_division_shadow(
+                client, plan=_plan(_urls("gate", 600)), wave_mint_provider_submit=True
+            )
+        self.assertIsNone(record, "an ungated real-capable client must produce NO shadow record")
+        self.assertEqual(client.divide_calls, 0, "a BILLED model call would have been made at the mint seam")
+
+    def test_no_live_provider_gate_var_implies_the_opt_in(self) -> None:
+        client = _RealCapableDividerClient()
+        live_ish = {
+            "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+            "SOURCING_LIVE_PROVIDER_CONFIRM": "1",
+            "SOURCING_ALLOW_ISOLATED_LIVE_PROVIDER_ACCESS": "1",
+            WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV: "",
+        }
+        with mock.patch.dict("os.environ", live_ish, clear=False):
+            self.assertFalse(divider_shadow_model_calls_permitted(client))
+            self.assertIsNone(
+                record_profile_prefetch_division_shadow(
+                    client, plan=_plan(_urls("gate_live", 600)), wave_mint_provider_submit=True
+                )
+            )
+        self.assertEqual(client.divide_calls, 0)
+
+    def test_explicit_opt_in_re_enables_the_real_capable_client(self) -> None:
+        client = _RealCapableDividerClient()
+        with mock.patch.dict("os.environ", {WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV: "1"}, clear=False):
+            self.assertTrue(divider_shadow_model_calls_permitted(client))
+            record = record_profile_prefetch_division_shadow(
+                client, plan=_plan(_urls("gate_on", 600)), wave_mint_provider_submit=True
+            )
+        assert record is not None
+        self.assertEqual(client.divide_calls, 1)
+        # It returned {} → the ruling-④ F1 audit, i.e. the call really happened.
+        self.assertEqual(record["fallback_audit"]["fallback_reason"], FALLBACK_REASON_MODEL_UNAVAILABLE)
+
+    def test_scripted_divider_needs_no_opt_in(self) -> None:
+        with mock.patch.dict("os.environ", {WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV: ""}, clear=False):
+            client = ScriptedProfileBatchDividerModelClient(mode="simulate")
+            self.assertTrue(divider_shadow_model_calls_permitted(client))
+            record = record_profile_prefetch_division_shadow(
+                client, plan=_plan(_urls("gate_scripted", 600)), wave_mint_provider_submit=True
+            )
+        assert record is not None
+        self.assertTrue(record["engaged"])
 
 
 class ShadowEngagementTest(unittest.TestCase):

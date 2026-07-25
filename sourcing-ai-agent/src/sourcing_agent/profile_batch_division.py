@@ -34,6 +34,18 @@ Engagement policy (OQ5): the divider engages only when the eligible
 helper returns an immediate structural fallback record WITHOUT calling the
 model — deliberate policy non-engagement, not a ruling-④ failure class, so it
 carries ``skip_reason`` instead of an F-audit.
+
+SHADOW SAFETY GATE (S3, added 2026-07-25 — design §5.1). The S3 shadow hook
+runs SYNCHRONOUSLY inside the enrichment mint seam while the scheduler lock is
+held. Its exposure is NOT the authoritative write path (dispatch never reads the
+record, and the ladder-built plan is byte-identical with the shadow on or off) —
+the exposure is a BILLED provider call plus up to a 20 s judge timeout inside a
+lock-held scheduling hot spot, once per wave mint above the OQ5 threshold. That
+is real enough to gate identically to the promote seam, so the hook requires
+capability (`model_client_supports_batch_division`) AND permission
+(`divider_shadow_model_calls_permitted`): a client whose class declares
+`ws7_shadow_billing_free = True` is always permitted; anything else needs the
+dedicated opt-in `SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL`, OFF by default.
 """
 
 from __future__ import annotations
@@ -50,8 +62,10 @@ from .model_provider import (
     PROFILE_BATCH_DIVIDER_RESPONSE_ERROR_KEY,
     PROFILE_BATCH_DIVIDER_RESPONSE_PROVENANCE_KEY,
     PROFILE_BATCH_DIVIDER_RESPONSE_RAW_PREVIEW_KEY,
+    WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV,
     DeterministicModelClient,
     ModelClient,
+    ws7_shadow_model_calls_permitted,
 )
 from .profile_batch_division_contract import (
     ACTOR_SLOT_URL_TARGET,
@@ -543,6 +557,32 @@ def model_client_supports_batch_division(model_client: Any) -> bool:
     return method is not DeterministicModelClient.divide_profile_prefetch_batches
 
 
+def divider_shadow_model_calls_permitted(model_client: Any) -> bool:
+    """SAFETY gate — may the mint-seam shadow actually CALL this client? (2026-07-25)
+
+    Mirror of ``organization_promote_judgment.promote_shadow_model_calls_permitted``.
+    Capability is not permission: ``model_client_supports_batch_division`` is
+    True for the REAL provider clients too, and this hook runs synchronously
+    inside the enrichment mint seam under the scheduler lock. So a client that
+    does not declare ``ws7_shadow_billing_free = True`` additionally requires the
+    dedicated opt-in env ``SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL``, which
+    is OFF by default and is deliberately not one of the three live-provider gate
+    vars.
+
+    EXPOSURE NOTE (differs from the promote seam — recorded honestly rather than
+    equated): the divider shadow is on the REFILL/mint path, not the
+    authoritative write path. Nothing it returns can change dispatch, and the
+    ladder plan is byte-identical with it on or off. What an ungated real client
+    WOULD have cost is a billed provider call plus up to the 20 s divider timeout
+    per wave mint >300 eligible urls, taken while the scheduler lock is held —
+    a latency/cost exposure on a scheduling hot spot rather than a correctness
+    exposure on authority. Gated identically anyway: an optional record-only path
+    must never be the thing that starts billing.
+    """
+
+    return ws7_shadow_model_calls_permitted(model_client, allow_real_model_env=WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV)
+
+
 def _shadow_item_url_key(item: Any) -> str:
     return str(getattr(item, "registry_key", "") or "").strip() or str(getattr(item, "profile_url", "") or "").strip()
 
@@ -659,9 +699,13 @@ def record_profile_prefetch_division_shadow(
     returned record to the ``refill_plan_items`` activity surface, which
     dispatch never reads.
 
-    Structural non-invocation (returns None, no model call, no record):
+    Non-invocation (returns None, no model call, no record):
       * no divider-capable client (default simulate/replay OfflineModelClient —
         condition (a); discrepancy D2)
+      * a divider-capable client that is NOT declared billing-free while the
+        dedicated opt-in ``SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL`` is
+        unset — the SAFETY gate
+        (:func:`divider_shadow_model_calls_permitted`)
       * completion fast path / deferred-submit callback
         (``wave_mint_provider_submit=False`` — ruling ② + OQ6: the divider runs
         once per wave mint, never on the <1 s completion tick)
@@ -679,6 +723,10 @@ def record_profile_prefetch_division_shadow(
     """
     try:
         if not model_client_supports_batch_division(model_client):
+            return None
+        # SAFETY gate (2026-07-25): capability is not permission. Without the
+        # dedicated opt-in a non-billing-free client never reaches the model.
+        if not divider_shadow_model_calls_permitted(model_client):
             return None
         if not wave_mint_provider_submit:
             return None

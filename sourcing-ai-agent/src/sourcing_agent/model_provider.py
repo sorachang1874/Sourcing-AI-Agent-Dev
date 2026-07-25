@@ -53,6 +53,33 @@ PROFILE_BATCH_DIVIDER_CIRCUIT_ERROR_PREFIX = "model_provider_circuit_open"
 # marker). Dedicated flag by ruling — it deliberately does NOT piggyback the
 # scripted-planning or scripted-divider flag (different blast radius).
 _SCRIPTED_ORGANIZATION_PROMOTE_JUDGE_ENV = "SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE"
+# ---------------------------------------------------------------------------
+# WS7 SHADOW SEAM SAFETY GATE (2026-07-25 — adversarial finding "the wiring
+# opens a BILLED, synchronous model call on the authoritative write path").
+#
+# Both S3 shadow recorders used to engage on a BARE structural capability probe
+# ("does this client override the deterministic stub?"). That probe is True for
+# the REAL provider clients as well (`OpenAICompatibleChatModelClient` and
+# `QwenResponsesModelClient` both override both methods), so once the 2026-07-25
+# promote wiring threaded `self.model_client` down from the production callers,
+# a live-mode process would have made a billed provider call from inside a path
+# that is by definition optional and record-only:
+#   * promote  — synchronously inside `upsert_organization_asset_registry_with_guard`,
+#                i.e. on the AUTHORITATIVE WRITE PATH, once per contested decision;
+#   * divider  — synchronously inside the enrichment mint seam while the
+#                scheduler lock is held, once per wave mint >300 eligible urls.
+# Structural capability is therefore NOT sufficient any more. A client that does
+# not DECLARE itself billing-free must additionally carry the seam's dedicated
+# opt-in env, and both opt-ins are OFF by default — so with no opt-in the seams
+# cannot reach a provider no matter what client production threads into them.
+# The real path is thus never easier to trigger than the scripted one, which has
+# always required `SOURCING_SCRIPTED_*` to return anything but the F1 marker.
+# Documented in docs/WS7_AI_PROMOTE_DESIGN.md §7.1 and
+# docs/WS7_AI_BATCH_DIVIDER_DESIGN.md §5.1.
+# ---------------------------------------------------------------------------
+WS7_SHADOW_BILLING_FREE_ATTR = "ws7_shadow_billing_free"
+WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL_ENV = "SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL"
+WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL_ENV = "SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL"
 # OQ8 RATIFIED 2026-07-24: the promote-judge call gets its own bounded timeout
 # (default 20 s) instead of ModelProviderSettings.timeout_seconds (45 s). Promote
 # is a materialize→promote decision point, not a hot serving path, but a bounded
@@ -202,6 +229,40 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on", "y"}
+
+
+def model_client_is_ws7_shadow_billing_free(model_client: Any) -> bool:
+    """True when the client's class DECLARES that its WS7 shadow methods make no
+    billed provider call (``ws7_shadow_billing_free = True``).
+
+    The declaration is a class attribute rather than an isinstance check so that
+    local test doubles and future offline clients can opt in without importing
+    the scripted classes. The real provider clients
+    (``OpenAICompatibleChatModelClient`` / ``QwenResponsesModelClient``)
+    deliberately do NOT carry it; ``tests/test_organization_promote_shadow.py``
+    pins the exact set of classes that do.
+    """
+
+    if model_client is None:
+        return False
+    return bool(getattr(type(model_client), WS7_SHADOW_BILLING_FREE_ATTR, False))
+
+
+def ws7_shadow_model_calls_permitted(model_client: Any, *, allow_real_model_env: str) -> bool:
+    """The WS7 shadow seams' SAFETY gate (see the block comment above).
+
+    Returns True only when the client is declared billing-free, or the seam's
+    dedicated real-model opt-in env is explicitly set. Both shadow recorders
+    call this IN ADDITION to their structural capability probe, so with no
+    opt-in the seam cannot reach a provider no matter what client is threaded
+    into it.
+    """
+
+    if model_client is None:
+        return False
+    if model_client_is_ws7_shadow_billing_free(model_client):
+        return True
+    return _env_bool(allow_real_model_env, False)
 
 
 def _env_int(name: str, default: int, *, minimum: int | None = None, maximum: int | None = None) -> int:
@@ -1097,6 +1158,10 @@ class ScriptedProfileBatchDividerModelClient(OfflineModelClient):
     bounds windows before engaging the divider; S3 scope).
     """
 
+    # WS7 shadow safety gate: this client never contacts a provider, so the
+    # divider shadow seam may engage it without the real-model opt-in env.
+    ws7_shadow_billing_free = True
+
     def provider_name(self) -> str:
         return "scripted_profile_batch_divider_model"
 
@@ -1198,6 +1263,10 @@ class ScriptedOrganizationPromoteJudgeModelClient(OfflineModelClient):
     output, so a scripted promote that a floor rejects keeps the incumbent by
     construction.
     """
+
+    # WS7 shadow safety gate: this client never contacts a provider, so the
+    # promote shadow seam may engage it without the real-model opt-in env.
+    ws7_shadow_billing_free = True
 
     def provider_name(self) -> str:
         return "scripted_organization_promote_judge_model"

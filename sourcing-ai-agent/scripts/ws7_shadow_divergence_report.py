@@ -33,11 +33,27 @@ separate, operator-gated step (S6). This is also NOT a historical replay: the
 rows are current post-fix state, and the extended promote corpus contains
 counterfactual incumbents that never held authority.
 
-What it CAN evidence: (a) how the retained validator battery behaves against
-legal-but-non-ladder shapes (the ladder's output is shape-degenerate, so any
-validator that has only ever seen ladder-shaped input is untested); (b) the
-end-to-end offline path at real data volumes; (c) an upper bound on authority
-churn; (d) data-quality facts about the real corpus.
+THE INPUT SIDE IS RECONSTRUCTED TOO (divider mode). The live registry has ZERO
+rows in ``refill_queue_state='ready'`` (the distribution is ''=7513,
+retry_wait=2, planned_dispatch=1; the terminal statuses are completed=7295 /
+fetched=218). A ready set is therefore NOT observed — the replay takes each
+wave's REAL url population and REAL attempt/failure history and FABRICATES the
+queue state as ``ready`` for every member, because replaying the terminal state
+would collapse the plan to an empty wave. So a "4,297-member set" is the
+cumulative all-time membership of a job token, not a set of items ever
+simultaneously awaiting refill. The emitted JSON carries this under
+``input_reconstruction``; every count below must be read as
+"real population, reconstructed queue state". Two further consequences: V8
+(retry isolation) can never fire because the fabrication overwrites the 2 genuine
+retry_wait rows, and the R6 durable-wave gate can never fire because the replay
+zeroes the recorded wave fields.
+
+What it CAN evidence: (a) how SOME of the retained validator battery behaves
+against legal-but-non-ladder shapes — see ``battery_coverage`` in the emitted
+summary for exactly which validators fired and which are structurally incapable
+of firing on this input; (b) the end-to-end offline path at real data volumes;
+(c) an upper bound on authority churn; (d) data-quality facts about the real
+corpus.
 
 =============================================================================
 SAFETY CONTRACT
@@ -78,6 +94,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import statistics
 import sys
 import tempfile
@@ -103,12 +120,23 @@ _SCRIPTED_DIVIDER_ENV_KEY = "SOURCING_SCRIPTED_PROFILE_BATCH_DIVIDER"
 _SCRIPTED_JUDGE_ENV_KEY = "SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE"
 
 _HONESTY_BANNER = (
-    "SCRIPTED-CLIENT CORPUS — this measures the PATH and the VALIDATOR BATTERY, never a model. "
-    "The scripted divider is clamp(ceil(n/300),4,8) equal chunks; the scripted judge is a 3-line "
-    "rule that is more permissive than the ladder by construction. Treat every AI-side number as a "
-    "SHAPE PROBE and an UPPER BOUND on authority churn, never as a quality signal. A real-model "
-    "corpus is a separate, operator-gated step (S6)."
+    "SCRIPTED-CLIENT CORPUS — this measures the PATH and PART of the validator battery, never a model. "
+    "The scripted divider is clamp(ceil(n/300),4,8) equal chunks; the scripted judge is a 3-line rule "
+    "whose two reject arms are exactly the predicates V_PROV/V_COMP re-check, so its permissive count "
+    "equals the guard-and-battery FLOOR's admission count (an upper bound no judge can exceed) — that "
+    "is a ceiling argument about the floor, NOT a claim that a real model is less permissive. "
+    "DIVIDER INPUT IS RECONSTRUCTED: the live registry has ZERO rows in refill_queue_state='ready'; "
+    "the replay uses real url populations + real attempt history but FABRICATES the ready queue state, "
+    "so a 'ready set' here is a wave's cumulative membership, not an observed refill queue. "
+    "Treat every AI-side number as a SHAPE PROBE. A real-model corpus is a separate, "
+    "operator-gated step (S6)."
 )
+
+# The live `linkedin_profile_registry.refill_queue_state` census this replay
+# overwrites — probed read-only 2026-07-25 and re-probed on every divider run
+# (see `_live_refill_queue_state_census`). Kept as a constant so the disk-only
+# mode can still disclose the substitution honestly.
+_KNOWN_LIVE_READY_ROW_COUNT = 0
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +525,14 @@ def run_engagement(args: argparse.Namespace) -> dict[str, Any]:
             "so the two paths are exercised as two separate runs — which is exactly how the daemon "
             "would have to be configured."
         ),
+        "input_provenance": (
+            "SYNTHETIC INPUTS. What is real here is the SEAM (the production call chain fires and a "
+            "record lands); the data is fabricated by this script — the divider runs on generated "
+            "`ws7-engagement-*` urls and the promote path on two generated `ws7-acme-*` snapshots. "
+            "Quote this block as PATH evidence only. The `division_id`/`decision_id` are fresh per run, "
+            "so they identify nothing and must never be cited as evidence identifiers."
+        ),
+        "provider_calls_total": 0,
         "divider": _engagement_divider(url_count=int(args.divider_url_count)),
         "promote": _engagement_promote(),
     }
@@ -507,10 +543,49 @@ def run_engagement(args: argparse.Namespace) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _live_refill_queue_state_census(connection: Any, *, schema: str) -> dict[str, Any]:
+    """The REAL `refill_queue_state` / `refill_terminal_status` distribution the
+    replay overwrites.
+
+    Emitted verbatim into the corpus so no reader has to take the word
+    "reconstructed" on trust: if `ready` is 0 here, then every "ready set" in
+    this report is a reconstruction, full stop.
+    """
+
+    queue_rows = _fetch_rows(
+        connection,
+        f"""
+        SELECT COALESCE(refill_queue_state, '') AS state, COUNT(*) AS n
+          FROM {_quoted(schema)}.linkedin_profile_registry
+         GROUP BY 1 ORDER BY 2 DESC
+        """,
+    )
+    terminal_rows = _fetch_rows(
+        connection,
+        f"""
+        SELECT COALESCE(refill_terminal_status, '') AS status, COUNT(*) AS n
+          FROM {_quoted(schema)}.linkedin_profile_registry
+         GROUP BY 1 ORDER BY 2 DESC
+        """,
+    )
+    queue_counts = {str(row["state"]): int(row["n"]) for row in queue_rows}
+    return {
+        "refill_queue_state_counts": queue_counts,
+        "refill_terminal_status_counts": {str(row["status"]): int(row["n"]) for row in terminal_rows},
+        "actual_ready_row_count": int(queue_counts.get("ready", 0)),
+    }
+
+
 def _load_divider_ready_sets(
     connection: Any, *, schema: str, min_urls: int, grouping: str = "job_token"
 ) -> list[dict[str, Any]]:
-    """Reconstruct historical wave-scoped ready sets from the live registry.
+    """RECONSTRUCT historical wave-scoped ready sets from the live registry.
+
+    NOT observed ready sets — see `_live_refill_queue_state_census`: no row in
+    the live registry is in `refill_queue_state='ready'`. What IS real here is
+    the url population of each wave and its attempt/failure history; the queue
+    state is fabricated by `_divider_case` (documented there and disclosed in the
+    emitted `input_reconstruction` block).
 
     Two groupings, both derived from ``source_jobs_json`` (the wave identity the
     refill path records):
@@ -556,7 +631,7 @@ def _load_divider_ready_sets(
     for key, members in sorted(groups.items(), key=lambda pair: (-len(pair[1]), pair[0])):
         if len(members) < min_urls:
             continue
-        ready_sets.append({"job_group": key, "rows": members})
+        ready_sets.append({"job_group": key, "rows": members, "provenance": "live_pg_registry"})
     return ready_sets
 
 
@@ -566,6 +641,7 @@ def _divider_case(
     rows: list[dict[str, Any]],
     available_new_worker_count: int,
     inflight_values: Sequence[int],
+    provenance: str = "live_pg_registry",
 ) -> dict[str, Any]:
     from sourcing_agent.enrichment import (
         _build_profile_prefetch_batch_plan,
@@ -577,6 +653,7 @@ def _divider_case(
     urls: list[str] = []
     source_shards_by_url: dict[str, list[str]] = {}
     registry_entries: dict[str, dict[str, Any]] = {}
+    actual_queue_states: dict[str, int] = {}
     for row in rows:
         url = str(row.get("profile_url") or row.get("profile_url_key") or "").strip()
         if not url:
@@ -585,12 +662,18 @@ def _divider_case(
         source_shards_by_url[url] = [
             str(item or "").strip() for item in _json_load(row.get("source_shards_json"), []) if str(item or "").strip()
         ]
+        actual_queue_states[str(row.get("refill_queue_state") or "")] = (
+            actual_queue_states.get(str(row.get("refill_queue_state") or ""), 0) + 1
+        )
         registry_entries[str(row.get("profile_url_key") or "")] = {
-            # The replay treats every member as a fresh normal-wave ready item:
-            # the live rows are mostly terminal `fetched`, and replaying their
+            # FABRICATED, NOT OBSERVED. The replay treats every member as a fresh
+            # normal-wave ready item: no live row is in `ready` at all (the live
+            # rows are terminal `fetched`/`completed`), and replaying their
             # terminal queue_state would collapse the plan to an empty wave.
-            # attempt/failure history IS carried through (it is real signal the
-            # shadow recorder folds into `failure_history`).
+            # The url population and the attempt/failure history ARE real (the
+            # latter is the signal the shadow recorder folds into
+            # `failure_history`); the queue state is not. Disclosed per case
+            # under `input_reconstruction` and in the report banner.
             "refill_queue_state": "ready",
             "status": str(row.get("status") or ""),
             "last_refill_attempt_count": int(row.get("last_refill_attempt_count") or 0),
@@ -636,8 +719,23 @@ def _divider_case(
     ladder_batches = [
         [item.registry_key or item.profile_url for item in chunk] for _, chunk in plan.dispatch_item_specs
     ]
+    member_keys = sorted({str(row.get("profile_url_key") or "") for row in rows} - {""})
     case: dict[str, Any] = {
         "job_group": job_group,
+        "provenance": provenance,
+        # Exact-membership identity: the corpus counts sets, and the same roster
+        # is reachable through several job tokens / snapshot ids, so every
+        # aggregate below is also reported deduped by this hash.
+        "member_set_sha256": hashlib.sha256("\n".join(member_keys).encode("utf-8")).hexdigest(),
+        "input_reconstruction": {
+            "refill_queue_state": "FABRICATED as 'ready' for every member",
+            "actual_refill_queue_state_counts": dict(sorted(actual_queue_states.items())),
+            "real_inputs": ["url population", "source shard tokens", "attempt/failure history"],
+            "reconstructed_inputs": [
+                "refill_queue_state",
+                "refill_plan_batch_size/batch_count/window_url_count (zeroed)",
+            ],
+        },
         "member_count": len(urls),
         "distinct_shard_token_count": len({shard for shards in source_shards_by_url.values() for shard in shards}),
         "ladder": {
@@ -755,29 +853,54 @@ def _mean_best_match_jaccard(ladder_batches: Sequence[Sequence[str]], ai_batches
     return round(statistics.fmean(scores), 4) if scores else 0.0
 
 
-def _load_disk_ready_sets(*, runtime_dirs: Sequence[Path], min_urls: int) -> list[dict[str, Any]]:
-    """On-disk ``candidate_documents.json`` snapshots as replayable ready sets.
+# A production snapshot id STARTS with a UTC stamp (`YYYYmmddTHHMMSS`); a
+# `<stamp>.<label>` variant is a real population under a quarantine/debt label
+# and is kept (the exact-member-set dedupe below is what stops it inflating a
+# count). A directory whose name does not start with a stamp at all is test
+# residue — e.g. `snapshot-company-roster-prefetch-defers`, whose path literal is
+# constructed by tests/test_worker_completion_pipeline.py — and must not be
+# counted as a real population (adversarial finding 2026-07-25).
+_PRODUCTION_SNAPSHOT_ID_PATTERN = re.compile(r"^\d{8}T\d{6}")
 
-    Read-only file access. The shard face here is COARSE (``source_dataset``,
-    typically 1-4 values per snapshot vs 157-2,389 shard tokens in the PG
-    registry), so disk sets exist to widen the SIZE distribution — they are the
-    only way to reach the 2,400+ band where V1 (≤300/batch) and V2/V10
-    (≤8 batches) become jointly unsatisfiable.
+
+def _load_disk_ready_sets(
+    *, runtime_dirs: Sequence[Path], min_urls: int, skipped_out: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """On-disk ``candidate_documents.json`` rosters as replayable populations.
+
+    READ THIS BEFORE TREATING A DISK CASE AS A REFILL WAVE. A disk case is a
+    CANDIDATE ROSTER, not a refill queue: every candidate carrying a linkedin_url
+    is taken as a pending item with no eligibility / already-fetched filter
+    (unlike the production mint path), and its shard face is SYNTHESIZED from a
+    single ``source_dataset`` token (1-2 values) versus 157-2,389 real shard
+    tokens on the PG cases — so ``distinct_shard_token_count`` is NOT comparable
+    between the two provenances. Disk sets exist only to widen the SIZE
+    distribution: they are the only way to reach the 2,400+ band where V1
+    (≤300/batch) and V2/V10 (≤8 batches) become jointly unsatisfiable.
+
+    Test residue is excluded (non-timestamp snapshot ids) and sets loaded from a
+    test runtime tree are tagged with their own provenance so they can be
+    excluded from any denominator.
     """
 
     from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 
     ready_sets: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
+    skipped_non_production: list[str] = []
     for runtime_dir in runtime_dirs:
         company_assets = Path(runtime_dir) / "company_assets"
         if not company_assets.is_dir():
             continue
+        test_tree = "test_env" in Path(runtime_dir).name
         for document in sorted(company_assets.glob("*/*/candidate_documents.json")):
             company = document.parent.parent.name
             snapshot_id = document.parent.name
             dedupe = f"{company}/{snapshot_id}"
             if dedupe in seen_keys:
+                continue
+            if not _PRODUCTION_SNAPSHOT_ID_PATTERN.match(snapshot_id):
+                skipped_non_production.append(f"disk::{company}::{snapshot_id}")
                 continue
             try:
                 payload = json.loads(document.read_text(encoding="utf-8"))
@@ -797,10 +920,13 @@ def _load_disk_ready_sets(*, runtime_dirs: Sequence[Path], min_urls: int) -> lis
                     {
                         "profile_url": url,
                         "profile_url_key": key,
+                        # SYNTHESIZED shard face — 1-2 source_dataset tokens, not
+                        # the 157-2,389 real shard tokens the PG cases carry.
                         "source_shards_json": json.dumps(
                             [str(dict(candidate).get("source_dataset") or "unknown_shard")]
                         ),
                         "status": "",
+                        "refill_queue_state": "<none: candidate roster, not a refill queue>",
                         "last_refill_attempt_count": 0,
                         "last_refill_deferred_reason": "",
                         "refill_terminal_status": "",
@@ -809,19 +935,115 @@ def _load_disk_ready_sets(*, runtime_dirs: Sequence[Path], min_urls: int) -> lis
             if len(rows) < min_urls:
                 continue
             seen_keys.add(dedupe)
-            ready_sets.append({"job_group": f"disk::{company}::{snapshot_id}", "rows": rows})
+            ready_sets.append(
+                {
+                    "job_group": f"disk::{company}::{snapshot_id}",
+                    "rows": rows,
+                    "provenance": ("disk_snapshot_roster_test_env" if test_tree else "disk_snapshot_roster"),
+                }
+            )
     ready_sets.sort(key=lambda entry: (-len(entry["rows"]), entry["job_group"]))
+    if skipped_out is not None:
+        skipped_out.extend(sorted(skipped_non_production))
     return ready_sets
+
+
+# The full validator battery the divider contract defines, so the report can
+# state which members actually FIRED instead of implying whole-battery coverage.
+_DIVIDER_VALIDATOR_IDS = (
+    "V1_provider_envelope",
+    "V2_batch_ceiling",
+    "V3_exact_partition",
+    "V4_tiny_batch_reason",
+    "V5_worker_budget",
+    "V6_wave_mint_only",
+    "V7_reason_audit",
+    "V8_retry_isolation",
+    "V9_round_budget",
+    "V10_batch_count_band",
+)
+# Validators that CANNOT return a non-pass on this replay, with the mechanism.
+# Recorded so a reader never has to infer coverage from "all pass".
+_DIVIDER_STRUCTURALLY_INERT_VALIDATORS = {
+    "V5_worker_budget": (
+        "profile_batch_division.py computes simulated_dispatched = min(batch_count, available) and then "
+        "asks validate_v5_worker_budget whether that exceeds available — false by construction for every "
+        "input, so V5 can only ever return pass/skipped"
+    ),
+    "V6_wave_mint_only": (
+        "V6 fails only on a FOREIGN live division id; pre-S4 no writer exists, so the live set is empty "
+        "by construction (the recorder's own docstring says so)"
+    ),
+    "V8_retry_isolation": (
+        "the replay FABRICATES refill_queue_state='ready' for every member, so retry_wait_indices is empty "
+        "in every case and V8 has nothing to isolate — the 2 genuine live retry_wait rows are overwritten"
+    ),
+}
+_DIVIDER_UNEXERCISED_GATES = {
+    "R6_durable_wave_inherited_window": (
+        "the replay zeroes refill_plan_batch_size/batch_count/window_url_count, so prior_round_context "
+        "recorded_wave_* is 0 for every case and the DURABLE_WAVE_BATCH_SIZE_REASON skip can never fire"
+    ),
+}
+
+
+def _ai_r5_deferred_item_count(case: Mapping[str, Any], *, available_new_worker_count: int) -> int:
+    """AI-side deferral under the SAME apply-time R5 bound the ladder is measured
+    against — the like-for-like counterpart to `ladder.deferred_item_count`.
+
+    Without this the corpus reported a six-figure ladder deferral next to an
+    "AI covers 100% of eligible members" row, which compares a PLAN against a
+    DISPATCH. A division is a plan: at apply time only
+    ``min(batch_count, available_new_worker_count)`` batches dispatch and the
+    surplus defers (profile_batch_division.py). A battery-REJECTED case produces
+    no division at all — the ruling-④ F5 fallback runs the ladder plan verbatim,
+    so its AI-side deferral IS the ladder's.
+
+    CAVEAT (stated, not hidden): this applies the R5 batch bound only; it ignores
+    the ladder's 50-url-per-actor-slot sizing rule, so it is an upper bound on how
+    much the AI division would actually close.
+    """
+
+    if not case.get("battery_valid"):
+        return int(dict(case.get("ladder") or {}).get("deferred_item_count") or 0)
+    sizes = [int(value) for value in list(dict(case.get("ai") or {}).get("batch_sizes") or [])]
+    dispatched = sum(sizes[: max(0, int(available_new_worker_count))])
+    return max(0, int(case.get("eligible_member_count") or 0) - dispatched)
+
+
+def _jaccard_clusters(member_sets: Sequence[frozenset[str]], *, threshold: float = 0.9) -> int:
+    """Single-linkage cluster count at a Jaccard threshold — used to report how
+    many INDEPENDENT populations a band really contains."""
+
+    parent = list(range(len(member_sets)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for left in range(len(member_sets)):
+        for right in range(left + 1, len(member_sets)):
+            union = member_sets[left] | member_sets[right]
+            if not union:
+                continue
+            if len(member_sets[left] & member_sets[right]) / len(union) >= threshold:
+                parent[find(left)] = find(right)
+    return len({find(index) for index in range(len(member_sets))})
 
 
 def run_divider(args: argparse.Namespace) -> dict[str, Any]:
     os.environ[_SCRIPTED_DIVIDER_ENV_KEY] = "1"
+    live_census: dict[str, Any] = {}
+    skipped_non_production: list[str] = []
     try:
         inflight_values = [int(value) for value in str(args.inflight).split(",") if str(value).strip()]
         ready_sets: list[dict[str, Any]] = []
         sources: list[str] = []
         if args.source in {"pg", "both"}:
             with read_only_live_connection(dsn=_resolve_dsn()) as connection:
+                live_census = _live_refill_queue_state_census(connection, schema=args.schema)
                 ready_sets.extend(
                     _load_divider_ready_sets(
                         connection, schema=args.schema, min_urls=int(args.min_urls), grouping=str(args.grouping)
@@ -830,16 +1052,28 @@ def run_divider(args: argparse.Namespace) -> dict[str, Any]:
             sources.append(f"{args.schema}.linkedin_profile_registry (READ-ONLY, rich shard mix)")
         if args.source in {"disk", "both"}:
             runtime_dirs = [_REPO_ROOT / "runtime", _REPO_ROOT / "runtime" / "test_env_live"]
-            ready_sets.extend(_load_disk_ready_sets(runtime_dirs=runtime_dirs, min_urls=int(args.min_urls)))
+            ready_sets.extend(
+                _load_disk_ready_sets(
+                    runtime_dirs=runtime_dirs, min_urls=int(args.min_urls), skipped_out=skipped_non_production
+                )
+            )
             sources.append("runtime/**/company_assets/*/*/candidate_documents.json (READ-ONLY, coarse shard mix)")
+        selected = ready_sets[: int(args.limit)]
+        member_sets = {
+            str(entry["job_group"]): frozenset(
+                {str(row.get("profile_url_key") or "") for row in entry["rows"]} - {""}
+            )
+            for entry in selected
+        }
         cases = [
             _divider_case(
                 job_group=entry["job_group"],
                 rows=entry["rows"],
                 available_new_worker_count=int(args.available_workers),
                 inflight_values=inflight_values,
+                provenance=str(entry.get("provenance") or "live_pg_registry"),
             )
-            for entry in ready_sets[: int(args.limit)]
+            for entry in selected
         ]
     finally:
         os.environ.pop(_SCRIPTED_DIVIDER_ENV_KEY, None)
@@ -858,34 +1092,161 @@ def run_divider(args: argparse.Namespace) -> dict[str, Any]:
         reason = str(case.get("fallback_reason") or "")
         if reason:
             fallback_counts[reason] = fallback_counts.get(reason, 0) + 1
+
+    # ---- provenance split (a disk case is a candidate roster, not a refill queue)
+    provenance_counts: dict[str, int] = {}
+    rejected_provenance_counts: dict[str, int] = {}
+    for case in cases:
+        key = str(case.get("provenance") or "")
+        provenance_counts[key] = provenance_counts.get(key, 0) + 1
+    for case in rejected:
+        key = str(case.get("provenance") or "")
+        rejected_provenance_counts[key] = rejected_provenance_counts.get(key, 0) + 1
+
+    # ---- exact-membership dedupe (the same roster is reachable via several
+    # job tokens / snapshot ids, so raw case counts double-count populations)
+    distinct_all = {str(case.get("member_set_sha256") or "") for case in cases}
+    distinct_rejected = {str(case.get("member_set_sha256") or "") for case in rejected}
+    above_ceiling = [case for case in cases if int(case.get("member_count") or 0) > 2400]
+    distinct_above_ceiling = {str(case.get("member_set_sha256") or "") for case in above_ceiling}
+    above_ceiling_sets = [member_sets.get(str(case.get("job_group") or ""), frozenset()) for case in above_ceiling]
+
+    # ---- validator firing (only what actually fired; never "the battery")
+    validator_status_counts: dict[str, dict[str, int]] = {}
+    for case in cases:
+        for entry in list(case.get("validator_results") or []) + list(case.get("apply_time_validator_results") or []):
+            bucket = validator_status_counts.setdefault(str(entry.get("validator") or ""), {})
+            status = str(entry.get("status") or "")
+            bucket[status] = bucket.get(status, 0) + 1
+    fired = sorted(
+        validator_id
+        for validator_id, statuses in validator_status_counts.items()
+        if any(status not in {"pass", "skipped"} for status in statuses)
+    )
+    never_observed = sorted(set(_DIVIDER_VALIDATOR_IDS) - set(validator_status_counts))
+
+    # ---- like-for-like deferral
+    available = int(args.available_workers)
+    ai_deferred_total = sum(_ai_r5_deferred_item_count(case, available_new_worker_count=available) for case in cases)
+    ladder_deferred_total = sum(int(case["ladder"]["deferred_item_count"]) for case in cases)
+    fallback_deferred_total = sum(int(case["ladder"]["deferred_item_count"]) for case in rejected)
+
     return {
         "mode": "divider",
         "honesty": _HONESTY_BANNER,
         "source": " + ".join(sources),
         "grouping": f"source_jobs_json / {args.grouping} (wave identity); disk sets are per (company, snapshot)",
+        "input_reconstruction": {
+            "headline": (
+                "THESE ARE NOT OBSERVED READY SETS. Real url populations + real attempt/failure history; "
+                "the refill queue state is FABRICATED as 'ready' for every member."
+            ),
+            "live_refill_queue_state_census": live_census
+            or {"note": "disk-only run; the live census was not read this run"},
+            "actual_live_ready_row_count": int(live_census.get("actual_ready_row_count", _KNOWN_LIVE_READY_ROW_COUNT)),
+            "why": (
+                "the live rows are terminal (fetched/completed); replaying their real queue_state collapses "
+                "the plan to an empty wave, so nothing could be measured at all"
+            ),
+            "consequences": [
+                "a 'set' is a wave's CUMULATIVE all-time membership, not items simultaneously awaiting refill",
+                "V8 (retry isolation) can never fire — the 2 genuine live retry_wait rows are overwritten",
+                "the R6 durable-wave gate can never fire — recorded wave fields are zeroed",
+            ],
+            "disk_case_caveat": (
+                "a disk case is a CANDIDATE ROSTER, not a refill queue: no eligibility/already-fetched filter, "
+                "and its shard face is synthesized from one source_dataset token (1-2 values) versus 157-2,389 "
+                "real shard tokens on PG cases — distinct_shard_token_count is NOT comparable across provenances"
+            ),
+            "excluded_non_production_snapshots": skipped_non_production,
+        },
         "summary": {
             "ready_set_count": len(cases),
+            "provenance_counts": provenance_counts,
             "engaged_count": len(engaged),
             "below_engagement_threshold_count": sum(
                 1 for case in cases if case.get("skip_reason") == "ready_set_at_or_below_engagement_threshold"
             ),
             "battery_valid_count": len(valid),
             "battery_rejected_count": len(rejected),
+            "battery_rejected_provenance_counts": rejected_provenance_counts,
             "first_failing_validator_counts": failing_counts,
             "fallback_reason_counts": fallback_counts,
             "mean_best_match_jaccard_range": ([min(jaccards), max(jaccards)] if jaccards else []),
             "mean_best_match_jaccard_mean": round(statistics.fmean(jaccards), 4) if jaccards else 0.0,
-            "ladder_deferred_item_total": sum(int(case["ladder"]["deferred_item_count"]) for case in cases),
+            "ladder_deferred_item_total": ladder_deferred_total,
+            # LIKE-FOR-LIKE: the AI side is a PLAN; at apply time the same R5
+            # bound applies, and a battery-rejected case falls back to the
+            # ladder plan verbatim. Reporting the ladder figure alone next to
+            # "AI covers 100% of eligible members" compared a plan to a dispatch.
+            "ai_deferred_item_total_under_same_r5_bound": ai_deferred_total,
+            "ai_deferral_closed_vs_ladder": ladder_deferred_total - ai_deferred_total,
+            "ai_deferral_closed_ratio": (
+                round((ladder_deferred_total - ai_deferred_total) / ladder_deferred_total, 4)
+                if ladder_deferred_total
+                else 0.0
+            ),
+            "fallback_case_ladder_deferred_item_total": fallback_deferred_total,
+            "deferral_comparison_caveat": (
+                "the AI figure applies the R5 batch bound only and ignores the ladder's 50-url-per-actor-slot "
+                "sizing rule, so it is an UPPER bound on what the division would close"
+            ),
             "membership_identical_count": sum(
                 1
                 for case in valid
                 if bool(dict(case.get("ladder_comparison") or {}).get("dispatched_membership_identical"))
             ),
+            # FORCED BY CONSTRUCTION — not an empirical finding. See the note.
+            "forced_by_construction": {
+                "membership_identical_count": (
+                    "compares the ladder's POST-R5 DISPATCHED partition against the AI's WHOLE-eligible-set "
+                    "division. The ladder deferred >=1 item in every case here (min "
+                    f"{min([int(case['ladder']['deferred_item_count']) for case in cases] or [0])}), so its "
+                    "dispatched set is always a proper subset and this count cannot be anything but 0. It "
+                    "carries NO information about whether the two divisions are different partitions."
+                ),
+                "mean_best_match_jaccard": (
+                    "both slicers are contiguous over the same ordering, so the best-match Jaccard is "
+                    "essentially the chunk-size ratio (e.g. ladder 4x50 vs AI 8x287 -> 50/287 = 0.174). It "
+                    "measures the SIZE difference the two formulas produce, not regrouping quality."
+                ),
+            },
+            "battery_coverage": {
+                "validator_status_counts": validator_status_counts,
+                "validators_that_actually_fired": fired,
+                "validators_never_observed": never_observed,
+                "structurally_unable_to_fail_on_this_input": _DIVIDER_STRUCTURALLY_INERT_VALIDATORS,
+                "unexercised_gates": _DIVIDER_UNEXERCISED_GATES,
+                "claim_scope": (
+                    "This corpus evidences exactly the validators listed in validators_that_actually_fired "
+                    "plus the pass-path of the rest. It does NOT evidence 'the validator battery'. It also "
+                    "does not exercise non-ladder SHAPES: the scripted divider is a contiguous near-equal "
+                    "split and the ladder is contiguous slicing, so only the chunk-size parameter varies."
+                ),
+            },
             # V1 (<=300/batch) AND V2/V10 (<=8 batches) are jointly unsatisfiable
             # above 8*300 = 2,400 eligible members: no legal division exists.
-            "sets_above_v1_v2_joint_ceiling_2400": sum(
-                1 for case in cases if int(case.get("member_count") or 0) > 2400
-            ),
+            # NOTE: this FACT is not a discovery of this corpus — it was already
+            # committed in ScriptedProfileBatchDividerModelClient's docstring
+            # (model_provider.py, commit e04b3a6, 2026-07-23). What the corpus
+            # adds is the PREVALENCE, deduped below.
+            "sets_above_v1_v2_joint_ceiling_2400": len(above_ceiling),
+            "dedupe_by_exact_member_set": {
+                "note": (
+                    "the same roster is reachable through several job tokens and snapshot ids, so raw case "
+                    "counts double-count populations; these are the counts by DISTINCT member set"
+                ),
+                "distinct_member_set_count": len(distinct_all),
+                "distinct_battery_rejected_member_set_count": len(distinct_rejected),
+                "distinct_sets_above_ceiling_2400": len(distinct_above_ceiling),
+                "raw_rejected_ratio": (round(len(rejected) / len(cases), 4) if cases else 0.0),
+                "deduped_rejected_ratio": (
+                    round(len(distinct_rejected) / len(distinct_all), 4) if distinct_all else 0.0
+                ),
+                "above_ceiling_near_duplicate_cluster_count_jaccard_0_9": (
+                    _jaccard_clusters(above_ceiling_sets) if above_ceiling_sets else 0
+                ),
+            },
         },
         "cases": cases,
     }
@@ -958,14 +1319,23 @@ def _promote_pair(incumbent: Mapping[str, Any], candidate: Mapping[str, Any]) ->
         candidate_record=dict(candidate),
         ladder_decision=decision,
     )
+    ladder_reason = str(decision.get("reason") or "")
     payload: dict[str, Any] = {
         "company_key": str(candidate.get("company_key") or ""),
         "incumbent_snapshot_id": str(incumbent.get("snapshot_id") or ""),
         "candidate_snapshot_id": str(candidate.get("snapshot_id") or ""),
         "ladder_promote": bool(decision.get("promote")),
-        "ladder_reason": str(decision.get("reason") or ""),
+        "ladder_reason": ladder_reason,
         "shadow_record_present": record is not None,
     }
+    if ladder_reason == _LADDER_FALLTHROUGH_REASON:
+        # NAME COLLISION, disclosed per pair. `guard_rejected` is the final
+        # else-branch of the LADDER's reason ladder (asset_reuse_planning.py) —
+        # "no promote branch fired". It has nothing to do with the storage
+        # lineage guard, whose verdict is the separate
+        # `guard_predicted_verdict` field below and is frequently
+        # {"refused": false} on exactly these pairs.
+        payload["ladder_reason_semantics"] = _LADDER_FALLTHROUGH_NOTE
     if record is None:
         payload["skip"] = "structural_non_invocation"
         return payload
@@ -983,6 +1353,16 @@ def _promote_pair(incumbent: Mapping[str, Any], candidate: Mapping[str, Any]) ->
     payload["fallback_reason"] = str(audit.get("fallback_reason") or "")
     payload["reason_code"] = str(dict(decision_payload.get("judgment") or decision_payload).get("reason_code") or "")
     return payload
+
+
+# The ladder's catch-all reason literal (asset_reuse_planning.py): emitted when
+# NONE of the four promote branches fires. It is NOT the storage lineage guard.
+_LADDER_FALLTHROUGH_REASON = "guard_rejected"
+_LADDER_FALLTHROUGH_NOTE = (
+    "MISNOMER (pre-existing, in asset_reuse_planning.py): `guard_rejected` is the ladder's FALL-THROUGH "
+    "label meaning 'no promote branch fired'. It does NOT mean the storage lineage guard refused — that "
+    "verdict is `guard_predicted_verdict` and is often {'refused': false} on these very pairs."
+)
 
 
 def _promote_structural_inertness(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -1060,10 +1440,17 @@ def run_promote(args: argparse.Namespace) -> dict[str, Any]:
         "extended": {
             "note": (
                 "Every (incumbent, candidate) permutation within a company. Metric vectors are real; "
-                "the incumbents are COUNTERFACTUAL — never quote this as 'historical decisions'."
+                "the incumbents are COUNTERFACTUAL — never quote this as 'historical decisions'. "
+                "The rows are ALSO mutable live state, so this corpus is reproducible only against the "
+                "same schema contents: quote it with the run date, never as a stable constant, and never "
+                "from a surface (a docstring, a design table) that cannot carry the artifact with it."
             ),
             "summary": _promote_summary(extended),
-            "pairs": extended if args.include_extended_pairs else [],
+            # EMITTED BY DEFAULT (2026-07-25). The extended corpus previously
+            # retained summary counts only, yet its 246/806 figure was quoted in
+            # a permanent production docstring — an unauditable claim. Every pair
+            # row now ships so the number can be re-derived from the artifact.
+            "pairs": [] if args.no_extended_pairs else extended,
         },
         "incidents": incidents,
     }
@@ -1095,13 +1482,46 @@ def _promote_summary(pairs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             if str(entry.get("status") or "") == "fail":
                 name = str(entry.get("validator") or "")
                 validator_fail_counts[name] = validator_fail_counts.get(name, 0) + 1
+    # DECOMPOSE the agreement headline. When the storage guard predicts a
+    # refusal, V_LINEAGE's pre-filter fails and the judge's output CANNOT change
+    # the outcome — agreement is structurally forced, not a quality signal. Only
+    # the guard-pass pairs are decision-relevant.
+    guard_refused_pairs = [
+        pair for pair in pairs if bool(dict(pair.get("guard_predicted_verdict") or {}).get("refused"))
+    ]
+    guard_pass_pairs = [
+        pair for pair in pairs if not bool(dict(pair.get("guard_predicted_verdict") or {}).get("refused"))
+    ]
+    guard_forced_agreements = sum(1 for pair in guard_refused_pairs if str(pair.get("divergence")) == "agree")
+    agree_total = int(divergence_counts.get("agree", 0))
     return {
         "pair_count": len(pairs),
         "divergence_counts": divergence_counts,
         "ai_more_permissive_count": int(divergence_counts.get("ai_more_permissive", 0)),
         "ai_more_conservative_count": int(divergence_counts.get("ai_more_conservative", 0)),
+        "agreement_decomposition": {
+            "note": (
+                "`agree` is NOT an AI-quality figure. Where the storage guard predicts a refusal the "
+                "V_LINEAGE pre-filter fails and no judge output can change the outcome, so agreement is "
+                "FORCED. Quote the judge-decisive line, not the raw agreement count."
+            ),
+            "agree_total": agree_total,
+            "agree_forced_by_guard_refusal": guard_forced_agreements,
+            "agree_where_the_judge_was_decision_relevant": agree_total - guard_forced_agreements,
+            "judge_decision_relevant_pair_count": len(guard_pass_pairs),
+            "guard_refused_pair_count": len(guard_refused_pairs),
+            "guard_forced_share_of_agreements": (
+                round(guard_forced_agreements / agree_total, 4) if agree_total else 0.0
+            ),
+            "agree_on_promote_pair_count": sum(
+                1
+                for pair in pairs
+                if str(pair.get("divergence")) == "agree" and bool(pair.get("ladder_promote"))
+            ),
+        },
         "guard_predicted_reason_counts": guard_reason_counts,
         "ladder_reason_counts": ladder_reason_counts,
+        "ladder_reason_semantics": {_LADDER_FALLTHROUGH_REASON: _LADDER_FALLTHROUGH_NOTE},
         "ai_status_counts": ai_status_counts,
         "validator_fail_counts": validator_fail_counts,
         "fallback_reason_counts": fallback_counts,
@@ -1156,21 +1576,57 @@ def _promote_incident_scenarios(by_company: Mapping[str, list[dict[str, Any]]]) 
 
 def _print_divider_report(report: Mapping[str, Any]) -> None:
     summary = dict(report.get("summary") or {})
+    reconstruction = dict(report.get("input_reconstruction") or {})
+    dedupe = dict(summary.get("dedupe_by_exact_member_set") or {})
+    coverage = dict(summary.get("battery_coverage") or {})
     print("\n=== DIVIDER — ladder vs scripted division ===")
     print(f"source: {report.get('source')}  ({report.get('grouping')})")
+    print(f"!! INPUT: {reconstruction.get('headline')}")
     print(
-        f"ready sets: {summary.get('ready_set_count')} | engaged: {summary.get('engaged_count')} "
+        f"   live rows actually in refill_queue_state='ready': "
+        f"{reconstruction.get('actual_live_ready_row_count')}  "
+        f"census={dict(reconstruction.get('live_refill_queue_state_census') or {}).get('refill_queue_state_counts')}"
+    )
+    if reconstruction.get("excluded_non_production_snapshots"):
+        print(f"   excluded non-production snapshot dirs: {reconstruction.get('excluded_non_production_snapshots')}")
+    print(
+        f"reconstructed sets: {summary.get('ready_set_count')} {summary.get('provenance_counts')} "
+        f"| distinct member sets: {dedupe.get('distinct_member_set_count')} "
+        f"| engaged: {summary.get('engaged_count')} "
         f"| below OQ5 threshold: {summary.get('below_engagement_threshold_count')}"
     )
     print(
         f"battery valid: {summary.get('battery_valid_count')} | rejected: {summary.get('battery_rejected_count')} "
-        f"{summary.get('first_failing_validator_counts')}"
+        f"{summary.get('first_failing_validator_counts')} provenance={summary.get('battery_rejected_provenance_counts')}"
+    )
+    print(
+        f"rejected ratio: raw {dedupe.get('raw_rejected_ratio')} vs DEDUPED {dedupe.get('deduped_rejected_ratio')} "
+        f"| >2400 band: {summary.get('sets_above_v1_v2_joint_ceiling_2400')} cases -> "
+        f"{dedupe.get('distinct_sets_above_ceiling_2400')} distinct sets -> "
+        f"{dedupe.get('above_ceiling_near_duplicate_cluster_count_jaccard_0_9')} clusters @ Jaccard>=0.9"
+    )
+    print(
+        f"validators that actually FIRED: {coverage.get('validators_that_actually_fired')} | structurally unable "
+        f"to fail here: {sorted(dict(coverage.get('structurally_unable_to_fail_on_this_input') or {}))} | "
+        f"unexercised gates: {sorted(dict(coverage.get('unexercised_gates') or {}))}"
     )
     print(
         f"mean best-match Jaccard: mean={summary.get('mean_best_match_jaccard_mean')} "
-        f"range={summary.get('mean_best_match_jaccard_range')}"
+        f"range={summary.get('mean_best_match_jaccard_range')}  [FORCED BY CONSTRUCTION — chunk-size ratio]"
     )
-    print(f"ladder deferred items (total across sets): {summary.get('ladder_deferred_item_total')}")
+    print(
+        f"membership_identical: {summary.get('membership_identical_count')}/{summary.get('battery_valid_count')} "
+        f"[FORCED BY CONSTRUCTION — post-R5 dispatched subset vs whole-set division]"
+    )
+    print(
+        f"deferred items, LIKE-FOR-LIKE under the same R5 bound: ladder "
+        f"{summary.get('ladder_deferred_item_total')} vs AI "
+        f"{summary.get('ai_deferred_item_total_under_same_r5_bound')} "
+        f"(AI closes {summary.get('ai_deferral_closed_vs_ladder')} = "
+        f"{summary.get('ai_deferral_closed_ratio')}; of which "
+        f"{summary.get('fallback_case_ladder_deferred_item_total')} sit on battery-REJECTED sets where the "
+        f"AI produces nothing and the ladder plan runs verbatim)"
+    )
     header = f"{'job group':<52} {'n':>6} {'ladder':>14} {'ai':>12} {'jac':>6} {'battery':>10}"
     print(header)
     for case in list(report.get("cases") or []):
@@ -1202,14 +1658,25 @@ def _print_promote_report(report: Mapping[str, Any]) -> None:
         summary = dict(block.get("summary") or {})
         if not summary.get("pair_count"):
             continue
+        decomposition = dict(summary.get("agreement_decomposition") or {})
         print(f"\n-- {corpus} corpus ({summary.get('pair_count')} pairs)")
         print(f"   divergence: {summary.get('divergence_counts')}")
+        print(
+            f"   agree {decomposition.get('agree_total')} DECOMPOSED: "
+            f"{decomposition.get('agree_forced_by_guard_refusal')} forced by a guard refusal "
+            f"(V_LINEAGE pre-filter fails; no judge output can change the outcome) + "
+            f"{decomposition.get('agree_where_the_judge_was_decision_relevant')} where the judge mattered; "
+            f"judge decision-relevant in {decomposition.get('judge_decision_relevant_pair_count')}/"
+            f"{summary.get('pair_count')} pairs; agree-on-PROMOTE pairs: "
+            f"{decomposition.get('agree_on_promote_pair_count')}"
+        )
         print(
             f"   ai_more_permissive (= authority flips S5 would newly permit): {summary.get('ai_more_permissive_count')}"
         )
         print(f"   guard predicted: {summary.get('guard_predicted_reason_counts')}")
         print(f"   validator FAILs: {summary.get('validator_fail_counts')}")
-        print(f"   ladder reasons: {summary.get('ladder_reason_counts')}")
+        print(f"   ladder reasons (BRANCH FALL-THROUGH labels, not the storage guard): "
+              f"{summary.get('ladder_reason_counts')}")
     print("\n-- incident scenarios (design §1.6)")
     for scenario in list(report.get("incidents") or []):
         if scenario.get("status") != "replayed":
@@ -1284,9 +1751,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--corpus", choices=("realistic", "extended", "both"), default="both")
     parser.add_argument(
-        "--include-extended-pairs",
+        "--no-extended-pairs",
         action="store_true",
-        help="promote: emit every extended pair (806 rows) into the JSON, not just the summary",
+        help="promote: emit ONLY the extended summary, dropping the per-pair rows (default: emit them, "
+        "so every quoted extended figure is auditable from the artifact)",
     )
     parser.add_argument("--divider-url-count", type=int, default=600, help="engagement: synthetic ready-set size")
     return parser

@@ -39,6 +39,27 @@ Responsibility split (design §2.2, mirror of divider D7): the model authors ONL
 candidate_descriptor, and provenance are caller-authored fact. Assembling that
 envelope is not "repairing" model output — the raw verdict passes through
 byte-identical and any defect surfaces as the auditable F4/F5 fallback.
+
+SHADOW SAFETY GATE (S3, added 2026-07-25 — design §7.1). The S3 shadow hook
+below runs SYNCHRONOUSLY INSIDE the authoritative write path
+(`upsert_organization_asset_registry_with_guard`, right after the store write).
+It is therefore gated by TWO independent predicates, not one:
+
+  1. `model_client_supports_promote_judgment` — structural capability ("would a
+     call return anything but the F1 marker?"). True for the scripted judge AND
+     for the real provider clients.
+  2. `promote_shadow_model_calls_permitted` — PERMISSION. A client whose class
+     declares `ws7_shadow_billing_free = True` is always permitted; any other
+     client requires the dedicated opt-in env
+     `SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL`, which is OFF BY DEFAULT and
+     is deliberately not one of the three live-provider gate vars.
+
+Consequence: with no opt-in the shadow cannot reach a provider no matter which
+client a production caller threads in, so the real path is never easier to
+trigger than the scripted one (which has always required
+`SOURCING_SCRIPTED_ORGANIZATION_PROMOTE_JUDGE`). Unsetting the env is the kill
+switch for a live wave. The divider's mint-seam shadow carries the mirrored gate
+(`SOURCING_WS7_DIVIDER_SHADOW_ALLOW_REAL_MODEL`, profile_batch_division.py).
 """
 
 from __future__ import annotations
@@ -53,8 +74,10 @@ from .model_provider import (
     ORGANIZATION_PROMOTE_JUDGE_RESPONSE_JUDGMENT_KEY,
     ORGANIZATION_PROMOTE_JUDGE_RESPONSE_PROVENANCE_KEY,
     ORGANIZATION_PROMOTE_JUDGE_RESPONSE_RAW_PREVIEW_KEY,
+    WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL_ENV,
     DeterministicModelClient,
     ModelClient,
+    ws7_shadow_model_calls_permitted,
 )
 from .organization_promote_contract import (
     DECISION_SOURCE_AI_JUDGE,
@@ -465,6 +488,36 @@ def model_client_supports_promote_judgment(model_client: Any) -> bool:
     return method is not DeterministicModelClient.judge_organization_asset_promotion
 
 
+def promote_shadow_model_calls_permitted(model_client: Any) -> bool:
+    """SAFETY gate — may the shadow seam actually CALL this client? (2026-07-25)
+
+    Separate from :func:`model_client_supports_promote_judgment`, which answers
+    only "would a call return something other than the F1 marker?". Capability
+    alone is true for the REAL provider clients as well, and the promote shadow
+    runs SYNCHRONOUSLY INSIDE ``upsert_organization_asset_registry_with_guard``
+    — the authoritative write path — once per contested decision. Threading a
+    real client down from a live-mode caller would therefore have billed a
+    provider call from a path that is by definition optional and record-only.
+
+    So the recorder requires capability AND permission:
+
+    * a client whose class declares ``ws7_shadow_billing_free = True`` (the
+      scripted judge; local test doubles that make no network call) is always
+      permitted — it cannot bill;
+    * ANY other client requires the dedicated opt-in env
+      ``SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL``, which is OFF by default
+      and is deliberately NOT one of the three live-provider gate vars, so
+      enabling live mode alone never enables the shadow call.
+
+    With no opt-in the seam returns None before building any payload, so it
+    cannot reach a provider no matter what client production threads into it.
+    This is the kill switch the wiring batch shipped without: unset the env (the
+    default) and the shadow is inert for every real client.
+    """
+
+    return ws7_shadow_model_calls_permitted(model_client, allow_real_model_env=WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL_ENV)
+
+
 def _shadow_int(value: Any) -> int:
     try:
         if isinstance(value, bool):
@@ -586,18 +639,37 @@ def _shadow_ladder_comparison(
     effective decision (design §7 S3 — the "AI decision ≠ ladder decision"
     counter the S5 flip consumes as free before/after evidence).
 
-    CORRECTED 2026-07-25 (design §7.1 finding 3). This docstring previously read
-    "under ruling ④ the AI can only be MORE conservative, so
-    ``ai_more_permissive`` should never fire on a contested decision". That is
-    empirically false: on the real registry corpus it fires 3/36 (realistic
-    incumbent-vs-candidate pairs) and 246/806 (extended permutations). It is not
-    a recorder bug — ruling ④'s "more conservative" holds relative to
-    **guard + validators** (a failure never flips authority), NOT relative to the
-    **ladder**, whose completeness threshold family S5 retires. So
-    ``ai_more_permissive`` is the expected, load-bearing signal: it counts the
-    authority flips the S5 conjunction would newly permit. Read it as an upper
-    bound on authority churn, and remember that a SCRIPTED judge is more
-    permissive than any plausible real one by construction."""
+    CORRECTED 2026-07-25, RE-CORRECTED the same day (design §7.1 finding 3).
+
+    The ORIGINAL docstring said "under ruling ④ the AI can only be MORE
+    conservative, so ``ai_more_permissive`` should never fire on a contested
+    decision". That is wrong as a matter of code, independently of any corpus:
+    ruling ④'s "more conservative" holds relative to **guard + validators** (a
+    failure never flips authority), NOT relative to the **ladder**, whose
+    completeness threshold family S5 retires. ``ai_more_permissive`` is
+    therefore the expected, load-bearing signal — it counts the authority flips
+    the S5 conjunction would newly permit — and the scripted-client replay does
+    fire it (design §7.1 records the counts and their provenance).
+
+    The FIRST correction then over-reached in the other direction by asserting
+    that "a SCRIPTED judge is more permissive than any plausible real one by
+    construction". Nothing about the scripted client constrains a real model's
+    raw verdict, and this batch has zero real-model evidence. What IS provable —
+    and is the claim to rely on — is a CEILING, not a comparison of models:
+
+        the scripted judge's only two reject arms
+        (``prior_snapshot_comparison.simulate_or_placeholder_provenance`` and
+        ``candidate.metrics.effective_lane_total < incumbent``) are exactly the
+        predicates the retained battery re-checks (V_PROV / V_COMP), so under
+        the S5 conjunction ``promote ⟺ guard-pass AND AI-approve AND
+        validators-pass`` a scripted promote survives iff the guard-∧-battery
+        floor admits it. The scripted ``ai_more_permissive`` count therefore
+        equals that floor's admission count, which NO judge — scripted or real —
+        can exceed.
+
+    Read ``ai_more_permissive`` as an UPPER BOUND on the authority churn the S5
+    conjunction permits, i.e. a measurement of FLOOR STRENGTH. It says nothing
+    about how a real model would behave inside that bound."""
     agreement = bool(ladder_promote) == bool(ai_promote)
     if not engaged:
         divergence = "not_engaged"
@@ -635,9 +707,15 @@ def record_organization_promote_shadow(
     the store, so authority is byte-identical with the shadow on or off (S3 hard
     rule).
 
-    Structural non-invocation (returns None — no model call, no record):
+    Non-invocation (returns None — no model call, no record):
       * no judge-capable client (default simulate/replay ``OfflineModelClient`` /
-        no client — condition (a), design §3.1).
+        no client — condition (a), design §3.1);
+      * a judge-capable client that is NOT declared billing-free while the
+        dedicated opt-in ``SOURCING_WS7_PROMOTE_SHADOW_ALLOW_REAL_MODEL`` is
+        unset — the SAFETY gate (see
+        :func:`promote_shadow_model_calls_permitted`). This seam runs inside the
+        authoritative write path, so a real provider client must never be
+        callable here by mere threading; the opt-in is OFF by default.
 
     Otherwise returns the shadow record. Engagement (OQ4):
       * a CONTESTED decision (a non-pre-branch ladder reason) drives the S2 helper
@@ -653,6 +731,10 @@ def record_organization_promote_shadow(
     """
     try:
         if not model_client_supports_promote_judgment(model_client):
+            return None
+        # SAFETY gate (2026-07-25): capability is not permission. Without the
+        # dedicated opt-in a non-billing-free client never reaches the model.
+        if not promote_shadow_model_calls_permitted(model_client):
             return None
 
         ladder = dict(ladder_decision or {})
@@ -756,6 +838,7 @@ __all__ = [
     "stale_input_keep_incumbent_audit",
     "judge_and_validate_promotion",
     "model_client_supports_promote_judgment",
+    "promote_shadow_model_calls_permitted",
     "record_organization_promote_shadow",
     "fallback_reason_for_validator",
 ]

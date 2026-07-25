@@ -116,7 +116,14 @@ SCRIPTED_LIVE_DELEGATED_METHODS = frozenset(
 MODEL_CLIENT_CONSUMER_MODULES = frozenset(
     {
         "acquisition.py",
+        # WS7/W7.3 S3 shadow WIRING (2026-07-25): these two carry a
+        # `model_client` parameter that is threaded, never called — the promote
+        # shadow's only model call stays in organization_promote_judgment.py, so
+        # they add ZERO call points below. They became consumers when the S3
+        # thread-through closed the dead-parameter gap (design §7.1).
+        "asset_registration.py",
         "asset_reuse_audit.py",
+        "candidate_artifacts.py",
         "cli.py",
         "company_asset_completion.py",
         "company_asset_supplement.py",
@@ -1434,7 +1441,13 @@ def test_model_client_consumer_inventory_and_call_points_match_v1_golden() -> No
     # (divide_profile_prefetch_batches + provider_name call points).
     # 26/31 → 27/33 on 2026-07-24: WS7/W7.3 S2 added organization_promote_judgment.py
     # (judge_organization_asset_promotion + provider_name call points).
-    assert len(modules) == 27
+    # 27/33 → 29/33 on 2026-07-25: the WS7/W7.3 S3 wiring made
+    # candidate_artifacts.py and asset_registration.py `model_client` HOLDERS
+    # (pass-through only — they never call a Protocol method), so the module
+    # count moves and the call-point total deliberately does NOT. This golden
+    # was left un-refreshed by the wiring batch (ecb1f8f) and failed from that
+    # commit onward; refreshed here with the remediation.
+    assert len(modules) == 29
     assert sum(calls.values()) == 33
     assert {method_name for _, _, method_name in calls} == set(PROTOCOL_METHOD_CONTRACTS)
 
