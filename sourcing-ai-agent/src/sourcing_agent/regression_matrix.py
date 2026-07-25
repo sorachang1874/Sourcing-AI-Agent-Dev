@@ -305,6 +305,11 @@ _RECOVERY_DRAIN_REGISTRY_SUITES = (
         args=("tests/test_worker_recovery_daemon.py",),
         reason="worker recovery daemon drives the recovery tick that iterates the drain registry",
     ),
+    PytestInvocation(
+        label="paired::tests/test_pipeline_compensation_contract.py",
+        args=("tests/test_pipeline_compensation_contract.py",),
+        reason="WS7/W7.4 S1 compensation seat table mirrors the drain bindings (phase + owner label) so an intent can only target an EXISTING owner — the suite cross-checks the mirror, so a binding rename/removal must re-run it",
+    ),
 )
 # recovery_phases.py holds the recovery-tick phase objects + TickContext +
 # registry seam (Phase 4 Step 2 A2) that run_worker_recovery_once iterates for
@@ -473,6 +478,33 @@ _ORGANIZATION_PROMOTE_CONTRACT_SUITES = (
         label="paired::tests/test_organization_promote_shadow.py",
         args=("tests/test_organization_promote_shadow.py",),
         reason="WS7/W7.3 S3 SHADOW hook body lives in organization_promote_judgment.py (record_organization_promote_shadow) — an edit here must re-run the shadow suite that pins record-only + exception isolation + byte-identical authority",
+    ),
+)
+# pipeline_compensation_contract.py is the WS7/W7.4 S1 compensation contract
+# (schema sourcing.pipeline.compensation_intent.v1 + the V_STAGE/V_SEAT/V_KEY/
+# V_DELTA/V_LINEAGE/V_SIGNAL/V_ATTEMPT battery). Its seat table names EXISTING
+# recovery-tick phases, so an edit here must re-run the contract suite AND the
+# whole-tick characterization oracle that pins those phase names/owner labels
+# (the OQ5/R-019 "zero new dispatch identity" fence is only as good as that
+# mirror).
+_PIPELINE_COMPENSATION_CONTRACT_RELATED_PATHS = {
+    "src/sourcing_agent/pipeline_compensation_contract.py",
+}
+_PIPELINE_COMPENSATION_CONTRACT_SUITES = (
+    PytestInvocation(
+        label="paired::tests/test_pipeline_compensation_contract.py",
+        args=("tests/test_pipeline_compensation_contract.py",),
+        reason="compensation_intent.v1 schema + V_STAGE/V_SEAT/V_KEY/V_DELTA/V_LINEAGE/V_SIGNAL/V_ATTEMPT battery + the §4 attempt ladder and terminal escalation record",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_recovery_tick_characterization.py",
+        args=("tests/test_recovery_tick_characterization.py",),
+        reason="the compensation seat table may only name phases the characterized recovery tick already runs; the oracle is that list's source of truth",
+    ),
+    PytestInvocation(
+        label="paired::tests/test_recovery_drain_registry.py",
+        args=("tests/test_recovery_drain_registry.py",),
+        reason="nine compensation seats mirror drain bindings (phase + owner label) one-for-one",
     ),
 )
 _MODEL_PROVIDER_RELATED_PATHS = {
@@ -682,6 +714,11 @@ def infer_pytest_invocations(
         if path in _ORGANIZATION_PROMOTE_CONTRACT_RELATED_PATHS:
             saw_backend_change = True
             for invocation in _ORGANIZATION_PROMOTE_CONTRACT_SUITES:
+                add(invocation)
+            continue
+        if path in _PIPELINE_COMPENSATION_CONTRACT_RELATED_PATHS:
+            saw_backend_change = True
+            for invocation in _PIPELINE_COMPENSATION_CONTRACT_SUITES:
                 add(invocation)
             continue
         if path in _MODEL_PROVIDER_RELATED_PATHS:
